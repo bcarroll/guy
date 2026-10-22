@@ -583,6 +583,49 @@ T.sweepInterrupts = () => {
 };
 
 // 8. Remove each object a running activity depends on, part-way through. No exception, he recovers, object comes back.
+// 7b. Carrying things: asking for another book while he is reading one must make him put the first back and then read the
+// new one, doing nothing else in between, even if the "record by the stereo" flag is stuck on. Stopping the stereo from the
+// player part-way through a record session must also end with the record back on the shelf and the flag cleared.
+T.sweepHolding = () => {
+  const out = [], b = B(), shelfBooks = () => W().objects.shelf.books.filter((x) => x.mesh.visible);
+  const okLabel = (l) => /wrapping up|putting the book back|putting the record back|reading/.test(l);
+  const readThenAsk = (stuck) => {
+    T.settle(); T.home(); b.queue = []; b.step = null; b.pendingActivity = null; b.forceBook = null; b.albumOnTable = false;
+    b.choose('read');
+    let t = 0;
+    while (t < 120 && !(b.step && b.step.fx && b.step.fx.chairSit && b.step.t > 6)) { step(0.25); t += 0.25; }
+    const cur = b.held && b.held.def.id;
+    if (stuck) b.albumOnTable = true;
+    const target = shelfBooks().find((x) => x.def.id !== cur);
+    const base = errors.length;
+    b.requestRead(target.def.id);
+    const wrong = []; let readTarget = false, e = 0;
+    while (e < 100) {
+      step(0.25); e += 0.25;
+      const l = label();
+      // a record in his hand during a normal stereo session is fine; a book in his hand during anything else is the bug
+      if (b.held && b.held.kind !== 'album' && b.held.def.id !== target.def.id && !okLabel(l)) wrong.push([+e.toFixed(1), l.slice(0, 40)]);
+      if (b.held && b.held.def.id === target.def.id) readTarget = true;
+      if (readTarget && !b.held) break;                // he has read it and put it back: after that he may do as he likes
+    }
+    return { cur, target: target.def.id, wrong: wrong.slice(0, 3), readTarget, errors: errors.slice(base) };
+  };
+  for (const stuck of [false, true]) {
+    const r = readThenAsk(stuck);
+    out.push(result(`holding: ask for another book while reading${stuck ? ' (record flag stuck on)' : ''}`, !r.wrong.length && r.readTarget && !r.errors.length, r));
+  }
+  // stop the stereo from the player while he has a record out
+  T.addObject('table'); T.learn(['stereo']); T.addAlbum('rock');
+  T.settle(); T.home(); b.queue = []; b.step = null; b.pendingActivity = null; b.forceAlbum = 'rock'; b.choose('dance');
+  let t = 0; while (t < 90 && !(b.music && b.albumOnTable)) { step(0.25); t += 0.25; }
+  const had = !!b.held && b.held.kind === 'album';
+  b.stereoControl('stop');
+  const settled = T.settle(120);
+  const rec = W().objects.shelf.albums.find((r) => r.def.id === 'rock');
+  out.push(result('holding: stop the stereo while a record is out', had && settled.ok && !b.held && !b.albumOnTable && rec.mesh.visible, { had, settled: settled.ok, held: !!b.held, flag: b.albumOnTable, backOnShelf: rec.mesh.visible }));
+  return out;
+};
+
 T.sweepRemovals = () => {
   const out = [];
   for (const name of Object.keys(MANIFEST.activities)) {
@@ -742,6 +785,7 @@ T.runAll = () => {
   report.combos = summarise(T.combos());
   report.interrupts = summarise(T.sweepInterrupts());
   report.removals = summarise(T.sweepRemovals());
+  report.holding = summarise(T.sweepHolding());
   report.decor = summarise(T.sweepDecor());
   report.machine = summarise(T.sweepMachine());
   report.errorsLogged = errors.length;

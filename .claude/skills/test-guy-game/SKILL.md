@@ -56,6 +56,7 @@ individually. Current baseline: everything passing, `T.errors` empty (run it 3-4
 | `T.combos()` | Multi-object cases: stereo + piano, stereo + guitar (in time), stereo + dance, stopping music mid-song, lamp party during a dance, user music surviving a skip. | each passes |
 | `T.sweepInterrupts()` | Interrupts every activity part-way (`skip()`); he must tidy up and end idle. | idle, no exceptions |
 | `T.sweepRemovals()` | Removes each object an activity depends on, part-way through, then restores it. | no exceptions, he recovers |
+| `T.sweepHolding()` | Asks for another book while he reads one (also with the "record by the stereo" flag stuck on), and stops the stereo from the player while a record is out. | he puts the first book back and reads the new one without wandering off carrying it; the record ends up back on the shelf with the flag cleared |
 | `T.sweepDecor()` | The rug, windows and picture: Remove through the Skill Machine button, check it is gone and offered as "Put back", put it back; wall limits (not over the Skill Machine, not over each other, furniture cannot be pushed into them). | all pass, no exceptions |
 | `T.sweepMachine()` | The Objects tab: every object has a category, All lists each once, each category chip lists exactly its items under one heading, the All chip counts what is in the room, the shelf has no Remove. | all pass |
 

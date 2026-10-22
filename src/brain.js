@@ -1063,6 +1063,7 @@ export class Brain {
 
   // ---- Books ----
   takeBook(book) {
+    if (book.kind !== 'album') this.albumOnTable = false;   // a book in his hand is not a record standing by the stereo
     this.held = book;
     book.mesh.visible = false;
     if (book.kind === 'album') { this.albumMesh.userData.setArt(book.def); this.albumMesh.visible = true; }
@@ -1082,6 +1083,7 @@ export class Brain {
       type: 'plan',
       fn: () => {
         if (!this.held) return [];
+        if (this.held.kind === 'album' && !this.music) this.albumOnTable = false;   // the music stopped: he picks the record up off the stereo
         if (!this.obj('shelf')) { this.returnBook(); return []; }
         return [this.walkAt('shelf', this.held.kind === 'album' ? -0.5 : -0.62, this.held.z, Math.PI / 2), this.play('putBook', 2.4, { at: [1.3, () => this.returnBook()] })];
       },
@@ -1358,7 +1360,10 @@ export class Brain {
     if (!name && this.gtr.held && this.obj('guitar')) name = 'putguitar'; // still holding the guitar: back on its stand
     if (!name && this.lampOffByMe && this.obj('lamp') && !this.obj('lamp').on) name = 'lighton'; // he switched it off for the stars and never put it back
     if (!name && this.ballHeld) name = 'dropball'; // still holding the ball: put it down first
-    if (!name && this.held && !this.albumOnTable) name = 'putback'; // he's still carrying a book or record: take it back first
+    // He's still carrying a book or record: take it back first. The one exception is a record that is really standing by the
+    // stereo while its music plays (the session puts it away itself). A stuck flag must never excuse carrying a book around.
+    const recordPlaying = this.held && this.held.kind === 'album' && this.albumOnTable && this.music;
+    if (!name && this.held && !recordPlaying) name = 'putback';
     if (!name) {
       const entries = Object.entries(weights)
         .filter(([k]) => this.available(k))
