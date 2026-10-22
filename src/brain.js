@@ -1318,6 +1318,16 @@ export class Brain {
     if (this.onStereoChange) this.onStereoChange();
   }
 
+  // Is the place he stands to use the drum kit or the easel inside the room and free? Pushed up against a wall (stool or easel side
+  // to the wall) it is not, and he must not try to walk there.
+  standOk(name) {
+    const o = this.obj(name), own = { drums: [0.55, 1.15], easel: [0, 0.8] }[name];
+    if (!o || !own) return true;
+    const l = o.local(own[0], own[1]), x = o.x + l.x, z = o.z + l.z;
+    if (Math.abs(x) > 4.4 || z < -3.5 || z > 3.6) return false;
+    return !cellBlocked(makeGrid(this.w.obstacles, 0.05, 0, o.obstacle), x, z);       // not inside another object (furniture merely nearby is fine: he walks round it)
+  }
+
   // Activities need their objects (removing one takes the activity away) and the skills he has learned.
   available(act) {
     const need = {
@@ -1344,6 +1354,8 @@ export class Brain {
     if (act === 'peek' && ['telescope', 'telescope.dark', 'telescope.care'].some((k) => this.skills.has(k))) return false;
     if (act === 'jamdrums' && !this.music) return false;
     if (act === 'lighton') return false;
+    if (['bang', 'drums', 'drumsolo', 'jamdrums'].includes(act) && !this.standOk('drums')) return false;
+    if (['scribble', 'paint', 'mixpaint', 'portrait'].includes(act) && !this.standOk('easel')) return false;
     if (act === 'plant' && !PLANT_NAMES.some((n) => this.obj(n))) return false;
     if (act === 'dust' && !Object.values(this.w.decor).some((d) => d.wall)) return false;
     if (['ball', 'dribble', 'toss'].includes(act) && this.w.ballGone) return false;
@@ -1442,6 +1454,9 @@ export class Brain {
     }[name];
     if (name === 'table' && !k('stereo') && !this.music && !k('dance.moves') && !k('dance.ballroom')) return { ok: false, message: "Guy doesn't know how to use the stereo yet. Maybe there's a manual on the shelf." };
     if (name === 'guitar' && !k('guitar')) return { ok: false, message: "Guy hasn't learned the guitar yet. Add \"Guitar for Beginners\" to the shelf and he'll read it." };
+    if ((name === 'drums' || name === 'easel') && !this.standOk(name)) {
+      return { ok: false, message: name === 'drums' ? "Guy can't get to the drum stool where the kit is. Move it away from the wall." : "Guy can't get in front of the easel where it is. Move it away from the wall." };
+    }
     const act = (tries || []).filter((a) => this.available(a));
     if (!act.length) return { ok: false, message: "Guy can't do anything with that right now." };
     this.skip();                                   // stands up, switches the stereo off, etc. first
@@ -1578,6 +1593,12 @@ export class Brain {
           this.moving = true;
           this.stuckT += dt;
           if (this.stuckT > 25) finished = true;
+          // Pressed against a wall, or circling something he cannot get past: if the distance still to walk along his path has not
+          // got shorter by 20 cm in 5 s, give up on the walk and the activity it belongs to (instead of pushing on for 25 s).
+          let rem = Math.hypot(wp.x - root.position.x, wp.z - root.position.z);
+          for (let k = 1; k < s.path.length; k++) rem += Math.hypot(s.path[k].x - s.path[k - 1].x, s.path[k].z - s.path[k - 1].z);
+          if (s.rem === undefined || rem < s.rem - 0.2) { s.rem = rem; s.remT = 0; }
+          else if ((s.remT += dt) > 5) { this.queue.length = 0; finished = true; this.ui('could not get there'); }
         } else if (s.yaw !== null && Math.abs(angDiff(s.yaw, root.rotation.y)) > 0.05) {
           this.turnTo(s.yaw, dt, 5);
           this.walkPhase += dt * 3;

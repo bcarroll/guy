@@ -690,6 +690,46 @@ T.sweepHolding = () => {
   return out;
 };
 
+// 7c. Furniture against a wall: with the drum kit or the easel pushed up to a wall in every rotation, Guy must either use it
+// promptly (sitting down within about 15 s) or decline (the Interact button explains), and a forced attempt at a spot he cannot
+// reach must be dropped within a few seconds, not after 50 s of walking into the wall.
+T.sweepWalls = () => {
+  const out = [], b = B(), G_ = G();
+  T.addObject('table'); T.addObject('drums'); T.addObject('easel'); T.learn(['drums', 'easel']);
+  const places = {
+    back: (o, r) => [0.5, -4 + (r % 2 ? o.bw / 2 : o.bd / 2) + 0.02],
+    left: (o, r) => [-5 + (r % 2 ? o.bd / 2 : o.bw / 2) + 0.02, 0.8],
+  };
+  for (const [name, seat, act] of [['drums', 'drumSit', 'drums'], ['easel', 'paintStand', 'paint']]) {
+    const o = W().objects[name];
+    for (const [wall, place] of Object.entries(places)) {
+      for (let r = 0; r < 4; r++) {
+        T.settle(); T.home(); o.rot = r;
+        const [x, z] = place(o, r);
+        o.set(x, z);
+        if (!W().fits(o, x, z)) continue;
+        const base = errors.length;
+        const reply = b.interact(name);
+        const ok = b.standOk(name);
+        let sat = false, t = 0, gaveUp = null;
+        if (reply.ok) {
+          while (t < 40 && !sat) { step(0.1); t += 0.1; if (b.pose === seat || (name === 'easel' && b.pose.startsWith('paint'))) sat = true; }
+          out.push(result(`wall: ${name} against the ${wall} wall, turned ${r}: he uses it promptly`, ok && sat && t < 15 && errors.length === base, { ok, sat, seconds: +t.toFixed(1) }));
+        } else {
+          // he declines; forcing the activity anyway must be dropped quickly
+          b.queue = []; b.step = null; b.pendingActivity = null; b.choose(act);
+          while (t < 40 && b.last === act) { step(0.1); t += 0.1; }
+          gaveUp = +t.toFixed(1);
+          out.push(result(`wall: ${name} against the ${wall} wall, turned ${r}: he declines, and a forced try is dropped quickly`, !ok && /Move it away/.test(reply.message) && gaveUp < 20 && errors.length === base, { ok, message: reply.message, gaveUpAfter: gaveUp }));
+        }
+      }
+    }
+    o.rot = 0; T.removeAll(); T.addObject('table'); T.addObject('drums'); T.addObject('easel');
+  }
+  void G_;
+  return out;
+};
+
 T.sweepRemovals = () => {
   const out = [];
   for (const name of Object.keys(MANIFEST.activities)) {
@@ -857,6 +897,7 @@ T.runAll = () => {
   report.interrupts = summarise(T.sweepInterrupts());
   report.removals = summarise(T.sweepRemovals());
   report.holding = summarise(T.sweepHolding());
+  report.walls = summarise(T.sweepWalls());
   report.decor = summarise(T.sweepDecor());
   report.machine = summarise(T.sweepMachine());
   report.errorsLogged = errors.length;
