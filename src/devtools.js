@@ -399,13 +399,18 @@ T.poseStats = (name, max = 150) => {
     if (frames % 2 || !b.step) continue;
     const pose = b.pose, ctx = b.lastCtx || {};
     for (const side of ['Left', 'Right']) {
-      const st = (stats[pose] ||= { behind: -9, wrist: 0, err: 0, n: 0, errs: [] });
+      const st = (stats[pose] ||= { behind: -9, wrist: 0, err: 0, neck: 0, n: 0, errs: [], necks: [] });
       const hand = g.root.worldToLocal(g.boneWorld(`${side}Hand`));
       st.behind = Math.max(st.behind, -hand.z);
       // wrist bend: angle between the forearm (elbow -> wrist) and the hand (wrist -> knuckle), degrees; 0 = straight
       const fa = g.boneWorld(`${side}ForeArm`), wr = g.boneWorld(`${side}Hand`), kn = g.boneWorld(`${side}HandMiddle1`);
       st.wrist = Math.max(st.wrist, Math.acos(Math.max(-1, Math.min(1, wr.clone().sub(fa).normalize().dot(kn.clone().sub(wr).normalize())))) * 57.3);
       st.n++;
+      if (side === 'Left' && pose === 'guitar' && ctx.guitar && ctx.guitar.cur) {      // fretting hand on the neck?
+        const F = ctx.guitar.cur, a0 = b.gp(F, 0.2, 0, 0), ab = b.gp(F, 0.8, 0, 0).sub(a0), p = g.boneWorld('LeftHandMiddle2');
+        const u = Math.max(0, Math.min(1, p.clone().sub(a0).dot(ab) / ab.lengthSq()));
+        st.necks.push(a0.clone().addScaledVector(ab, u).distanceTo(p));
+      }
       // intended wrist position, where the game computed one
       const k = side === 'Left' ? 'L' : 'R';
       let want = null, w = 0;
@@ -420,15 +425,19 @@ T.poseStats = (name, max = 150) => {
     s.errs.sort((a, c) => a - c);
     s.err = s.errs.length ? s.errs[Math.floor(s.errs.length * 0.9)] : 0;
     delete s.errs;
-    for (const k of ['behind', 'wrist', 'err']) s[k] = +s[k].toFixed(k === 'wrist' ? 0 : 2);
+    s.necks.sort((a, c) => a - c);
+    s.neck = s.necks.length ? s.necks[Math.floor(s.necks.length * 0.9)] : 0;
+    delete s.necks;
+    for (const k of ['behind', 'wrist', 'err', 'neck']) s[k] = +s[k].toFixed(k === 'wrist' ? 0 : 3);
   }
   return stats;
 };
 
 // Limits for the pose-sanity sweep. `behind`: m behind his body (a hand reaching a world point behind him once measured 0.53;
 // walking and waltzing peak at ~0.35). `wrist`: degrees of wrist bend (a real wrist manages ~90). `err`: m between the hand and the
-// wrist position the game asked for (90th percentile; drum, brush and guitar poses expose one).
-export const POSE_LIMITS = { behind: 0.45, wrist: 100, err: 0.32 };
+// wrist position the game asked for (90th percentile; drum, brush and guitar poses expose one). `neck`: m between the fretting
+// hand's middle finger joint and the guitar neck (90th percentile; the hand must be on the neck).
+export const POSE_LIMITS = { behind: 0.45, wrist: 110, err: 0.32, neck: 0.05 };
 T.sweepPoses = () => {
   const out = [];
   for (const [name, m] of Object.entries(MANIFEST.activities)) {
@@ -566,6 +575,8 @@ T.sweepPlaylist = () => {
   const seen = [b.track];
   for (let k = 0; k < 5; k++) { step(trackSeconds(TRACKS[b.track]) + 1); if (seen[seen.length - 1] !== b.track) seen.push(b.track); }
   out.push(result('playlist: a track hands over to the next song on its record', seen.slice(0, 5).join(',') === 'rock,rock2,rock3,rock4,rock' && b.userMusic, { seen, userMusicKept: b.userMusic }));
+  const lens = Object.entries(TRACKS).filter(([, tr]) => tr.step && tr.bpm).map(([id, tr]) => [id, +trackSeconds(tr).toFixed(1)]);
+  out.push(result('every song on a record plays 20 s or less', lens.length > 20 && lens.every(([, sec]) => sec <= 20 && sec >= 5), { longest: lens.sort((a, c) => c[1] - a[1])[0], shortest: lens.sort((a, c) => a[1] - c[1])[0], n: lens.length }));
   b.stereoControl('stop'); b.step = null; b.queue = [];
   // Guy: the same record forced again and again must not repeat its song; the record he plays should change too when he can
   const songs = [], albums = [];
@@ -702,6 +713,8 @@ T.sweepWalls = () => {
   };
   for (const [name, seat, act] of [['drums', 'drumSit', 'drums'], ['easel', 'paintStand', 'paint']]) {
     const o = W().objects[name];
+    const other = name === 'drums' ? 'easel' : 'drums';           // park the other one clear, so earlier sweeps cannot leave it next to this one
+    W().objects[other].set(...(other === 'drums' ? [3.0, 1.8] : [-3.0, 2.4]));
     for (const [wall, place] of Object.entries(places)) {
       for (let r = 0; r < 4; r++) {
         T.settle(); T.home(); o.rot = r;
@@ -884,6 +897,31 @@ T.visualChecklist = () => MANIFEST.visual;
 // ---- everything ---------------------------------------------------------------------------------------------------
 const summarise = (list) => ({ total: list.length, passed: list.filter((r) => r.pass).length, failed: list.filter((r) => !r.pass) });
 T.summarise = summarise;
+// Dragging or turning something Guy is using must make him let go (stand up, step back) instead of stretching his arms after it.
+T.sweepMoves = () => {
+  const out = [], b = B();
+  const cases = [['piano', 'piano', 'piano'], ['sitpiano', 'pianoSit', 'piano'], ['drums', 'drumSit', 'drums'], ['paint', 'paintStand', 'easel'],
+    ['stargaze', 'scopePeer', 'telescope'], ['guitar', 'guitar', 'guitar'], ['read', 'readSit', 'armchair']];
+  for (const [act, pose, name] of cases) {
+    const base = errors.length;
+    let reached = false;
+    for (let attempt = 0; attempt < 3 && !reached; attempt++) {      // some layouts leave no room to use the telescope: try again
+      T.removeAll(); T.prep(act); T.addObject(name); T.settle(); T.home(); b.queue = []; b.step = null; b.pendingActivity = null; b.choose(act);
+      let t = 0; while (t < 80 && !(b.step && b.pose === pose && b.step.t > 4)) { step(0.1); t += 0.1; }
+      reached = !!(b.step && b.pose === pose);
+    }
+    const o = W().objects[name];
+    const ox = o.x, oz = o.z, rot = o.rot;
+    o.set(ox + 0.6, oz);
+    step(1.2);
+    const letGo = reached && (b.pose !== pose || (b.step && b.step.t >= b.step.dur - 3));
+    const settled = T.settle(120);
+    o.set(ox, oz);
+    out.push(result(`moved while in use: ${act}`, reached && letGo && settled.ok && errors.length === base, { reached, letGo, pose: b.pose, idleAfter: settled.ok, errors: errors.slice(base) }));
+  }
+  return out;
+};
+
 T.runAll = () => {
   const report = { coverage: T.coverage() };
   report.objects = summarise(T.sweepObjects());
@@ -896,6 +934,7 @@ T.runAll = () => {
   report.combos = summarise(T.combos());
   report.interrupts = summarise(T.sweepInterrupts());
   report.removals = summarise(T.sweepRemovals());
+  report.moves = summarise(T.sweepMoves());
   report.holding = summarise(T.sweepHolding());
   report.walls = summarise(T.sweepWalls());
   report.decor = summarise(T.sweepDecor());

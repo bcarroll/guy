@@ -730,7 +730,13 @@ export class Brain {
 
     const neckRest = this.gp(rest, 0.36, 0, 0.03);
     const neckNow = this.gp(cur, 0.36, 0, 0.03);
-    const fretPt = this.gp(cur, 0.46 + st.fret, -0.12, -0.03);             // left WRIST under the neck (and a little behind it), beyond the body so the arm clears it
+    // left hand: fingers angled up along the neck, palm to the neck. The WRIST is placed so the knuckles sit on the neck (a fixed
+    // offset left the hand 8-14 cm away from it, floating; 0.124 m is wrist-to-knuckle on this model).
+    const axZ = new THREE.Vector3(0, 0, 1).applyQuaternion(cur.q), axX = new THREE.Vector3(1, 0, 0).applyQuaternion(cur.q);
+    const leftFingers = new THREE.Vector3(0, 1, 0).applyQuaternion(cur.q).multiplyScalar(0.4).addScaledVector(axX, 0.8).addScaledVector(axZ, -0.35).normalize();
+    const leftPalm = axZ.clone().multiplyScalar(-1);                                                             // palm normal: towards the neck
+    const knuckle = this.gp(cur, 0.46 + st.fret, 0, 0).addScaledVector(leftPalm, -0.01);          // where the knuckles rest
+    const fretPt = knuckle.addScaledVector(leftFingers, -0.124);
     const fingersDir = new THREE.Vector3(0, -1, 0).applyQuaternion(cur.q).multiplyScalar(0.9).addScaledVector(new THREE.Vector3(0, 0, 1).applyQuaternion(cur.q), -0.4).normalize();
     const tip = this.gp(cur, 0.05, st.y * 0.5, 0.07);                       // right FINGERTIPS just above the strings by the sound hole
     const strum = tip.clone().addScaledVector(fingersDir, -this.g.limb.Right.handLen * 0.9); // ...so the WRIST is a hand's length back along the fingers
@@ -753,10 +759,7 @@ export class Brain {
     // strumming fingers hang down over the strings (down the soundboard, tipped a little towards it)
     // fretting hand: wrist under the neck, fingers pointing up, palm towards the back of the neck, thumb behind it
     const lp = -1;   // thumb along the neck towards the headstock (the other roll left the thumb pointing back at his body)
-    out.leftHand = {
-      fingers: new THREE.Vector3(0, 1, 0).applyQuaternion(cur.q).multiplyScalar(0.6).addScaledVector(out.axisX, 0.6).addScaledVector(out.axisZ, 0.35 * lp).normalize(),
-      palm: out.axisZ.clone().multiplyScalar(lp),
-    };
+    out.leftHand = { fingers: leftFingers, palm: leftPalm };
     out.fingersDir = new THREE.Vector3(0, -1, 0).applyQuaternion(cur.q).multiplyScalar(0.9).addScaledVector(out.axisZ, -0.4).normalize();
     out.cur = cur;
     out.beat = s.fx.sync && this.music ? this.currentBeat() : (t - 0.6) / 0.6;
@@ -954,6 +957,7 @@ export class Brain {
       type: 'plan',
       fn: () => {
         const b = this.obj('bench'), p = this.obj('piano');
+        if (!b) return [];                                  // no bench in the room (the user removed it): nothing to move
         const l = p.local(0, 0.8);
         const sx = p.x + l.x, sz = p.z + l.z;
         const blocking = sx > b.obstacle.x0 - 0.4 && sx < b.obstacle.x1 + 0.4 && sz > b.obstacle.z0 - 0.4 && sz < b.obstacle.z1 + 0.4;
@@ -1434,6 +1438,41 @@ export class Brain {
     this.step = null;
   }
 
+  // Objects a step has his hands on (or is sitting at): if the user drags or turns one, the arms would be pulled along with it.
+  watchedNames(s) {
+    const f = s.fx || {};
+    const names = new Set(f.needs || []);
+    if (s.type === 'play') {
+      if (f.piano || f.sit) names.add('piano');
+      if (f.drums) names.add('drums');
+      if (f.paint) names.add('easel');
+      if (f.scope) names.add('telescope');
+      if (f.guitar) names.add('guitar');
+      if (f.chairSit) names.add('armchair');
+      if (s.pose === 'grab' || s.pose === 'putBook') names.add('shelf');
+    }
+    return names;
+  }
+
+  // Returns true if the step was abandoned because something it uses was moved or turned by the user.
+  checkMoved(s) {
+    const names = this.watchedNames(s);
+    if (!names.size) return false;
+    const snap = (s.watch ||= {});
+    for (const n of names) {
+      const o = this.obj(n);
+      if (!o) continue;
+      const cur = [o.x, o.z, o.rot];
+      if (!snap[n]) { snap[n] = cur; continue; }
+      const moved = Math.hypot(cur[0] - snap[n][0], cur[1] - snap[n][1]) > 0.06 || cur[2] !== snap[n][2];
+      if (!moved || (s.push && s.push.obj === o)) continue;
+      this.ui(`the ${n} was moved: letting go`);
+      this.skip();
+      return !this.step;
+    }
+    return false;
+  }
+
   // The user asked Guy to use something right now. Returns { ok, message }.
   interact(name) {
     const k = (id) => this.skills.has(id);
@@ -1548,6 +1587,7 @@ export class Brain {
       this.stuckT = 0;
     }
     const s = this.step;
+    if (this.checkMoved(s)) return;       // the user dragged or turned something he was using: he lets go
     // Whatever Guy is pushing or sitting on doesn't block him while he's doing it.
     for (const o of this.w.obstacles) o.active = true;
     if (s.push) s.push.obj.obstacle.active = false;

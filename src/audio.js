@@ -414,7 +414,7 @@ Object.assign(TRACKS, {
 // chord names, a key and a seed: `makeLine` writes a melody that lands on chord tones on the strong beats, walks by step in
 // between and comes home to the tonic, so every track has its own tune and each one plays the same every time. `jam` gives the
 // piano and guitar a scale and one chord per bar to play along with. `bars` is the length of the form: a record plays it a few
-// times (see trackSeconds) and then moves on to the next track on the record.
+// times (see trackSeconds, at most 20 s) and then moves on to the next track on the record.
 // ---------------------------------------------------------------------------------------------------------------
 const distGtrAt = (t, m, d = 0.4, g = 0.05) => tone(t, m, d, { partials: [[1, 1, 'sawtooth'], [1.006, 0.8, 'square'], [0.5, 0.4, 'sawtooth']], gain: g, attack: 0.004, cutoff: 2200, endCutoff: 700 });
 const powerChord = (t, root, d, g = 0.04) => { distGtrAt(t, root, d, g); distGtrAt(t, root + 7, d, g); distGtrAt(t, root + 12, d, g * 0.8); };
@@ -845,10 +845,12 @@ Object.assign(TRACKS.country, { label: 'Empty Porch Swing', bars: 8, drums: 'sof
 Object.assign(TRACKS.blues, { label: 'Twelve Bar Sunrise', bars: 12, drums: 'rock' });
 Object.assign(TRACKS.lullaby, { label: 'Little Lamb Dream', bars: 8, drums: 'soft' });
 
-// How long a record plays a track before it moves on to the next one: a few runs through the form, about a minute.
+// How long a record plays a track before it moves on to the next one: whole runs through the form that fit in 20 seconds, or
+// the first 20 seconds of a form that is longer than that (short songs keep the game lively).
+export const MAX_TRACK_SECONDS = 20;
 export function trackSeconds(tr) {
   const loop = (tr.bars || 8) * 4 * (60 / tr.bpm);
-  return loop * Math.max(2, Math.round(60 / loop));
+  return loop >= MAX_TRACK_SECONDS ? MAX_TRACK_SECONDS : loop * Math.floor(MAX_TRACK_SECONDS / loop);
 }
 
 // Loop a track; returns a stop function (like startBeat).

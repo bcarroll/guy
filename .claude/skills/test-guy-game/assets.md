@@ -121,7 +121,7 @@ Needs and allowed arm contacts are in `MANIFEST.activities`.
 | read-grab-mid | `T.moment('read','grab',1.2,'hand:Right')` | thumb-up handshake grip around the book; arm in front of him (never swinging behind him) |
 | read-sit | `T.moment('read','readSit',8,'front')` | book open, **pages face Guy**, both hands on the lower edges, legs hang clear of the chair |
 | read-turn | `T.moment('read','readSit',0,'front',{turning:true})` | right hand on Guy's side of the pages while the page flips |
-| guitar-play | `T.moment('guitar','guitar',7,'front')` | guitar held high on his chest, neck raised ~30°, with strap; right fingers hang over the strings, palm to them; left wrist under the neck, fingers up, thumb toward the headstock; nothing through the body |
+| guitar-play | `T.moment('guitar','guitar',7,'front')` | guitar held high on his chest, neck raised ~30°, with strap; **left knuckles on the neck (`neck` stat <= 0.05 m), fingers wrapping it**; right fingers hang over the strings, palm to them; left wrist under the neck, fingers up, thumb toward the headstock; nothing through the body |
 | piano-sit | `T.moment('sitpiano','pianoSit',6,'side')` | on the bench, hands on keys, knees under the shelf |
 | piano-stand | `T.moment('piano','piano',5,'side')` | standing, leaning in, both hands on keys |
 | stereo-button | `T.moment('dance','reach',1.1,'front')` | index finger on the button |
@@ -176,3 +176,8 @@ book list popup (long-press a lower shelf at a book: title, read / not read).
 - Guy kept playing the same tune: each record had one looping track and nothing ever moved on. Records now have four songs and the stereo hands over to the next one on the same record after about a minute; Guy avoids the last record and song he played. `T.sweepPlaylist`.
 - The drum kit counted as "arm inside the drums" over its whole bounding box, which is mostly air, so walking past its corner failed runs intermittently once the room was crowded. The overlap check now only counts a hand near a drum, a cymbal, the kick or the stool (`inKit` in `src/devtools.js`).
 - Drum kit (or easel) pushed against a wall with the stool (or easel) side to the wall: Guy walked into the wall for about 50 s (two 25 s walk timeouts) and then sat down by snapping into place. `Brain.standOk` now makes the activities unavailable when the standing spot is outside the room or inside another object (Interact explains), and a walk gives up, with its activity, when the distance left on its path has not shrunk by 20 cm in 5 s. Covered by `T.sweepWalls`.
+- Dragging or turning an object while Guy was using it pulled his arms along with it (the hands track the object's keys / pads / canvas). `checkMoved` now makes him let go (`sweepMoves`).
+- Fretting hand floated 8-14 cm off the neck with the wrist bent: the wrist is now placed from where the knuckles should rest on the neck (`neck` and `wrist` limits in `sweepPoses`).
+- Songs: a record plays each song for at most 20 s (`trackSeconds`, checked in `sweepPlaylist`); longer forms are cut at 20 s.
+- `piano` activity with no bench in the room threw inside `benchAway` and fell through to a random activity; it now just skips moving the bench.
+- `sweepWalls` could fail depending on where earlier sweeps left the drums (the easel's stand spot was inside them): each case now parks the other object clear first.
