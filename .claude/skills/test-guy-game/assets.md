@@ -1,6 +1,6 @@
 # Asset reference for testing (keep in sync with the game; see SKILL.md section 6)
 
-Last verified against: 13 objects, 20 books, 5 records, 6 tracks, 38 activities, 35 poses. `T.coverage()` is the
+Last verified against: 13 objects, 20 books, 12 records, 13 tracks, 38 activities, 35 poses. `T.coverage()` is the
 machine check of this list; this file adds the expectations a human or Claude needs.
 
 ## Objects (`OBJECT_CATALOG` in `src/machine.js`, built in `src/room.js`)
@@ -54,13 +54,25 @@ Guy learns a skill only after keeping the book open for 8 s; interrupted reads t
 | record | track | bpm | status |
 |---|---|---|---|
 | Happy Time Parade | `happy` | 132 | free (Skill Machine > Records) |
+| Garage Thunder (rock, E minor) | `rock` | 124 | free (Skill Machine > Records) |
+| Rooftop Beats (hip-hop, A minor) | `hiphop` | 88 | free |
+| Dusty Road Two-Step (upbeat country, D) | `twostep` | 118 | free |
+| Neon Sugar (pop, A minor / C) | `pop` | 118 | free |
+| Midnight Swing Club (jazz, C) | `jazz` | 132 | free |
+| Rainy Day Blues (slow blues, A minor, 12 bars) | `slowblues` | 62 | free |
+| Party Time Mixtape (party, G minor) | `party` | 126 | free |
 | Hits from the Old Days | `classical` | 100 | premium (dev bypass in tests) |
 | Sad Country | `country` | 72 | premium |
 | Blues Collection | `blues` | 94 | premium |
 | Out like a Lamb | `lullaby` | 66 | premium |
 | (stereo's own beat) | `default` | 110 | always |
 
-Records live on the top shelf row. A stereo session may fetch one (75%): grab (top-shelf IK), carry by the top edge,
+All melodies and chord loops are original (no real songs). Each genre track also sets a drum style for Guy at the kit
+(`DRUM_STYLE_BY_TRACK` in `src/hobbies.js`: rock, boombap, train, disco, swing, soft).
+
+Records live on the top shelf row. Up to 5 sleeves stand side by side; with more they overlap like records in a rack
+(each is a little closer to the room, and `rec.z` is the middle of the exposed left strip, where Guy's hand goes). Every
+sleeve repeats its title down the left edge so it still reads when overlapped. A stereo session may fetch one (75%): grab (top-shelf IK), carry by the top edge,
 stand it against the boombox, play, pick it up, put it back. The user can instead start/stop/select tracks from the stereo's
 playback panel or the top-shelf record list; Guy then joins in without touching the stereo.
 
@@ -101,7 +113,8 @@ Needs and allowed arm contacts are in `MANIFEST.activities`.
 | dance-swing | `T.moment('ballroom','swing',4,'front')` | arms swinging wide, alternate knee kicks |
 | record-carry | `T.moment('dance','walk',0,'front',{album:true})` | sleeve hangs from the hand by its top edge |
 
-Other things to eyeball once per release: the Skill Machine screen on the wall, the record list popup, the playback
+Other things to eyeball once per release: the top shelf with all 12 records (`?records=all`: every title readable, no
+sleeves poking out of the shelf), the Skill Machine screen on the wall, the record list popup, the playback
 panel, the skills panel (K), the strap on the guitar, record sleeves on the top shelf, spine titles on the books, and the
 book list popup (long-press a lower shelf at a book: title, read / not read).
 
@@ -124,3 +137,4 @@ book list popup (long-press a lower shelf at a book: title, read / not read).
 - Putting a book back: once the book was let go (`held` = null) the shelf target was lost and the hand reached for the world origin, swinging the arm behind him. `bookTargets` now caches the slot (`s.shelfCache`). Check: `putBook` hand z in his frame never goes below about -0.15.
 - The pose sweep (`T.sweepPoses`) found the fretting wrist bent ~153° (a wrist manages ~90): the guitar was slung too low, so the forearm ran steeply down to the neck while the fingers pointed up. The guitar is now held higher with the neck raised (hold y 1.05, tilt 0.55) and the fingers angled along the neck; the exact hand orientation applies only once the hand is on the neck. Also the `scopeWrong` hand on the barrel (115°).
 - Why the old sweeps missed these: they check completion, exceptions, feet and box overlap only. Anything about *how a pose looks* needs `sweepPoses` or a visual checkpoint. When a visual bug is reported, first ask which measurable invariant it violates and add that to `sweepPoses`.
+- The top shelf only had room for 5 record sleeves (a 6th stood outside the shelf): sleeves now overlap when crowded (`layoutAlbums` in `src/room.js`). `sweepRecords` must pass with `?records=all` (12 records).

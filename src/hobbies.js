@@ -8,7 +8,10 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 // Drums. Pads (see room.js buildDrums): snare, hat, tom1, tom2, floor, crash, ride, kick (foot).
 // A hit is { k: pad, h: 'L' | 'R' | 'F' (foot), v: loudness }. Pads on the drummer's left (x < 0) are played by the left hand.
 // ---------------------------------------------------------------------------------------------------------------
-export const DRUM_STYLE_BY_TRACK = { default: 'rock', happy: 'rock', classical: 'march', country: 'soft', blues: 'rock', lullaby: 'soft' };
+export const DRUM_STYLE_BY_TRACK = {
+  default: 'rock', happy: 'rock', classical: 'march', country: 'soft', blues: 'rock', lullaby: 'soft',
+  rock: 'rock', hiphop: 'boombap', twostep: 'train', pop: 'disco', jazz: 'swing', slowblues: 'soft', party: 'disco',
+};
 export const PAD_SIDE = { snare: 'C', hat: 'L', crash: 'L', tom1: 'L', tom2: 'R', floor: 'R', ride: 'R' };
 
 // what is played on eighth-note `n` (8 per bar) in a style
@@ -27,6 +30,22 @@ export function drumStep(style, n) {
   } else if (style === 'march') {
     hits.push({ k: 'snare', h: i % 2 ? 'R' : 'L', v: i % 2 ? 0.4 : 0.6 });
     if (i === 0 || i === 4) hits.push({ k: 'kick', h: 'F', v: 0.8 });
+  } else if (style === 'boombap') {                             // hip-hop: kick-heavy, hard snare on 2 and 4
+    hits.push({ k: 'hat', h: 'L', v: i % 2 ? 0.4 : 0.6 });
+    if (i === 0 || i === 3 || (i === 5 && bar % 2)) hits.push({ k: 'kick', h: 'F', v: 0.95 });
+    if (i === 2 || i === 6) hits.push({ k: 'snare', h: 'R', v: 0.9 });
+  } else if (style === 'train') {                               // country train beat: the snare chugs on every eighth
+    hits.push({ k: 'snare', h: i % 2 ? 'L' : 'R', v: i === 2 || i === 6 ? 0.7 : 0.35 });
+    if (i === 0 || i === 4) hits.push({ k: 'kick', h: 'F', v: 0.6 });
+  } else if (style === 'disco') {                               // pop / party: four on the floor, off-beat hats
+    if (i % 2 === 1) hits.push({ k: 'hat', h: 'L', v: 0.7 });
+    if (i % 2 === 0) hits.push({ k: 'kick', h: 'F', v: 0.9 });
+    if (i === 2 || i === 6) hits.push({ k: 'snare', h: 'R', v: 0.85 });
+  } else if (style === 'swing') {                               // jazz: ride cymbal pattern, feathered kick, ghost snare
+    if ([0, 2, 3, 4, 6, 7].includes(i)) hits.push({ k: 'ride', h: 'R', v: i === 3 || i === 7 ? 0.35 : 0.5 });
+    if (i === 2 || i === 6) hits.push({ k: 'hat', h: 'L', v: 0.4 });
+    if (i === 0 && bar % 2 === 0) hits.push({ k: 'kick', h: 'F', v: 0.35 });
+    if (i === 5 && bar % 2) hits.push({ k: 'snare', h: 'L', v: 0.3 });
   } else if (style === 'solo') {
     const phase = bar % 6;
     if (phase < 2) groove();

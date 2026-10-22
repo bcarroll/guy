@@ -68,8 +68,11 @@ export const MANIFEST = {
     stars: { then: 'stargaze' }, darksky: { then: 'darkstargaze' }, scopecare: { then: 'scopecare' },
   },
   // records and tracks that must exist
-  albums: { happy: {}, classical: { premium: true }, country: { premium: true }, blues: { premium: true }, lullaby: { premium: true } },
-  tracks: ['default', 'happy', 'classical', 'country', 'blues', 'lullaby'],
+  albums: {
+    happy: {}, rock: {}, hiphop: {}, twostep: {}, pop: {}, jazz: {}, slowblues: {}, party: {},
+    classical: { premium: true }, country: { premium: true }, blues: { premium: true }, lullaby: { premium: true },
+  },
+  tracks: ['default', 'happy', 'rock', 'hiphop', 'twostep', 'pop', 'jazz', 'slowblues', 'party', 'classical', 'country', 'blues', 'lullaby'],
   // the visual checkpoints: freeze Guy at (activity, pose, t) and look from `view`. See assets.md for the full checklist.
   visual: [
     { id: 'read-grab-mid', activity: 'read', pose: 'grab', t: 1.2, view: 'hand:Right', expect: 'handshake grip, thumb up, hand reaches the book, arm in front of him' },

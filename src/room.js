@@ -230,22 +230,39 @@ export function buildRoom(scene) {
     while (g2.measureText(def.title).width > 232 && size > 12) { size -= 1; g2.font = `bold ${size}px sans-serif`; }
     g2.fillText(def.title, 128, 202);
     g2.fillStyle = acc; g2.font = '15px sans-serif'; g2.fillText(def.genre, 128, 232);
+    // the title again, down the left edge, so a sleeve still reads when the next one overlaps it on a crowded shelf
+    g2.save(); g2.translate(26, 118); g2.rotate(-Math.PI / 2);
+    g2.fillStyle = '#fff'; size = 20; g2.font = `bold ${size}px sans-serif`;
+    while (g2.measureText(def.title).width > 216 && size > 11) { size -= 1; g2.font = `bold ${size}px sans-serif`; }
+    g2.fillText(def.title, 0, 0);
+    g2.restore();
     const t = new THREE.CanvasTexture(c);
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
   };
+  // Up to five sleeves stand side by side. More than that overlap like records in a rack: each one sits a little closer
+  // to the room than the one before it, so the left strip of every sleeve shows. rec.z is the middle of the exposed
+  // strip, which is where Guy's hand goes (the last sleeve is fully exposed).
+  const layoutAlbums = () => {
+    const n = shelfAlbums.length, crowded = n > 5;
+    const step = crowded ? 1.44 / (n - 1) : 0.34, z0 = crowded ? -0.72 : -0.68;
+    shelfAlbums.forEach((r, i) => {
+      const x = -0.07 - (crowded ? i * 0.009 : 0), zc = z0 + i * step;
+      r.mesh.position.set(x, r.y, zc);
+      r.z = crowded && i < n - 1 ? zc - 0.155 + step / 2 : zc;
+      r.reachX = x - 0.03;
+    });
+  };
   const addAlbum = (def) => {
-    const i = shelfAlbums.length;
-    const z = -0.68 + i * 0.34;
     const side = mat(0x15151a);
     const mats = [side, new THREE.MeshStandardMaterial({ map: albumArt(def), roughness: 0.6 }), side, side, side, side];
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.31, 0.31), mats);
     const y = 0.04 + 4 * 0.43 + 0.155 + 0.01;
-    mesh.position.set(-0.07, y, z);
     mesh.castShadow = true;
     shelfGroup.add(mesh);
-    const rec = { mesh, row: 4, y, z, color: new THREE.Color(def.color), h: 0.31, w: 0.31, def, kind: 'album', reachX: -0.1 };
+    const rec = { mesh, row: 4, y, z: 0, color: new THREE.Color(def.color), h: 0.31, w: 0.31, def, kind: 'album', reachX: -0.1 };
     shelfAlbums.push(rec);
+    layoutAlbums();
     return rec;
   };
   objects.shelf.albums = shelfAlbums;
