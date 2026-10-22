@@ -5,6 +5,7 @@ import { ROOM } from './room.js';
 import { randomSong, makeJam, plinkSong } from './songs.js';
 import { installHobbies } from './hobbybrain.js';
 
+const PLANT_NAMES = ['plant', 'flowerplant', 'tree'];   // objects Guy can tend with the 'plant' activity
 const lerp = THREE.MathUtils.lerp;
 const clamp = THREE.MathUtils.clamp;
 const smooth = (x) => x * x * (3 - 2 * x);
@@ -600,8 +601,18 @@ export class Brain {
       stretch: () => ['stretching', this.play('stretch', 5)],
       wave: () => ['waving at you', this.walk(0, 2.2, 0), this.play('wave', 3.5)],
       rearrange: () => this.rearrangeSteps(),
-      plant: () => ['tending the plant', this.sideStep('plant', 0.62),
-        this.play('reach', 2.6, { needs: ['plant'], target: () => this.plantLeaf() })],
+      // any of the plants in the room (the user can ask for a particular one: forcePlant)
+      plant: () => ['tending the plants', {
+        type: 'plan',
+        fn: () => {
+          const want = this.forcePlant; this.forcePlant = null;
+          const name = want && this.obj(want) ? want : pick(PLANT_NAMES.filter((n) => this.obj(n)));
+          if (!name) { this.queue.length = 0; return []; }
+          return [...this.sideStep(name, name === 'tree' ? 0.75 : 0.62).fn(), this.play('reach', 2.6, { needs: [name], target: () => this.plantLeaf(name) })];
+        },
+      }],
+      // decorating book: dust a picture frame, wall light or window sill, wiping along its lower edge
+      dust: () => ['dusting the picture frames', { type: 'plan', fn: () => this.dustSteps() }],
       // Without the ball book he only pokes it; with it he kicks properly.
       ball: () => {
         const skilled = this.skills.has('ball');
@@ -1008,10 +1019,32 @@ export class Brain {
     return new THREE.Vector3(l.x + (dx / len) * 0.04, 1.05, l.z + (dz / len) * 0.04);
   }
 
-  plantLeaf() { // a leaf near the top of the plant, on the side Guy stands
-    const p = this.obj('plant'), g = this.g.pos;
+  plantLeaf(name = 'plant') { // a leaf (or bloom, or branch) near the top of the plant, on the side Guy stands
+    const p = this.obj(name), g = this.g.pos;
+    const [out, y] = { plant: [0.1, 0.78], flowerplant: [0.12, 0.74], tree: [0.4, 1.25] }[name] || [0.1, 0.78];
     const dx = g.x - p.x, dz = g.z - p.z, len = Math.hypot(dx, dz) || 1;
-    return new THREE.Vector3(p.x + (dx / len) * 0.1, 0.78, p.z + (dz / len) * 0.1);
+    return new THREE.Vector3(p.x + (dx / len) * out, y, p.z + (dz / len) * out);
+  }
+
+  // Stand 0.55 m in front of a wall piece he can reach (clear floor there) and wipe along the lower edge of its frame.
+  dustSteps() {
+    const grid = makeGrid(this.w.obstacles, INFLATE), spots = [];
+    for (const d of Object.values(this.w.decor)) {
+      if (!d.wall) continue;
+      const back = d.wall === 'back';
+      const x = back ? d.u : -ROOM.w / 2 + 0.55, z = back ? -ROOM.d / 2 + 0.55 : d.u;
+      if (Math.abs(x) > 4.4 || z < -3.5 || z > 3.6 || cellBlocked(grid, x, z)) continue;
+      spots.push({ d, x, z, yaw: back ? Math.PI : -Math.PI / 2 });
+    }
+    if (!spots.length) { this.queue.length = 0; return []; }
+    const s = pick(spots), d = s.d, name = d.name, t0 = this.time;
+    const y = clamp(d.v - d.hh + 0.12, 0.95, 1.7), span = Math.min(d.hw * 0.6, 0.35);
+    const target = () => {
+      const u = d.u + Math.sin((this.time - t0) * 2.4) * span;
+      return d.wall === 'back' ? new THREE.Vector3(u, y, -ROOM.d / 2 + 0.06) : new THREE.Vector3(-ROOM.w / 2 + 0.06, y, u);
+    };
+    this.ui(`dusting the ${d.label}`);
+    return [this.walk(s.x, s.z, s.yaw), this.play('reach', 5, { needs: [name], target })];
   }
 
   benchEdge(bench) { // the near edge of the seat
@@ -1248,7 +1281,7 @@ export class Brain {
     const need = {
       piano: ['piano'], sitpiano: ['piano', 'bench'], plink: ['piano'], jam: ['piano', 'table'], jampiano: ['piano', 'table'],
       jamsit: ['piano', 'bench', 'table'], dance: ['table'], dancemoves: ['table'], ballroom: ['table'], lamp: ['lamp'], mood: ['lamp'], read: ['shelf'], books: ['shelf'],
-      guitar: ['guitar'], jamguitar: ['guitar'], plant: ['plant'],
+      guitar: ['guitar'], jamguitar: ['guitar'],
       bang: ['drums'], drums: ['drums'], drumsolo: ['drums'], jamdrums: ['drums'],
       scribble: ['easel'], paint: ['easel'], mixpaint: ['easel'], portrait: ['easel'],
       peek: ['telescope'], stargaze: ['telescope'], darkstargaze: ['telescope'], scopecare: ['telescope'], lighton: ['lamp'],
@@ -1257,7 +1290,7 @@ export class Brain {
       dance: ['stereo'], dancemoves: ['dance.moves'], ballroom: ['dance.ballroom'], jam: ['stereo', 'piano'], jampiano: ['stereo', 'piano'], jamsit: ['stereo', 'piano'],
       piano: ['piano'], sitpiano: ['piano'], dribble: ['ball'], toss: ['ball'], mood: ['lighting'], guitar: ['guitar'],
       drums: ['drums'], drumsolo: ['drums.solo'], jamdrums: ['drums.band'], paint: ['easel'], mixpaint: ['easel.colour'], portrait: ['easel.portrait'],
-      stargaze: ['telescope'], darkstargaze: ['telescope.dark'], scopecare: ['telescope.care'],
+      stargaze: ['telescope'], darkstargaze: ['telescope.dark'], scopecare: ['telescope.care'], dust: ['decorate'],
     }[act] || [];
     // with the music already on he doesn't need to know how to work the stereo to join in
     if (!skill.filter((k) => !(k === 'stereo' && this.music)).every((k) => this.skills.has(k))) return false;
@@ -1269,6 +1302,8 @@ export class Brain {
     if (act === 'peek' && ['telescope', 'telescope.dark', 'telescope.care'].some((k) => this.skills.has(k))) return false;
     if (act === 'jamdrums' && !this.music) return false;
     if (act === 'lighton') return false;
+    if (act === 'plant' && !PLANT_NAMES.some((n) => this.obj(n))) return false;
+    if (act === 'dust' && !Object.values(this.w.decor).some((d) => d.wall)) return false;
     if (['ball', 'dribble', 'toss'].includes(act) && this.w.ballGone) return false;
     // both hands go out to the sides of the ball: not while it is jammed against furniture (he kicks it free first)
     if (['dribble', 'toss'].includes(act) && this.w.ball) {
@@ -1304,7 +1339,7 @@ export class Brain {
       wander: 3, dancemoves: 1.5, ballroom: 1.5, piano: 1, sitpiano: 1.2, plink: 1.4, dance: 1.8, jam: 0.9, jampiano: 0.5, jamsit: 0.9, lamp: 1.2, mood: 1.1,
       read: 1.8 + unread * 1.8, stretch: 1.3, wave: 0.7, ball: 2, dribble: 1.1, toss: 1.1, rearrange: 0.7, guitar: 1.6, plant: 0.6, jamguitar: 1.5,
       bang: 1.3, drums: 1.6, drumsolo: 1.2, jamdrums: 1.5, scribble: 1.3, paint: 1.6, mixpaint: 1.3, portrait: 1.4,
-      peek: 1.3, stargaze: 1.6, darkstargaze: 1.3, scopecare: 0.6,
+      peek: 1.3, stargaze: 1.6, darkstargaze: 1.3, scopecare: 0.6, dust: 0.9,
     };
     // the music is on: he is in the mood to join in
     if (this.music) for (const k of ['dance', 'dancemoves', 'ballroom', 'jam', 'jampiano', 'jamsit', 'jamguitar', 'jamdrums']) weights[k] *= 2.5;
@@ -1315,7 +1350,7 @@ export class Brain {
       ball: ['ball'], dribble: ['ball'], toss: ['ball'], guitar: ['guitar'], jamguitar: ['guitar', 'stereo'],
       bang: ['drums'], drums: ['drums'], drumsolo: ['drums'], jamdrums: ['drums', 'stereo'],
       scribble: ['paint'], paint: ['paint'], mixpaint: ['paint'], portrait: ['paint'],
-      peek: ['scope'], stargaze: ['scope'], darkstargaze: ['scope'], scopecare: ['scope', 'fidget'],
+      peek: ['scope'], stargaze: ['scope'], darkstargaze: ['scope'], scopecare: ['scope', 'fidget'], dust: ['fidget'],
     };
     // the last two activities count, so he doesn't drift back to the same theme straight away
     const lastTags = [this.last, this.prev].flatMap((n) => tags[n] || []);
@@ -1353,7 +1388,7 @@ export class Brain {
       shelf: ['read'],
       armchair: ['read'],
       lamp: k('lighting') ? ['mood', 'lamp'] : ['lamp'],
-      plant: ['plant'],
+      plant: ['plant'], flowerplant: ['plant'], tree: ['plant'],
       ball: k('ball') ? ['dribble', 'toss', 'ball'] : ['ball'],
       guitar: k('guitar') ? (this.music ? ['jamguitar'] : ['guitar']) : [],
       drums: this.music && k('drums.band') ? ['jamdrums'] : ['bang', 'drums', 'drumsolo'],
@@ -1365,6 +1400,7 @@ export class Brain {
     const act = (tries || []).filter((a) => this.available(a));
     if (!act.length) return { ok: false, message: "Guy can't do anything with that right now." };
     this.skip();                                   // stands up, switches the stereo off, etc. first
+    if (PLANT_NAMES.includes(name)) this.forcePlant = name;   // the plant he was asked about, not just any plant
     this.pendingActivity = pick(act);
     return { ok: true, message: 'On it!' };
   }

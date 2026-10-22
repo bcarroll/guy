@@ -34,6 +34,9 @@ export const BOOK_CATALOG = [
     blurb: 'how to mix colours on a palette', requires: { object: 'easel' }, desc: 'Mix the paints on a palette before they touch the canvas.' },
   { id: 'portrait', title: 'Portraits & Landscapes', teaches: 'easel.portrait', color: 0x7f8c8d, thick: 0.06, height: 0.33,
     blurb: 'how to paint portraits and landscapes', requires: { object: 'easel' }, desc: 'Faces, hills, suns and still lifes, then step back and admire.' },
+  // ---- decorating (no object needed: the room always has something to dust) ----
+  { id: 'decorating', title: 'Home Decorating for Robots', teaches: 'decorate', color: 0xc8744a, thick: 0.06, height: 0.32,
+    blurb: 'how to look after the room: dusting the picture frames and the windows', desc: 'Dust the frames, wipe the window sills and keep the room looking its best. Pictures, plants, rugs and more are in the Skill Machine under Decor.' },
   // ---- telescope ----
   { id: 'stars', title: 'Stargazing for Robots', teaches: 'telescope', color: 0x1b2a6b, thick: 0.055, height: 0.31,
     blurb: 'how to use a telescope', requires: { object: 'telescope' }, desc: 'Aim it, focus it, and look through the right end.' },
@@ -77,6 +80,7 @@ export const SKILL_INFO = {
   easel: { name: 'Painting', book: 'Painting for Robots', unlocks: ['Paint on the easel with a brush', 'Before this he can only scribble with a finger'] },
   'easel.colour': { name: 'Colour mixing', book: 'Colour Mixing', unlocks: ['Mix colours on a palette before painting'] },
   'easel.portrait': { name: 'Portraits & landscapes', book: 'Portraits & Landscapes', unlocks: ['Paint recognisable pictures, then step back to admire them'] },
+  decorate: { name: 'Decorating', book: 'Home Decorating for Robots', unlocks: ['Dust the picture frames, wall lights and window sills', 'Before this he only tends the plants'] },
   telescope: { name: 'Stargazing', book: 'Stargazing for Robots', unlocks: ['Aim the telescope and look through the right end', 'Before this he looks in the wrong end'] },
   'telescope.dark': { name: 'Dark-sky stargazing', book: 'Dark Sky Rules', unlocks: ['Switch the lamp off first for a better view'] },
   'telescope.care': { name: 'Telescope care', book: 'Looking After Your Telescope', unlocks: ['Wipe the lens and tube, check the tripod'] },

@@ -19,19 +19,32 @@ export const OBJECT_CATEGORIES = [
   { id: 'games', name: 'Games', icon: '⚽' },
 ];
 
+// The order of the sub-headings inside a category that uses them (Decor & lighting has a lot of things in it).
+export const DECOR_SUBS = ['Plants', 'Wall art', 'Windows', 'Rugs', 'Lighting', 'Small furniture'];
+
 export const OBJECT_CATALOG = [
   { id: 'piano', cat: 'music', name: 'Upright Piano', icon: '🎹', desc: 'Scales, tunes and jam sessions. Heavy: only you can move it.', core: true },
   { id: 'bench', cat: 'music', name: 'Piano Bench', icon: '🪑', desc: 'Guy pulls this up to the piano.', core: true },
   { id: 'table', cat: 'music', name: 'Stereo & Table', icon: '📻', desc: 'The boombox and the table it sits on.', core: true },
   { id: 'shelf', cat: 'furniture', name: 'Bookshelf', icon: '📚', desc: 'Where the books live. Heavy: only you can move it.', core: true },
-  { id: 'lamp', cat: 'decor', name: 'Floor Lamp', icon: '💡', desc: 'On and off, plus moods and light shows with the right book.', core: true },
+  { id: 'lamp', cat: 'decor', sub: 'Lighting', name: 'Floor Lamp', icon: '💡', desc: 'On and off, plus moods and light shows with the right book.', core: true },
   { id: 'armchair', cat: 'furniture', name: 'Armchair', icon: '🛋️', desc: 'A comfortable place to read.', core: true },
-  { id: 'plant', cat: 'decor', name: 'Potted Plant', icon: '🪴', desc: 'Makes the room feel lived in.', core: true },
+  { id: 'plant', cat: 'decor', sub: 'Plants', name: 'Potted Plant', icon: '🪴', desc: 'Makes the room feel lived in.', core: true },
   { id: 'ball', cat: 'games', name: 'Red Ball', icon: '⚽', desc: 'Kick it, dribble it, toss it.', core: true, ball: true },
-  { id: 'rug', cat: 'decor', name: 'Round Rug', icon: '🟥', desc: 'A soft rug for the middle of the floor.', core: true, decor: true },
-  { id: 'picture', cat: 'decor', name: 'Wall Picture', icon: '🖼️', desc: 'A sunset in a frame on the back wall. Drag it along the wall.', core: true, decor: true },
-  { id: 'window', cat: 'decor', name: 'Window', icon: '🪟', desc: 'Lets the daylight in. Drag it along the left wall.', core: true, decor: true },
-  { id: 'window2', cat: 'decor', name: 'Second Window', icon: '🪟', desc: 'Another window, for the back wall. Drag it along the wall.', free: true, decor: true },
+  { id: 'rug', cat: 'decor', sub: 'Rugs', name: 'Round Rug', icon: '🟥', desc: 'A soft rug for the middle of the floor. Hold on it, then drag to move it.', core: true, decor: true },
+  { id: 'picture', cat: 'decor', sub: 'Wall art', name: 'Wall Picture', icon: '🖼️', desc: 'A sunset in a frame on the back wall. Drag it along the wall.', core: true, decor: true },
+  { id: 'window', cat: 'decor', sub: 'Windows', name: 'Window', icon: '🪟', desc: 'Lets the daylight in. Drag it along the left wall.', core: true, decor: true },
+  { id: 'window2', cat: 'decor', sub: 'Windows', name: 'Second Window', icon: '🪟', desc: 'Another window, for the back wall. Drag it along the wall.', free: true, decor: true },
+  { id: 'flowerplant', cat: 'decor', sub: 'Plants', name: 'Flowering Plant', icon: '🌸', desc: 'A pot of pink, yellow and white blooms. Guy tends it like the other plants.', free: true },
+  { id: 'tree', cat: 'decor', sub: 'Plants', name: 'Indoor Tree', icon: '🌳', desc: 'Tall and leafy in a big planter. Heavy: only you can move it.', free: true },
+  { id: 'art_mountains', cat: 'decor', sub: 'Wall art', name: 'Mountain Picture', icon: '🏔️', desc: 'Hills at dusk over a still lake. Hangs on the left wall; drag it along.', free: true, decor: true },
+  { id: 'art_abstract', cat: 'decor', sub: 'Wall art', name: 'Abstract Picture', icon: '🔶', desc: 'Bold blocks of colour in a pale frame. Hangs on the back wall.', free: true, decor: true },
+  { id: 'art_moon', cat: 'decor', sub: 'Wall art', name: 'Moon Picture', icon: '🌙', desc: 'A big moon over a quiet hill. Hangs on the left wall.', free: true, decor: true },
+  { id: 'rug2', cat: 'decor', sub: 'Rugs', name: 'Blue Woven Rug', icon: '🟦', desc: 'A rectangular rug with a cream border and a diamond. Hold on it, then drag to move; long-press to turn it.', free: true, decor: true },
+  { id: 'rug3', cat: 'decor', sub: 'Rugs', name: 'Striped Runner', icon: '🟩', desc: 'A long green and cream runner. Hold on it, then drag to move; long-press to turn it.', free: true, decor: true },
+  { id: 'sconce', cat: 'decor', sub: 'Lighting', name: 'Wall Light', icon: '🏮', desc: 'A brass wall light that glows when the room lights are on. Drag it along the wall.', free: true, decor: true },
+  { id: 'coffeetable', cat: 'decor', sub: 'Small furniture', name: 'Coffee Table', icon: '☕', desc: 'A low walnut table with two books and a cup.', free: true },
+  { id: 'nightstand', cat: 'decor', sub: 'Small furniture', name: 'Nightstand', icon: '🗄️', desc: 'A little cabinet with a drawer and a clock on top.', free: true },
   { id: 'guitar', cat: 'music', name: 'Acoustic Guitar', icon: '🎸', desc: 'On its stand. Comes with the book "Guitar for Beginners".', free: true, book: 'guitar' },
   { id: 'workbench', cat: 'furniture', name: 'Workbench', icon: '🛠️', desc: 'Build furniture when the tools and materials are available.', locked: true },
   { id: 'drums', cat: 'music', name: 'Drum Kit', icon: '🥁', desc: 'Kick, snare, hi-hat and cymbals on a stool. Comes with the book "Drumming for Robots".', free: true, book: 'drumming' },
@@ -162,7 +175,8 @@ export function initMachine({ world, guy, persist, notify, remove }) {
       const rank = { inroom: 0, removed: 1, available: 2, locked: 3 };
       const sections = [];
       for (const c of OBJECT_CATEGORIES) {
-        const items = OBJECT_CATALOG.filter((d) => d.cat === c.id).sort((a, b) => rank[objectStatus(a)] - rank[objectStatus(b)]);
+        const subOf = (d) => (d.sub ? DECOR_SUBS.indexOf(d.sub) : -1);
+        const items = OBJECT_CATALOG.filter((d) => d.cat === c.id).sort((a, b) => subOf(a) - subOf(b) || rank[objectStatus(a)] - rank[objectStatus(b)]);
         const here = items.filter((d) => objectStatus(d) === 'inroom').length;
         sections.push({ c, items, here });
       }
@@ -171,7 +185,7 @@ export function initMachine({ world, guy, persist, notify, remove }) {
         .map((c) => `<button class="chip${cat === c.id ? ' on' : ''}" data-cat="${c.id}">${c.icon ? c.icon + ' ' : ''}${c.name} <span>${c.here}/${c.total}</span></button>`).join('');
       for (const { c, items, here } of sections) {
         if (cat !== 'all' && cat !== c.id) continue;
-        const cards = items.map((d) => {
+        const objectCard = (d) => {
           const st = objectStatus(d);
           const base = { icon: d.icon, name: d.name, desc: d.desc, status: st };
           if (st === 'inroom') {
@@ -184,6 +198,12 @@ export function initMachine({ world, guy, persist, notify, remove }) {
           const i = handlers.push(() => addObject(d)) - 1;
           return card({ ...base, label: st === 'removed' ? 'Put back' : 'Add', action: i,
             note: st === 'removed' ? 'You took this out earlier.' : d.book ? 'Comes with its own book.' : '' });
+        };
+        let lastSub = null;
+        const cards = items.flatMap((d) => {
+          const head = d.sub && d.sub !== lastSub ? [`<div class="subhead">${d.sub}</div>`] : [];
+          lastSub = d.sub || lastSub;
+          return [...head, objectCard(d)];
         });
         groups[`${c.icon} ${c.name} · ${here} of ${items.length} in the room`] = cards;
       }

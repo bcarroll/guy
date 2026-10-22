@@ -1,6 +1,6 @@
 # Asset reference for testing (keep in sync with the game; see SKILL.md section 6)
 
-Last verified against: 17 objects (13 + 4 decor), 20 books, 12 records, 13 tracks, 38 activities, 35 poses. `T.coverage()` is the
+Last verified against: 27 objects (13 + 14 decor and decor furniture), 21 books, 12 records, 13 tracks, 39 activities, 35 poses. `T.coverage()` is the
 machine check of this list; this file adds the expectations a human or Claude needs.
 
 ## Objects (`OBJECT_CATALOG` in `src/machine.js`, built in `src/room.js`)
@@ -19,7 +19,17 @@ machine check of this list; this file adds the expectations a human or Claude ne
 | drums | drum kit + stool (kit faces local -z, stool at +z; added free, brings `Drumming for Robots`) | medium | `drums`, `drums.solo`, `drums.band` | unskilled `bang`; `drums` / `drumsolo`; stereo playing + band skill: `jamdrums` | side-steps onto the stool from 0.55 m to its right; sticks come off the snare, tips follow the pads (`obj.pads`); right foot works the kick | stick tips land within ~10 cm of the pad at each hit (`hitErr` idea: compare fingertip-stick tip to pad at the trigger frame) |
 | easel | painting easel; canvas is a live `CanvasTexture` (`obj.paint`) | light | `easel`, `easel.colour`, `easel.portrait` | unskilled `scribble` (finger, grey); `paint`, `mixpaint`, `portrait` | stands 0.59 m in front of the canvas; palette picked up from the tray into the left hand and put back; brush tip draws the stroke as it moves; old paintings are washed over with white strokes, never cleared by magic | check the canvas in a screenshot: strokes must appear where the brush is |
 | telescope | tripod + aimable tube (`obj.setAim`) | light | `telescope`, `telescope.dark`, `telescope.care` | unskilled `peek` (wrong end); `stargaze`, `darkstargaze`, `scopecare` | swings the tube with one hand, then stands behind the eyepiece with knees bent / waist leaning, eye at the eyepiece, left hand on the focus knob | `darkstargaze` switches the lamp off first and back on afterwards (`lampOffByMe`, forced `lighton` if interrupted) |
-| rug | round rug (`world.decor`, category decor) | n/a (not an obstacle) | none | none | Guy walks over it | long-press > Remove (a drag on it orbits the camera instead); Skill Machine Remove / Put back |
+| rug | round rug (`world.decor`, category decor) | n/a (not an obstacle) | none | none | Guy walks over it | quick drag orbits the camera; **hold ~0.5 s then drag** moves it; hold and release for the menu (Remove; Turn only for rectangular rugs); Skill Machine Remove / Put back |
+| rug2 | **Blue Woven Rug** 2.4 x 1.6 (canvas texture, free, saved between visits) | n/a | none | none | | same rug controls; Turn (quarter turn) swaps its extents; lies 0.016 above the floor so overlapping rugs never z-fight |
+| rug3 | **Striped Runner** 0.8 x 2.6 (free) | n/a | none | none | | same rug controls; lies 0.022 above the floor |
+| art_mountains | **Mountain Picture** 0.9 x 0.6, left wall (free) | n/a | none | none | | wall piece: drag along its wall; Guy can dust it (`dust`) once he has read the decorating book |
+| art_abstract | **Abstract Picture** 0.6 x 0.6, back wall (free) | n/a | none | none | | same |
+| art_moon | **Moon Picture** 0.5 x 0.7, left wall (free) | n/a | none | none | | same |
+| sconce | **Wall Light**, back wall (free); glows with the floor lamp (on/off and colour in a light show), no real light source | n/a | none | none | | `lampState.followers` in `src/room.js`; tested by `T.sweepDecor` |
+| flowerplant | **Flowering Plant** (free) | light | none | `plant` (alias target: this plant) | any free side, hand near a bloom | one of `PLANT_NAMES` in `src/brain.js` |
+| tree | **Indoor Tree** 2.4 m (free) | heavy (only you move it) | none | `plant` (this tree) | 0.75 m from the planter, hand on a low branch | cannot stand under a wall piece it would hit |
+| coffeetable | **Coffee Table** (free; two books and a cup on it) | medium | none | none (Guy cannot use it) | | rearranged by Guy like other medium things |
+| nightstand | **Nightstand** (free) | light | none | none | | |
 | picture | framed sunset on the back wall (`world.decor`) | n/a | none | none | | drag along the back wall; kept off other wall pieces and off furniture taller than its lower edge |
 | window | window on the left wall (`world.decor`) | n/a | none | none | | drag along the left wall; cannot cover the Skill Machine |
 | window2 | **Second Window** on the back wall (added free from the Skill Machine, saved between visits) | n/a | none | none | | same wall rules |
@@ -55,6 +65,7 @@ left wall and cannot be removed, moved or rotated.
 | stars | Stargazing for Robots | `telescope` | telescope object | `stargaze` | comes with the telescope |
 | darksky | Dark Sky Rules | `telescope.dark` | telescope object | `darkstargaze` | no (Skill Machine) |
 | scopecare | Looking After Your Telescope | `telescope.care` | telescope object | `scopecare` | no (Skill Machine) |
+| decorating | Home Decorating for Robots | `decorate` | none | `dust` (wipes along the bottom edge of a frame, wall light or sill) | no (Skill Machine) |
 | woodwork | premium | | workbench | | locked |
 
 Guy learns a skill only after keeping the book open for 8 s; interrupted reads teach nothing.
@@ -90,7 +101,7 @@ playback panel or the top-shelf record list; Guy then joins in without touching 
 
 wander, stretch, wave, piano, sitpiano, plink, jam, jampiano, jamsit, dance, lamp, mood, plant, read (alias `books`),
 rearrange, ball, dribble, toss, guitar, jamguitar, bang, drums, drumsolo, jamdrums, scribble, paint, mixpaint, portrait, peek,
-stargaze, darkstargaze, scopecare, dancemoves, ballroom; internal recovery: putback, putguitar, dropball, lighton.
+stargaze, darkstargaze, scopecare, dancemoves, ballroom, dust (needs `decorate` and a wall piece with clear floor in front); internal recovery: putback, putguitar, dropball, lighton.
 Needs and allowed arm contacts are in `MANIFEST.activities`.
 
 ## Visual checkpoints (`T.moment(...)`, then screenshot)
@@ -116,6 +127,7 @@ Needs and allowed arm contacts are in `MANIFEST.activities`.
 | scope-aim | `T.moment('stargaze','scopeAim',2.2,'top')` | hand on top of the barrel while the tube swings |
 | scope-wrong | `T.moment('peek','scopeWrong',2.8,'side')` | eye at the big lens end, other hand on his knee |
 | scope-care | `T.moment('scopecare','scopeCare',13,'front')` | squatting by the tripod, a hand on one leg |
+| dust-frame | `T.moment('dust','reach',2.5,'front')` | facing the wall, right hand wiping along the lower edge of a frame (not inside the wall or his head) |
 | dance-twist | `T.moment('dancemoves','twist',4,'front')` | hips and shoulders twist opposite ways, knees bent and apart |
 | dance-shuffle | `T.moment('dancemoves','shuffle',4,'front')` | one foot slides forward at a time, elbows pumping alternately |
 | dance-twirl | `T.moment('dancemoves','twirl',2.5,'front')` | arms out, spinning on the spot (`fx.spin`) clear of furniture |
@@ -149,3 +161,4 @@ book list popup (long-press a lower shelf at a book: title, read / not read).
 - Why the old sweeps missed these: they check completion, exceptions, feet and box overlap only. Anything about *how a pose looks* needs `sweepPoses` or a visual checkpoint. When a visual bug is reported, first ask which measurable invariant it violates and add that to `sweepPoses`.
 - The top shelf only had room for 5 record sleeves (a 6th stood outside the shelf): sleeves now overlap when crowded (`layoutAlbums` in `src/room.js`). `sweepRecords` must pass with `?records=all` (12 records).
 - The rug, picture and windows used to be fixed meshes that could not be removed; they are `world.decor` now. `fits()` also keeps furniture out of wall pieces, and `decorFits()` keeps wall pieces off the Skill Machine and each other. Run `T.sweepDecor()`.
+- Putting a removed object back (`restoreObject`) only checked that it fitted at its old spot, so the easel could return right in front of the drum kit with its standing spot blocked (found as an intermittent `paint` / `scribble` failure with `drums` overlaps in the second `runAll`). It now also needs its own standing spot clear and must not sit on someone else's (`ownStandClear`, `onSomeonesStand` in `src/room.js`). Run `runAll` at least twice in a row: the second run starts with the room full.

@@ -280,6 +280,7 @@ export function buildRoom(scene) {
       lampLight.intensity = this.on ? this.base : 0;
       shadeMat.emissive.copy(this.color);
       shadeMat.emissiveIntensity = this.on ? 0.9 : 0;
+      for (const f of this.followers || []) f(this.on, this.color);     // wall lights glow with the lamp
     },
     set(on) { this.on = on; if (!on) this.mode = 'normal'; this.apply(); },
     toggle() { this.set(!this.on); },
@@ -337,13 +338,25 @@ export function buildRoom(scene) {
     room.add(group);
     build(group);
     const d = {
-      name, label, decor: true, removable: true, group, wall: o.wall || null, hw: o.hw || 0, hh: o.hh || 0, radius: o.radius || 0,
+      name, label, decor: true, removable: true, group, wall: o.wall || null, hw: o.hw || 0, hh: o.hh || 0,
+      hx: o.hx || 0, hz: o.hz || 0, rot: 0,          // floor pieces: half sizes along x and z (swapped on odd quarter turns)
+      get ex() { return this.rot % 2 ? this.hz : this.hx; },
+      get ez() { return this.rot % 2 ? this.hx : this.hz; },
       home: { u: o.u, v: o.v }, u: o.u, v: o.v,
       plane: o.wall ? WALL[o.wall].plane : new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
       set(u, v) {
         this.u = u; this.v = v;
         if (this.wall) { group.position.copy(WALL[this.wall].at(u, v)); group.rotation.y = WALL[this.wall].rotY; }
-        else group.position.set(u, 0, v);
+        else { group.position.set(u, 0, v); group.rotation.y = (this.rot * Math.PI) / 2; }
+      },
+      // a quarter turn for a floor piece, if the turned piece still fits where it is
+      turn(dir) {
+        if (this.wall || this.hx === this.hz) return false;
+        const was = this.rot;
+        this.rot = (this.rot + dir + 4) % 4;
+        if (!decorFits(this, this.u, this.v)) { this.rot = was; return false; }
+        this.set(this.u, this.v);
+        return true;
       },
       // a point on the plane the piece lives on -> its (u, v)
       uv(p) { return this.wall === 'left' ? { u: p.z, v: p.y } : this.wall === 'back' ? { u: p.x, v: p.y } : { u: p.x, v: p.z }; },
@@ -356,7 +369,7 @@ export function buildRoom(scene) {
   // Room on its wall (or, for the rug, on the floor) for `d` at (u, v)? Clear of the other pieces, the Skill Machine and furniture
   // standing against the wall that is taller than the piece's lower edge.
   const decorFits = (d, u, v) => {
-    if (!d.wall) return Math.abs(u) <= ROOM.w / 2 - d.radius && Math.abs(v) <= ROOM.d / 2 - d.radius;
+    if (!d.wall) return Math.abs(u) <= ROOM.w / 2 - d.ex && Math.abs(v) <= ROOM.d / 2 - d.ez;     // a rug stays inside the room (rugs may overlap: each lies a little above the last)
     const W = WALL[d.wall];
     if (u - d.hw < W.lo + 0.05 || u + d.hw > W.hi - 0.05 || v - d.hh < 0.45 || v + d.hh > ROOM.h - 0.1) return false;
     for (const o of Object.values(decor)) {
@@ -409,11 +422,132 @@ export function buildRoom(scene) {
     ring.position.y = 0.012;
     g.add(ring);
   };
-  makeDecor('rug', 'rug', { radius: 1.8, u: 0, v: 0.4 }, buildRug);
+  // Rugs drawn on a canvas: `paint(ctx, w, h)` fills it; the plane lies `y` above the floor so overlapping rugs never fight.
+  const buildCanvasRug = (w, h, y, paint) => (g) => {
+    const c = document.createElement('canvas');
+    c.width = Math.round(w * 200); c.height = Math.round(h * 200);
+    paint(c.getContext('2d'), c.width, c.height);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
+    m.rotation.x = -Math.PI / 2;
+    m.position.y = y;
+    m.receiveShadow = true;
+    g.add(m);
+  };
+  // Blue Woven Rug 2.4 x 1.6: a navy field, a cream border with a thin gold line, and a diamond in the middle
+  const buildWovenRug = buildCanvasRug(2.4, 1.6, 0.016, (x, W, H) => {
+    x.fillStyle = '#e9e0c9'; x.fillRect(0, 0, W, H);
+    x.fillStyle = '#2b4a7c'; x.fillRect(18, 18, W - 36, H - 36);
+    x.strokeStyle = '#c9a24a'; x.lineWidth = 5; x.strokeRect(34, 34, W - 68, H - 68);
+    x.fillStyle = '#8fb0d8';
+    x.beginPath(); x.moveTo(W / 2, 62); x.lineTo(W / 2 + 150, H / 2); x.lineTo(W / 2, H - 62); x.lineTo(W / 2 - 150, H / 2); x.closePath(); x.fill();
+    x.fillStyle = '#2b4a7c';
+    x.beginPath(); x.moveTo(W / 2, 100); x.lineTo(W / 2 + 90, H / 2); x.lineTo(W / 2, H - 100); x.lineTo(W / 2 - 90, H / 2); x.closePath(); x.fill();
+    x.fillStyle = '#e9e0c9';
+    x.beginPath(); x.arc(W / 2, H / 2, 20, 0, Math.PI * 2); x.fill();
+    for (let i = 0; i < 12; i++) { x.fillStyle = i % 2 ? '#c9a24a' : '#8fb0d8'; x.fillRect(48 + i * ((W - 120) / 11), 46, 14, 12); x.fillRect(48 + i * ((W - 120) / 11), H - 58, 14, 12); }
+  });
+  // Striped Runner 0.8 x 2.6: long green and cream stripes with fringe at both ends
+  const buildRunnerRug = buildCanvasRug(0.8, 2.6, 0.022, (x, W, H) => {
+    x.fillStyle = '#f0e8d2'; x.fillRect(0, 0, W, H);
+    const bands = ['#2f6b4f', '#f0e8d2', '#b5523b', '#f0e8d2', '#2f6b4f'];
+    const bw = (W - 24) / bands.length;
+    bands.forEach((col, i) => { x.fillStyle = col; x.fillRect(12 + i * bw, 20, bw, H - 40); });
+    x.fillStyle = '#d9b44a';
+    for (let y = 60; y < H - 60; y += 70) x.fillRect(12, y, W - 24, 6);
+    x.strokeStyle = '#f0e8d2'; x.lineWidth = 3;
+    for (let i = 0; i < 14; i++) { const fx = 14 + i * ((W - 28) / 13); x.beginPath(); x.moveTo(fx, 20); x.lineTo(fx, 4); x.moveTo(fx, H - 20); x.lineTo(fx, H - 4); x.stroke(); }
+  });
+
+  // Wall pictures drawn on a canvas inside a frame. w, h = the artwork; the frame adds a little all round.
+  const buildArt = (w, h, frameCol, paint) => (g) => {
+    const f = 0.045;
+    box(w + f * 2, h + f * 2, 0.04, mat(frameCol), 0, 0, 0.02, g);
+    const c = document.createElement('canvas');
+    c.width = Math.round(w * 400); c.height = Math.round(h * 400);
+    paint(c.getContext('2d'), c.width, c.height);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const art = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex }));
+    art.position.z = 0.0415;
+    g.add(art);
+  };
+  // "Mountain Dusk": a dusk sky, three ranges of hills and a lake that holds the sun's reflection (0.9 x 0.6)
+  const buildMountainArt = buildArt(0.9, 0.6, 0x6b4a2f, (x, W, H) => {
+    const sky = x.createLinearGradient(0, 0, 0, H * 0.62);
+    sky.addColorStop(0, '#3b4a8c'); sky.addColorStop(0.6, '#e08a6a'); sky.addColorStop(1, '#f7c97a');
+    x.fillStyle = sky; x.fillRect(0, 0, W, H);
+    x.fillStyle = '#fbe9b0'; x.beginPath(); x.arc(W * 0.7, H * 0.46, H * 0.09, 0, Math.PI * 2); x.fill();
+    const range = (col, base, peaks) => { x.fillStyle = col; x.beginPath(); x.moveTo(0, H * 0.66); peaks.forEach(([px, py]) => x.lineTo(W * px, H * (base - py))); x.lineTo(W, H * 0.66); x.closePath(); x.fill(); };
+    range('#6a5a8a', 0.66, [[0.1, 0.2], [0.28, 0.34], [0.46, 0.18], [0.7, 0.3], [0.9, 0.16]]);
+    range('#4a3f6e', 0.66, [[0.0, 0.1], [0.2, 0.18], [0.4, 0.08], [0.6, 0.2], [0.8, 0.1], [1.0, 0.18]]);
+    range('#2c2748', 0.66, [[0.05, 0.05], [0.3, 0.1], [0.55, 0.04], [0.85, 0.09]]);
+    x.fillStyle = '#35507a'; x.fillRect(0, H * 0.66, W, H * 0.34);
+    x.fillStyle = 'rgba(251,233,176,0.55)'; for (let i = 0; i < 7; i++) x.fillRect(W * 0.7 - 40 + i * 4, H * 0.7 + i * 14, 80 - i * 8, 5);
+  });
+  // "Bright Shapes": flat blocks of colour (0.6 x 0.6)
+  const buildAbstractArt = buildArt(0.6, 0.6, 0xf2f0ea, (x, W, H) => {
+    x.fillStyle = '#f4ecd8'; x.fillRect(0, 0, W, H);
+    x.fillStyle = '#e4572e'; x.beginPath(); x.arc(W * 0.34, H * 0.36, W * 0.22, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#17a2a2'; x.fillRect(W * 0.52, H * 0.12, W * 0.34, H * 0.4);
+    x.fillStyle = '#f2b134'; x.beginPath(); x.arc(W * 0.62, H * 0.86, W * 0.26, Math.PI, 0); x.fill();
+    x.fillStyle = '#26323a'; x.fillRect(W * 0.08, H * 0.7, W * 0.3, H * 0.07);
+    x.strokeStyle = '#26323a'; x.lineWidth = 4; x.beginPath(); x.moveTo(W * 0.5, H * 0.02); x.lineTo(W * 0.5, H * 0.98); x.stroke();
+  });
+  // "Moon Over the Hill": a big pale moon, stars, a hill and a lit window (0.5 x 0.7)
+  const buildMoonArt = buildArt(0.5, 0.7, 0x1c1c22, (x, W, H) => {
+    const sky = x.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, '#0d1b3d'); sky.addColorStop(1, '#2b3f7a');
+    x.fillStyle = sky; x.fillRect(0, 0, W, H);
+    x.fillStyle = '#fff6d6'; for (let i = 0; i < 40; i++) { const sx = (i * 73 % 100) / 100 * W, sy = (i * 37 % 60) / 100 * H; x.fillRect(sx, sy, 2, 2); }
+    x.fillStyle = '#f4efd0'; x.beginPath(); x.arc(W * 0.55, H * 0.3, W * 0.24, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#0d1b3d'; x.beginPath(); x.arc(W * 0.64, H * 0.27, W * 0.2, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#10182c'; x.beginPath(); x.moveTo(0, H); x.lineTo(0, H * 0.76); x.quadraticCurveTo(W * 0.5, H * 0.6, W, H * 0.8); x.lineTo(W, H); x.fill();
+    x.fillStyle = '#080c18'; x.fillRect(W * 0.3, H * 0.74, W * 0.2, H * 0.1);
+    x.fillStyle = '#ffd66b'; x.fillRect(W * 0.36, H * 0.77, W * 0.05, H * 0.04);
+  });
+
+  // A wall light: the glow follows the floor lamp (on / off, and its colour in a light show). No real light source (kept cheap for phones).
+  const sconceFollowers = [];
+  const buildSconce = (g) => {
+    const brass = mat(0xb08d4a, { roughness: 0.35, metalness: 0.7 });
+    box(0.1, 0.22, 0.03, brass, 0, 0, 0.015, g);
+    box(0.03, 0.03, 0.1, brass, 0, -0.04, 0.08, g);
+    const shadeMat2 = new THREE.MeshStandardMaterial({ color: 0xfff1c9, emissive: 0xffd88a, emissiveIntensity: 0.9, side: THREE.DoubleSide });
+    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.16, 20, 1, true), shadeMat2);
+    shade.position.set(0, 0.04, 0.12);
+    g.add(shade);
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const x = c.getContext('2d'), gr = x.createRadialGradient(64, 64, 4, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(255,255,255,0.8)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
+    const glowMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), color: 0xffd9a0, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending });
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), glowMat);
+    glow.position.set(0, 0.04, 0.035);
+    g.add(glow);
+    sconceFollowers.push((on, color) => {
+      shadeMat2.emissiveIntensity = on ? 0.9 : 0;
+      shadeMat2.emissive.copy(color);
+      glowMat.opacity = on ? 0.5 : 0;
+      glowMat.color.copy(color);
+    });
+    lampState.apply();
+  };
+  lampState.followers = sconceFollowers;
+
+  makeDecor('rug', 'rug', { hx: 1.8, hz: 1.8, u: 0, v: 0.4 }, buildRug);
   makeDecor('window', 'window', { wall: 'left', hw: 0.95, hh: 0.7, u: 0.2, v: 1.8 }, buildWindow);
   makeDecor('picture', 'picture', { wall: 'back', hw: 0.5, hh: 0.35, u: 0.2, v: 1.9 }, buildPicture);
   const DECOR_NEW = {              // decor that starts out of the room and can be added from the Skill Machine
     window2: () => makeDecor('window2', 'second window', { wall: 'back', hw: 0.95, hh: 0.7, u: 2.6, v: 1.9 }, buildWindow),
+    art_mountains: () => makeDecor('art_mountains', 'mountain picture', { wall: 'left', hw: 0.5, hh: 0.345, u: 2.7, v: 1.9 }, buildMountainArt),
+    art_abstract: () => makeDecor('art_abstract', 'abstract picture', { wall: 'back', hw: 0.345, hh: 0.345, u: -3.6, v: 2.1 }, buildAbstractArt),
+    art_moon: () => makeDecor('art_moon', 'moon picture', { wall: 'left', hw: 0.295, hh: 0.395, u: -3.35, v: 1.9 }, buildMoonArt),
+    sconce: () => makeDecor('sconce', 'wall light', { wall: 'back', hw: 0.12, hh: 0.14, u: -1.0, v: 1.9 }, buildSconce),
+    rug2: () => makeDecor('rug2', 'woven rug', { hx: 1.2, hz: 0.8, u: -3.0, v: 2.4 }, buildWovenRug),
+    rug3: () => makeDecor('rug3', 'striped runner', { hx: 0.4, hz: 1.3, u: 2.7, v: 0.1 }, buildRunnerRug),
   };
 
   // ---- Ball ----
@@ -664,7 +798,74 @@ export function buildRoom(scene) {
     return obj;
   };
 
+  // ---- Decor furniture and plants (added from the Skill Machine under Decor) ----
+  // Flowering plant: a cream pot, green leaves and a crown of pink, yellow and white blooms
+  const buildFlowerPlant = (x = 0, z = 0) => makeObject('flowerplant', x, z, 0.5, 0.5, 0.95, 'light', (g) => {
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.15, 0.32, 16), mat(0xe2d3b3));
+    pot.position.y = 0.16; pot.castShadow = true; g.add(pot);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.02, 8, 20), mat(0xe2d3b3));
+    rim.rotation.x = Math.PI / 2; rim.position.y = 0.32; g.add(rim);
+    for (let i = 0; i < 6; i++) {
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), mat(0x3f8f4a));
+      leaf.scale.set(0.5, 1.3, 0.25);
+      leaf.position.set(Math.cos(i * 1.1) * 0.12, 0.5, Math.sin(i * 1.1) * 0.12);
+      leaf.rotation.set(Math.sin(i * 2) * 0.6, i, Math.cos(i * 2) * 0.6);
+      leaf.castShadow = true; g.add(leaf);
+    }
+    const blooms = [0xff6f91, 0xffd166, 0xfdfdfd, 0xff6f91, 0xffd166, 0xff9ec4, 0xfdfdfd, 0xffd166, 0xff6f91];
+    blooms.forEach((col, i) => {
+      const a = i * 2.4, r = 0.05 + (i % 3) * 0.06, y = 0.7 + (i % 4) * 0.06;
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, y - 0.32, 5), mat(0x2f7d3a));
+      stem.position.set(Math.cos(a) * r * 0.6, (y + 0.32) / 2, Math.sin(a) * r * 0.6); g.add(stem);
+      const bloom = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), mat(col, { roughness: 0.6 }));
+      bloom.position.set(Math.cos(a) * r, y, Math.sin(a) * r); bloom.castShadow = true; g.add(bloom);
+    });
+  });
+
+  // Indoor tree: a big grey planter, a slim trunk and a canopy of overlapping leaf balls (heavy: only you can move it)
+  const buildTree = (x = 0, z = 0) => makeObject('tree', x, z, 0.9, 0.9, 2.4, 'heavy', (g) => {
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.26, 0.42, 20), mat(0x4a4a52, { roughness: 0.6 }));
+    pot.position.y = 0.21; pot.castShadow = true; g.add(pot);
+    const soil = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.31, 0.02, 20), mat(0x3b2a1c));
+    soil.position.y = 0.42; g.add(soil);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.055, 1.5, 10), mat(0x6b4a2f));
+    trunk.position.y = 1.15; trunk.castShadow = true; g.add(trunk);
+    for (const [px, py, pz, r, col] of [[0, 2.0, 0, 0.46, 0x2f7d3a], [0.25, 1.7, 0.1, 0.34, 0x3b9147], [-0.25, 1.75, -0.1, 0.34, 0x2a6e34], [0.05, 1.5, -0.25, 0.28, 0x3b9147], [-0.1, 1.55, 0.25, 0.28, 0x2f7d3a], [0.1, 2.3, 0.05, 0.28, 0x3b9147]]) {
+      const leafBall = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), mat(col, { roughness: 0.9 }));
+      leafBall.position.set(px, py, pz); leafBall.castShadow = true; g.add(leafBall);
+    }
+  });
+
+  // Coffee table: a low walnut top on four legs with a shelf and two books on it
+  const buildCoffeeTable = (x = 0, z = 0) => makeObject('coffeetable', x, z, 1.1, 0.6, 0.5, 'medium', (g) => {
+    const wood = mat(0x7a4f2e), dark = mat(0x2e2218);
+    box(1.1, 0.05, 0.6, wood, 0, 0.42, 0, g);
+    for (const dx of [-0.5, 0.5]) for (const dz of [-0.25, 0.25]) box(0.05, 0.4, 0.05, dark, dx, 0.2, dz, g);
+    box(0.95, 0.025, 0.45, wood, 0, 0.14, 0, g);
+    box(0.3, 0.04, 0.22, mat(0x2d6a9f), -0.2, 0.465, 0.05, g);
+    box(0.26, 0.035, 0.2, mat(0xc0392b), -0.2, 0.5, 0.05, g);
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.032, 0.07, 14), mat(0xf5f2ea));
+    cup.position.set(0.25, 0.485, -0.05); cup.castShadow = true; g.add(cup);
+  });
+
+  // Nightstand: a little cabinet with a drawer, a knob and a clock on top
+  const buildNightstand = (x = 0, z = 0) => makeObject('nightstand', x, z, 0.5, 0.4, 0.6, 'light', (g) => {
+    const wood = mat(0x9a6b3d), dark = mat(0x3a2a1c);
+    box(0.5, 0.5, 0.4, wood, 0, 0.3, 0, g);
+    box(0.44, 0.17, 0.02, mat(0xb07c4a), 0, 0.42, 0.205, g);
+    box(0.44, 0.17, 0.02, mat(0xb07c4a), 0, 0.2, 0.205, g);
+    for (const y of [0.42, 0.2]) { const k = new THREE.Mesh(new THREE.SphereGeometry(0.02, 10, 8), dark); k.position.set(0, y, 0.225); g.add(k); }
+    box(0.5, 0.03, 0.4, dark, 0, 0.565, 0, g);
+    box(0.1, 0.07, 0.04, mat(0x222831), 0.12, 0.615, 0, g);
+    const face = new THREE.Mesh(new THREE.CircleGeometry(0.022, 12), new THREE.MeshBasicMaterial({ color: 0xff5555 }));
+    face.position.set(0.12, 0.615, 0.021); g.add(face);
+  });
+
   const NEW_OBJECTS = {            // object id -> [builder, preferred spot]
+    flowerplant: [buildFlowerPlant, { x: -4.3, z: -3.3 }],
+    tree: [buildTree, { x: 4.3, z: -2.0 }],
+    coffeetable: [buildCoffeeTable, { x: 3.2, z: 1.9 }],
+    nightstand: [buildNightstand, { x: 4.4, z: 3.3 }],
     guitar: [buildGuitar, { x: 1.5, z: -1.5 }],
     drums: [buildDrums, { x: 1.4, z: -2.2 }],
     easel: [buildEasel, { x: -0.4, z: -2.8 }],
@@ -703,12 +904,23 @@ export function buildRoom(scene) {
     removeBall() { scene.remove(ball); world.ballGone = true; },
 
     // Nearest place to `pref` where `obj` fits with room to walk around it and, if given, not right next to `avoid`.
+    // Is the spot where Guy stands to use `obj` (if it has one) free if `obj` stood at (x, z)?
+    ownStandClear(obj, x, z) {
+      const own = { easel: [0, 0.8], drums: [0.55, 1.15] }[obj.name];
+      if (!own) return true;
+      const l = obj.local(own[0], own[1]), sx = x + l.x, sz = z + l.z;
+      return !(Math.abs(sx) > 4.2 || sz < -3.2 || sz > 3.4 || obstacles.some((o) => o !== obj.obstacle && sx > o.x0 - 0.6 && sx < o.x1 + 0.6 && sz > o.z0 - 0.6 && sz < o.z1 + 0.6));
+    },
+    // Would `obj` at (x, z) sit on top of a place where Guy has to stand to use something else?
+    onSomeonesStand(obj, x, z) {
+      return [['piano', 0, 0.95], ['piano', 0, 1.65], ['table', 0, 0.55], ['lamp', 0.55, 0], ['shelf', -0.7, 0], ['armchair', 0, -0.95], ['guitar', 0, 0.62], ['drums', 0.55, 1.15], ['easel', 0, 0.8]]
+        .filter(([n]) => objects[n] && objects[n] !== obj)
+        .map(([n, dx, dz]) => { const o = objects[n], l = o.local(dx, dz); return { x: o.x + l.x, z: o.z + l.z }; })
+        .some((q) => Math.abs(q.x - x) < obj.w / 2 + 0.55 && Math.abs(q.z - z) < obj.d / 2 + 0.55);
+    },
     findSpot(obj, pref, avoid) {
       // places where Guy has to stand to use something: a new object must not sit on top of them
-      const stands = [['piano', 0, 0.95], ['piano', 0, 1.65], ['table', 0, 0.55], ['lamp', 0.55, 0], ['shelf', -0.7, 0], ['armchair', 0, -0.95], ['guitar', 0, 0.62], ['drums', 0.55, 1.15], ['easel', 0, 0.8]]
-        .filter(([n]) => objects[n] && objects[n] !== obj)
-        .map(([n, dx, dz]) => { const o = objects[n], l = o.local(dx, dz); return { x: o.x + l.x, z: o.z + l.z }; });
-      const standsBlocked = (o, x, z) => stands.some((q) => Math.abs(q.x - x) < o.w / 2 + 0.55 && Math.abs(q.z - z) < o.d / 2 + 0.55);
+      const standsBlocked = (o, x, z) => world.onSomeonesStand(o, x, z);
       const cands = [];
       for (let x = -4.6; x <= 4.6; x += 0.25) for (let z = -3.6; z <= 3.6; z += 0.25) cands.push([x, z]);
       const p = pref || { x: 0, z: 0 };
@@ -718,11 +930,7 @@ export function buildRoom(scene) {
           if (!fits(obj, x, z, obj.w + margin, obj.d + margin)) continue;
           if (avoid && Math.hypot(x - avoid.x, z - avoid.z) < 1.0) continue;
           if (standsBlocked(obj, x, z)) continue;
-          const own = { easel: [0, 0.8], drums: [0.55, 1.15] }[obj.name];     // the spot he stands on to use it must be clear too
-          if (own) {
-            const l = obj.local(own[0], own[1]), sx = x + l.x, sz = z + l.z;
-            if (Math.abs(sx) > 4.2 || sz < -3.2 || sz > 3.4 || obstacles.some((o) => o !== obj.obstacle && sx > o.x0 - 0.6 && sx < o.x1 + 0.6 && sz > o.z0 - 0.6 && sz < o.z1 + 0.6)) continue;
-          }
+          if (!world.ownStandClear(obj, x, z)) continue;                       // the spot he stands on to use it must be clear too
           // the middle of the room is where he dances: keep new things out of it (the last-resort pass may not)
           if (margin > 0.1 && obj.name !== 'guitar' && Math.abs(x) < obj.w / 2 + 1.3 && Math.abs(z - 0.4) < obj.d / 2 + 1.3) continue;
           // leave room to walk round the back of it (the fallback pass may squeeze it in)
@@ -745,7 +953,9 @@ export function buildRoom(scene) {
         o.set(spot.u, spot.v);
         return true;
       }
-      const spot = fits(o, o.home.x, o.home.z) ? o.home : world.findSpot(o, o.home, avoid);
+      // its old place, if it still fits there and neither blocks someone's standing spot nor loses its own
+      const homeOk = fits(o, o.home.x, o.home.z) && world.ownStandClear(o, o.home.x, o.home.z) && !world.onSomeonesStand(o, o.home.x, o.home.z);
+      const spot = homeOk ? o.home : world.findSpot(o, o.home, avoid);
       if (!spot) return false;
       delete world.removed[name];
       room.add(o.group);

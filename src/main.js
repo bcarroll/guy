@@ -347,7 +347,8 @@ function openMenu(hit, x, y) {
   menuTarget = hit;
   menuTitle.textContent = hit.ball ? 'ball' : hit.decor ? hit.decor.label : hit.obj.name;
   menuNote.textContent = '';
-  menu.querySelectorAll('[data-act^="rot"]').forEach((b) => (b.hidden = !!(hit.ball || hit.decor)));
+  const turnable = hit.decor && !hit.decor.wall && hit.decor.hx !== hit.decor.hz;   // a rectangular rug can be turned; wall pieces and round things cannot
+  menu.querySelectorAll('[data-act^="rot"]').forEach((b) => (b.hidden = !!(hit.ball || (hit.decor && !turnable))));
   menu.querySelectorAll('[data-act="interact"]').forEach((b) => (b.hidden = !!hit.decor));
   menu.querySelectorAll('[data-act="remove"]').forEach((b) => (b.hidden = !!(hit.obj && hit.obj.removable === false)));
   menu.querySelectorAll('[data-act="player"]').forEach((b) => (b.hidden = !(hit.obj && hit.obj.name === 'table')));   // playback controls are for the stereo
@@ -387,6 +388,10 @@ menu.addEventListener('click', (e) => {
     if (t.obj && t.obj.removable === false) return;
     removeById(t.ball ? 'ball' : (t.obj || t.decor).name);
     closeMenu();
+  } else if (t.decor) {
+    const ok = t.decor.turn(act === 'rotr' ? 1 : -1);
+    menuNote.textContent = ok ? '' : 'No room to turn it here';
+    if (ok) closeMenu();
   } else if (t.obj) {
     const ok = rotateObject(t.obj, act === 'rotr' ? 1 : -1);
     menuNote.textContent = ok ? '' : 'No room to turn it here';
@@ -403,11 +408,18 @@ canvas.addEventListener('pointerdown', (e) => {
   const hit = pick(e);
   if (!hit) return;
   if (hit.machine) { machinePress = { x: e.clientX, y: e.clientY, t: performance.now() }; return; } // a tap, not draggable or removable
-  // The rug covers the middle of the floor, where people drag to orbit: it only answers to a long press (its menu has Remove).
-  // We do not stop the event, so a drag that starts on it still orbits.
+  // Rugs cover the middle of the floor, where people drag to orbit, so a quick drag on one still orbits (we do not stop the event).
+  // Hold on a rug for half a second and it is picked up: drag to move it, or let go without moving for its menu (Turn / Remove).
   if (hit.decor && !hit.decor.wall) {
-    pending = { hit, x: e.clientX, y: e.clientY, off: null, orbit: true };
-    pending.timer = setTimeout(() => { if (pending) { openMenu(pending.hit, pending.x, pending.y); pending = null; } }, LONG_PRESS_MS);
+    pending = { hit, x: e.clientX, y: e.clientY, off: null, orbit: true, armed: false };
+    pending.timer = setTimeout(() => {
+      if (!pending) return;
+      const p = planeAt({ clientX: pending.x, clientY: pending.y }, hit.decor.plane);
+      pending.armed = true;
+      pending.off = p ? { u: hit.decor.u - p.x, v: hit.decor.v - p.z } : { u: 0, v: 0 };
+      controls.enabled = false;                    // the orbit that began on the press stops here
+      canvas.style.cursor = 'grab';
+    }, LONG_PRESS_MS);
     return;
   }
   e.stopImmediatePropagation();
@@ -429,7 +441,7 @@ canvas.addEventListener('pointerdown', (e) => {
 canvas.addEventListener('pointermove', (e) => {
   if (pending && Math.hypot(e.clientX - pending.x, e.clientY - pending.y) > 8) {
     clearTimeout(pending.timer);
-    if (!pending.orbit) drag = { ...pending.hit, off: pending.off };
+    if (!pending.orbit || pending.armed) drag = { ...pending.hit, off: pending.off };   // a held rug follows the pointer; a quick drag on one orbits
     pending = null;
   }
   if (!drag) {
@@ -437,6 +449,15 @@ canvas.addEventListener('pointermove', (e) => {
     return;
   }
   canvas.style.cursor = 'grabbing';
+  if (drag.decor && !drag.decor.wall) {                // a rug: follow the pointer across the floor, staying inside the room
+    const d = drag.decor, p = planeAt(e, d.plane);
+    if (!p) return;
+    const nu = p.x + drag.off.u, nv = p.z + drag.off.v;
+    if (world.decorFits(d, nu, nv)) d.set(nu, nv);
+    else if (world.decorFits(d, nu, d.v)) d.set(nu, d.v);
+    else if (world.decorFits(d, d.u, nv)) d.set(d.u, nv);
+    return;
+  }
   if (drag.decor) {                                    // slide a window or the picture along its wall, round anything in the way
     const d = drag.decor, p = planeAt(e, d.plane);
     if (!p) return;
@@ -460,8 +481,13 @@ canvas.addEventListener('pointermove', (e) => {
   else if (canPlace(o, o.x, nz)) o.set(o.x, nz);
 });
 
-const endPress = () => {
-  if (pending) clearTimeout(pending.timer);
+const endPress = (e) => {
+  if (pending) {
+    clearTimeout(pending.timer);
+    // let go of a held rug without moving it: open its menu
+    if (pending.armed && e && e.type === 'pointerup') openMenu(pending.hit, pending.x, pending.y);
+  }
+  controls.enabled = true;
   pending = null;
   drag = null;
   canvas.style.cursor = '';

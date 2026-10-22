@@ -23,6 +23,10 @@ export const MANIFEST = {
     workbench: { locked: true }, drums: { skills: ['drums'] }, easel: { skills: ['easel'] }, telescope: { skills: ['telescope'] },
     // decor (world.decor): no interaction; tested by sweepDecor (remove / put back through the Skill Machine, wall limits)
     rug: { decor: true }, picture: { decor: true, wall: 'back' }, window: { decor: true, wall: 'left' }, window2: { decor: true, wall: 'back', startsOut: true },
+    art_mountains: { decor: true, wall: 'left', startsOut: true }, art_abstract: { decor: true, wall: 'back', startsOut: true }, art_moon: { decor: true, wall: 'left', startsOut: true },
+    sconce: { decor: true, wall: 'back', startsOut: true }, rug2: { decor: true, startsOut: true }, rug3: { decor: true, startsOut: true },
+    // decor furniture and plants (real objects): the plants are tended, the tables are only furniture
+    flowerplant: { skills: [] }, tree: { skills: [] }, coffeetable: { skills: [] }, nightstand: { skills: [] },
   },
   // activities: objects that must be in the room, skills needed, `music` = needs the stereo already playing,
   // touches = objects Guy's arms may legitimately be inside the bounding box of (hands on keys, pushing, ...)
@@ -37,7 +41,8 @@ export const MANIFEST = {
     dance: { objects: ['table'], skills: ['stereo'], touches: ['table', 'shelf', 'lamp'] },
     lamp: { objects: ['lamp'], touches: ['lamp'] },
     mood: { objects: ['lamp'], skills: ['lighting'], touches: ['lamp'] },
-    plant: { objects: ['plant'], touches: ['plant'] },
+    plant: { objects: ['plant'], touches: ['plant', 'flowerplant', 'tree'] },
+    dust: { objects: ['picture'], skills: ['decorate'], touches: [] },
     read: { objects: ['shelf'], touches: ['shelf', 'armchair'] },
     rearrange: { objects: ['lamp', 'plant', 'armchair'], touches: ['lamp', 'plant', 'armchair', 'table', 'bench'] },
     ball: { touches: [] },
@@ -68,6 +73,7 @@ export const MANIFEST = {
     drumming: { then: 'drums' }, drumsolo: { then: 'drumsolo' }, drumband: { then: 'jamdrums' },
     painting: { then: 'paint' }, colour: { then: 'mixpaint' }, portrait: { then: 'portrait' },
     stars: { then: 'stargaze' }, darksky: { then: 'darkstargaze' }, scopecare: { then: 'scopecare' },
+    decorating: { then: 'dust' },
   },
   // records and tracks that must exist
   albums: {
@@ -96,6 +102,7 @@ export const MANIFEST = {
     { id: 'scope-aim', activity: 'stargaze', pose: 'scopeAim', t: 2.2, view: 'top', expect: 'one hand on top of the barrel while the tube swings round' },
     { id: 'scope-wrong', activity: 'peek', pose: 'scopeWrong', t: 2.8, view: 'side', expect: 'eye at the big lens end, hand on the barrel, other hand on his knee' },
     { id: 'scope-care', activity: 'scopecare', pose: 'scopeCare', t: 13, view: 'front', expect: 'squatting beside the tripod with a hand on one leg' },
+    { id: 'dust-frame', activity: 'dust', pose: 'reach', t: 2.5, view: 'front', expect: 'facing the wall, right hand wiping along the lower edge of a frame (not inside the wall or his own head)' },
     { id: 'dance-twist', activity: 'dancemoves', pose: 'twist', t: 4, view: 'front', expect: 'hips and shoulders twisting opposite ways, knees bent and apart, elbows bent, feet flat' },
     { id: 'dance-shuffle', activity: 'dancemoves', pose: 'shuffle', t: 4, view: 'front', expect: 'one foot slides forward at a time, elbows bent and pumping alternately' },
     { id: 'dance-twirl', activity: 'dancemoves', pose: 'twirl', t: 2.5, view: 'front', expect: 'arms out to the sides, spinning on the spot without drifting or hitting furniture' },
@@ -637,8 +644,28 @@ T.sweepDecor = () => {
   out.push(result('decor:window keeps off the Skill Machine', !!win && !w.decorFits(win, -2.3, 1.5) && w.decorFits(win, win.u, win.v)));
   out.push(result('decor:window stays on its wall', !!win && !w.decorFits(win, 4.5, 1.8) && !w.decorFits(win, 0, 3.4)));
   out.push(result('decor:two windows and the picture do not overlap', !!win2 && !!pic && !w.decorFits(win2, pic.u, pic.v) && w.decorFits(win2, win2.u, win2.v)));
-  out.push(result('decor:furniture cannot be pushed into a wall piece', !!piano && w.decorFits(pic, pic.u, pic.v) &&
-    !w.fits(piano, pic.u, -3.5, piano.w, piano.d) === (piano.h > pic.v - pic.hh) ));
+  // a rectangular rug turns a quarter, a round one does not; the wall light glows with the floor lamp
+  T.addObject('rug2'); T.addObject('rug3'); T.addObject('rug'); T.addObject('sconce'); T.addObject('lamp');
+  const r2 = w.decor.rug2, r1 = w.decor.rug;
+  if (r2) { r2.rot = 0; r2.set(r2.home.u, r2.home.v); }          // start from the rug as it was first laid, whatever an earlier run did
+  const ex0 = r2 && r2.ex;
+  out.push(result('decor:woven rug turns a quarter, round rug does not', !!r2 && r2.turn(1) && r2.ex === r2.hz && ex0 === r2.hx && !!r1 && r1.turn(1) === false));
+  if (r2) { r2.rot = 0; r2.set(r2.home.u, r2.home.v); }
+  const sc = w.decor.sconce, glow = sc && sc.group.children.find((c) => c.material && c.material.blending === 2);
+  const lamp = w.lamp;
+  lamp.set(true); const onOp = glow && glow.material.opacity;
+  lamp.set(false); const offOp = glow && glow.material.opacity;
+  lamp.set(true);
+  out.push(result('decor:wall light glows with the lamp', !!glow && onOp > 0.3 && offOp === 0, { onOp, offOp }));
+  // a tall piece of furniture (the tree, 2.4 m) cannot stand against the back wall under the picture; with the picture taken down it can
+  T.addObject('tree');
+  const tree = w.objects.tree;
+  tree.rot = 0; tree.set(tree.x, tree.z);
+  const hung = !!tree && w.fits(tree, pic.u, -3.55, tree.w, tree.d);
+  w.removeObject('picture');
+  const bare = !!tree && w.fits(tree, pic.u, -3.55, tree.w, tree.d);
+  T.addObject('picture');
+  out.push(result('decor:furniture cannot be pushed into a wall piece', !!tree && !hung && bare, { hung, bare }));
   return out;
 };
 
