@@ -21,6 +21,8 @@ export const MANIFEST = {
     piano: { skills: ['piano'] }, bench: { skills: ['piano'] }, table: { skills: ['stereo'] }, shelf: { skills: [], fixed: true },
     lamp: { skills: ['lighting'] }, armchair: { skills: [] }, plant: { skills: [] }, ball: { skills: ['ball'] }, guitar: { skills: ['guitar'] },
     workbench: { locked: true }, drums: { skills: ['drums'] }, easel: { skills: ['easel'] }, telescope: { skills: ['telescope'] },
+    // decor (world.decor): no interaction; tested by sweepDecor (remove / put back through the Skill Machine, wall limits)
+    rug: { decor: true }, picture: { decor: true, wall: 'back' }, window: { decor: true, wall: 'left' }, window2: { decor: true, wall: 'back', startsOut: true },
   },
   // activities: objects that must be in the room, skills needed, `music` = needs the stereo already playing,
   // touches = objects Guy's arms may legitimately be inside the bounding box of (hands on keys, pushing, ...)
@@ -202,14 +204,15 @@ T.removeAll = () => {
     if (W().objects[name].removable === false) continue;
     W().removeObject(name); B().objectRemoved(name);
   }
+  for (const name of Object.keys(W().decor)) { W().removeObject(name); B().objectRemoved(name); }
   if (!W().ballGone) { W().removeBall(); B().ballRemoved(); }
 };
+const isPresent = (id) => (id === 'ball' ? !W().ballGone : !!(W().objects[id] || W().decor[id]));
 T.addObject = (id) => { // through the Skill Machine, like a user would
   const def = OBJECT_CATALOG.find((d) => d.id === id);
-  const present = id === 'ball' ? !W().ballGone : !!W().objects[id];
-  if (present) return true;
+  if (isPresent(id)) return true;
   if (def.locked) return false;
-  return machineClick('objects', def.name) && (id === 'ball' ? !W().ballGone : !!W().objects[id]);
+  return machineClick('objects', def.name) && isPresent(id);
 };
 T.addBook = (id) => {
   const def = BOOK_CATALOG.find((b) => b.id === id);
@@ -341,6 +344,12 @@ T.sweepObjects = () => {
   for (const def of OBJECT_CATALOG) {
     const m = MANIFEST.objects[def.id] || {};
     if (def.locked) { out.push(result(def.id, true, { skipped: 'locked (premium): listed, cannot be added' })); continue; }
+    if (m.decor) { // the rug, windows and picture: nothing to interact with; just check they come back and sit on their wall/floor
+      const added = T.addObject(def.id);
+      const d = W().decor[def.id];
+      out.push(result(def.id, added && !!d && d.group.parent === W().room && W().decorFits(d, d.u, d.v), { added, decor: true }));
+      continue;
+    }
     const added = T.addObject(def.id);
     const o = def.id === 'ball' ? null : W().objects[def.id];
     const fits = o ? W().fits(o, o.x, o.z) : true;
@@ -589,6 +598,75 @@ T.sweepRemovals = () => {
   return out;
 };
 
+// 8. Decor (rug, windows, picture): remove each through the Skill Machine's Remove button, check it is really gone and offered
+// as "Put back", put it back, and check the wall pieces keep to their wall and out of each other's and the machine's way.
+const machineCard = (title) => [...machine().querySelectorAll('.card')].find((c) => c.querySelector('.title').textContent === title);
+const openObjects = (cat = 'all') => {
+  const m = machine();
+  m.hidden = false;
+  m.querySelector('[data-tab=objects]').click();
+  const chip = m.querySelector(`.chip[data-cat=${cat}]`);
+  if (chip) chip.click();
+  return m;
+};
+T.sweepDecor = () => {
+  const out = [];
+  for (const def of OBJECT_CATALOG.filter((d) => d.decor)) {
+    const id = def.id, base = errors.length;
+    T.addObject(id);                                    // make sure it is in the room first (window2 starts out of it)
+    const d0 = W().decor[id];
+    const placed = !!d0 && d0.group.parent === W().room && W().decorFits(d0, d0.u, d0.v);
+    openObjects();
+    const rm = machineCard(def.name) && machineCard(def.name).querySelector('.act.rm');
+    if (rm) rm.click();
+    step(3);
+    const gone = !W().decor[id] && !!W().removed[id] && !W().room.children.includes(d0.group);
+    openObjects();
+    const put = machineCard(def.name) && machineCard(def.name).querySelector('.act');
+    const offered = !!put && put.textContent === 'Put back';
+    if (put) put.click();
+    machine().hidden = true;
+    step(3);
+    const back = !!W().decor[id] && W().decor[id].group.parent === W().room && W().decorFits(W().decor[id], W().decor[id].u, W().decor[id].v);
+    out.push(result(`decor:${id}`, placed && !!rm && gone && offered && back && errors.length === base, { placed, hadRemoveButton: !!rm, gone, offeredPutBack: offered, back, errors: errors.slice(base) }));
+  }
+  // wall limits: a window may not be dragged over the Skill Machine, the other window, or below a piano standing against its wall
+  const w = W();
+  T.addObject('window2'); T.addObject('picture'); T.addObject('window'); T.addObject('piano');
+  const win = w.decor.window, pic = w.decor.picture, win2 = w.decor.window2, piano = w.objects.piano;
+  out.push(result('decor:window keeps off the Skill Machine', !!win && !w.decorFits(win, -2.3, 1.5) && w.decorFits(win, win.u, win.v)));
+  out.push(result('decor:window stays on its wall', !!win && !w.decorFits(win, 4.5, 1.8) && !w.decorFits(win, 0, 3.4)));
+  out.push(result('decor:two windows and the picture do not overlap', !!win2 && !!pic && !w.decorFits(win2, pic.u, pic.v) && w.decorFits(win2, win2.u, win2.v)));
+  out.push(result('decor:furniture cannot be pushed into a wall piece', !!piano && w.decorFits(pic, pic.u, pic.v) &&
+    !w.fits(piano, pic.u, -3.5, piano.w, piano.d) === (piano.h > pic.v - pic.hh) ));
+  return out;
+};
+
+// 9. The Skill Machine's Objects tab: category chips, one section per category, counts that match the room.
+T.sweepMachine = () => {
+  const out = [];
+  const cats = [...new Set(OBJECT_CATALOG.map((d) => d.cat))];
+  out.push(result('machine: every object has a category', OBJECT_CATALOG.every((d) => d.cat), { uncategorised: OBJECT_CATALOG.filter((d) => !d.cat).map((d) => d.id) }));
+  let m = openObjects('all');
+  const titles = () => [...m.querySelectorAll('.card .title')].map((e) => e.textContent);
+  out.push(result('machine: All shows every object once', titles().length === OBJECT_CATALOG.length && new Set(titles()).size === OBJECT_CATALOG.length, { shown: titles().length, catalog: OBJECT_CATALOG.length }));
+  for (const c of cats) {
+    m = openObjects(c);
+    const want = OBJECT_CATALOG.filter((d) => d.cat === c).map((d) => d.name).sort();
+    const got = titles().sort();
+    const heads = [...m.querySelectorAll('h4')].length;
+    out.push(result(`machine: filter ${c}`, JSON.stringify(want) === JSON.stringify(got) && heads === 1, { want, got, headings: heads }));
+  }
+  m = openObjects('all');
+  const chipCounts = [...m.querySelectorAll('.chip')].map((c) => c.textContent.trim());
+  const inRoomNow = OBJECT_CATALOG.filter((d) => isPresent(d.id) && !d.locked).length;
+  out.push(result('machine: the All chip counts what is in the room', chipCounts[0] === `All ${inRoomNow}/${OBJECT_CATALOG.length}`, { chip: chipCounts[0], inRoomNow }));
+  const shelfCard = machineCard('Bookshelf');
+  out.push(result('machine: the bookshelf cannot be removed', !!shelfCard && !shelfCard.querySelector('.act')));
+  openObjects('all'); machine().hidden = true;
+  return out;
+};
+
 // ---- visual checkpoints -----------------------------------------------------------------------------------------
 // Freeze Guy in a pose and put the camera somewhere useful. Take a screenshot afterwards (wait ~2 s: the pane renders lazily).
 let frozen = null;
@@ -637,6 +715,8 @@ T.runAll = () => {
   report.combos = summarise(T.combos());
   report.interrupts = summarise(T.sweepInterrupts());
   report.removals = summarise(T.sweepRemovals());
+  report.decor = summarise(T.sweepDecor());
+  report.machine = summarise(T.sweepMachine());
   report.errorsLogged = errors.length;
   return report;
 };

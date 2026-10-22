@@ -9,37 +9,54 @@
 import { BOOK_CATALOG } from './skills.js';
 import { ALBUM_CATALOG } from './albums.js';
 
+// cat: the category the Objects tab files it under (see OBJECT_CATEGORIES). decor: not furniture Guy uses; the rug, the windows
+// and the picture live in world.decor and can be removed and put back like everything else.
+export const OBJECT_CATEGORIES = [
+  { id: 'music', name: 'Music', icon: '🎵' },
+  { id: 'hobbies', name: 'Hobbies', icon: '🎨' },
+  { id: 'furniture', name: 'Furniture', icon: '🛋️' },
+  { id: 'decor', name: 'Decor & lighting', icon: '🖼️' },
+  { id: 'games', name: 'Games', icon: '⚽' },
+];
+
 export const OBJECT_CATALOG = [
-  { id: 'piano', name: 'Upright Piano', icon: '🎹', desc: 'Scales, tunes and jam sessions. Heavy: only you can move it.', core: true },
-  { id: 'bench', name: 'Piano Bench', icon: '🪑', desc: 'Guy pulls this up to the piano.', core: true },
-  { id: 'table', name: 'Stereo & Table', icon: '📻', desc: 'The boombox and the table it sits on.', core: true },
-  { id: 'shelf', name: 'Bookshelf', icon: '📚', desc: 'Where the books live. Heavy: only you can move it.', core: true },
-  { id: 'lamp', name: 'Floor Lamp', icon: '💡', desc: 'On and off, plus moods and light shows with the right book.', core: true },
-  { id: 'armchair', name: 'Armchair', icon: '🛋️', desc: 'A comfortable place to read.', core: true },
-  { id: 'plant', name: 'Potted Plant', icon: '🪴', desc: 'Makes the room feel lived in.', core: true },
-  { id: 'ball', name: 'Red Ball', icon: '⚽', desc: 'Kick it, dribble it, toss it.', core: true, ball: true },
-  { id: 'guitar', name: 'Acoustic Guitar', icon: '🎸', desc: 'On its stand. Comes with the book "Guitar for Beginners".', free: true, book: 'guitar' },
-  { id: 'workbench', name: 'Workbench', icon: '🛠️', desc: 'Build furniture when the tools and materials are available.', locked: true },
-  { id: 'drums', name: 'Drum Kit', icon: '🥁', desc: 'Kick, snare, hi-hat and cymbals on a stool. Comes with the book "Drumming for Robots".', free: true, book: 'drumming' },
-  { id: 'easel', name: 'Painting Easel', icon: '🎨', desc: 'A canvas that really gets painted. Comes with the book "Painting for Robots".', free: true, book: 'painting' },
-  { id: 'telescope', name: 'Telescope', icon: '🔭', desc: 'On a tripod by the window. Comes with the book "Stargazing for Robots".', free: true, book: 'stars' },
+  { id: 'piano', cat: 'music', name: 'Upright Piano', icon: '🎹', desc: 'Scales, tunes and jam sessions. Heavy: only you can move it.', core: true },
+  { id: 'bench', cat: 'music', name: 'Piano Bench', icon: '🪑', desc: 'Guy pulls this up to the piano.', core: true },
+  { id: 'table', cat: 'music', name: 'Stereo & Table', icon: '📻', desc: 'The boombox and the table it sits on.', core: true },
+  { id: 'shelf', cat: 'furniture', name: 'Bookshelf', icon: '📚', desc: 'Where the books live. Heavy: only you can move it.', core: true },
+  { id: 'lamp', cat: 'decor', name: 'Floor Lamp', icon: '💡', desc: 'On and off, plus moods and light shows with the right book.', core: true },
+  { id: 'armchair', cat: 'furniture', name: 'Armchair', icon: '🛋️', desc: 'A comfortable place to read.', core: true },
+  { id: 'plant', cat: 'decor', name: 'Potted Plant', icon: '🪴', desc: 'Makes the room feel lived in.', core: true },
+  { id: 'ball', cat: 'games', name: 'Red Ball', icon: '⚽', desc: 'Kick it, dribble it, toss it.', core: true, ball: true },
+  { id: 'rug', cat: 'decor', name: 'Round Rug', icon: '🟥', desc: 'A soft rug for the middle of the floor.', core: true, decor: true },
+  { id: 'picture', cat: 'decor', name: 'Wall Picture', icon: '🖼️', desc: 'A sunset in a frame on the back wall. Drag it along the wall.', core: true, decor: true },
+  { id: 'window', cat: 'decor', name: 'Window', icon: '🪟', desc: 'Lets the daylight in. Drag it along the left wall.', core: true, decor: true },
+  { id: 'window2', cat: 'decor', name: 'Second Window', icon: '🪟', desc: 'Another window, for the back wall. Drag it along the wall.', free: true, decor: true },
+  { id: 'guitar', cat: 'music', name: 'Acoustic Guitar', icon: '🎸', desc: 'On its stand. Comes with the book "Guitar for Beginners".', free: true, book: 'guitar' },
+  { id: 'workbench', cat: 'furniture', name: 'Workbench', icon: '🛠️', desc: 'Build furniture when the tools and materials are available.', locked: true },
+  { id: 'drums', cat: 'music', name: 'Drum Kit', icon: '🥁', desc: 'Kick, snare, hi-hat and cymbals on a stool. Comes with the book "Drumming for Robots".', free: true, book: 'drumming' },
+  { id: 'easel', cat: 'hobbies', name: 'Painting Easel', icon: '🎨', desc: 'A canvas that really gets painted. Comes with the book "Painting for Robots".', free: true, book: 'painting' },
+  { id: 'telescope', cat: 'hobbies', name: 'Telescope', icon: '🔭', desc: 'On a tripod by the window. Comes with the book "Stargazing for Robots".', free: true, book: 'stars' },
 ];
 
 const KEY = 'guy.room.v1';
 
-export function initMachine({ world, guy, persist, notify }) {
+export function initMachine({ world, guy, persist, notify, remove }) {
   const root = document.getElementById('machine');
   const body = root.querySelector('.body');
+  const chipBar = root.querySelector('.chips');
   let tab = 'objects';
+  let cat = 'all';                   // the category filter on the Objects tab
 
+  const inRoom = (id) => (id === 'ball' ? !world.ballGone : !!(world.objects[id] || world.decor[id]));
   const objectStatus = (d) => {
     if (d.locked) return 'locked';
     if (d.ball) return world.ballGone ? 'removed' : 'inroom';
-    if (world.objects[d.id]) return 'inroom';
+    if (inRoom(d.id)) return 'inroom';
     if (world.removed[d.id]) return 'removed';
     return 'available';
   };
-  const hasObject = (id) => (id === 'ball' ? !world.ballGone : !!world.objects[id]);
+  const hasObject = inRoom;
   const shelf = () => world.objects.shelf;
   const albumStatus = (a) => {
     if (a.premium) return 'locked';
@@ -58,7 +75,7 @@ export function initMachine({ world, guy, persist, notify }) {
 
   const save = () => {
     if (!persist) return;
-    const extras = { objects: OBJECT_CATALOG.filter((d) => d.free && world.objects[d.id]).map((d) => d.id),
+    const extras = { objects: OBJECT_CATALOG.filter((d) => d.free && inRoom(d.id)).map((d) => d.id),
       books: shelf() ? shelf().books.filter((r) => !r.def.start).map((r) => r.def.id) : [],
       albums: shelf() ? shelf().albums.map((r) => r.def.id) : [] };
     try { localStorage.setItem(KEY, JSON.stringify(extras)); } catch { /* no storage */ }
@@ -99,6 +116,14 @@ export function initMachine({ world, guy, persist, notify }) {
     render();
   }
 
+  function removeObject(d) {
+    if (!inRoom(d.id)) return;
+    remove(d.id);
+    notify(`Took the ${d.name} out of the room`);
+    save();
+    render();
+  }
+
   function addAlbum(a) {
     const ok = addAlbumDef(a);
     notify(ok ? `"${a.title}" is on the top shelf` : 'Could not add the record');
@@ -115,9 +140,9 @@ export function initMachine({ world, guy, persist, notify }) {
 
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-  function card({ icon, name, desc, status, label, action, note }) {
+  function card({ icon, name, desc, status, label, action, note, danger }) {
     const btn = action !== undefined
-      ? `<button class="act" data-action="${action}">${label}</button>`
+      ? `<button class="act${danger ? ' rm' : ''}" data-action="${action}">${label}</button>`
       : `<span class="badge ${status}">${label}</span>`;
     return `<div class="card ${status}"><div class="icon">${icon}</div>
       <div class="info"><div class="title">${esc(name)}</div><div class="desc">${esc(desc)}</div>${note ? `<div class="note">${esc(note)}</div>` : ''}</div>
@@ -130,15 +155,39 @@ export function initMachine({ world, guy, persist, notify }) {
     const albumGroups = { 'On the shelf': [], 'Add to the shelf': [], 'Not available yet': [], 'Premium · coming soon': [] };
     const bookGroups = { 'On the shelf': [], 'Add to the shelf': [], 'Not available yet': [], 'Premium · coming soon': [] };
     const handlers = [];
+    chipBar.hidden = tab !== 'objects';
     if (tab === 'objects') {
-      for (const d of OBJECT_CATALOG) {
-        const st = objectStatus(d);
-        const i = handlers.push(() => addObject(d)) - 1;
-        if (st === 'inroom') groups['In the room'].push(card({ icon: d.icon, name: d.name, desc: d.desc, status: st, label: '✓ In the room' }));
-        else if (st === 'locked') groups['Premium · coming soon'].push(card({ icon: d.icon, name: d.name, desc: d.desc, status: st, label: '🔒 Locked' }));
-        else groups['Add to the room'].push(card({ icon: d.icon, name: d.name, desc: d.desc, status: st, label: st === 'removed' ? 'Put back' : 'Add', action: i,
-          note: st === 'removed' ? 'You removed this earlier.' : d.book ? 'Comes with its own book.' : '' }));
+      // One section per category, each with how many of its items are in the room. Within a section: what is in the room first
+      // (with a Remove button), then things you took out (Put back), then things you can add, then locked ones.
+      const rank = { inroom: 0, removed: 1, available: 2, locked: 3 };
+      const sections = [];
+      for (const c of OBJECT_CATEGORIES) {
+        const items = OBJECT_CATALOG.filter((d) => d.cat === c.id).sort((a, b) => rank[objectStatus(a)] - rank[objectStatus(b)]);
+        const here = items.filter((d) => objectStatus(d) === 'inroom').length;
+        sections.push({ c, items, here });
       }
+      chipBar.innerHTML = [{ id: 'all', name: 'All', icon: '', here: sections.reduce((n, s) => n + s.here, 0), total: OBJECT_CATALOG.length }]
+        .concat(sections.map((s) => ({ id: s.c.id, name: s.c.name, icon: s.c.icon, here: s.here, total: s.items.length })))
+        .map((c) => `<button class="chip${cat === c.id ? ' on' : ''}" data-cat="${c.id}">${c.icon ? c.icon + ' ' : ''}${c.name} <span>${c.here}/${c.total}</span></button>`).join('');
+      for (const { c, items, here } of sections) {
+        if (cat !== 'all' && cat !== c.id) continue;
+        const cards = items.map((d) => {
+          const st = objectStatus(d);
+          const base = { icon: d.icon, name: d.name, desc: d.desc, status: st };
+          if (st === 'inroom') {
+            const fixed = d.id === 'shelf';       // the bookshelf is where Guy learns: it can never leave
+            if (fixed) return card({ ...base, label: '✓ Fixed in place' });
+            const i = handlers.push(() => removeObject(d)) - 1;
+            return card({ ...base, label: 'Remove', action: i, danger: true });
+          }
+          if (st === 'locked') return card({ ...base, label: '🔒 Locked' });
+          const i = handlers.push(() => addObject(d)) - 1;
+          return card({ ...base, label: st === 'removed' ? 'Put back' : 'Add', action: i,
+            note: st === 'removed' ? 'You took this out earlier.' : d.book ? 'Comes with its own book.' : '' });
+        });
+        groups[`${c.icon} ${c.name} · ${here} of ${items.length} in the room`] = cards;
+      }
+      delete groups['In the room']; delete groups['Add to the room']; delete groups['Premium · coming soon'];
     } else if (tab === 'records') {
       for (const a of ALBUM_CATALOG) {
         const st = albumStatus(a);
@@ -169,6 +218,7 @@ export function initMachine({ world, guy, persist, notify }) {
   }
 
   root.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => { tab = t.dataset.tab; render(); }));
+  chipBar.addEventListener('click', (e) => { const b = e.target.closest('[data-cat]'); if (b) { cat = b.dataset.cat; render(); } });
   const close = () => { root.hidden = true; };
   root.querySelector('.close').addEventListener('click', close);
   root.addEventListener('pointerdown', (e) => { if (e.target === root) close(); });

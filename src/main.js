@@ -123,6 +123,7 @@ brain.onLearn = (def) => showToast(`Guy learned ${def.blurb}!`);
 const machineUI = initMachine({
   world, guy, persist: !params.has('fresh'),
   notify: (msg) => { showToast(msg); renderSkills(); },
+  remove: (id) => removeById(id),
 });
 machineUI.restoreExtras();
 if (params.get('records') === 'all' && world.objects.shelf) ALBUM_CATALOG.forEach((a) => { if (!world.objects.shelf.albums.some((r) => r.def.id === a.id)) world.objects.shelf.addAlbum(a); }); // testing aid
@@ -225,6 +226,7 @@ function pick(e) {
   ray(e);
   const targets = Object.values(world.objects).map((o) => o.group);
   targets.push(world.skillMachine);
+  for (const d of Object.values(world.decor)) targets.push(d.group);
   if (!world.ballGone) targets.push(world.ball);
   const hit = raycaster.intersectObjects(targets, true)[0];
   if (!hit) return null;
@@ -234,8 +236,22 @@ function pick(e) {
     if (n === world.ball) return { ball: true };
     const obj = Object.values(world.objects).find((o) => o.group === n);
     if (obj) return { obj, point };
+    const decor = Object.values(world.decor).find((d) => d.group === n);
+    if (decor) return { decor, point };
   }
   return null;
+}
+
+// A point on the plane a wall piece lives on.
+function planeAt(e, plane) {
+  ray(e);
+  return raycaster.ray.intersectPlane(plane, hitPoint) ? hitPoint : null;
+}
+
+// Take something out of the room (the context menu and the Skill Machine both come through here).
+function removeById(id) {
+  if (id === 'ball') { world.removeBall(); brain.ballRemoved && brain.ballRemoved(); }
+  else { world.removeObject(id); brain.objectRemoved(id); }
 }
 
 function floorAt(e, y = 0) {
@@ -329,9 +345,10 @@ albumMenu.addEventListener('click', (e) => {
 
 function openMenu(hit, x, y) {
   menuTarget = hit;
-  menuTitle.textContent = hit.ball ? 'ball' : hit.obj.name;
+  menuTitle.textContent = hit.ball ? 'ball' : hit.decor ? hit.decor.label : hit.obj.name;
   menuNote.textContent = '';
-  menu.querySelectorAll('[data-act^="rot"]').forEach((b) => (b.hidden = !!hit.ball));
+  menu.querySelectorAll('[data-act^="rot"]').forEach((b) => (b.hidden = !!(hit.ball || hit.decor)));
+  menu.querySelectorAll('[data-act="interact"]').forEach((b) => (b.hidden = !!hit.decor));
   menu.querySelectorAll('[data-act="remove"]').forEach((b) => (b.hidden = !!(hit.obj && hit.obj.removable === false)));
   menu.querySelectorAll('[data-act="player"]').forEach((b) => (b.hidden = !(hit.obj && hit.obj.name === 'table')));   // playback controls are for the stereo
   menu.hidden = false;
@@ -368,8 +385,7 @@ menu.addEventListener('click', (e) => {
   }
   if (act === 'remove') {
     if (t.obj && t.obj.removable === false) return;
-    if (t.ball) { world.removeBall(); brain.ballRemoved && brain.ballRemoved(); }
-    else { const name = t.obj.name; world.removeObject(name); brain.objectRemoved(name); }
+    removeById(t.ball ? 'ball' : (t.obj || t.decor).name);
     closeMenu();
   } else if (t.obj) {
     const ok = rotateObject(t.obj, act === 'rotr' ? 1 : -1);
@@ -387,11 +403,19 @@ canvas.addEventListener('pointerdown', (e) => {
   const hit = pick(e);
   if (!hit) return;
   if (hit.machine) { machinePress = { x: e.clientX, y: e.clientY, t: performance.now() }; return; } // a tap, not draggable or removable
+  // The rug covers the middle of the floor, where people drag to orbit: it only answers to a long press (its menu has Remove).
+  // We do not stop the event, so a drag that starts on it still orbits.
+  if (hit.decor && !hit.decor.wall) {
+    pending = { hit, x: e.clientX, y: e.clientY, off: null, orbit: true };
+    pending.timer = setTimeout(() => { if (pending) { openMenu(pending.hit, pending.x, pending.y); pending = null; } }, LONG_PRESS_MS);
+    return;
+  }
   e.stopImmediatePropagation();
-  const p = floorAt(e);
+  const p = hit.decor ? planeAt(e, hit.decor.plane) : floorAt(e);
   if (!p) return;
   try { canvas.setPointerCapture(e.pointerId); } catch { /* synthetic or already-released pointer */ }
-  pending = { hit, x: e.clientX, y: e.clientY, off: hit.obj ? { x: hit.obj.x - p.x, z: hit.obj.z - p.z } : null };
+  const q = hit.decor ? hit.decor.uv(p) : null;
+  pending = { hit, x: e.clientX, y: e.clientY, off: hit.obj ? { x: hit.obj.x - p.x, z: hit.obj.z - p.z } : q ? { u: hit.decor.u - q.u, v: hit.decor.v - q.v } : null };
   pending.timer = setTimeout(() => {
     if (!pending) return;
     const h = pending.hit;
@@ -405,14 +429,23 @@ canvas.addEventListener('pointerdown', (e) => {
 canvas.addEventListener('pointermove', (e) => {
   if (pending && Math.hypot(e.clientX - pending.x, e.clientY - pending.y) > 8) {
     clearTimeout(pending.timer);
-    drag = { ...pending.hit, off: pending.off };
+    if (!pending.orbit) drag = { ...pending.hit, off: pending.off };
     pending = null;
   }
   if (!drag) {
-    if (!pending) { const h = pick(e); canvas.style.cursor = h ? (h.machine ? 'pointer' : 'grab') : ''; }
+    if (!pending) { const h = pick(e); canvas.style.cursor = h && !(h.decor && !h.decor.wall) ? (h.machine ? 'pointer' : 'grab') : ''; }
     return;
   }
   canvas.style.cursor = 'grabbing';
+  if (drag.decor) {                                    // slide a window or the picture along its wall, round anything in the way
+    const d = drag.decor, p = planeAt(e, d.plane);
+    if (!p) return;
+    const q = d.uv(p), nu = q.u + drag.off.u, nv = q.v + drag.off.v;
+    if (world.decorFits(d, nu, nv)) d.set(nu, nv);
+    else if (world.decorFits(d, nu, d.v)) d.set(nu, d.v);
+    else if (world.decorFits(d, d.u, nv)) d.set(d.u, nv);
+    return;
+  }
   if (drag.ball) {
     const p = floorAt(e, 0.5);
     if (p) world.ball.position.set(THREE.MathUtils.clamp(p.x, -4.8, 4.8), 0.5, THREE.MathUtils.clamp(p.z, -3.8, 3.8));

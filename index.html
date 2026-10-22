@@ -39,6 +39,14 @@
   #machine .tabs { display: flex; gap: 6px; padding: 0 18px 10px; }
   #machine .tab { background: rgba(255,255,255,.06); border: 0; color: #c5d0e0; padding: 8px 16px; border-radius: 999px; font: inherit; font-size: 14px; cursor: pointer; }
   #machine .tab.on { background: #2a7fb0; color: #fff; }
+  #machine .chips { display: flex; flex: none; gap: 6px; padding: 0 18px 10px; overflow-x: auto; scrollbar-width: none; }
+  #machine .chips[hidden] { display: none; }
+  #machine .chip { flex: none; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); color: #c5d0e0; padding: 6px 12px; border-radius: 999px; font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+  #machine .chip span { color: #7f8fa6; margin-left: 2px; font-size: 12px; }
+  #machine .chip.on { background: #2a7fb0; border-color: #2a7fb0; color: #fff; }
+  #machine .chip.on span { color: #d6ecf8; }
+  #machine .act.rm { background: rgba(255,255,255,.08); color: #ff9a9a; }
+  #machine .act.rm:hover { background: rgba(255,120,120,.2); }
   #machine .body { overflow: auto; padding: 0 18px 18px; }
   #machine h4 { margin: 16px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #7f8fa6; }
   #machine .card { display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin-bottom: 8px; background: rgba(255,255,255,.05); border-radius: 12px; }
@@ -111,6 +119,7 @@
     <header><h2>⚙️ SKILL MACHINE</h2><button class="close" title="Close (Esc)">✕</button></header>
     <div class="sub">Add objects to the room, books and records to the shelf. Guy learns new things by reading.</div>
     <div class="tabs"><button class="tab on" data-tab="objects">Objects</button><button class="tab" data-tab="books">Books</button><button class="tab" data-tab="records">Records</button></div>
+    <div class="chips"></div>
     <div class="body"></div>
   </div>
 </div>

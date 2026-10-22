@@ -61,17 +61,6 @@ export function buildRoom(scene) {
   box(0.03, 0.12, ROOM.d, bb, -ROOM.w / 2 + 0.015, 0.06, 0, room);
   box(0.03, 0.12, ROOM.d, bb, ROOM.w / 2 - 0.015, 0.06, 0, room);
 
-  // Rug
-  const rug = new THREE.Mesh(new THREE.CircleGeometry(1.8, 48), mat(0x7a2e3a, { roughness: 1 }));
-  rug.rotation.x = -Math.PI / 2;
-  rug.position.set(0, 0.01, 0.4);
-  rug.receiveShadow = true;
-  room.add(rug);
-  const rug2 = new THREE.Mesh(new THREE.RingGeometry(1.35, 1.5, 48), mat(0xe8c872, { roughness: 1 }));
-  rug2.rotation.x = -Math.PI / 2;
-  rug2.position.set(0, 0.012, 0.4);
-  room.add(rug2);
-
   // ---- Movable objects ----
   // Every piece of furniture is a group positioned at its footprint centre, registered in `objects`.
   // weight: 'light' | 'medium' can be pushed around by Guy; 'heavy' stays put unless the user drags it.
@@ -328,16 +317,104 @@ export function buildRoom(scene) {
     }
   });
 
-  // ---- Window on left wall + picture on back wall ----
-  const frameMat = mat(0xf0f0f0);
-  box(0.05, 1.3, 1.8, frameMat, -4.97, 1.8, 0.2, room);
-  const sky = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.1), new THREE.MeshBasicMaterial({ color: 0x8fc3ff }));
-  sky.rotation.y = Math.PI / 2; sky.position.set(-4.94, 1.8, 0.2); room.add(sky);
-  box(1.0, 0.7, 0.04, mat(0x2b2b2b), 0.2, 1.9, -ROOM.d / 2 + 0.03, room);
-  const art = new THREE.Mesh(new THREE.PlaneGeometry(0.88, 0.58), new THREE.MeshBasicMaterial({ color: 0xe86a4a }));
-  art.position.set(0.2, 1.9, -ROOM.d / 2 + 0.055); room.add(art);
-  const art2 = new THREE.Mesh(new THREE.CircleGeometry(0.2, 24), new THREE.MeshBasicMaterial({ color: 0xffe28a }));
-  art2.position.set(0.35, 1.98, -ROOM.d / 2 + 0.056); room.add(art2);
+  // ---- Decor: the rug, the windows and the picture ----
+  // Not obstacles (Guy walks over the rug and never touches the wall pieces), but first-class objects all the same: the user can
+  // remove them, put them back from the Skill Machine, and slide the wall pieces along their wall.
+  // A wall piece sits at (u, v): u along the wall (z on the left wall, x on the back wall), v = height of its centre.
+  // The rug sits at (u, v) = (x, z). Its group's local +z points into the room for wall pieces.
+  const decor = {};
+  const WALL = {
+    left: { rotY: Math.PI / 2, lo: -ROOM.d / 2, hi: ROOM.d / 2, plane: new THREE.Plane(new THREE.Vector3(1, 0, 0), ROOM.w / 2),
+      at: (u, v) => new THREE.Vector3(-ROOM.w / 2, v, u), near: (x0, x1, z0) => x0 < -ROOM.w / 2 + 0.1, span: (x0, x1, z0, z1) => [z0, z1] },
+    back: { rotY: 0, lo: -ROOM.w / 2, hi: ROOM.w / 2, plane: new THREE.Plane(new THREE.Vector3(0, 0, 1), ROOM.d / 2),
+      at: (u, v) => new THREE.Vector3(u, v, -ROOM.d / 2), near: (x0, x1, z0) => z0 < -ROOM.d / 2 + 0.1, span: (x0, x1) => [x0, x1] },
+  };
+  const MACHINE_RECT = { u0: -2.7, u1: -1.9, v0: 1.0, v1: 2.3 };   // the Skill Machine on the left wall
+  const overlap1 = (a0, a1, b0, b1) => a1 > b0 && a0 < b1;
+
+  const makeDecor = (name, label, o, build) => {
+    const group = new THREE.Group();
+    room.add(group);
+    build(group);
+    const d = {
+      name, label, decor: true, removable: true, group, wall: o.wall || null, hw: o.hw || 0, hh: o.hh || 0, radius: o.radius || 0,
+      home: { u: o.u, v: o.v }, u: o.u, v: o.v,
+      plane: o.wall ? WALL[o.wall].plane : new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
+      set(u, v) {
+        this.u = u; this.v = v;
+        if (this.wall) { group.position.copy(WALL[this.wall].at(u, v)); group.rotation.y = WALL[this.wall].rotY; }
+        else group.position.set(u, 0, v);
+      },
+      // a point on the plane the piece lives on -> its (u, v)
+      uv(p) { return this.wall === 'left' ? { u: p.z, v: p.y } : this.wall === 'back' ? { u: p.x, v: p.y } : { u: p.x, v: p.z }; },
+    };
+    d.set(o.u, o.v);
+    decor[name] = d;
+    return d;
+  };
+
+  // Room on its wall (or, for the rug, on the floor) for `d` at (u, v)? Clear of the other pieces, the Skill Machine and furniture
+  // standing against the wall that is taller than the piece's lower edge.
+  const decorFits = (d, u, v) => {
+    if (!d.wall) return Math.abs(u) <= ROOM.w / 2 - d.radius && Math.abs(v) <= ROOM.d / 2 - d.radius;
+    const W = WALL[d.wall];
+    if (u - d.hw < W.lo + 0.05 || u + d.hw > W.hi - 0.05 || v - d.hh < 0.45 || v + d.hh > ROOM.h - 0.1) return false;
+    for (const o of Object.values(decor)) {
+      if (o !== d && o.wall === d.wall && overlap1(u - d.hw, u + d.hw, o.u - o.hw, o.u + o.hw) && overlap1(v - d.hh, v + d.hh, o.v - o.hh, o.v + o.hh)) return false;
+    }
+    if (d.wall === 'left' && overlap1(u - d.hw, u + d.hw, MACHINE_RECT.u0, MACHINE_RECT.u1) && overlap1(v - d.hh, v + d.hh, MACHINE_RECT.v0, MACHINE_RECT.v1)) return false;
+    for (const o of obstacles) {
+      if (!W.near(o.x0, o.x1, o.z0)) continue;
+      const [a, b] = W.span(o.x0, o.x1, o.z0, o.z1);
+      if (overlap1(u - d.hw, u + d.hw, a, b) && v - d.hh < o.h) return false;
+    }
+    return true;
+  };
+
+  // Nearest free place on its wall to where the piece used to hang.
+  const findWallSpot = (d) => {
+    const W = WALL[d.wall], cands = [];
+    for (let u = W.lo; u <= W.hi; u += 0.1) for (let v = 0.6; v <= 2.7; v += 0.1) cands.push({ u, v });
+    cands.sort((a, b) => Math.hypot(a.u - d.home.u, a.v - d.home.v) - Math.hypot(b.u - d.home.u, b.v - d.home.v));
+    return cands.find((c) => decorFits(d, c.u, c.v)) || null;
+  };
+
+  const buildWindow = (g) => {
+    const frame = mat(0xf0f0f0);
+    box(1.8, 1.3, 0.05, frame, 0, 0, 0.025, g);
+    const sky = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.1), new THREE.MeshBasicMaterial({ color: 0x8fc3ff }));
+    sky.position.set(0, 0, 0.052);
+    g.add(sky);
+    box(0.04, 1.1, 0.02, frame, 0, 0, 0.06, g);          // the cross bars
+    box(1.6, 0.04, 0.02, frame, 0, 0, 0.06, g);
+    box(1.9, 0.05, 0.12, frame, 0, -0.67, 0.06, g);       // sill
+  };
+  const buildPicture = (g) => {
+    box(1.0, 0.7, 0.04, mat(0x2b2b2b), 0, 0, 0.02, g);
+    const art = new THREE.Mesh(new THREE.PlaneGeometry(0.88, 0.58), new THREE.MeshBasicMaterial({ color: 0xe86a4a }));
+    art.position.set(0, 0, 0.041);
+    g.add(art);
+    const sun = new THREE.Mesh(new THREE.CircleGeometry(0.2, 24), new THREE.MeshBasicMaterial({ color: 0xffe28a }));
+    sun.position.set(0.15, 0.08, 0.042);
+    g.add(sun);
+  };
+  const buildRug = (g) => {
+    const rug = new THREE.Mesh(new THREE.CircleGeometry(1.8, 48), mat(0x7a2e3a, { roughness: 1 }));
+    rug.rotation.x = -Math.PI / 2;
+    rug.position.y = 0.01;
+    rug.receiveShadow = true;
+    g.add(rug);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(1.35, 1.5, 48), mat(0xe8c872, { roughness: 1 }));
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.012;
+    g.add(ring);
+  };
+  makeDecor('rug', 'rug', { radius: 1.8, u: 0, v: 0.4 }, buildRug);
+  makeDecor('window', 'window', { wall: 'left', hw: 0.95, hh: 0.7, u: 0.2, v: 1.8 }, buildWindow);
+  makeDecor('picture', 'picture', { wall: 'back', hw: 0.5, hh: 0.35, u: 0.2, v: 1.9 }, buildPicture);
+  const DECOR_NEW = {              // decor that starts out of the room and can be added from the Skill Machine
+    window2: () => makeDecor('window2', 'second window', { wall: 'back', hw: 0.95, hh: 0.7, u: 2.6, v: 1.9 }, buildWindow),
+  };
 
   // ---- Ball ----
   const ball = new THREE.Mesh(new THREE.SphereGeometry(0.18, 24, 16), mat(0xe8453c, { roughness: 0.4 }));
@@ -598,6 +675,12 @@ export function buildRoom(scene) {
   const fits = (obj, x, z, w = obj.w, d = obj.d) => {
     const x0 = x - w / 2, x1 = x + w / 2, z0 = z - d / 2, z1 = z + d / 2;
     if (x0 < -ROOM.w / 2 || x1 > ROOM.w / 2 || z0 < -ROOM.d / 2 || z1 > ROOM.d / 2) return false;
+    // furniture taller than the lower edge of a window or picture must not be pushed into it
+    for (const dc of Object.values(decor)) {
+      if (!dc.wall || !WALL[dc.wall].near(x0, x1, z0)) continue;
+      const [a, b] = WALL[dc.wall].span(x0, x1, z0, z1);
+      if (overlap1(a, b, dc.u - dc.hw, dc.u + dc.hw) && obj.h > dc.v - dc.hh) return false;
+    }
     return !obstacles.some((o) => o !== obj.obstacle && x1 > o.x0 && x0 < o.x1 && z1 > o.z0 && z0 < o.z1);
   };
 
@@ -605,8 +688,11 @@ export function buildRoom(scene) {
     room, obstacles, objects, fits, ballGone: false,
     piano: { group: pianoObj.group, keys }, boombox: { group: boombox, led }, lamp: lampState, ball,
     skillMachine: machine,
-    removed: {},                  // objects the user took out, kept so they can be put back
+    removed: {},                  // objects (and decor) the user took out, kept so they can be put back
+    decor, decorFits,
     removeObject(name) {
+      const dc = decor[name];
+      if (dc) { room.remove(dc.group); delete decor[name]; world.removed[name] = dc; return; }
       const o = objects[name];
       if (!o || o.removable === false) return;
       obstacles.splice(obstacles.indexOf(o.obstacle), 1);
@@ -650,6 +736,15 @@ export function buildRoom(scene) {
     restoreObject(name, avoid) {
       const o = world.removed[name];
       if (!o) return false;
+      if (o.decor) {
+        const spot = !o.wall || decorFits(o, o.home.u, o.home.v) ? o.home : findWallSpot(o);
+        if (!spot) return false;
+        delete world.removed[name];
+        room.add(o.group);
+        decor[name] = o;
+        o.set(spot.u, spot.v);
+        return true;
+      }
       const spot = fits(o, o.home.x, o.home.z) ? o.home : world.findSpot(o, o.home, avoid);
       if (!spot) return false;
       delete world.removed[name];
@@ -675,6 +770,15 @@ export function buildRoom(scene) {
     },
     // Objects that do not exist yet but can be added from the Skill Machine.
     addNew(id, avoid) {
+      if (DECOR_NEW[id]) {
+        if (decor[id]) return false;
+        const d = DECOR_NEW[id]();
+        const spot = decorFits(d, d.home.u, d.home.v) ? d.home : findWallSpot(d);
+        if (!spot) { room.remove(d.group); delete decor[id]; return false; }
+        d.home = { u: spot.u, v: spot.v };
+        d.set(spot.u, spot.v);
+        return true;
+      }
       const entry = NEW_OBJECTS[id];
       if (!entry || objects[id]) return false;
       const o = entry[0]();
