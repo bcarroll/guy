@@ -585,6 +585,11 @@ export class Brain {
           this.play('waltz', 9, { dance: true, spin: -0.9 }), this.play('swing', 8, { dance: true, spin: 1.6 }),
           this.play('wave', 2.2, { dance: true }), ...ss.off, ...ss.post];
       },
+      // from the stereo's long-press menu: switch it on (the song the player has selected) or off
+      stereoon: () => ['switching the stereo on', this.walkAt('table', 0, 0.55, Math.PI),
+        this.play('reach', 1.8, { at: [0.9, () => { const np = this.nowPlaying(); this.musicOn(np.list[np.index].id, true); }], needs: ['table'], target: () => this.stereoButton() })],
+      stereooff: () => ['switching the stereo off', this.walkAt('table', 0, 0.55, Math.PI),
+        this.play('reach', 1.8, { at: [0.9, () => { this.musicOff(); this.albumOnTable = false; }], needs: ['table'], target: () => this.stereoButton() })],
       lamp: () => ['fiddling with the lamp', this.sideStep('lamp', 0.55),
         this.play('reach', 1.8, { at: [0.9, () => w.lamp.toggle()], needs: ['lamp'], target: () => this.lampSwitch() })],
       // lighting book: choose a mood for the room
@@ -1336,7 +1341,7 @@ export class Brain {
   available(act) {
     const need = {
       piano: ['piano'], sitpiano: ['piano', 'bench'], plink: ['piano'], jam: ['piano', 'table'], jampiano: ['piano', 'table'],
-      jamsit: ['piano', 'bench', 'table'], dance: ['table'], dancemoves: ['table'], ballroom: ['table'], lamp: ['lamp'], mood: ['lamp'], read: ['shelf'], books: ['shelf'],
+      jamsit: ['piano', 'bench', 'table'], stereoon: ['table'], stereooff: ['table'], dance: ['table'], dancemoves: ['table'], ballroom: ['table'], lamp: ['lamp'], mood: ['lamp'], read: ['shelf'], books: ['shelf'],
       guitar: ['guitar'], jamguitar: ['guitar'],
       bang: ['drums'], drums: ['drums'], drumsolo: ['drums'], jamdrums: ['drums'],
       scribble: ['easel'], paint: ['easel'], mixpaint: ['easel'], portrait: ['easel'],
@@ -1358,6 +1363,8 @@ export class Brain {
     if (act === 'peek' && ['telescope', 'telescope.dark', 'telescope.care'].some((k) => this.skills.has(k))) return false;
     if (act === 'jamdrums' && !this.music) return false;
     if (act === 'lighton') return false;
+    if (act === 'stereoon' && this.music) return false;
+    if (act === 'stereooff' && !this.music) return false;
     if (['bang', 'drums', 'drumsolo', 'jamdrums'].includes(act) && !this.standOk('drums')) return false;
     if (['scribble', 'paint', 'mixpaint', 'portrait'].includes(act) && !this.standOk('easel')) return false;
     if (act === 'plant' && !PLANT_NAMES.some((n) => this.obj(n))) return false;
@@ -1480,7 +1487,7 @@ export class Brain {
       // with the stereo already playing, an instrument means playing along with it
       piano: k('piano') ? (this.music ? ['jamsit', 'jampiano', 'jam'] : ['sitpiano', 'piano']) : ['plink'],
       bench: k('piano') ? (this.music ? ['jamsit', 'jam'] : ['sitpiano', 'piano']) : ['plink'],
-      table: k('stereo') || this.music || k('dance.moves') || k('dance.ballroom') ? ['dance', 'dancemoves', 'ballroom', 'jam', 'jampiano'] : [],
+      table: this.music ? ['stereooff'] : ['stereoon'],
       shelf: ['read'],
       armchair: ['read'],
       lamp: k('lighting') ? ['mood', 'lamp'] : ['lamp'],
@@ -1491,7 +1498,7 @@ export class Brain {
       easel: ['scribble', 'paint', 'mixpaint', 'portrait'],
       telescope: ['peek', 'stargaze', 'darkstargaze', 'scopecare'],
     }[name];
-    if (name === 'table' && !k('stereo') && !this.music && !k('dance.moves') && !k('dance.ballroom')) return { ok: false, message: "Guy doesn't know how to use the stereo yet. Maybe there's a manual on the shelf." };
+    if (name === 'table' && !k('stereo') && !this.music) return { ok: false, message: "Guy doesn't know how to use the stereo yet. Maybe there's a manual on the shelf." };
     if (name === 'guitar' && !k('guitar')) return { ok: false, message: "Guy hasn't learned the guitar yet. Add \"Guitar for Beginners\" to the shelf and he'll read it." };
     if ((name === 'drums' || name === 'easel') && !this.standOk(name)) {
       return { ok: false, message: name === 'drums' ? "Guy can't get to the drum stool where the kit is. Move it away from the wall." : "Guy can't get in front of the easel where it is. Move it away from the wall." };

@@ -52,6 +52,8 @@ export const MANIFEST = {
     jamguitar: { objects: ['guitar'], skills: ['guitar'], music: true, touches: ['guitar'] },
     dancemoves: { objects: ['table'], skills: ['dance.moves'], touches: ['table', 'shelf', 'lamp'] },
     ballroom: { objects: ['table'], skills: ['dance.ballroom'], touches: ['table', 'shelf', 'lamp'] },
+    stereoon: { objects: ['table'], skills: ['stereo'], touches: ['table', 'shelf'] },
+    stereooff: { objects: ['table'], skills: ['stereo'], music: true, touches: ['table', 'shelf'] },
     bang: { objects: ['drums'], touches: ['drums'] },
     drums: { objects: ['drums'], skills: ['drums'], touches: ['drums'] },
     drumsolo: { objects: ['drums'], skills: ['drums.solo'], touches: ['drums'] },
@@ -611,7 +613,28 @@ T.combos = () => {
   setup(); // stereo playing, then told to use an instrument
   out.push(result('stereo + piano (play along)', ...(() => { const r = timed(() => { B().stereoControl('play'); const x = T.interact('piano', { max: 30, partial: true }); B().stereoControl('stop'); return x; }); return [r.pass && /along/.test((r.labels || []).join(' ')) && !r.errors.length, { labels: r.labels }]; })()));
   out.push(result('stereo + guitar (play along, in time)', ...(() => { const r = timed(() => { B().stereoControl('play'); T.settle(); B().stereoControl('play'); const x = T.interact('guitar', { max: 30, partial: true }); B().stereoControl('stop'); return x; }); return [r.pass && /along/.test((r.labels || []).join(' ')), { labels: r.labels }]; })()));
-  out.push(result('stereo + dance (joins the music)', ...(() => { const r = timed(() => { B().stereoControl('play'); const x = T.interact('table', { max: 90 }); B().stereoControl('stop'); return x; }); return [r.pass, { labels: r.labels }]; })()));
+  out.push(result('stereo + dance (joins the music)', ...(() => {
+    const r = timed(() => {
+      const b = B();
+      T.settle(); T.home(); b.stereoControl('play'); b.queue = []; b.step = null; b.pendingActivity = null; b.choose('dance');
+      let t = 0, danced = false; while (t < 90 && !(b.last !== 'dance' && t > 1)) { step(0.25); t += 0.25; if (b.last === 'dance' && /dance/.test(b.pose)) danced = true; if (['disco', 'robot', 'pump'].includes(b.pose)) danced = true; }
+      b.stereoControl('stop');
+      return { pass: b.last !== 'dance' && danced, labels: [label()] };
+    });
+    return [r.pass && !r.errors.length, { labels: r.labels }];
+  })()));
+  // the stereo's long-press button: "Turn Stereo On" has Guy switch it on (the selected song, left on), "Turn Stereo Off" switches it off
+  out.push(result('stereo menu button: Guy turns it on, then off', ...(() => {
+    const r = timed(() => {
+      const b = B();
+      T.settle(); T.home(); b.stereoControl('stop');
+      const a = b.interact('table'); let t = 0; while (t < 30 && !(b.music && b.last === 'stereoon' && !b.step)) { step(0.25); t += 0.25; if (b.music) break; }
+      const wasOn = !!b.music; step(3);
+      const c = b.interact('table'); t = 0; while (t < 30 && b.music) { step(0.25); t += 0.25; }
+      return { pass: a.ok && wasOn && c.ok && !b.music, wasOn, off: !b.music };
+    });
+    return [r.pass && !r.errors.length, { wasOn: r.wasOn, off: r.off }];
+  })()));
   // stopping the music ends what he was playing along to
   out.push(result('stop music mid-song ends the play-along', ...(() => {
     const r = timed(() => {

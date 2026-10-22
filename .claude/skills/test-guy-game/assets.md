@@ -9,7 +9,7 @@ machine check of this list; this file adds the expectations a human or Claude ne
 |---|---|---|---|---|---|---|
 | piano | upright piano | heavy (never pushed by Guy) | `piano` | skilled: `sitpiano` or `piano`; unskilled: `plink`; stereo playing: `jamsit`/`jampiano`/`jam` | 0.8 m in front of the keys, or on the bench; hands on keys (IK follows the notes) | needs the bench out of the way when standing |
 | bench | piano bench | light | `piano` | as piano | fetched and pushed to 1.65 m in front of the piano; he steps into the gap, sits back, scoots it in | moved only by Guy |
-| table | stereo + table (boombox rides on it) | medium | `stereo` (not needed if the music is already on) | `dance`, `jam`, `jampiano` | 0.55 m in front; index finger on the button | removing it stops the music |
+| table | stereo + table (boombox rides on it) | medium | `stereo` (not needed if the music is already on) | `stereoon` / `stereooff` (menu button "Turn Stereo On/Off"; he leaves it playing for you), Guy dances etc. on his own when music is on | 0.55 m in front; index finger on the button | removing it stops the music |
 | shelf | bookshelf, books on rows 3 and 2, records on the top row | heavy, **not removable** | none | `read` | 0.62 m in front (0.5 for the top row) | long-press top row opens the record list |
 | lamp | floor lamp | light | `lighting` for moods/party | `lamp` (toggle) or `mood` | any free side, finger on the stem switch | party mode during a dance when he has `lighting`+`stereo` |
 | armchair | armchair, faces local -z | medium | none | `read` | sits back onto it; legs hang clear of the front | seat top 0.5 m |
@@ -109,7 +109,7 @@ playback panel or the top-shelf record list; Guy then joins in without touching 
 
 ## Activities (`activities()` in `src/brain.js`)
 
-wander, stretch, wave, piano, sitpiano, plink, jam, jampiano, jamsit, dance, lamp, mood, plant, read (alias `books`),
+wander, stretch, wave, stereoon, stereooff (menu only), piano, sitpiano, plink, jam, jampiano, jamsit, dance, lamp, mood, plant, read (alias `books`),
 rearrange, ball, dribble, toss, guitar, jamguitar, bang, drums, drumsolo, jamdrums, scribble, paint, mixpaint, portrait, peek,
 stargaze, darkstargaze, scopecare, dancemoves, ballroom, dust (needs `decorate` and a wall piece with clear floor in front); internal recovery: putback, putguitar, dropball, lighton.
 Needs and allowed arm contacts are in `MANIFEST.activities`.

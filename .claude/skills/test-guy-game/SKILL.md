@@ -109,8 +109,8 @@ Use synthetic pointer events on the canvas, as the tests in this repo did (wrap 
 `scene.updateMatrixWorld(true)` first, and project a world point to screen):
 - tap the wall **Skill Machine**: modal opens with Objects / Books / Records tabs, correct groups
   (In the room / Add / Premium), Add buttons work, premium shows 🔒; long-press does nothing (cannot be removed)
-- long-press every object: menu shows **Interact**, Rotate, Remove (Remove hidden for the bookshelf; rotate hidden for
-  the ball; **Playback controls** only for the stereo)
+- long-press every object: the first button is named for what the object does (Play Piano, Play Guitar, Play Drums, Play with Ball, Turn Stereo On/Off, Paint, Tend Plant, Set the Mood / Turn Lamp On/Off ...; `interactLabel` in `main.js`), then Rotate, Remove (Remove hidden for the bookshelf; rotate hidden for
+  the ball). The stereo's playback controls are the **🎵 Stereo** button left of Follow, visible only while a stereo is in the room; the stereo's menu button turns it on or off (Guy walks over and presses the button)
 - long-press a **book** on the lower shelves: popup lists the books with read / not read (✅ / 📕), updating as Guy reads; clicking an unread book makes Guy read exactly that one next (`brain.requestRead(id)`), read books are not clickable
 - long-press the **top shelf** when it holds records: record list; long-press lower shelves: normal menu
 - playback panel: play / stop / previous / next, track list updates, Guy joins in

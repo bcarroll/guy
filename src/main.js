@@ -288,6 +288,14 @@ function showPlayer() {
   playerTimer = setInterval(renderPlayer, 500);   // Guy can start or stop the music too
 }
 function hidePlayer() { player.hidden = true; clearInterval(playerTimer); }
+// the playback controls live on a button beside Follow, shown while there is a stereo in the room
+const playerBtn = document.getElementById('player-btn');
+playerBtn.addEventListener('click', () => (player.hidden ? showPlayer() : hidePlayer()));
+setInterval(() => {
+  const has = !!brain.obj('table');
+  playerBtn.hidden = !has;
+  if (!has && !player.hidden) hidePlayer();
+}, 300);
 player.querySelector('.pclose').addEventListener('click', hidePlayer);
 player.addEventListener('click', (e) => {
   const a = e.target.dataset && e.target.dataset.p;
@@ -349,6 +357,25 @@ albumMenu.addEventListener('click', (e) => {
   showToast(`Playing ${brain.nowPlaying().title}`);
 });
 
+// What the long-press "do something with it" button is called for each object.
+function interactLabel(name) {
+  const w = brain.w;
+  switch (name) {
+    case 'piano': case 'bench': return '🎹 Play Piano';
+    case 'table': return brain.music ? '🔊 Turn Stereo Off' : '🔊 Turn Stereo On';
+    case 'guitar': return '🎸 Play Guitar';
+    case 'drums': return '🥁 Play Drums';
+    case 'ball': return '⚽ Play with Ball';
+    case 'lamp': return brain.skills.has('lighting') ? '💡 Set the Mood' : w.lamp && w.lamp.on === false ? '💡 Turn Lamp On' : '💡 Turn Lamp Off';
+    case 'shelf': return '📖 Read a Book';
+    case 'armchair': return '📖 Sit and Read';
+    case 'easel': return '🎨 Paint';
+    case 'telescope': return '🔭 Look through Telescope';
+    case 'plant': case 'flowerplant': case 'tree': return '🌱 Tend Plant';
+    default: return '▶ Use';
+  }
+}
+
 function openMenu(hit, x, y) {
   menuTarget = hit;
   menuTitle.textContent = hit.ball ? 'ball' : hit.decor ? hit.decor.label : hit.obj.name;
@@ -357,7 +384,9 @@ function openMenu(hit, x, y) {
   menu.querySelectorAll('[data-act^="rot"]').forEach((b) => (b.hidden = !!(hit.ball || (hit.decor && !turnable))));
   menu.querySelectorAll('[data-act="interact"]').forEach((b) => (b.hidden = !!hit.decor));
   menu.querySelectorAll('[data-act="remove"]').forEach((b) => (b.hidden = !!(hit.obj && hit.obj.removable === false)));
-  menu.querySelectorAll('[data-act="player"]').forEach((b) => (b.hidden = !(hit.obj && hit.obj.name === 'table')));   // playback controls are for the stereo
+  // the first button says what the object is for
+  const iact = menu.querySelector('[data-act="interact"]');
+  if (iact) iact.textContent = interactLabel(hit.ball ? 'ball' : hit.obj && hit.obj.name);
   menu.hidden = false;
   menu.style.left = Math.min(x, innerWidth - menu.offsetWidth - 8) + 'px';
   menu.style.top = Math.min(y, innerHeight - menu.offsetHeight - 8) + 'px';
@@ -383,7 +412,6 @@ menu.addEventListener('click', (e) => {
   const act = e.target.dataset && e.target.dataset.act;
   if (!act || !menuTarget) return;
   const t = menuTarget;
-  if (act === 'player') { showPlayer(); closeMenu(); return; }
   if (act === 'interact') {
     const r = brain.interact(t.ball ? 'ball' : t.obj.name);
     showToast(r.message);
