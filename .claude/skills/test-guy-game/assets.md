@@ -1,6 +1,6 @@
 # Asset reference for testing (keep in sync with the game; see SKILL.md section 6)
 
-Last verified against: 13 objects, 20 books, 12 records, 13 tracks, 38 activities, 35 poses. `T.coverage()` is the
+Last verified against: 17 objects (13 + 4 decor), 20 books, 12 records, 13 tracks, 38 activities, 35 poses. `T.coverage()` is the
 machine check of this list; this file adds the expectations a human or Claude needs.
 
 ## Objects (`OBJECT_CATALOG` in `src/machine.js`, built in `src/room.js`)
@@ -19,7 +19,17 @@ machine check of this list; this file adds the expectations a human or Claude ne
 | drums | drum kit + stool (kit faces local -z, stool at +z; added free, brings `Drumming for Robots`) | medium | `drums`, `drums.solo`, `drums.band` | unskilled `bang`; `drums` / `drumsolo`; stereo playing + band skill: `jamdrums` | side-steps onto the stool from 0.55 m to its right; sticks come off the snare, tips follow the pads (`obj.pads`); right foot works the kick | stick tips land within ~10 cm of the pad at each hit (`hitErr` idea: compare fingertip-stick tip to pad at the trigger frame) |
 | easel | painting easel; canvas is a live `CanvasTexture` (`obj.paint`) | light | `easel`, `easel.colour`, `easel.portrait` | unskilled `scribble` (finger, grey); `paint`, `mixpaint`, `portrait` | stands 0.59 m in front of the canvas; palette picked up from the tray into the left hand and put back; brush tip draws the stroke as it moves; old paintings are washed over with white strokes, never cleared by magic | check the canvas in a screenshot: strokes must appear where the brush is |
 | telescope | tripod + aimable tube (`obj.setAim`) | light | `telescope`, `telescope.dark`, `telescope.care` | unskilled `peek` (wrong end); `stargaze`, `darkstargaze`, `scopecare` | swings the tube with one hand, then stands behind the eyepiece with knees bent / waist leaning, eye at the eyepiece, left hand on the focus knob | `darkstargaze` switches the lamp off first and back on afterwards (`lampOffByMe`, forced `lighton` if interrupted) |
+| rug | round rug (`world.decor`, category decor) | n/a (not an obstacle) | none | none | Guy walks over it | long-press > Remove (a drag on it orbits the camera instead); Skill Machine Remove / Put back |
+| picture | framed sunset on the back wall (`world.decor`) | n/a | none | none | | drag along the back wall; kept off other wall pieces and off furniture taller than its lower edge |
+| window | window on the left wall (`world.decor`) | n/a | none | none | | drag along the left wall; cannot cover the Skill Machine |
+| window2 | **Second Window** on the back wall (added free from the Skill Machine, saved between visits) | n/a | none | none | | same wall rules |
 | workbench | **locked / premium**: listed, no builder yet | | | | | tests only check it stays locked |
+
+Decor is tested by `T.sweepDecor` (Remove through the Skill Machine button, "Put back", wall limits), not by interaction.
+
+Skill Machine Objects tab: filter chips (All + one per category) with in-room counts, one section per category (Music, Hobbies,
+Furniture, Decor & lighting, Games), a Remove button on every in-room item except the shelf, "Put back" for removed ones.
+`cat` for each object is in `OBJECT_CATALOG` (`src/machine.js`); tested by `T.sweepMachine`.
 
 Skill Machine rules: removed objects show "Put back"; the shelf can never be removed; the machine itself is fixed to the
 left wall and cannot be removed, moved or rotated.
