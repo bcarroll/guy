@@ -1,7 +1,7 @@
 // Guy's behaviour with the drum kit, the easel and the telescope. Installed onto Brain / POSES at the bottom of brain.js.
 import * as THREE from 'three';
 import { Q } from './guy.js';
-import { drumHit } from './audio.js';
+import { drumHit, TRACKS } from './audio.js';
 import { drumStep, handFor, polyPoint, paintPlan, makeStick, makeBrush, makePalette, DRUM_STYLE_BY_TRACK } from './hobbies.js';
 
 const UPV = new THREE.Vector3(0, 1, 0);
@@ -229,7 +229,7 @@ export function installHobbies(Brain, POSES, H) {
       const playing = T >= start && T < D - endGap && (!fx.sync || !!this.music);
       if (playing) {
         if (dr.n === null) dr.n = Math.floor(b * 2);
-        const style = fx.style === 'jam' ? (DRUM_STYLE_BY_TRACK[this.track] || 'rock') : fx.style;
+        const style = fx.style === 'jam' ? ((TRACKS[this.track] && TRACKS[this.track].drums) || DRUM_STYLE_BY_TRACK[this.track] || 'rock') : fx.style;
         while (dr.n < Math.floor(b * 2) + 3) {
           dr.n++;
           const hits = style === 'bang' ? bangStep() : drumStep(style, dr.n);

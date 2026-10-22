@@ -1,6 +1,6 @@
 # Asset reference for testing (keep in sync with the game; see SKILL.md section 6)
 
-Last verified against: 27 objects (13 + 14 decor and decor furniture), 21 books, 12 records, 13 tracks, 39 activities, 35 poses. `T.coverage()` is the
+Last verified against: 27 objects (13 + 14 decor and decor furniture), 21 books, 12 records, 49 tracks (4 per record + the stereo beat), 39 activities, 35 poses. `T.coverage()` is the
 machine check of this list; this file adds the expectations a human or Claude needs.
 
 ## Objects (`OBJECT_CATALOG` in `src/machine.js`, built in `src/room.js`)
@@ -72,24 +72,34 @@ Guy learns a skill only after keeping the book open for 8 s; interrupted reads t
 
 ## Records and tracks (`src/albums.js`, `TRACKS` in `src/audio.js`)
 
-| record | track | bpm | status |
-|---|---|---|---|
-| Happy Time Parade | `happy` | 132 | free (Skill Machine > Records) |
-| Garage Thunder (rock, E minor) | `rock` | 124 | free (Skill Machine > Records) |
-| Rooftop Beats (hip-hop, A minor) | `hiphop` | 88 | free |
-| Dusty Road Two-Step (upbeat country, D) | `twostep` | 118 | free |
-| Neon Sugar (pop, A minor / C) | `pop` | 118 | free |
-| Midnight Swing Club (jazz, C) | `jazz` | 132 | free |
-| Rainy Day Blues (slow blues, A minor, 12 bars) | `slowblues` | 62 | free |
-| Party Time Mixtape (party, G minor) | `party` | 126 | free |
-| Hits from the Old Days | `classical` | 100 | premium (dev bypass in tests) |
-| Sad Country | `country` | 72 | premium |
-| Blues Collection | `blues` | 94 | premium |
-| Out like a Lamb | `lullaby` | 66 | premium |
-| (stereo's own beat) | `default` | 110 | always |
+Every record has four songs (`tracks` in `src/albums.js`, ids `x`, `x2`, `x3`, `x4`), each with a title of its own (`label` in `TRACKS`):
 
-All melodies and chord loops are original (no real songs). Each genre track also sets a drum style for Guy at the kit
-(`DRUM_STYLE_BY_TRACK` in `src/hobbies.js`: rock, boombap, train, disco, swing, soft).
+| record | songs (id, bpm) | status |
+|---|---|---|
+| Happy Time Parade | Parade Day (`happy` 132), Bubble Bounce (`happy2` 126), Sunny Side Skip (`happy3` 138), Pancake Polka (`happy4` 144) | free (Skill Machine > Records) |
+| Garage Thunder (rock) | Garage Thunder (`rock` 124), Loose Gravel (112), Basement Lightning (138), Last Amp Standing (100) | free |
+| Rooftop Beats (hip-hop) | Rooftop Beats (`hiphop` 88), Late Bus Loop (84), Corner Store Cipher (92), Neon Puddles (78) | free |
+| Dusty Road Two-Step (upbeat country) | Dusty Road Two-Step (`twostep` 118), Barn Dance Hustle (126), Creekbed Shuffle (108), Sundown Hoedown (134) | free |
+| Neon Sugar (pop) | Neon Sugar (`pop` 118), Glitter Static (124), Skyline Heart (112), Confetti Signal (128) | free |
+| Midnight Swing Club (jazz) | Midnight Swing Club (`jazz` 132), Blue Corner Booth (118), Velvet Elevator (104), Last Call Cool (140) | free |
+| Rainy Day Blues (slow blues, 12 bars) | Rainy Day Blues (`slowblues` 62), Porch Rain Slow Drag (56), Kettle on the Stove (64), Streetlight Lament (60) | free |
+| Party Time Mixtape (party) | Party Time Mixtape (`party` 126), Glow Stick Rush (128), Confetti Cannon (122), Balloon Drop (132) | free |
+| Hits from the Old Days | Ode to Joy (`classical` 100, Beethoven, public domain), Sonata in the Garden (112), Minuet for a Quiet Room (92), Allegro Over the Rooftops (132) | premium (dev bypass in tests) |
+| Sad Country | Empty Porch Swing (`country` 72), Fence Line Blues (68), Highway Moon (76), Letter I Never Sent (62) | premium |
+| Blues Collection | Twelve Bar Sunrise (`blues` 94), Gravel Road Shuffle (104), Hammer and Nails (88), Midnight Train Home (112) | premium |
+| Out like a Lamb | Little Lamb Dream (`lullaby` 66), Moon Mobile (60), Counting Clouds (68), Blanket Fort (56) | premium |
+| (stereo's own beat) | `default` 110 | always |
+
+All melodies and chord loops are original (the one exception is Beethoven's Ode to Joy, which is public domain). The first song of
+each record is hand-written; the others come from the generators in `src/audio.js` (`rockTrack`, `hiphopTrack`, ... a key, chord
+names and a seed: the same seed always gives the same tune). Each song also sets a drum style for Guy at the kit (`drums` on the
+track, falling back to `DRUM_STYLE_BY_TRACK` in `src/hobbies.js`: rock, boombap, train, disco, swing, soft, march).
+
+Playback: a song plays for about a minute (`trackSeconds`: a few runs through its form), then the stereo moves to the next song on
+the **same record**, wrapping round (`Brain.autoAdvance`). Music Guy started stays his; music the user started (or switched with
+next / previous / a tap in the list) stays the user's. Next / previous walk through the whole list; tap a row in the player to
+play that song. When Guy starts a record he picks one he did not play last time and a song from it that was not its last song
+(`lastAlbumId`, `lastTrackOf`). `T.sweepPlaylist` checks all of this.
 
 Records live on the top shelf row. Up to 5 sleeves stand side by side; with more they overlap like records in a rack
 (each is a little closer to the room, and `rec.z` is the middle of the exposed left strip, where Guy's hand goes). Every
@@ -163,3 +173,5 @@ book list popup (long-press a lower shelf at a book: title, read / not read).
 - The rug, picture and windows used to be fixed meshes that could not be removed; they are `world.decor` now. `fits()` also keeps furniture out of wall pieces, and `decorFits()` keeps wall pieces off the Skill Machine and each other. Run `T.sweepDecor()`.
 - Putting a removed object back (`restoreObject`) only checked that it fitted at its old spot, so the easel could return right in front of the drum kit with its standing spot blocked (found as an intermittent `paint` / `scribble` failure with `drums` overlaps in the second `runAll`). It now also needs its own standing spot clear and must not sit on someone else's (`ownStandClear`, `onSomeonesStand` in `src/room.js`). Run `runAll` at least twice in a row: the second run starts with the room full.
 - Asking for another book while he was reading one made him wander off (tend plants, wave, play piano) still holding the first book, and only put it back much later. `choose()` skipped "put it back" whenever `albumOnTable` was true, and the flag could be left stuck on (for example by stopping the stereo from the player while a record was out). Now only a record that is really standing by the stereo with its music playing is exempt; taking a book clears the flag; putting a record back with the music off clears it. Covered by `T.sweepHolding`.
+- Guy kept playing the same tune: each record had one looping track and nothing ever moved on. Records now have four songs and the stereo hands over to the next one on the same record after about a minute; Guy avoids the last record and song he played. `T.sweepPlaylist`.
+- The drum kit counted as "arm inside the drums" over its whole bounding box, which is mostly air, so walking past its corner failed runs intermittently once the room was crowded. The overlap check now only counts a hand near a drum, a cymbal, the kick or the stool (`inKit` in `src/devtools.js`).

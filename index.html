@@ -73,8 +73,12 @@
   #player .ctl button { background: rgba(255,255,255,.08); border: 0; color: #fff; font-size: 20px; width: 56px; height: 44px; border-radius: 10px; cursor: pointer; }
   #player .ctl button:hover { background: rgba(255,255,255,.18); }
   #player .ctl button.on { background: #2a9d63; }
-  #player .tracks { margin-top: 10px; font-size: 13px; color: #aab6c8; max-height: 120px; overflow: auto; }
-  #player .tracks .cur { color: #fff; font-weight: 600; }
+  #player .now small { display: block; margin-top: 1px; font-size: 12px; font-weight: 400; color: #7f8fa6; }
+  #player .tracks { margin-top: 10px; font-size: 13px; color: #aab6c8; max-height: 190px; overflow: auto; position: relative; }
+  #player .tracks .row { padding: 5px 6px; border-radius: 6px; cursor: pointer; }
+  #player .tracks .row:hover { background: rgba(255,255,255,.08); }
+  #player .tracks .row small { color: #7f8fa6; font-size: 11px; margin-left: 4px; }
+  #player .tracks .cur { color: #fff; font-weight: 600; background: rgba(42,157,99,.18); }
   #toast { position: fixed; top: 18px; left: 50%; transform: translate(-50%, -20px); background: rgba(40,120,70,.95); color: #fff;
            padding: 11px 20px; border-radius: 10px; font-size: 15px; opacity: 0; pointer-events: none; transition: .35s; z-index: 6; }
   #toast.show { opacity: 1; transform: translate(-50%, 0); }

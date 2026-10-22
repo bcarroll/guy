@@ -273,9 +273,13 @@ const player = document.getElementById('player');
 let playerTimer = 0;
 function renderPlayer() {
   const np = brain.nowPlaying();
-  player.querySelector('.now').textContent = (np.playing ? '▶ ' : '■ ') + np.title;
+  player.querySelector('.now').innerHTML = `${np.playing ? '▶ ' : '■ '}${np.title}${np.album ? `<small>${np.album}</small>` : ''}`;
   player.querySelector('[data-p=play]').classList.toggle('on', np.playing);
-  player.querySelector('.tracks').innerHTML = np.list.map((t, i) => `<div class="${i === np.index ? 'cur' : ''}">${i === np.index && np.playing ? '▶' : '·'} ${t.title}</div>`).join('');
+  // every song on every record on the shelf, in order; tap one to play it
+  const box = player.querySelector('.tracks');
+  box.innerHTML = np.list.map((t, i) => `<div class="row ${i === np.index ? 'cur' : ''}" data-id="${t.id}">${i === np.index && np.playing ? '▶' : '·'} ${t.title}${t.album ? ` <small>${t.album}</small>` : ''}</div>`).join('');
+  const cur = box.querySelector('.cur');
+  if (cur) box.scrollTop = Math.max(0, cur.offsetTop - box.clientHeight / 2 + cur.offsetHeight / 2);
 }
 function showPlayer() {
   player.hidden = false;
@@ -288,6 +292,8 @@ player.querySelector('.pclose').addEventListener('click', hidePlayer);
 player.addEventListener('click', (e) => {
   const a = e.target.dataset && e.target.dataset.p;
   if (a) brain.stereoControl(a);
+  const row = e.target.closest && e.target.closest('.row[data-id]');
+  if (row) brain.stereoControl('select', row.dataset.id);
   renderPlayer();
 });
 brain.onStereoChange = renderPlayer;

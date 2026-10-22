@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Q } from './guy.js';
-import { playNote, playPluck, startBeat, startTrack, TRACKS, BEAT } from './audio.js';
+import { playNote, playPluck, startBeat, startTrack, trackSeconds, TRACKS, BEAT } from './audio.js';
+import { ALBUM_CATALOG } from './albums.js';
 import { ROOM } from './room.js';
 import { randomSong, makeJam, plinkSong } from './songs.js';
 import { installHobbies } from './hobbybrain.js';
@@ -1178,9 +1179,18 @@ export class Brain {
     }
     const shelf = this.obj('shelf');
     const albums = shelf && shelf.albums ? shelf.albums.filter((a) => a.mesh.visible && TRACKS[a.def.track] && TRACKS[a.def.track].step) : [];
-    let rec = albums.length && !this.held && Math.random() < 0.75 ? pick(albums) : null;
+    // not the record he played last time if there is another to choose from
+    const fresh = albums.filter((a) => a.def.id !== this.lastAlbumId);
+    let rec = albums.length && !this.held && Math.random() < 0.75 ? pick(fresh.length ? fresh : albums) : null;
     if (this.forceAlbum) { rec = albums.find((a) => a.def.id === this.forceAlbum) || rec; this.forceAlbum = null; } // QA hook
-    const track = rec ? rec.def.track : 'default';
+    // and not the song he played last from that record: the record then carries on through its other songs by itself
+    let track = 'default';
+    if (rec) {
+      const songs = (rec.def.tracks || [rec.def.track]).filter((id) => TRACKS[id] && TRACKS[id].step);
+      const last = this.lastTrackOf && this.lastTrackOf[rec.def.id];
+      track = pick(songs.filter((id) => id !== last).length ? songs.filter((id) => id !== last) : songs);
+      this.lastAlbumId = rec.def.id;
+    }
     const atStereo = () => this.walkAt('table', 0, 0.55, Math.PI);
     return {
       rec, track, title: rec ? rec.def.title : null,
@@ -1225,7 +1235,39 @@ export class Brain {
     this.beatLen = 60 / TRACKS[playable].bpm;
     this.music = playable === 'default' ? startBeat() : startTrack(playable);
     this.musicT0 = performance.now() / 1000 + 0.05;
+    this.trackSince = this.time;                                                       // a record moves on to its next track after a minute or so
+    this.trackFor = playable === 'default' ? Infinity : trackSeconds(TRACKS[playable]);
+    const rec = this.albumOf(playable);
+    if (rec) { this.lastTrackOf ||= {}; this.lastTrackOf[rec.id] = playable; }          // so the next time that record plays, it starts somewhere else
     this.w.boombox.led.material.color.set(0x22ff66);
+  }
+
+  // The record a track belongs to (and the track after it on that record, wrapping round to the first).
+  albumOf(trackId) { return ALBUM_CATALOG.find((a) => a.tracks && a.tracks.includes(trackId)) || null; }
+  nextOnAlbum(trackId) {
+    const a = this.albumOf(trackId);
+    if (!a) return null;
+    const ids = a.tracks.filter((id) => TRACKS[id] && TRACKS[id].step);
+    return ids.length > 1 ? ids[(ids.indexOf(trackId) + 1) % ids.length] : null;
+  }
+
+  // Switch to another track without stopping the session: whoever started the music still owns it, and anything he is playing
+  // along on follows the new key and tempo.
+  changeTrack(id) {
+    const byUser = this.userMusic;
+    this.musicOff();
+    this.musicOn(id, byUser);
+    const st = this.step;
+    if (st && st.fx && st.fx.sync && st.fx.gen) { st.fx = { ...st.fx, gen: makeJam(TRACKS[this.track]) }; st.q = []; st.bar = undefined; }
+    if (this.onStereoChange) this.onStereoChange();
+  }
+
+  // Called every frame: when a track has had its minute, play the next one on the same record.
+  autoAdvance() {
+    if (!this.music || this.track === 'default' || this.time - this.trackSince < this.trackFor) return;
+    const next = this.nextOnAlbum(this.track);
+    if (next) this.changeTrack(next);
+    else this.trackSince = this.time;                 // a one-track record just carries on
   }
   musicOff() {
     if (!this.music) return;
@@ -1239,14 +1281,15 @@ export class Brain {
   // The playlist is the stereo's own beat plus every record that is on the shelf.
   trackList() {
     const shelf = this.obj('shelf');
-    const albums = shelf && shelf.albums ? shelf.albums.filter((a) => TRACKS[a.def.track] && TRACKS[a.def.track].step) : [];
-    return [{ id: 'default', title: 'Stereo beat' }, ...albums.map((a) => ({ id: a.def.track, title: a.def.title }))];
+    const albums = shelf && shelf.albums ? shelf.albums : [];
+    const songs = albums.flatMap((a) => (a.def.tracks || [a.def.track]).filter((id) => TRACKS[id] && TRACKS[id].step).map((id) => ({ id, title: TRACKS[id].label, album: a.def.title })));
+    return [{ id: 'default', title: 'Stereo beat', album: '' }, ...songs];
   }
 
   nowPlaying() {
     const list = this.trackList();
     const i = this.music ? Math.max(0, list.findIndex((t) => t.id === this.track)) : clamp(this.trackIndex ?? 0, 0, list.length - 1);
-    return { playing: !!this.music, index: i, title: list[i].title, list };
+    return { playing: !!this.music, index: i, title: list[i].title, album: list[i].album, list };
   }
 
   stereoControl(action, id = null) {
@@ -1269,11 +1312,8 @@ export class Brain {
     } else if (action === 'select' && !this.music) {   // picked a record while the stereo is off: start it
       this.musicOn(list[i].id, true);
     } else if (this.music) {                      // next / previous / pick while playing: switch the track straight away
-      this.musicOff();
-      this.musicOn(list[i].id, true);
-      // anything he is playing along on follows the new key and tempo
-      const st = this.step;
-      if (st && st.fx && st.fx.sync && st.fx.gen) { st.fx = { ...st.fx, gen: makeJam(TRACKS[this.track]) }; st.q = []; st.bar = undefined; }
+      this.userMusic = true;                      // he chose it, so the music is his now
+      this.changeTrack(list[i].id);
     }
     if (this.onStereoChange) this.onStereoChange();
   }
@@ -1471,6 +1511,7 @@ export class Brain {
 
   update(dt) {
     this.time += dt;
+    this.autoAdvance();
     const g = this.g;
     const root = g.root;
     if (!this.step) {

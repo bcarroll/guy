@@ -9,7 +9,7 @@
 import { OBJECT_CATALOG } from './machine.js';
 import { BOOK_CATALOG, SKILL_INFO } from './skills.js';
 import { ALBUM_CATALOG } from './albums.js';
-import { TRACKS } from './audio.js';
+import { TRACKS, trackSeconds } from './audio.js';
 import { POSES } from './brain.js';
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -44,7 +44,7 @@ export const MANIFEST = {
     plant: { objects: ['plant'], touches: ['plant', 'flowerplant', 'tree'] },
     dust: { objects: ['picture'], skills: ['decorate'], touches: [] },
     read: { objects: ['shelf'], touches: ['shelf', 'armchair'] },
-    rearrange: { objects: ['lamp', 'plant', 'armchair'], touches: ['lamp', 'plant', 'armchair', 'table', 'bench'] },
+    rearrange: { objects: ['lamp', 'plant', 'armchair'], touches: ['lamp', 'plant', 'armchair', 'table', 'bench', 'flowerplant', 'coffeetable', 'nightstand', 'guitar', 'easel', 'telescope'] },
     ball: { touches: [] },
     dribble: { skills: ['ball'], touches: [] },
     toss: { skills: ['ball'], touches: [] },
@@ -80,7 +80,7 @@ export const MANIFEST = {
     happy: {}, rock: {}, hiphop: {}, twostep: {}, pop: {}, jazz: {}, slowblues: {}, party: {},
     classical: { premium: true }, country: { premium: true }, blues: { premium: true }, lullaby: { premium: true },
   },
-  tracks: ['default', 'happy', 'rock', 'hiphop', 'twostep', 'pop', 'jazz', 'slowblues', 'party', 'classical', 'country', 'blues', 'lullaby'],
+  tracks: ['default', ...ALBUM_CATALOG.flatMap((a) => a.tracks)],     // every track on every record; coverage fails for a track no record lists
   // the visual checkpoints: freeze Guy at (activity, pose, t) and look from `view`. See assets.md for the full checklist.
   visual: [
     { id: 'read-grab-mid', activity: 'read', pose: 'grab', t: 1.2, view: 'hand:Right', expect: 'handshake grip, thumb up, hand reaches the book, arm in front of him' },
@@ -262,6 +262,13 @@ function sampleOverlaps(acc, touches) {
     const P = c.map((n) => g.boneWorld(n));
     for (let i = 0; i < P.length - 1; i++) for (let k = 0; k <= 4; k++) pts.push(new THREE.Vector3().lerpVectors(P[i], P[i + 1], k / 4));
   }
+  // the drum kit is mostly air: only a hand near a drum, a cymbal, the kick or the stool counts as being inside it
+  const kit = W().objects.drums;
+  if (kit) kit.group.updateWorldMatrix(true, false);
+  const inKit = (p) => {
+    const l = kit.group.worldToLocal(p.clone());
+    return [...Object.values(kit.pads), { x: 0, y: 0.29, z: -0.42 }, { x: 0, y: 0.47, z: 0.42 }].some((q) => Math.hypot(l.x - q.x, l.y - q.y, l.z - q.z) < 0.26);
+  };
   for (const o of W().obstacles) {
     if (allowed.has(o.name)) continue;
     // thin things (lamp pole, guitar stand) fill little of their bounding box: only count the middle column
@@ -269,6 +276,7 @@ function sampleOverlaps(acc, touches) {
     for (const p of pts) {
       if (!(p.x > o.x0 && p.x < o.x1 && p.z > o.z0 && p.z < o.z1 && p.y < o.h && p.y > 0.02)) continue;
       if (sparse && (Math.abs(p.x - cx) > 0.16 || Math.abs(p.z - cz) > 0.16)) continue;
+      if (o.name === 'drums' && kit && !inKit(p)) continue;
       acc[o.name] = (acc[o.name] || 0) + 1;
       T.lastOverlap = { object: o.name, pose: B().pose, activity: B().last, label: label().slice(0, 50), guy: [+G().pos.x.toFixed(2), +G().pos.z.toFixed(2)], point: [+p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2)], box: [o.x0, o.x1, o.z0, o.z1].map((v) => +v.toFixed(2)) };
       break;
@@ -520,10 +528,66 @@ T.sweepRecords = () => {
       if (b.music) sawTrack = b.track;
     }
     const idle = T.settle().ok;
-    out.push(result(`record:${a.id}`, add.ok && sawHeld && sawOnTable && sawTrack === a.track && rec.mesh.visible && !b.music && idle && errors.length === base, {
+    out.push(result(`record:${a.id}`, add.ok && sawHeld && sawOnTable && a.tracks.includes(sawTrack) && rec.mesh.visible && !b.music && idle && errors.length === base, {
       premiumDevBypass: !!add.devBypass, fetched: sawHeld, onTable: sawOnTable, trackPlayed: sawTrack, returnedToShelf: rec.mesh.visible, errors: errors.slice(base),
     }));
   }
+  return out;
+};
+
+// 5b. The playlist: every record has several songs with titles of their own, the stereo list shows them all, next / previous /
+// pick work, a track hands over to the next song on the same record after its minute, and Guy does not play the same song
+// (or the same record) twice in a row.
+T.sweepPlaylist = () => {
+  const out = [], b = B();
+  T.addObject('table'); T.learn(['stereo']);
+  for (const a of ALBUM_CATALOG) T.addAlbum(a.id);
+  if (b.music) b.stereoControl('stop');
+  const labels = Object.entries(TRACKS).filter(([id]) => id !== 'default').map(([, t]) => t.label);
+  out.push(result('playlist: every record has at least 3 playable songs', ALBUM_CATALOG.every((a) => a.tracks.length >= 3 && a.tracks.every((id) => TRACKS[id] && TRACKS[id].step)),
+    { short: ALBUM_CATALOG.filter((a) => a.tracks.length < 3).map((a) => a.id) }));
+  out.push(result('playlist: every song has its own title', new Set(labels).size === labels.length && labels.every(Boolean), { songs: labels.length, unique: new Set(labels).size }));
+  const list = b.trackList();
+  out.push(result('playlist: the stereo lists every song on the shelf', list.length === 1 + ALBUM_CATALOG.reduce((n, a) => n + a.tracks.length, 0), { listed: list.length }));
+  // next / previous / pick
+  b.stereoControl('stop'); b.trackIndex = 0;
+  b.stereoControl('select', 'rock'); step(0.5);
+  const startedOn = b.track;
+  b.stereoControl('next'); step(0.5);
+  const afterNext = b.track;
+  b.stereoControl('prev'); step(0.5);
+  const afterPrev = b.track;
+  b.stereoControl('select', 'jazz3'); step(0.5);
+  out.push(result('playlist: select, next and previous change the song', startedOn === 'rock' && afterNext === 'rock2' && afterPrev === 'rock' && b.track === 'jazz3' && b.userMusic, { startedOn, afterNext, afterPrev, now: b.track }));
+  // auto-advance: a track hands over to the next one on its record, in order, and wraps round
+  T.settle(); T.home();
+  b.stereoControl('select', 'rock');
+  b.queue = []; b.step = b.play('idle', 1e9); b.step.t = 0;            // keep him standing still so only the stereo is being tested
+  const seen = [b.track];
+  for (let k = 0; k < 5; k++) { step(trackSeconds(TRACKS[b.track]) + 1); if (seen[seen.length - 1] !== b.track) seen.push(b.track); }
+  out.push(result('playlist: a track hands over to the next song on its record', seen.slice(0, 5).join(',') === 'rock,rock2,rock3,rock4,rock' && b.userMusic, { seen, userMusicKept: b.userMusic }));
+  b.stereoControl('stop'); b.step = null; b.queue = [];
+  // Guy: the same record forced again and again must not repeat its song; the record he plays should change too when he can
+  const songs = [], albums = [];
+  for (let k = 0; k < 8; k++) {
+    T.settle(); T.home(); b.queue = []; b.step = null; b.pendingActivity = null;
+    b.forceAlbum = 'party'; b.choose('dance');
+    let t = 0; while (t < 60 && !b.music) { step(0.25); t += 0.25; }
+    songs.push(b.track);
+    T.settle(120);
+  }
+  const repeats = songs.filter((s, i) => i && s === songs[i - 1]).length;
+  out.push(result('playlist: Guy does not play the same song twice in a row from a record', repeats === 0 && new Set(songs).size >= 3, { songs, repeats }));
+  for (let k = 0; k < 12; k++) {
+    T.settle(); T.home(); b.queue = []; b.step = null; b.pendingActivity = null;
+    b.choose('dance');
+    let t = 0; while (t < 60 && !b.music) { step(0.25); t += 0.25; }
+    albums.push(b.albumOf(b.track) ? b.albumOf(b.track).id : 'none');
+    T.settle(120);
+  }
+  const recordRepeats = albums.filter((s, i) => i && s === albums[i - 1] && s !== 'none').length;
+  out.push(result('playlist: Guy picks different records from session to session', recordRepeats === 0 && new Set(albums).size >= 3, { albums, recordRepeats }));
+  out.push(result('playlist: no errors', true, { errors: errors.length }));
   return out;
 };
 
@@ -704,11 +768,17 @@ T.sweepDecor = () => {
   T.addObject('tree');
   const tree = w.objects.tree;
   tree.rot = 0; tree.set(tree.x, tree.z);
-  const hung = !!tree && w.fits(tree, pic.u, -3.55, tree.w, tree.d);
+  // (find a stretch of the back wall where the tree fits when the picture is down, whatever else the room holds, and hang the picture there)
   w.removeObject('picture');
-  const bare = !!tree && w.fits(tree, pic.u, -3.55, tree.w, tree.d);
-  T.addObject('picture');
-  out.push(result('decor:furniture cannot be pushed into a wall piece', !!tree && !hung && bare, { hung, bare }));
+  const free = [];
+  for (let u = -4.0; u <= 4.0; u += 0.25) if (tree && w.fits(tree, u, -3.55, tree.w, tree.d)) free.push(u);
+  w.restoreObject('picture');
+  const p2 = w.decor.picture;
+  let tested = null;
+  for (const u of free) {
+    if (p2 && w.decorFits(p2, u, p2.v)) { p2.set(u, p2.v); tested = { u, treeFitsUnderIt: w.fits(tree, u, -3.55, tree.w, tree.d) }; break; }
+  }
+  out.push(result('decor:furniture cannot be pushed into a wall piece', !!tree && !!p2 && (!tested || !tested.treeFitsUnderIt), { freeStretches: free.length, tested, note: tested ? undefined : 'no free stretch of back wall to test in this layout' }));
   return out;
 };
 
@@ -782,6 +852,7 @@ T.runAll = () => {
   report.tracks = summarise(T.sweepTracks());
   report.books = summarise(T.sweepBooks());
   report.records = summarise(T.sweepRecords());
+  report.playlist = summarise(T.sweepPlaylist());
   report.combos = summarise(T.combos());
   report.interrupts = summarise(T.sweepInterrupts());
   report.removals = summarise(T.sweepRemovals());
