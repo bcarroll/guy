@@ -670,11 +670,13 @@ Recorded from the owner's description. Nothing is built.
 
 **Two characters.** GUY is the main character, built from the Mixamo Y Bot model (GUY = Genetically Universal Ybot). X Bot is the second character. "Y Bot" is the model's name, not a second character.
 
+**GAL and books (from the owner).** Learning from books applies to GAL as well. She has her own skill set (her own `Skills` instance, forgetting included) and must read a book to gain an ability, especially an advanced one. She reads from the same bookshelf. What follows for the design: her activities are gated by `skillNeeds` against her skills; Guy cannot order her to do something she has not learned (he picks only from what she can do, or the order is refused kindly); she shows up in the skills panel as a second set; her skills are saved with her. Reading would reuse the `read` activity and the book steps, run by her own brain.
+
 **Open questions for the owner**
 1. Is the machine consumed when it prints X Bot, or does it stay as something else?
 2. What does the premium unlock cost, and is it a one-off unlock or paid per machine?
 3. How does the user give Guy an order for X Bot, or does Guy decide everything himself?
-4. Can X Bot learn skills of her own, or only use the ones Guy has (her skills = Guy's skills)?
+4. ~~Can X Bot learn skills of her own?~~ **Answered:** yes. GAL learns from books like Guy does: she must read a book to gain the abilities of an advanced skill. Her skills are her own, not Guy's (see "GAL and books" below).
 5. Does X Bot persist between visits (the saved layout)?
 6. Y Bot's prompts: are they in speech bubbles, gestures only, or both?
 7. X Bot is told what to do by GUY, but she also starts things on her own (the prompts above). Does she act on her own at any time, or only when GUY is near and free to respond?
