@@ -260,6 +260,8 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 
 ## Regression watch (bugs found and fixed; make sure they stay fixed)
 
+- GAL had black balls floating off her joints that moved with her body parts: the X Bot's Joints mesh lists its 64 bones in a different order from the body's 65, and the loader shared the body's skeleton by index. `Guy.load` now rebuilds the Joints skeleton by bone name with its own inverse bind matrices. Look at both robots' joints (visual check) whenever a model changes.
+
 - The Build a Bot machine's menu button (Use) said "Guy can't do anything with that yet": `interact` had no entry for it. Now `botprinter: ['buildbot']` with kind messages (`sweepGal` presses the real menu button).
 - Reported: Guy once walked into the wall beside a workshop door before turning to the door (not reproduced: 27+ trials of every wall, random starts, GAL standing at the door, furniture near it). Guard added: `doorStand` (approach.js) picks the nearest free spot in front of a door instead of always 0.8 m out, and a stand plan whose target has gone aborts instead of throwing. If it happens again note where Guy and GAL were and which room he had come from.
 

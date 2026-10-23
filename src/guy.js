@@ -87,7 +87,15 @@ export class Guy {
     if (!opts.keep) {
       let body = null;
       model.traverse((o) => { if (o.isSkinnedMesh && o.name.includes('Surface')) body = o; });
-      model.traverse((o) => { if (o.isSkinnedMesh && o !== body) o.skeleton = body.skeleton; });
+      // (by bone name, with its own inverse bind matrices: the two meshes list their bones in different orders, so sharing the
+      // body's skeleton as it is left black joint balls floating off the X Bot)
+      const byName = new Map();
+      for (const bn of body.skeleton.bones) if (!byName.has(bn.name)) byName.set(bn.name, bn);
+      model.traverse((o) => {
+        if (!o.isSkinnedMesh || o === body) return;
+        const own = o.skeleton;
+        o.skeleton = new THREE.Skeleton(own.bones.map((bn) => byName.get(bn.name) || bn), own.boneInverses);
+      });
     }
 
     const wq = new THREE.Quaternion();
