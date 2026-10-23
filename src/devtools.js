@@ -7,7 +7,8 @@
 // T.coverage() reports anything the MANIFEST below does not know about yet. When you add an asset or an
 // activity, add it to MANIFEST (and to .claude/skills/test-guy-game/assets.md). See that skill for the workflow.
 import { OBJECT_CATALOG } from './machine.js';
-import { BOOK_CATALOG, SKILL_INFO } from './skills.js';
+import { BOOK_CATALOG, SKILL_INFO, TIMING_SKILLS } from './skills.js';
+import { BAND } from './gal.js';
 import { ROOM_CATALOG } from './rooms.js';
 import { initLayout } from './layout.js';
 import { RECIPES as RECIPES_DEF } from './workshop.js';
@@ -2011,34 +2012,31 @@ T.sweepGal = () => {
   const said6 = gal.log.join(' | ');
   out.push(result('gal: her own idea: she switches the stereo on, asks Guy to dance, he stops what he is doing, they dance, and the music goes off when they have both finished', wasOn && !b.music && /GAL asks GUY: dance/.test(said6) && seen6.some((s) => s === 'dance/dance') && errors.length === e6, { seen6: seen6.slice(0, 10), said6, t6 }));
   out.push(result('gal: she asks nothing of Guy while he is locked on something', (() => { const was = b.lock; b.lock = { name: 'piano' }; const ok = !gal.canInvite() && !gal.askGuy('dance'); b.lock = was; return ok; })()));
-  // 6b. keeping time: Guy plays the guitar on his own tempo and GAL drums beside him. With only the basic book her beat is her own;
-  // once she has read an advanced one (Fills & Solos / Playing in the Band) she locks onto his tempo
-  for (const skilled of [false, true]) {
+  // 6b. keeping time: Guy plays the guitar on his own tempo and GAL plays beside him (each instrument in BAND that keeps a beat).
+  // With only the basic book her beat is her own; once she has read an advanced one she locks onto his tempo (Brain.tempoToFollow).
+  out.push(result('gal: every instrument that can be jammed has an entry in TIMING_SKILLS (keeping time)', Object.values(BAND).every((x) => Object.keys(TIMING_SKILLS).includes(x.label))));
+  const TIMED = { drums: { act: 'drums', basic: ['drums'], adv: 'drums.solo', objs: ['drums'] }, piano: { act: 'sitpiano', basic: ['piano'], adv: 'piano.advanced', objs: ['piano', 'bench'] } };
+  for (const [inst, spec] of Object.entries(TIMED)) for (const skilled of [false, true]) {
     galReset(); galBuild(); gb = gal.brain;
-    for (const id of ['drums', 'guitar']) T.addObject(id);
-    skillsOf().known.clear(); T.learn(['guitar']); gb.skills.known.clear(); gb.skills.learn('drums'); if (skilled) gb.skills.learn('drums.solo');
+    for (const id of [...spec.objs, 'guitar']) T.addObject(id);
+    skillsOf().known.clear(); T.learn(['guitar']); gb.skills.known.clear(); for (const k of spec.basic) gb.skills.learn(k); if (skilled) gb.skills.learn(spec.adv);
     T.settle();
-    const e6b = errors.length; let n6 = 0, maxOff = 0, minOff = 9, tt = 0, nearPhase = 0;
-    const origDrums = gb.computeDrums;
-    gb.computeDrums = function (s) {
-      const o = origDrums.call(this, s);
-      const clk = b.bandClock;
-      if (o && o.playing && clk && b.time - clk.seen < 0.5) {
-        const mine = o.beat, his = (b.time - clk.t0) / clk.bl;
-        const d = Math.abs(((mine - his) % 1 + 1.5) % 1 - 0.5);          // distance between the two beats, in beats (0 = together)
-        n6++; maxOff = Math.max(maxOff, d); minOff = Math.min(minOff, d); if (d < 0.1) nearPhase++;
-      }
-      return o;
-    };
+    const e6b = errors.length; let n6 = 0, tight = 0, tt = 0;
     try {
       b.queue = []; b.step = null; b.skip(true); gb.queue = []; gb.step = null; gb.skip(true);
-      b.choose('riff'); gb.choose('drums');
-      while (tt < 90) { step(0.25); tt += 0.25; }
-    } finally { gb.computeDrums = origDrums; }
+      b.choose('riff'); gb.choose(spec.act);
+      while (tt < 120) {
+        step(0.25); tt += 0.25;
+        const k = gb.keptTime, clk = b.bandClock;
+        if (k && k.inst === inst && clk && b.time - clk.seen < 0.5 && gb.step && gb.step.fx && (gb.step.fx.guitar || gb.step.fx.song || gb.step.fx.style)) {
+          n6++; if (k.ref !== null && Math.abs(k.bl - clk.bl) < 1e-6 && Math.abs(((k.mine - k.ref) % 1 + 1.5) % 1 - 0.5) < 0.05) tight++;
+        }
+      }
+    } finally { gb.queue = []; gb.step = null; }
     out.push(result(skilled
-      ? 'gal: with an advanced drumming book she keeps time with the tempo Guy is playing (beats line up)'
-      : 'gal: with only the basic drumming book her beat is her own (not locked to his)',
-      n6 > 20 && (skilled ? nearPhase / n6 > 0.9 : nearPhase / n6 < 0.9) && errors.length === e6b, { samples: n6, nearPhase, maxOff, minOff }));
+      ? `gal: with an advanced ${inst} book she keeps time with the tempo Guy is playing`
+      : `gal: with only the basic ${inst} book her beat is her own (not locked to his)`,
+      n6 > 10 && (skilled ? tight / n6 > 0.9 : tight === 0) && errors.length === e6b, { samples: n6, tight }));
   }
   // 7. both help in the restaurant: customers are looked after by whoever gets there, nothing is done twice
   galReset(); galBuild(); gb = gal.brain;

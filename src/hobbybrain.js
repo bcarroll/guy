@@ -227,12 +227,11 @@ export function installHobbies(Brain, POSES, H) {
       d.restSticks.forEach((m) => (m.visible = !holding));
       // Timing comes with the advanced books (Fills & Solos, Playing in the Band): such a drummer locks onto the stereo's beat, or
       // onto the tempo the other robot is playing, wherever the song is. With only the basic book the beat is steady but her own.
-      const skilled = this.skills.has('drums.solo') || this.skills.has('drums.band');
-      const clk = this.other && this.other.bandClock;
-      const follow = skilled && !(fx.sync && this.music) && !this.music && clk && this.other.time - clk.seen < 0.5 ? clk : null;
-      const sync = !!(this.music && (fx.sync || skilled));
-      const bl = sync ? this.beatLen : follow ? follow.bl : 60 / (fx.bpm || 100);
-      const b = sync ? this.currentBeat() : follow ? (this.other.time - follow.t0) / bl : (T - start) / bl;
+      const f = fx.sync && this.music ? { bl: this.beatLen, beat: this.currentBeat() } : this.tempoToFollow('drums');
+      const bl = f ? f.bl : 60 / (fx.bpm || 100);
+      const b = f ? f.beat : (T - start) / bl;
+      this.keptTime = { inst: 'drums', mine: b, ref: f ? f.beat : null, bl };
+      if (!f && !fx.sync) this.publishTempo(this.time - T + start, bl);
       const dr = (s.dr ||= { n: null, q: { L: [], R: [], F: [] }, last: { L: null, R: null }, kickAt: -9 });
       const playing = T >= start && T < D - endGap && (!fx.sync || !!this.music);
       if (!playing) dr.n = null;

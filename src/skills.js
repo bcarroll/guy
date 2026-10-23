@@ -118,6 +118,10 @@ export const SKILL_INFO = {
 const KEY = 'guy.skills.v1';
 const FADE_KEY = 'guy.skills.fade.v1';
 // How long a forgotten skill takes to fade away completely (seconds of game time). Speed reading is slow to go.
+// The advanced books of each instrument: a player who has read any of them keeps time with the music or with the other player
+// (Brain.tempoToFollow). With only the basic book the beat is her own. Every instrument that plays on a beat needs an entry.
+export const TIMING_SKILLS = { drums: ['drums.solo', 'drums.band'], piano: ['piano.advanced'], guitar: [] };
+
 export const FADE_SECONDS = { default: 150, speedreading: 300 };
 
 export class Skills {

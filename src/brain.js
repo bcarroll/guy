@@ -3,6 +3,7 @@ import { Q } from './guy.js';
 import { playNote, playPluck, startBeat, startTrack, trackSeconds, TRACKS, BEAT } from './audio.js';
 import { ALBUM_CATALOG } from './albums.js';
 import { ROOM } from './room.js';
+import { TIMING_SKILLS } from './skills.js';
 import { randomSong, makeJam, plinkSong } from './songs.js';
 import { installHobbies } from './hobbybrain.js';
 import { installWorkshop } from './workbrain.js';
@@ -14,6 +15,7 @@ const REST_ACTS = ['takepay', 'serve', 'takeorder', 'cook', 'rwait'];
 import { RECIPES, PLANKS_PER_RUN, STOCK_CAP } from './workshop.js';
 import { sfx, drag as sfxDrag } from './sfx.js';
 import { nextRiff, keepRiff, riffAt, STEPS as RIFF_STEPS } from './riffs.js';
+import { makeStrum, strumPattern } from './strum.js';
 
 const PLANT_NAMES = ['plant', 'flowerplant', 'tree'];   // objects Guy can tend with the 'plant' activity
 const lerp = THREE.MathUtils.lerp;
@@ -625,7 +627,7 @@ export class Brain {
       sit: () => ['sitting down for a rest', this.chairStep((c) => [this.play('sitRest', rand(10, 16), { chairSit: true, chair: c.name })])],
       sitguitar: () => ['sitting down to play the guitar', this.walkAt('guitar', 0, 0.62, Math.PI),
         this.play('takeGuitar', 2.4, { guitar: true, at: [1.0, () => this.setGuitarHeld(true)] }),
-        this.chairStep((c) => [this.play('sitGuitar', rand(22, 32), { guitar: true, chairSit: true, chair: c.name }),
+        this.chairStep((c) => [this.play('sitGuitar', rand(22, 32), { guitar: true, chairSit: true, chair: c.name, strum: makeStrum() }),
           { ...this.walkAt('guitar', 0, 0.62, Math.PI), fx: { guitar: true } },
           this.play('putGuitar', 2.4, { guitar: true, at: [1.3, () => this.setGuitarHeld(false)] })], true)],
       slouch: () => ['slouching on the drum stool', this.walkAt('drums', 0.55, 1.15), this.walkAt('drums', 0.55, 0.6, Math.PI, true),
@@ -691,7 +693,11 @@ export class Brain {
         this.play('pickup', 2.0, { ball: true, at: [0.9, () => { this.ballHeld = true; }] }),
         this.play('toss', 6.85, { ball: true }),
         this.play('putdown', 2.0, { ball: true, at: [1.0, () => this.releaseBall()] })],
-      guitar: () => ['playing the guitar', ...this.guitarBegin(), this.play('guitar', 26, { guitar: true }), ...this.guitarEnd()],
+      // a new song every time (strum.js): a key, a chord progression, a pattern and a tempo
+      guitar: () => {
+        const song = makeStrum();
+        return [`strumming ${song.name} in ${song.key} on the guitar (${song.chords.map((c) => c.name).join(' ')})`, ...this.guitarBegin(), this.play('guitar', song.secs, { guitar: true, strum: song }), ...this.guitarEnd()];
+      },
       // the stereo is on: strum along in time and in the key of whatever is playing
       // through the door of an added room, a look round, and back (long-press the door, or he does it now and then)
       visit: () => {
@@ -733,7 +739,7 @@ export class Brain {
           } }),
           ...this.guitarEnd()];
       },
-      jamguitar: () => [`playing the guitar along with ${this.nowPlaying().title}`, ...this.guitarBegin(), this.play('guitar', rand(30, 45), { guitar: true, sync: true }), ...this.guitarEnd()],
+      jamguitar: () => [`playing the guitar along with ${this.nowPlaying().title}`, ...this.guitarBegin(), this.play('guitar', rand(30, 45), { guitar: true, sync: true, strum: { pat: strumPattern() } }), ...this.guitarEnd()],
       // he was interrupted while holding the guitar: take it back to its stand
       putguitar: () => ['putting the guitar back', this.walkAt('guitar', 0, 0.62, Math.PI),
         this.play('putGuitar', 2.4, { guitar: true, at: [1.3, () => this.setGuitarHeld(false)] })],
@@ -809,17 +815,20 @@ export class Brain {
           }
         }
       } else {
+      const song = s.fx.strum;                                       // the song he made up (strum.js); none: the old Am F C G
       if (s.fx.sync && this.music) { const b = this.currentBeat(); n = Math.floor(b * 2); chord = guitarChordAt(this.track, b); } // locked to the stereo
+      else if (song && song.chords) { n = Math.floor((t - 0.6) / song.step); chord = song.chords[Math.floor(n / (8 * song.bars)) % song.chords.length]; }
       else { n = Math.floor((t - 0.6) / 0.3); chord = GUITAR_CHORDS[Math.floor(n / 8) % GUITAR_CHORDS.length]; }
       if (n !== st.n && n >= 0) {
         st.n = n;
-        const pat = 'D.DU.UDU'[n % 8];
+        const pat = ((song && song.pat) || 'D.DU.UDU')[n % 8];
         st.fretGoal = chord.fret;
-        if (pat !== '.') {
+        if (pat === 'D' || pat === 'U') {
           const notes = pat === 'D' ? chord.notes : [...chord.notes].reverse();
           notes.forEach((m, i) => playPluck(m, i * 0.018, 1.8, pat === 'D' ? 0.15 : 0.11));
           st.yGoal = pat === 'D' ? -0.1 : 0.07;
-        }
+        } else if (pat === 'B') { playPluck(chord.notes[0], 0, 1.6, 0.13); st.yGoal = -0.05; }                 // the bass note alone
+        else if (pat !== '.') { playPluck(chord.notes[Number(pat) % chord.notes.length], 0, 1.1, 0.13); st.yGoal = n % 2 ? 0.05 : -0.06; }    // picking one string
       }
       }
     }
@@ -862,7 +871,7 @@ export class Brain {
     out.cur = cur;
     out.beat = s.fx.sync && this.music ? this.currentBeat() : (t - 0.6) / 0.6;
     // free playing keeps a tempo (an eighth note every 0.3 s from 0.6 s in); a skilled drummer joining in locks onto it
-    if (pose === 'guitar' || pose === 'sitGuitar') this.bandClock = s.fx.sync && this.music ? null : { t0: this.time - t + 0.6, bl: 0.6, seen: this.time };
+    if ((pose === 'guitar' || pose === 'sitGuitar') && !(s.fx.sync && this.music)) this.publishTempo(this.time - t + 0.6, 0.6);
     return out;
   }
 
@@ -1429,6 +1438,20 @@ export class Brain {
     v.copy(dir).multiplyScalar(skilled ? rand(4, 6.5) : rand(0.9, 1.6));
     v.y = skilled ? 1.5 : 0;
     sfx('kick', skilled ? 1 : 0.4);
+  }
+
+  // ---- keeping time with the others (every instrument that plays on a beat uses these two) ----
+  // An instrument played on its own tempo publishes it (`publishTempo`); a player who has read the advanced book(s) of that instrument
+  // (TIMING_SKILLS in skills.js) locks onto the stereo's beat, or onto the tempo the other robot is publishing (`tempoToFollow`).
+  // With only the basic book the beat stays her own. A new instrument: add it to TIMING_SKILLS, call publishTempo when it plays a tempo
+  // of its own, ask tempoToFollow when it starts a bar; sweepGal 6b checks every instrument in BAND (gal.js).
+  publishTempo(t0, bl) { this.bandClock = { t0, bl, seen: this.time }; }
+  isTight(inst) { return (TIMING_SKILLS[inst] || []).some((k) => this.skills.has(k)); }
+  tempoToFollow(inst) {
+    if (!this.isTight(inst)) return null;
+    if (this.music) return { bl: this.beatLen, beat: this.currentBeat() };
+    const clk = this.other && this.other.bandClock;
+    return clk && this.other.time - clk.seen < 0.5 ? { bl: clk.bl, beat: (this.other.time - clk.t0) / clk.bl } : null;
   }
 
   currentBeat() { return this.music ? (performance.now() / 1000 - this.musicT0) / this.beatLen : this.time / BEAT; }
@@ -2270,7 +2293,16 @@ export class Brain {
       }
     } else {
       s.q ??= [...s.fx.song.events];
-      beat = ((s.t - (s.fx.startAt ?? 0.8)) * s.fx.song.bpm) / 60;
+      const start = s.fx.startAt ?? 0.8, f = s.t >= start ? this.tempoToFollow('piano') : null;
+      if (f) {                                   // a skilled player starts the piece on a downbeat of the tempo she is following and plays it at that tempo
+        s.follow0 ??= Math.ceil(f.beat);
+        beat = (f.beat - s.follow0) * (f.bl > 0 ? (s.fx.song.bpm * f.bl) / 60 : 1);
+        this.keptTime = { inst: 'piano', mine: f.beat - s.follow0, ref: f.beat - s.follow0, bl: f.bl };     // (her bars are counted in the tempo she follows)
+      } else {
+        beat = ((s.t - start) * s.fx.song.bpm) / 60;
+        if (!(s.fx.sync)) this.publishTempo(this.time - s.t + start, 60 / s.fx.song.bpm);
+        if (s.t >= start) this.keptTime = { inst: 'piano', mine: beat, ref: null };
+      }
     }
     while (beat >= 0 && s.q.length && s.q[0].beat <= beat) this.fireNotes(s.q.shift(), piano);
     piano.keys.forEach((k) => {
