@@ -27,7 +27,7 @@ export function initLayout({ world, guy, remove, persist, key = KEY }) {
       instances: Object.values(world.objects).filter((o) => o.kind).map((o) => ({ name: o.name, kind: o.kind })),
       out: Object.keys(world.removed),               // taken out of the room (by the user, or to make way for a door)
       ball: world.ballGone ? null : { x: r2(world.ball.position.x), z: r2(world.ball.position.z) },
-      stock: { wood: world.stock.wood, parts: world.stock.parts, items: { ...world.stock.items } },      // what the Workshop has made
+      stock: { wood: world.stock.wood, parts: world.stock.parts, items: { ...world.stock.items }, coins: world.stock.coins || 0 },      // what the Workshop has made
     };
   }
 
@@ -78,6 +78,7 @@ export function initLayout({ world, guy, remove, persist, key = KEY }) {
     if (st && typeof st === 'object') {
       const n = (v) => (num(v) ? Math.max(0, Math.min(40, Math.round(v))) : 0);
       world.stock.wood = n(st.wood); world.stock.parts = n(st.parts);
+      world.stock.coins = num(st.coins) ? Math.max(0, Math.min(999999, Math.round(st.coins))) : 0;
       world.stock.items = {};
       for (const [k, v] of Object.entries(st.items && typeof st.items === 'object' ? st.items : {})) if (num(v) && v > 0) world.stock.items[k] = Math.min(99, Math.round(v));
       world.syncStock();

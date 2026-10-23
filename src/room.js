@@ -2,10 +2,12 @@ import * as THREE from 'three';
 import { BOOK_DEFS } from './skills.js';
 import { sfx } from './sfx.js';
 import { makeWorkshopBuilders } from './workobjects.js';
+import { makeRestaurantBuilders } from './restobjects.js';
 
 export const ROOM = { w: 10, d: 8, h: 3.2 }; // x in [-5,5], z in [-4,4]
 
 const mat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.8, ...o });
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
 
 function box(w, h, d, material, x, y, z, parent) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
@@ -1014,7 +1016,29 @@ export function buildRoom(scene) {
     builtchair: { build: (name, x, z) => buildWoodenChair(name, x, z), pref: { x: -2.4, z: 2.6 } },
   };
 
+  // ---- Restaurant furniture (src/restobjects.js), placed the same way in the Restaurant's own frame
+  const rest = makeRestaurantBuilders({ makeObject, box, mat });
+  const REST_LAYOUT = {
+    stove: (N, L) => ({ n: N - 0.5, lat: L / 2 - 0.8, face: 'door' }),
+    kitchencounter: (N, L) => ({ n: N - 0.5, lat: L / 2 - 2.5, face: 'door' }),
+    register: (N, L) => ({ n: 2.6, lat: -L / 2 + 1.7, face: 'plusLat' }),
+    diningtable: (N, L) => ({ n: N * 0.5, lat: L * 0.14, face: 'door' }),
+    diningtable2: (N, L) => ({ n: N * 0.5, lat: -L * 0.12, face: 'door' }),
+  };
+  const restSpot = (id) => (w) => {
+    if (!w.doors.restaurant) return null;
+    const { n: N, l: L } = w.shellSize('restaurant'), ax = w.shellAxes('restaurant');
+    const s = REST_LAYOUT[id](N, L), p = w.shellPoint('restaurant', s.n, s.lat);
+    const face = s.face === 'door' ? ax.toDoor : s.face === 'minusLat' ? ax.lat.clone().negate() : ax.lat;
+    return { x: p.x, z: p.z, rot: w.rotFacing(face.x, face.z) };
+  };
+
   const NEW_OBJECTS = {            // object id -> [builder, preferred spot (or a function of the world that works it out)]
+    stove: [rest.stove, restSpot('stove')],
+    kitchencounter: [rest.kitchencounter, restSpot('kitchencounter')],
+    register: [rest.register, restSpot('register')],
+    diningtable: [(x = 0, z = 0) => rest.diningtable('diningtable', x, z), restSpot('diningtable')],
+    diningtable2: [(x = 0, z = 0) => rest.diningtable('diningtable2', x, z), restSpot('diningtable2')],
     workbench: [work.workbench, shopSpot('workbench')],
     toolbox: [work.toolbox, shopSpot('toolbox')],
     woodfactory: [work.woodfactory, shopSpot('woodfactory')],
@@ -1075,6 +1099,7 @@ export function buildRoom(scene) {
     walls.forEach((wall, wi) => {
       const W = WALL[wall];
       if (!W || wall === 'left') return;
+      if (Object.values(doors).some((d) => d.wall === wall)) return;                 // one added room to a wall: two would stand on the same ground
       const steps = Math.floor((W.hi - W.lo - 1.8) / 0.1 + 1e-6);
       for (let i = 0; i <= steps; i++) {
         const u = +(W.lo + 0.9 + i * 0.1).toFixed(2);
@@ -1217,16 +1242,40 @@ export function buildRoom(scene) {
       room.add(shell.group);
       room.add(cut);
       doors[def.id] = { id: def.id, name: def.name, wall, u, group, leaf: group.userData.leaf, shell, cut, rect: doorRect(wall, u), rectIn: doorRectIn(wall, u), open: 0, openTo: 0 };
+      if (def.elevator) {                                       // a room with an elevator (the Restaurant): a cabin against the far wall
+        const b = shell.bounds, sgn = WALL[wall].rotY === Math.PI ? -1 : 1;
+        const N = wall === 'right' ? b.maxX - b.minX : b.maxZ - b.minZ, Lw = wall === 'right' ? b.maxZ - b.minZ : b.maxX - b.minX;
+        const lat = -Lw / 2 + 1.3;
+        const cabin = rest.buildElevator();
+        cabin.position.set(sgn * lat, 0, -N + 0.02);
+        shell.group.add(cabin);
+        shell.group.updateWorldMatrix(true, true);
+        const { W, D, H } = cabin.userData;
+        const pts = [[-W / 2, 0], [W / 2, 0], [-W / 2, D], [W / 2, D]].map(([lx, lz]) => cabin.localToWorld(V3(lx, 0, lz)));
+        const ob = { x0: Math.min(...pts.map((p) => p.x)), x1: Math.max(...pts.map((p) => p.x)), z0: Math.min(...pts.map((p) => p.z)), z1: Math.max(...pts.map((p) => p.z)), h: H, active: true, name: 'elevator' };
+        obstacles.push(ob);
+        doors[def.id].elevator = { group: cabin, obstacle: ob, lat, sgn, N, D };
+      }
       return doors[def.id];
     },
     removeDoor(id) {
       const d = doors[id];
       if (!d) return false;
       for (const g of [d.group, d.shell.group, d.cut]) { room.remove(g); disposeTree(g); }
+      if (d.elevator) obstacles.splice(obstacles.indexOf(d.elevator.obstacle), 1);
       if (!Object.values(doors).some((o) => o !== d && o.wall === d.wall)) wallMeshes[d.wall].visible = true;
       delete doors[id];
       return true;
     },
+    // ---- the elevator of a room that has one (the Restaurant) ----
+    // A point `d` metres in front of its doors (into the room), or inside the cabin (`inside`); the way to face leaving it; open / shut.
+    elevatorPoint(id, d, inside = false) {
+      const e = doors[id].elevator, p = doors[id].shell.group.localToWorld(V3(e.sgn * e.lat, 0, inside ? -e.N + 0.6 : -e.N + e.D + d));
+      return { x: p.x, z: p.z };
+    },
+    elevatorYaw(id) { const nv = inwardOf(doors[id].wall); return Math.atan2(nv.x, nv.z); },
+    setElevatorOpen(id, open) { const d = doors[id]; if (d && d.elevator) d.elevator.group.userData.setOpen(open); },
+    isElevatorOpen: (id) => !!doors[id] && !!doors[id].elevator && doors[id].elevator.group.userData.open > 0.85,
     // ---- walking through a door ----
     // A point `d` metres from the door along the way into Guy's room (negative: inside the added room), and the way to face
     // to walk that way (`intoRoom`) or the other (into the added room).
@@ -1238,6 +1287,7 @@ export function buildRoom(scene) {
     // Swing the doors towards open or shut (called every frame by the brain).
     updateDoors(dt) {
       for (const d of Object.values(doors)) {
+        if (d.elevator) d.elevator.group.userData.update(dt);        // the elevator doors slide
         if (d.open === d.openTo) continue;
         d.open = Math.max(0, Math.min(1, d.open + Math.max(-1, Math.min(1, d.openTo - d.open)) * dt / 0.8));
         if (Math.abs(d.open - d.openTo) < 0.001) d.open = d.openTo;
@@ -1393,10 +1443,18 @@ export function buildRoom(scene) {
       return false;
     },
     // What the Workshop has in stock: planks, cut parts, and finished things waiting in storage (counts per kind). Saved with the layout.
-    stock: { wood: 0, parts: 0, items: {} },
-    syncStock() {                                    // keep the piles on the workbench in step with the counts
+    // `coins` is what the Restaurant has earned (no cap).
+    stock: { wood: 0, parts: 0, items: {}, coins: 0 },
+    syncStock() {                                    // keep the piles on the workbench and the coins in the till in step with the counts
       const b = objects.workbench;
       if (b) { b.setWood(world.stock.wood); b.setParts(world.stock.parts); }
+      const r = objects.register;
+      if (r) r.setCoins(world.stock.coins);
+    },
+    addCoins(n) {
+      world.stock.coins = Math.max(0, Math.min(999999, (world.stock.coins || 0) + n));
+      world.syncStock();
+      return world.stock.coins;
     },
     addStock(kind, n) {
       world.stock[kind] = Math.max(0, Math.min(40, (world.stock[kind] || 0) + n));

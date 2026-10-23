@@ -15,13 +15,14 @@ export const OBJECT_CATEGORIES = [
   { id: 'music', name: 'Music', icon: '🎵' },
   { id: 'hobbies', name: 'Hobbies', icon: '🎨' },
   { id: 'workshop', name: 'Workshop', icon: '🛠️' },
+  { id: 'restaurant', name: 'Restaurant', icon: '🍽️' },
   { id: 'furniture', name: 'Furniture', icon: '🛋️' },
   { id: 'decor', name: 'Decor & lighting', icon: '🖼️' },
   { id: 'games', name: 'Games', icon: '⚽' },
 ];
 
 // The order of the sub-headings inside a category that uses them (Decor & lighting has a lot of things in it).
-export const DECOR_SUBS = ['Plants', 'Wall art', 'Windows', 'Rugs', 'Lighting', 'Small furniture', 'Workbench & storage', 'Woodwork', 'Built by Guy'];
+export const DECOR_SUBS = ['Plants', 'Wall art', 'Windows', 'Rugs', 'Lighting', 'Small furniture', 'Workbench & storage', 'Woodwork', 'Built by Guy', 'Kitchen', 'Dining'];
 
 export const OBJECT_CATALOG = [
   { id: 'piano', cat: 'music', name: 'Upright Piano', icon: '🎹', desc: 'Scales, tunes and jam sessions. Heavy: only you can move it.', core: true },
@@ -61,6 +62,12 @@ export const OBJECT_CATALOG = [
   { id: 'footstool', cat: 'workshop', sub: 'Built by Guy', name: 'Wooden Foot Stool', icon: '🪜', desc: 'A little wooden foot stool, built by Guy.', built: true, room: 'workshop' },
   { id: 'woodshelves', cat: 'workshop', sub: 'Built by Guy', name: 'Wooden Shelves', icon: '🗄️', desc: 'A set of wooden shelves, built by Guy.', built: true, room: 'workshop' },
   { id: 'builtchair', cat: 'workshop', sub: 'Built by Guy', name: 'Wooden Chair (built by Guy)', icon: '🪑', desc: 'A wooden chair that Guy made himself. He can sit on it.', built: true, room: 'workshop' },
+  // The Restaurant (a room added from the Rooms tab). Customers arrive by its elevator. See src/restobjects.js and src/customers.js.
+  { id: 'stove', cat: 'restaurant', sub: 'Kitchen', name: 'Stove', icon: '🍲', desc: 'A big stove with a pot. Guy cooks the orders here. Heavy: only you can move it. Comes with the book "Restaurant Basics".', free: true, room: 'restaurant', book: 'restaurant' },
+  { id: 'kitchencounter', cat: 'restaurant', sub: 'Kitchen', name: 'Kitchen Counter', icon: '🧊', desc: 'A counter with a fridge, where the cooked plates wait to be served. Heavy: only you can move it.', free: true, room: 'restaurant' },
+  { id: 'register', cat: 'restaurant', sub: 'Dining', name: 'Cash Register', icon: '💵', desc: 'Where customers pay when they have finished. Ding!', free: true, room: 'restaurant' },
+  { id: 'diningtable', cat: 'restaurant', sub: 'Dining', name: 'Dining Table', icon: '🍽️', desc: 'A table for two with two chairs. Customers sit here to eat.', free: true, room: 'restaurant' },
+  { id: 'diningtable2', cat: 'restaurant', sub: 'Dining', name: 'Second Dining Table', icon: '🍽️', desc: 'Another table for two, so more customers can eat at once.', free: true, room: 'restaurant' },
   { id: 'drums', cat: 'music', name: 'Drum Kit', icon: '🥁', desc: 'Kick, snare, hi-hat and cymbals on a stool. Comes with the book "Drumming for Robots".', free: true, book: 'drumming' },
   { id: 'easel', cat: 'hobbies', name: 'Painting Easel', icon: '🎨', desc: 'A canvas that really gets painted. Comes with the book "Painting for Robots".', free: true, book: 'painting' },
   { id: 'telescope', cat: 'hobbies', name: 'Telescope', icon: '🔭', desc: 'On a tripod by the window. Comes with the book "Stargazing for Robots".', free: true, book: 'stars' },

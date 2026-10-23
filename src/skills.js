@@ -21,6 +21,9 @@ export const BOOK_CATALOG = [
     blurb: 'how to make planks, saw and sand wood, and build wooden shelves', requires: { object: 'woodfactory' }, desc: 'Run the Wood Factory, saw planks into parts and sand them smooth. Wooden shelves are the project.' },
   { id: 'furniture', title: 'Furniture for Robots', teaches: 'workshop.furniture', color: 0x6d4c41, thick: 0.07, height: 0.34, room: 'workshop',
     blurb: 'how to build wooden chairs', requires: { object: 'workbench' }, desc: 'Bigger projects, starting with a wooden chair. Best read after the basics.' },
+  // ---- the Restaurant (listed only once the Restaurant room has been added) ----
+  { id: 'restaurant', title: 'Restaurant Basics', teaches: 'restaurant', color: 0xc0392b, thick: 0.055, height: 0.31, room: 'restaurant',
+    blurb: 'how to cook, serve and take payment', requires: { object: 'stove' }, desc: 'Taking orders, cooking at the stove, serving the plates and ringing up the bill.' },
   // ---- reading itself ----
   { id: 'speedread', title: 'Speed Reading for Robots', teaches: 'speedreading', color: 0x00a3b4, thick: 0.045, height: 0.3,
     blurb: 'how to read much faster', desc: 'Skim, flip, absorb. He reads at the bookshelf without sitting down, and learns from every book in a fraction of the time. Forgotten slowly.' },
@@ -60,6 +63,10 @@ export const SKILL_INFO = {
   workshop: {
     name: 'Workshop basics', book: 'Workshop Basics',
     unlocks: ['Work at the workbench and use the toolbox', 'Tap parts together with the rubber mallet', 'Build a wooden foot stool'],
+  },
+  restaurant: {
+    name: 'Restaurant basics', book: 'Restaurant Basics',
+    unlocks: ['Take customers\' orders', 'Cook at the stove', 'Serve plates to the tables', 'Take payment at the register'],
   },
   'workshop.materials': {
     name: 'Wood & Metal Basics', book: 'Wood & Metal Basics',

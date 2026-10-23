@@ -12,7 +12,7 @@ export const setMuted = (m) => { muted = !!m; if (muted) dragOff(); };
 export const isMuted = () => muted;
 
 const last = {};
-const MIN_GAP = { bounce: 40, knock: 60, thud: 60, page: 250, step: 150, tick: 70, brush: 80, wipe: 160, leaf: 220, click: 40, sit: 400, kick: 60, saw: 200, tap: 80, sand: 250, machine: 500, lid: 150 };
+const MIN_GAP = { bounce: 40, knock: 60, thud: 60, page: 250, step: 150, tick: 70, brush: 80, wipe: 160, leaf: 220, click: 40, sit: 400, kick: 60, saw: 200, tap: 80, sand: 250, machine: 500, lid: 150, sizzle: 400, plate: 150, ding: 200 };
 
 let noise = null;
 const noiseBuf = (ctx) => {
@@ -98,6 +98,12 @@ const SOUNDS = {
   sand(ctx, out) { burst(ctx, out, { dur: 0.3, f: 3000, f2: 4500, q: 0.6, gain: 0.07 }); },
   machine(ctx, out) { tone(ctx, out, { f0: 70, f1: 130, dur: 0.6, type: 'sawtooth', gain: 0.1 }); burst(ctx, out, { dur: 0.5, type: 'lowpass', f: 400, gain: 0.15 }); },
   lid(ctx, out) { tone(ctx, out, { f0: 260, f1: 140, dur: 0.1, type: 'square', gain: 0.1 }); burst(ctx, out, { dur: 0.08, f: 2200, q: 2, gain: 0.1 }); },
+  // the Restaurant
+  ding(ctx, out) { tone(ctx, out, { f0: 1480, f1: 1470, dur: 0.5, gain: 0.16, attack: 0.005 }); tone(ctx, out, { f0: 2220, f1: 2200, dur: 0.35, gain: 0.07, attack: 0.005 }); },
+  cash(ctx, out) { burst(ctx, out, { dur: 0.08, f: 3800, q: 3, gain: 0.12 }); [1760, 2349].forEach((f, i) => tone(ctx, out, { f0: f, f1: f, dur: 0.12, gain: 0.08, delay: 0.07 + i * 0.07, attack: 0.003 })); },
+  sizzle(ctx, out) { burst(ctx, out, { dur: 0.7, f: 5200, f2: 4200, q: 0.6, gain: 0.07 }); },
+  plate(ctx, out) { tone(ctx, out, { f0: 1900, f1: 1500, dur: 0.07, type: 'triangle', gain: 0.12 }); burst(ctx, out, { dur: 0.04, f: 3000, q: 2, gain: 0.08 }); },
+  lift(ctx, out) { tone(ctx, out, { f0: 660, f1: 660, dur: 0.25, gain: 0.1, attack: 0.01 }); tone(ctx, out, { f0: 880, f1: 880, dur: 0.4, gain: 0.1, delay: 0.25, attack: 0.01 }); },
   // the game itself
   chime(ctx, out) { [880, 1175, 1568].forEach((f, i) => tone(ctx, out, { f0: f, f1: f * 0.99, dur: 0.55, gain: 0.12, delay: i * 0.1, attack: 0.01 })); },
   pop(ctx, out) { tone(ctx, out, { f0: 380, f1: 900, dur: 0.09, gain: 0.18 }); },

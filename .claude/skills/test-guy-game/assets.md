@@ -40,6 +40,10 @@ machine check of this list; this file adds the expectations a human or Claude ne
 | saw | **Saw & Sawhorse** (Workshop) | medium | `workshop.materials` | `sawwood` (needs a plank in stock) | 0.72 m in front; plank on the horse, hand saw in the right hand, left hand on the plank | the plank splits in two halves |
 | mallet | **Rubber Mallet & Block** (Workshop): a waist-high block, the mallet lies on it | light | `workshop` | `tap` | 0.55 m in front; mallet in the right hand, left hand steadying | parts jump a little at every tap |
 | sander | **Sander** (Workshop): waist-high belt sander, rollers turn while it runs | medium | `workshop.materials` | `sand` (needs a plank) | 0.52 m in front; both hands slide the piece along the belt | |
+| stove | **Stove** (Restaurant; `room: 'restaurant'`): steel cooker with a pot, hood, oven door; the pot's lid comes off and steam rises while it cooks | heavy | `restaurant` | `cook` (needs a customer who has ordered) | 0.62 m in front; right hand stirs the pot with a wooden spoon, left hand on the hob | comes with the book "Restaurant Basics" |
+| kitchencounter | **Kitchen Counter** (Restaurant): counter with a fridge and three plate places | heavy | `restaurant` | `serve` (needs a cooked plate) | 0.62 m in front, beside the plate's place; hand reaches the plate | cooked plates wait here |
+| register | **Cash Register** (Restaurant): counter with a till, coin tray and bell; coins show earnings (`world.stock.coins`, one per 2 coins up to 10) | medium | `restaurant` | `takepay` (needs a customer at the till) | 0.62 m in front, left of centre; finger on the till button; the customer stands at the right end | the bell rings, ding + cash sounds |
+| diningtable, diningtable2 | **Dining Table** (Restaurant): table for two with a chair at each end (0.95 x 1.95) | medium | `restaurant` | `takeorder` (needs a waiting customer) | stands 1.42 m out from the chair end, facing the customer; serves from the side (0.78 m) | customers sit on the chairs; plates appear in front of them |
 | footstool, woodshelves, builtchair | **Built by Guy** (Workshop): not added from the Catalogue like the rest; when Guy finishes one it stands in the Workshop at once (`world.placeBuilt`, the middle of the room); only when there is no room does it go to storage (`world.stock.items`), and "Add" in the Catalogue takes one out as a real object named `<kind>_<n>` with `kind` set | light / medium / light | none | none | | a built chair is a chair he can sit on; Remove (long-press) puts it back in storage |
 
 Decor is tested by `T.sweepDecor` (Remove through the Catalogue button, "Put back", wall limits), not by interaction.
@@ -77,6 +81,7 @@ left wall and cannot be removed, moved or rotated.
 | workshop | Workshop Basics (Workshop) | `workshop` | workbench | `build` | the foot stool; comes with the workbench |
 | woodmetal | Wood & Metal Basics (Workshop) | `workshop.materials` | woodfactory | `makewood` | the wooden shelves; comes with the Wood Factory |
 | furniture | Furniture for Robots (Workshop) | `workshop.furniture` | workbench | `build` | the wooden chair (advanced) |
+| restaurant | Restaurant Basics (Restaurant) | `restaurant` | stove | `takeorder` | customers only come once he has read it; comes with the stove |
 
 Guy learns a skill only after keeping the book open for 8 s (3.2 s at full Speed Reading); interrupted reads teach nothing.
 
@@ -121,7 +126,7 @@ playback panel or the top-shelf record list; Guy then joins in without touching 
 
 wander, stretch, wave, stereoon, stereooff (menu only), piano, sitpiano, plink, jam, jampiano, jamsit, dance, lamp, mood, plant, read (alias `books`),
 rearrange, ball, dribble, toss, guitar, riff (makes up riffs on the guitar, see below), jamguitar, bang, drums, drumsolo, jamdrums, scribble, paint, mixpaint, portrait, peek,
-stargaze, darkstargaze, scopecare, dancemoves, ballroom, dust (needs `decorate` and a wall piece with clear floor in front); makewood, sawwood, tap, sand, tidytools, build (the Workshop, see below); internal: putback, putguitar, dropball, lighton, visit and leave (through the door of an added room and back: tested by `T.sweepVisit`).
+stargaze, darkstargaze, scopecare, dancemoves, ballroom, dust (needs `decorate` and a wall piece with clear floor in front); makewood, sawwood, tap, sand, tidytools, build (the Workshop, see below); takeorder, cook, serve, takepay (the Restaurant, see below; internal: rwait); internal: putback, putguitar, dropball, lighton, visit and leave (through the door of an added room and back: tested by `T.sweepVisit`).
 Needs and allowed arm contacts are in `MANIFEST.activities`.
 
 ## Visual checkpoints (`T.moment(...)`, then screenshot)
@@ -168,6 +173,7 @@ book list popup (long-press a lower shelf at a book: title, read / not read).
 | id | what | doorWalls | size (depth x width) | Notes |
 |---|---|---|---|---|
 | workshop | **Workshop**: free, unlocked by default. Adds a closed door with a sign and a grey room (floor, three walls, ceiling) behind it | right, front, back (never left: the Catalogue) | same as Guy's room: 10 wide x 8 deep, whichever wall (no `size` in the catalogue entry) | Guy can go in: long-press the door > "Go into the Workshop" (see below). The room is empty until the Workshop objects exist |
+| restaurant | **Restaurant**: free for now (premium later), unlocked. The same room in warm colours, with an **elevator** against the far wall (`elevator: true`: a cabin with sliding doors, an obstacle) | front, back, right (`planDoor` skips a wall that already has a room's door, so with the Workshop on the right the Restaurant takes the front or back) | 10 x 8 like the others | customers arrive and leave through the elevator; see "The Restaurant" below |
 
 Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 - A door is 1.0 m wide and 2.2 m tall, with a 1.0 m floor strip in front of it that furniture cannot be put or pushed into and wall pieces cannot cover.
@@ -199,6 +205,17 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 - **Hands:** the poses `workSaw`, `workTap`, `workSand` use two-handed IK (`computeWork` in `workbrain.js`): wrists, finger directions and palms, the saw and mallet follow the right hand, the piece being sanded sits between both. The work surfaces are waist high and he bends over them (the pose sweep's hand-error limit applies). Sounds: `saw`, `tap`, `sand`, `machine`, `lid`.
 - **Tested by** `T.sweepWorkshop` (placement on all three walls, kind refusals, five whole builds from nothing on different walls, cut-short at every stage, Lock in on the workbench, storage and the Catalogue, saved layout round trip), plus `sweepActivities`, `sweepPoses`, `sweepInterrupts`, `sweepRemovals`, `sweepBooks`, `sweepObjects`, `sweepSounds`. `T.addObject` adds the Workshop first, `T.prep` sets `stock`, and `runAll` takes the room away after each sweep.
 
+## The Restaurant (`src/restobjects.js`, `customers.js`, `customermodels.js`, `restbrain.js`; room and elevator in `room.js`)
+
+- **Setup:** Rooms tab > Restaurant; Objects tab > Restaurant: Stove (brings "Restaurant Basics"), Kitchen Counter, Cash Register, Dining Table, Second Dining Table. Furniture goes in the room's own frame (`REST_LAYOUT` in `room.js`); the elevator is built by `addDoor` when the room entry has `elevator: true` (cabin 1.5 x 1.1 x 2.4 against the far wall, an obstacle; `world.elevatorPoint/elevatorYaw/setElevatorOpen/isElevatorOpen`).
+- **Opening:** `world.restaurant.isOpen()`: room added, stove + counter + register + at least one table, **and Guy has read Restaurant Basics** (`skillOk`). Only then do customers arrive: one every 35 to 70 s, up to 3 at a time (one per free seat; 4 seats).
+- **Customers** (`customers.js`: plain records with a figure drawn on top; `headless` skips the figures for the tests). States: `ride > exit > walk > sitdown > seated > waiting > ordered > cooking > cooked > eating > standup > walk > paying > thanks > leave > enter > ridden > gone`. They arrive by the elevator (the doors open for them and shut after), walk by A* to a free seat, read the menu, put a hand up (🙋), order (the dish emoji in a speech bubble), wait, eat (fork to mouth), stand up, walk to the till (💵), pay, and leave by the elevator. They never walk through each other or Guy (the newer waits; after 4 s it goes on). **Patience** 75 s: a customer nobody has taken the order of, or started cooking for, gives up (😞), leaves politely and pays nothing. Once the food is cooking they wait for it. Take their table away and they stand up and leave.
+- **Who they are:** `customermodels.js` lists the characters (id, name, pack, file under `public/models/customers/`, height) and which packs are owned (`CUSTOMER_PACKS`); more packs are a line each. A model loads the first time that character arrives (a capsule stands in until then). `models/` (the Mixamo packs) is the user's asset folder and is never committed; optimise before adding big files (3 to 8 MB is fine).
+- **Guy's jobs** (`restbrain.js`: ordinary activities with high weights while someone is waiting; **running the restaurant is a default, not a rule**: if he is busy elsewhere they wait): `takeorder` (walk to the table end, ask), `cook` (stir the pot 5 to 8 s with the lid off and the spoon in the right hand, plate to the counter), `serve` (plate off the counter, to the table, put it down), `takepay` (finger on the till, bell, +price coins), `rwait` (stand by the till; only while customers are about or he is locked on a restaurant object). Priority: pay, serve, take order, cook. He stays in the restaurant while customers are about (`restStays`) and leaves by the door when they are gone. Dishes (`DISHES`): soup 3, pizza 4, pasta 4, burger 5, cake 3 coins. Coins live in `world.stock.coins` (saved with the layout).
+- **Nothing appears by itself:** he carries the plate in his hand (`brain.carry === 'plate'`); cut short, `restCleanup` puts it all back (an order not yet cooked goes back to waiting, a dish not yet served goes back on the counter). The one tidy-up not shown yet: a customer's empty plate disappears when they stand up (dishwashing is a later feature).
+- **Staffing hook for later (GAL, see the plan):** the jobs are plain activities on `Brain`; a second robot can use the same `restaurant.find(job)` and claim logic.
+- **Tested by** `T.sweepRestaurant` (placement on three walls, kind refusals, nobody arrives without the book, whole visits on three walls with every state in order, coins, sounds, three at once, patience, cut short at three stages, table and stove taken away, Lock in on the register, coins in the saved layout, room taken away), plus `sweepActivities` (`customer` in the manifest stages a customer in the right state with `restaurant.stage(state)`), `sweepPoses`, `sweepBooks`, `sweepObjects`, `sweepSounds`.
+
 ## Doors (long-press a door)
 
 - A door is now a real doorway: the wall is rebuilt in three pieces round it, the leaf hangs from a hinge and swings away from the room (about 100 degrees in 0.8 s). Long-press the door > "🚪 Go into the <room>" (or "🚪 Come back" while he is inside): the menu has just that one button. Dragging a door does nothing.
@@ -212,6 +229,8 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 - **Speed** (the dropdown beside Follow, `#speed-sel`, 1x / 2x / 3x / 4x, remembered in `guy.speed.v1`, always 1x under `?fresh`): scales his walking (and turning and pushing furniture) and the idle pauses between interactions (`brain.speed`). The interactions themselves (playing, reading, painting, waving ...) run at normal speed. Tested by `T.sweepLock` and `T.sweepSpeed`.
 
 ## Regression watch (bugs found and fixed; make sure they stay fixed)
+
+- Restaurant: two customers leaving the elevator together stood on top of each other (`clearToExit`; customers also yield to older ones). `T.settle()` inside the restaurant with customers about runs for 90 s because he keeps working: tests `r.clear()` first (or stub `r.find`) before settling.
 
 - Furniture put away from an added room kept its `home` in that room; when the room was gone "Put back" dropped it into Guy's room. `rooms.reset` now clears what was put away from the room too (`sweepWorkshop`).
 - `wave` walked to the fixed spot (0, 2.2) even when a piece of furniture stood there (the telescope in some layouts: 31 arm-inside samples). It now waves from the nearest open spot (`openSpotNear`).

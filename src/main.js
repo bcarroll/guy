@@ -12,6 +12,7 @@ import { initLayout } from './layout.js';
 import { config as riffConfig } from './riffs.js';
 import { ALBUM_CATALOG } from './albums.js';
 import { initUpdateCheck } from './update.js';
+import { Restaurant } from './customers.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -100,6 +101,8 @@ const params = new URLSearchParams(location.search);
 // what Guy has learned persists between visits; ?skills=all|none|stereo,piano overrides it (for testing)
 const skills = new Skills(params.get('skills'));
 const brain = new Brain(guy, world, (t) => (label.textContent = t), skills);
+// the Restaurant's customers (they only come once the room is added, stocked, and Guy has read "Restaurant Basics")
+world.restaurant = new Restaurant(world, { skillOk: () => skills.has('restaurant'), guyAt: () => guy.root.position });
 
 // ---- skills panel + "learned something" toast ----
 const panel = document.getElementById('skills');

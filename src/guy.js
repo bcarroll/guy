@@ -42,7 +42,8 @@ export class Guy {
     this.loaded = false;
   }
 
-  async load(url) {
+  // opts.keep: keep the model's own materials and textures (the customers); opts.height: how tall he or she is, in metres.
+  async load(url, opts = {}) {
     const loader = new FBXLoader();
     // single-file builds embed the model as base64 in window.__YBOT_B64
     const fbx = window.__YBOT_B64
@@ -55,7 +56,7 @@ export class Guy {
     // Normalise to a 1.75 m tall character.
     model.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(model);
-    const s = 1.75 / (box.max.y - box.min.y);
+    const s = (opts.height || 1.75) / (box.max.y - box.min.y);
     model.scale.multiplyScalar(s);
     this.scale = model.scale.x;
     model.updateMatrixWorld(true);
@@ -65,10 +66,14 @@ export class Guy {
         o.castShadow = true;
         o.receiveShadow = true;
         o.frustumCulled = false;
-        // The FBX materials load with NaN colours, so give Guy his own.
-        o.material = o.name.includes('Joints')
-          ? new THREE.MeshStandardMaterial({ color: 0x23262d, roughness: 0.5, metalness: 0.4 })
-          : new THREE.MeshStandardMaterial({ color: 0xf1c232, roughness: 0.35, metalness: 0.15 });
+        if (opts.keep) {                      // a customer: its own textures (any NaN colour is made white so the texture shows)
+          for (const m of Array.isArray(o.material) ? o.material : [o.material]) if (m && m.color && Number.isNaN(m.color.r)) m.color.set(0xffffff);
+        } else {
+          // The FBX materials load with NaN colours, so give Guy his own.
+          o.material = o.name.includes('Joints')
+            ? new THREE.MeshStandardMaterial({ color: 0x23262d, roughness: 0.5, metalness: 0.4 })
+            : new THREE.MeshStandardMaterial({ color: 0xf1c232, roughness: 0.35, metalness: 0.15 });
+        }
       }
       if (o.isBone) {
         const n = o.name.replace('mixamorig:', '').replace('mixamorig', '');
@@ -78,9 +83,11 @@ export class Guy {
     });
 
     // The Joints mesh arrives with its own detached skeleton; make it follow the body's one.
-    let body = null;
-    model.traverse((o) => { if (o.isSkinnedMesh && o.name.includes('Surface')) body = o; });
-    model.traverse((o) => { if (o.isSkinnedMesh && o !== body) o.skeleton = body.skeleton; });
+    if (!opts.keep) {
+      let body = null;
+      model.traverse((o) => { if (o.isSkinnedMesh && o.name.includes('Surface')) body = o; });
+      model.traverse((o) => { if (o.isSkinnedMesh && o !== body) o.skeleton = body.skeleton; });
+    }
 
     const wq = new THREE.Quaternion();
     for (const n of BONES) {

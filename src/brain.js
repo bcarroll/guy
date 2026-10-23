@@ -6,6 +6,9 @@ import { ROOM } from './room.js';
 import { randomSong, makeJam, plinkSong } from './songs.js';
 import { installHobbies } from './hobbybrain.js';
 import { installWorkshop } from './workbrain.js';
+import { installRestaurant, REST_OBJECTS, REST_JOBS } from './restbrain.js';
+
+const REST_ACTS = ['takepay', 'serve', 'takeorder', 'cook', 'rwait'];
 import { RECIPES, PLANKS_PER_RUN, STOCK_CAP } from './workshop.js';
 import { sfx, drag as sfxDrag } from './sfx.js';
 import { nextRiff, keepRiff, riffAt, STEPS as RIFF_STEPS } from './riffs.js';
@@ -538,6 +541,7 @@ export class Brain {
     this.poseDur = 1;
     this.initHobbies();
     this.initWork();
+    this.initRest();
   }
 
   // ---- step builders ----
@@ -553,6 +557,7 @@ export class Brain {
     return {
       ...this.hobbyActivities(),
       ...this.workActivities(),
+      ...this.restActivities(),
       wander: () => {
         const p = this.freeSpot();
         return ['wandering', this.walk(p.x, p.z), this.play('idle', rand(2, 4))];
@@ -1513,6 +1518,7 @@ export class Brain {
       drums: ['drums'], drumsolo: ['drums.solo'], jamdrums: ['drums.band'], paint: ['easel'], mixpaint: ['easel.colour'], portrait: ['easel.portrait'],
       stargaze: ['telescope'], darkstargaze: ['telescope.dark'], scopecare: ['telescope.care'], dust: ['decorate'],
       makewood: ['workshop.materials'], sawwood: ['workshop.materials'], sand: ['workshop.materials'], tap: ['workshop'], tidytools: ['workshop'],
+      takeorder: ['restaurant'], cook: ['restaurant'], serve: ['restaurant'], takepay: ['restaurant'], rwait: ['restaurant'],
     }[act] || [];
   }
 
@@ -1563,6 +1569,7 @@ export class Brain {
       if (act === 'sand' && st.wood < 1) return false;
       if (act === 'build') return !!this.pickRecipe() && need.every((n) => this.obj(n));
     }
+    if (REST_JOBS.includes(act) || act === 'rwait') return this.restAvailable(act);
     if (act === 'read' && !this.obj('shelf').books.some((b) => b.mesh.visible)) return false;
     if (act === 'rearrange' && !Object.values(this.w.objects).some((o) => o.weight !== 'heavy' && o.name !== 'bench')) return false;
     return need.every((n) => this.obj(n));
@@ -1611,6 +1618,7 @@ export class Brain {
       shelf: ['read'], lamp: ['mood', 'lamp'], plant: ['plant'], flowerplant: ['plant'], tree: ['plant'],
       ball: ['dribble', 'toss', 'ball'], guitar: ['guitar', 'riff', 'jamguitar'], drums: ['bang', 'drums', 'drumsolo', 'jamdrums'],
       easel: ['scribble', 'paint', 'mixpaint', 'portrait'], telescope: ['peek', 'stargaze', 'darkstargaze', 'scopecare'],
+      stove: REST_ACTS, kitchencounter: REST_ACTS, register: REST_ACTS, diningtable: REST_ACTS, diningtable2: REST_ACTS,
       workbench: ['build', 'makewood', 'sawwood'], toolbox: ['tidytools'], woodfactory: ['makewood'], saw: ['sawwood', 'makewood'], mallet: ['tap', 'build'], sander: ['sand', 'build'],
     }[name] || (this.obj(name) && this.obj(name).sit ? ['read', 'sit', 'sitguitar'] : []);
     return list.filter((a) => this.available(a));
@@ -1656,6 +1664,7 @@ export class Brain {
     const weights = {
       wander: 3, sit: 0.7, sitguitar: 1.1, slouch: 0.5, dancemoves: 1.5, ballroom: 1.5, piano: 1, sitpiano: 1.2, plink: 1.4, dance: 1.8, jam: 0.9, jampiano: 0.5, jamsit: 0.9, lamp: 1.2, mood: 1.1,
       read: 1.8 + unread * 1.8, stretch: 1.3, wave: 0.7, ball: 2, dribble: 1.1, toss: 1.1, rearrange: 0.7, guitar: 1.6, riff: 1.0, plant: 0.6, jamguitar: 1.5, visit: 0.4,
+      takeorder: 40, cook: 35, serve: 45, takepay: 50,
       build: 2.0, makewood: 0.5, sawwood: 0.6, tap: 0.5, sand: 0.4, tidytools: 0.4,
       bang: 1.3, drums: 1.6, drumsolo: 1.2, jamdrums: 1.5, scribble: 1.3, paint: 1.6, mixpaint: 1.3, portrait: 1.4,
       peek: 1.3, stargaze: 1.6, darkstargaze: 1.3, scopecare: 0.6, dust: 0.9,
@@ -1676,9 +1685,10 @@ export class Brain {
     };
     // the last two activities count, so he doesn't drift back to the same theme straight away
     const lastTags = [this.last, this.prev].flatMap((n) => tags[n] || []);
+    this.restCleanup();                                      // cut short in the Restaurant: the dish goes back, the order waits again
     this.workCleanup();                                      // cut short in the Workshop: what he carries goes back in the stock
     let name = force;
-    if (!name && !this.inMain() && !this.lockedInside()) name = 'leave';             // he is in an added room: back through the door before anything else
+    if (!name && !this.inMain() && !this.lockedInside() && !this.restStays()) name = 'leave';             // he is in an added room: back through the door before anything else
     if (!name && this.gtr.held && this.obj('guitar') && !this.guitarLocked()) name = 'putguitar'; // still holding the guitar: back on its stand (not while locked in on it)
     if (!name && this.lampOffByMe && this.obj('lamp') && !this.obj('lamp').on) name = 'lighton'; // he switched it off for the stars and never put it back
     if (!name && this.ballHeld) name = 'dropball'; // still holding the ball: put it down first
@@ -1699,6 +1709,7 @@ export class Brain {
         if (this.obj(L.name) && this.obj(L.name).sit) this.activeChair = L.name;
       }
     }
+    if (!name && this.restStays()) name = this.restNext();             // customers about: he stays and looks after them
     if (!name) {
       const entries = Object.entries(weights)
         .filter(([k]) => this.available(k))
@@ -1756,7 +1767,7 @@ export class Brain {
   // The user asked Guy to use something right now. Returns { ok, message }.
   interact(name) {
     const k = (id) => this.skills.has(id);
-    const tries = {
+    let tries = {
       // with the stereo already playing, an instrument means playing along with it
       piano: k('piano') ? (this.music ? ['jamsit', 'jampiano', 'jam'] : ['sitpiano', 'piano']) : ['plink'],
       bench: k('piano') ? (this.music ? ['jamsit', 'jam'] : ['sitpiano', 'piano']) : ['plink'],
@@ -1772,13 +1783,14 @@ export class Brain {
       telescope: ['peek', 'stargaze', 'darkstargaze', 'scopecare'],
       workbench: ['build'], toolbox: ['tidytools'], woodfactory: ['makewood'], saw: ['sawwood'], mallet: ['tap'], sander: ['sand'],
     }[name];
-    const wmsg = this.workRefusal(name);
+    const wmsg = this.workRefusal(name) || this.restRefusal(name);
     if (wmsg) return { ok: false, message: wmsg };
     if (name === 'table' && !k('stereo') && !this.music) return { ok: false, message: "Guy doesn't know how to use the stereo yet. Maybe there's a manual on the shelf." };
     if (name === 'guitar' && !k('guitar')) return { ok: false, message: "Guy hasn't learned the guitar yet. Add \"Guitar for Beginners\" to the shelf and he'll read it." };
     if ((name === 'drums' || name === 'easel') && !this.standOk(name)) {
       return { ok: false, message: name === 'drums' ? "Guy can't get to the drum stool where the kit is. Move it away from the wall." : "Guy can't get in front of the easel where it is. Move it away from the wall." };
     }
+    if (REST_OBJECTS.includes(name)) tries = this.restTries(name);
     const act = (tries || []).filter((a) => this.available(a));
     if (!act.length) return { ok: false, message: "Guy can't do anything with that right now." };
     if (this.lock && this.lock.name !== name) this.unlock(false);     // told to do something else: the lock is over
@@ -1852,6 +1864,7 @@ export class Brain {
   update(dt) {
     this.time += dt;
     this.w.updateDoors(dt);               // doors swing open and shut
+    if (this.w.restaurant) this.w.restaurant.update(dt);      // customers arrive, order, eat and pay (customers.js)
     this.skills.tick(dt);                 // skills whose book was forgotten fade away
     this.autoAdvance();
     const g = this.g;
@@ -2473,5 +2486,6 @@ function angDiff(a, b) {
 
 installHobbies(Brain, POSES, { sitLegs, env, smooth, clamp, lerp, rand, pick, makeGrid, cellBlocked, INFLATE });
 installWorkshop(Brain, POSES, { smooth, clamp, lerp, rand, pick });
+installRestaurant(Brain, POSES, { smooth, clamp, lerp, rand, pick });
 
-export { ROOM };
+export { ROOM, basePose, sitLegs, makeGrid, findPath, cellBlocked, MAIN_FRAME, INFLATE };
