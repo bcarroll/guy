@@ -121,11 +121,11 @@ export function installWorkshop(Brain, POSES, H) {
       return [this.stand('workbench', 0.78),
         this.play('reach', 1.6, { needs: ['workbench'], at: [0.8, () => {
           this.carry = null; this.pieceParts = 0;
-          wb().showProduct(id);
-          const items = this.w.stock.items;
-          items[r.object] = Math.min(STORAGE_CAP, (items[r.object] || 0) + 1);
+          // what he made stands in the Workshop straight away (the user can move it or put it away); storage only if there is no room
+          const placed = this.w.placeBuilt(r.object);
+          if (!placed) { const items = this.w.stock.items; items[r.object] = Math.min(STORAGE_CAP, (items[r.object] || 0) + 1); }
           sfx('chime');
-          if (this.onBuilt) this.onBuilt(`Guy built a ${r.name}! It is in storage: add it from the Catalogue.`);
+          if (this.onBuilt) this.onBuilt(placed ? `Guy built a ${r.name}! It is in the Workshop.` : `Guy built a ${r.name}! There is no room in the Workshop, so it is in storage.`);
         }], target: () => wb().productPoint() }),
         this.play('idle', 2.0, { needs: ['workbench'] })];
     },

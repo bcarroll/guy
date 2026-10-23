@@ -1533,10 +1533,11 @@ T.sweepWorkshop = () => {
     }
     delete b.pickRecipe;
     const st = w.stock, s1 = sfxNow(), saw = w.objects.saw, ml = w.objects.mallet, fac = w.objects.woodfactory, tb = w.objects.toolbox, wb = w.objects.workbench;
-    const item = st.items[R0.object] || 0;
+    const item = Object.values(w.objects).filter((o) => o.kind === R0.object && w.roomIdAt(o.x, o.z) === 'workshop').length;   // standing in the Workshop
+    const stored0 = st.items[R0.object] || 0;
     const left = runs * 4 - planks;
-    out.push(result(`workshop: build ${recipe} from nothing (${wall} wall): it goes in, makes planks, saws, taps${R0.sand ? ', sands' : ''}, finishes and comes out`, r.ok && wentIn && doorOpened && item === 1 && b.inMain() && door.open === 0, { r, wentIn, doorOpened, item, inMain: b.inMain(), open: door.open, t }));
-    out.push(result(`workshop: build ${recipe} (${wall}): the stock adds up (${planks} planks sawn, ${left} left over, no parts left, nothing carried or left on a machine)`, st.wood === left && st.parts === 0 && b.carry === null && !saw.plankA.visible && !ml.assembly.children.length && !fac.tray.children.length && tb.open === 0 && wb.product.children.length > 0, { stock: JSON.parse(JSON.stringify(st)), left, carry: b.carry }));
+    out.push(result(`workshop: build ${recipe} from nothing (${wall} wall): it goes in, makes planks, saws, taps${R0.sand ? ', sands' : ''}, finishes and comes out, and the thing it made stands in the Workshop`, r.ok && wentIn && doorOpened && item === 1 && stored0 === 0 && b.inMain() && door.open === 0, { r, wentIn, doorOpened, item, stored0, inMain: b.inMain(), open: door.open, t }));
+    out.push(result(`workshop: build ${recipe} (${wall}): the stock adds up (${planks} planks sawn, ${left} left over, no parts left, nothing carried or left on a machine)`, st.wood === left && st.parts === 0 && b.carry === null && !saw.plankA.visible && !ml.assembly.children.length && !fac.tray.children.length && tb.open === 0, { stock: JSON.parse(JSON.stringify(st)), left, carry: b.carry }));
     const needSounds = ['saw', 'tap', 'machine', 'lid', 'chime', ...(R0.sand ? ['sand'] : [])];
     out.push(result(`workshop: build ${recipe} (${wall}): every step makes its sound`, needSounds.every((k) => heard(s0, s1, k) > 0), { silent: needSounds.filter((k) => !(heard(s0, s1, k) > 0)) }));
     out.push(result(`workshop: build ${recipe} (${wall}): he never stands where he should not, and there are no errors`, bad === 0 && errors.length === base, { bad, errors: errors.slice(base) }));

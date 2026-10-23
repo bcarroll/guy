@@ -1405,7 +1405,7 @@ export function buildRoom(scene) {
     },
     // Take a built thing out of storage and put it in Guy's room (`free`: it is being restored from a save, so storage is not touched).
     // Returns its name, or null if there is none in storage or no room for it.
-    addInstance(kind, avoid, forcedName = null, free = false) {
+    addInstance(kind, avoid, forcedName = null, free = false, pref = null) {
       const k = INSTANCE_KINDS[kind];
       if (!k) return null;
       if (!free && !((world.stock.items[kind] || 0) > 0)) return null;
@@ -1414,7 +1414,7 @@ export function buildRoom(scene) {
       if (objects[name]) return name;
       const o = k.build(name, 0, 0);
       o.kind = kind;
-      const spot = world.findSpot(o, k.pref, avoid);
+      const spot = world.findSpot(o, pref || k.pref, avoid);
       if (!spot) { world.removeObject(name); delete world.removed[name]; return null; }
       o.home = { x: spot.x, z: spot.z };
       o.set(spot.x, spot.z);
@@ -1433,6 +1433,14 @@ export function buildRoom(scene) {
       return true;
     },
     instanceKinds: () => Object.keys(INSTANCE_KINDS),
+    // Guy has just built `kind`: it goes straight into the Workshop (the middle of the room, or the nearest free spot there).
+    // Returns its name, or null if there is no room for it (the caller then puts it in storage).
+    placeBuilt(kind) {
+      if (!doors.workshop) return null;
+      const { n } = world.shellSize('workshop');
+      const p = world.shellPoint('workshop', n * 0.5, 0);
+      return world.addInstance(kind, null, null, true, { x: p.x, z: p.z });
+    },
     // Objects that do not exist yet but can be added from the Catalogue.
     addNew(id, avoid) {
       if (DECOR_NEW[id]) {

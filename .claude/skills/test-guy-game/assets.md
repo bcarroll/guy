@@ -40,7 +40,7 @@ machine check of this list; this file adds the expectations a human or Claude ne
 | saw | **Saw & Sawhorse** (Workshop) | medium | `workshop.materials` | `sawwood` (needs a plank in stock) | 0.72 m in front; plank on the horse, hand saw in the right hand, left hand on the plank | the plank splits in two halves |
 | mallet | **Rubber Mallet & Block** (Workshop): a waist-high block, the mallet lies on it | light | `workshop` | `tap` | 0.55 m in front; mallet in the right hand, left hand steadying | parts jump a little at every tap |
 | sander | **Sander** (Workshop): waist-high belt sander, rollers turn while it runs | medium | `workshop.materials` | `sand` (needs a plank) | 0.52 m in front; both hands slide the piece along the belt | |
-| footstool, woodshelves, builtchair | **Built by Guy** (Workshop): not added from the Catalogue like the rest; they wait in storage (`world.stock.items`) and "Add" takes one out as a real object named `<kind>_<n>` with `kind` set | light / medium / light | none | none | | a built chair is a chair he can sit on; Remove (long-press) puts it back in storage |
+| footstool, woodshelves, builtchair | **Built by Guy** (Workshop): not added from the Catalogue like the rest; when Guy finishes one it stands in the Workshop at once (`world.placeBuilt`, the middle of the room); only when there is no room does it go to storage (`world.stock.items`), and "Add" in the Catalogue takes one out as a real object named `<kind>_<n>` with `kind` set | light / medium / light | none | none | | a built chair is a chair he can sit on; Remove (long-press) puts it back in storage |
 
 Decor is tested by `T.sweepDecor` (Remove through the Catalogue button, "Put back", wall limits), not by interaction.
 
