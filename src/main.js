@@ -196,9 +196,32 @@ addEventListener('keydown', (e) => {
 // There is no "click to start" screen. Browsers keep the sound off until the page has been touched once, so the first real tap, drag
 // or key press anywhere starts the audio quietly; until then Guy carries on in silence. Fullscreen on phones is the Full button.
 // (?nostart is still accepted so old test URLs work; it no longer does anything.)
-// A red speaker in the top corner says the sound is still off. It goes away as soon as the audio is running (tapping it counts too).
-const soundIcon = document.getElementById('sound-off');
-const syncSoundIcon = () => { const c = audio().ctx; soundIcon.hidden = !!(c && c.state === 'running'); };
+// The speaker in the top corner is always there: red (and pulsing) while the sound has not started, red while it is muted, and
+// faint while it is on. Tapping it starts the sound, and once it is running it is the mute button (M does the same).
+const soundBtn = document.getElementById('sound-btn');
+let soundMuted = false;
+const audioRunning = () => { const c = audio().ctx; return !!(c && c.state === 'running'); };
+const syncSoundIcon = () => {
+  const running = audioRunning();
+  const state = !running ? 'off' : soundMuted ? 'muted' : 'on';
+  soundBtn.className = state;
+  soundBtn.textContent = state === 'on' ? '🔊' : '🔇';
+  const label = { off: 'Sound is off. Tap to turn it on.', muted: 'Sound is muted. Tap to turn it back on.', on: 'Sound is on. Tap to mute.' }[state];
+  soundBtn.title = label; soundBtn.setAttribute('aria-label', label);
+};
+const setSoundMuted = (m) => {                    // mutes everything: the music and Guy's instruments (the master volume) and the sound effects
+  soundMuted = !!m;
+  const { master } = audio();
+  if (master) master.gain.value = soundMuted ? 0 : 0.5;
+  setMuted(soundMuted);
+  syncSoundIcon();
+};
+// Not yet running: the tap itself starts the sound (unlockAudio), and that same tap must not also mute it, so whether the sound was
+// running is noted when the press begins.
+let wasRunning = false;
+for (const t of ['pointerdown', 'keydown']) soundBtn.addEventListener(t, () => { wasRunning = audioRunning(); });
+soundBtn.addEventListener('click', () => { if (wasRunning && audioRunning()) setSoundMuted(!soundMuted); });
+window.__guySound = { mute: setSoundMuted, muted: () => soundMuted, sync: syncSoundIcon };       // for the QA harness
 const UNLOCK_EVENTS = ['pointerup', 'touchend', 'click', 'keydown'];
 function unlockAudio(e) {
   if (!e.isTrusted) return;                       // only a real touch counts (the QA harness's pretend events must not start the audio)
@@ -290,6 +313,7 @@ function pick(e) {
   const targets = Object.values(world.objects).map((o) => o.group);
   targets.push(world.skillMachine);
   for (const d of Object.values(world.decor)) targets.push(d.group);
+  for (const d of Object.values(world.doors)) targets.push(d.group);
   if (!world.ballGone) targets.push(world.ball);
   const hit = raycaster.intersectObjects(targets, true)[0];
   if (!hit) return null;
@@ -299,6 +323,8 @@ function pick(e) {
     if (n === world.ball) return { ball: true };
     const obj = Object.values(world.objects).find((o) => o.group === n);
     if (obj) return { obj, point };
+    const door = Object.values(world.doors).find((d) => d.group === n);
+    if (door) return { door, point };
     const decor = Object.values(world.decor).find((d) => d.group === n);
     if (decor) return { decor, point };
   }
@@ -386,8 +412,9 @@ const albumMenu = document.getElementById('albummenu');
 const TOP_SHELF_Y = 1.74;   // height of the board under the top shelf
 function placeAlbumMenu(x, y) {
   albumMenu.hidden = false;
-  albumMenu.style.left = Math.min(x, innerWidth - albumMenu.offsetWidth - 8) + 'px';
-  albumMenu.style.top = Math.min(y, innerHeight - albumMenu.offsetHeight - 8) + 'px';
+  albumMenu.style.left = Math.max(8, Math.min(x, innerWidth - albumMenu.offsetWidth - 8)) + 'px';
+  albumMenu.style.top = Math.max(8, Math.min(y, innerHeight - albumMenu.offsetHeight - 8)) + 'px';      // always fully on screen: a long list scrolls inside
+  albumMenu.scrollTop = 0;
 }
 // the lower shelves hold the books: long-press them to see which ones Guy has read
 function openBookMenu(shelfObj, x, y) {
@@ -460,6 +487,16 @@ function interactLabel(name) {
 
 function openMenu(hit, x, y) {
   menuTarget = hit;
+  if (hit.door) {                                       // a door: the only thing to do is go through it (or come back)
+    menuTitle.textContent = `${hit.door.name} door`;
+    menuNote.textContent = '';
+    menu.querySelectorAll('[data-act]').forEach((b) => { b.hidden = b.dataset.act !== 'interact'; });
+    menu.querySelector('[data-act="interact"]').textContent = brain.inMain() ? `🚪 Go into the ${hit.door.name}` : '🚪 Come back';
+    menu.hidden = false;
+    menu.style.left = Math.min(x, innerWidth - menu.offsetWidth - 8) + 'px';
+    menu.style.top = Math.min(y, innerHeight - menu.offsetHeight - 8) + 'px';
+    return;
+  }
   menuTitle.textContent = hit.ball ? 'ball' : hit.decor ? hit.decor.label : hit.obj.name;
   menuNote.textContent = '';
   const turnable = hit.decor && !hit.decor.wall && hit.decor.hx !== hit.decor.hz;   // a rectangular rug can be turned; wall pieces and round things cannot
@@ -500,6 +537,11 @@ menu.addEventListener('click', (e) => {
   const act = e.target.dataset && e.target.dataset.act;
   if (!act || !menuTarget) return;
   const t = menuTarget;
+  if (t.door) {                                         // long-press a door > Go into the room (or Come back)
+    if (act === 'interact') showToast(brain.visitRoom(t.door.id).message);
+    closeMenu();
+    return;
+  }
   if (act === 'interact') {
     const r = brain.interact(t.ball ? 'ball' : t.obj.name);
     showToast(r.message);
@@ -528,8 +570,10 @@ menu.addEventListener('click', (e) => {
   }
 });
 addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
+window.__guyOpenBooks = () => openBookMenu(world.objects.shelf, 200, 100);          // the long-press book list, for the QA harness
+window.__guyOpenDoorMenu = (id) => openMenu({ door: world.doors[id] }, 120, 120);     // for the QA harness
 window.__guyOpenMenu = (name) => openMenu(name === 'ball' ? { ball: true } : { obj: brain.obj(name) }, 120, 120);     // for the QA harness
-addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') { setMuted(!isMuted()); showToast(isMuted() ? 'Sound effects off (M to turn them back on)' : 'Sound effects on'); } });
+addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') { setSoundMuted(!soundMuted); showToast(soundMuted ? 'Sound muted (M or the speaker to turn it back on)' : 'Sound on'); } });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 // Capture phase so we run before OrbitControls and can keep it from orbiting while we handle an object.
@@ -572,11 +616,12 @@ canvas.addEventListener('pointerdown', (e) => {
 canvas.addEventListener('pointermove', (e) => {
   if (pending && Math.hypot(e.clientX - pending.x, e.clientY - pending.y) > 8) {
     clearTimeout(pending.timer);
-    if (!pending.orbit || pending.armed) drag = { ...pending.hit, off: pending.off };   // a held rug follows the pointer; a quick drag on one orbits
+    if (pending.hit.door) { /* a door cannot be dragged: moving the pointer cancels the press */ }
+    else if (!pending.orbit || pending.armed) drag = { ...pending.hit, off: pending.off };   // a held rug follows the pointer; a quick drag on one orbits
     pending = null;
   }
   if (!drag) {
-    if (!pending) { const h = pick(e); canvas.style.cursor = h && !(h.decor && !h.decor.wall) ? (h.machine ? 'pointer' : 'grab') : ''; }
+    if (!pending) { const h = pick(e); canvas.style.cursor = h && !(h.decor && !h.decor.wall) ? (h.machine || h.door ? 'pointer' : 'grab') : ''; }
     return;
   }
   canvas.style.cursor = 'grabbing';

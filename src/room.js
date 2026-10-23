@@ -47,10 +47,12 @@ export function buildRoom(scene) {
     room.add(p);
     return p;
   };
-  wall(ROOM.w, ROOM.h, 0, ROOM.h / 2, -ROOM.d / 2, 0);
-  wall(ROOM.w, ROOM.h, 0, ROOM.h / 2, ROOM.d / 2, Math.PI);
-  wall(ROOM.d, ROOM.h, -ROOM.w / 2, ROOM.h / 2, 0, Math.PI / 2);
-  wall(ROOM.d, ROOM.h, ROOM.w / 2, ROOM.h / 2, 0, -Math.PI / 2);
+  const wallMeshes = {                    // kept so a doorway can be cut in one (see cutDoorway)
+    back: wall(ROOM.w, ROOM.h, 0, ROOM.h / 2, -ROOM.d / 2, 0),
+    front: wall(ROOM.w, ROOM.h, 0, ROOM.h / 2, ROOM.d / 2, Math.PI),
+    left: wall(ROOM.d, ROOM.h, -ROOM.w / 2, ROOM.h / 2, 0, Math.PI / 2),
+    right: wall(ROOM.d, ROOM.h, ROOM.w / 2, ROOM.h / 2, 0, -Math.PI / 2),
+  };
   const ceil = new THREE.Mesh(new THREE.PlaneGeometry(ROOM.w, ROOM.d), mat(0xeeeeee));
   ceil.rotation.x = Math.PI / 2;
   ceil.position.y = ROOM.h;
@@ -179,7 +181,50 @@ export function buildRoom(scene) {
     return new THREE.MeshStandardMaterial({ map: t, roughness: 0.7 });
   };
 
-  // Put a book on the shelf in the next free slot (rows 3 and 2 are within Guy's reach).
+  // The shelf holds 16 books on the two rows within Guy's reach (slots 0-15). A book past that is laid flat on the floor in a stack
+  // beside the shelf, spine towards the room, one on top of the other (it still counts as "on the shelf" for the Catalogue).
+  const SHELF_CAPACITY = 16;
+  const STACK_X = -0.06;                            // the stack's place beside the shelf, in the shelf's own frame (z along the shelf)
+  let stackZ = null;                                // chosen when the first book overflows: the end of the shelf with room
+  const stackObs = { x0: 0, x1: 0, z0: 0, z1: 0, h: 0.5, active: true, name: 'bookstack' };
+  const pickStackEnd = () => {
+    const sh = objects.shelf;
+    for (const zEnd of [-1.3, 1.3]) {
+      const l = sh.local(STACK_X, zEnd), x = sh.x + l.x, z = sh.z + l.z;
+      if (Math.abs(x) < 4.5 && z > -3.5 && z < 3.5 && !obstacles.some((o) => o !== sh.obstacle && o !== stackObs && x > o.x0 - 0.3 && x < o.x1 + 0.3 && z > o.z0 - 0.3 && z < o.z1 + 0.3)) return zEnd;
+    }
+    return -1.3;
+  };
+  // Lay the stacked books out: flat, one on top of the other from the floor up, a little untidy. Held books are left out (the others
+  // settle), and the stack's footprint is an obstacle so nothing is put on top of it.
+  const layoutStack = () => {
+    const stack = shelfBooks.filter((r) => r.stack).sort((a, b) => a.slot - b.slot);
+    let y = 0, any = false;
+    for (const r of stack) {
+      if (!r.mesh.visible) continue;
+      const j = Math.sin(r.slot * 12.9898), k = Math.cos(r.slot * 78.233);
+      r.mesh.rotation.order = 'YXZ';
+      r.mesh.rotation.set(Math.PI / 2, j * 0.14, 0);
+      r.mesh.position.set(STACK_X + j * 0.015, y + r.w / 2, stackZ + k * 0.015);
+      y += r.w + 0.002;
+      r.y = y; r.z = stackZ; r.reachX = STACK_X;       // where Guy's hand goes: the top of this book
+      any = true;
+    }
+    const at = objects.shelf.indexOfStack = stack.length;
+    const l = objects.shelf.local(STACK_X, stackZ ?? 0), cx = objects.shelf.x + l.x, cz = objects.shelf.z + l.z;
+    Object.assign(stackObs, { x0: cx - 0.22, x1: cx + 0.22, z0: cz - 0.22, z1: cz + 0.22, h: Math.max(0.1, y) });
+    const listed = obstacles.indexOf(stackObs) >= 0;
+    if (at && !listed) obstacles.push(stackObs);
+    else if (!at && listed) obstacles.splice(obstacles.indexOf(stackObs), 1);
+    void any;
+  };
+  const baseShelfSet = objects.shelf.set;
+  objects.shelf.set = function (nx, nz) { baseShelfSet.call(this, nx, nz); if (stackZ !== null) layoutStack(); };      // the stack goes where the shelf goes
+  objects.shelf.layoutStack = layoutStack;
+  // the book on top of the stack (the one he can pick up), or null
+  objects.shelf.stackTop = () => shelfBooks.filter((r) => r.stack && r.mesh.visible).sort((a, b) => b.slot - a.slot)[0] || null;
+
+  // Put a book on the shelf in the next free slot (rows 3 and 2 are within Guy's reach), or on the stack if the shelf is full.
   const addBook = (def) => {
     let i = 0;                                      // the lowest free slot: a forgotten book leaves a gap, nothing slides along
     while (shelfBooks.some((r) => r.slot === i)) i++;
@@ -189,11 +234,18 @@ export function buildRoom(scene) {
     const color = new THREE.Color(def.color);
     const side = mat(color);
     const mats = [side, spineMaterial(def), side, side, side, side]; // +x, -x (spine, towards the room), +y, -y, +z, -z
-    const y = 0.045 + row * 0.43 + h / 2 + 0.02;
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.26, h, w), mats);
-    mesh.position.set(-0.03, y, z + w / 2);
     mesh.castShadow = mesh.receiveShadow = true;
     shelfGroup.add(mesh);
+    if (i >= SHELF_CAPACITY) {
+      if (stackZ === null) stackZ = pickStackEnd();
+      const rec = { mesh, row: -1, y: 0, z: stackZ, color, h, w, def, slot: i, stack: true, reachX: STACK_X };
+      shelfBooks.push(rec);
+      layoutStack();
+      return rec;
+    }
+    const y = 0.045 + row * 0.43 + h / 2 + 0.02;
+    mesh.position.set(-0.03, y, z + w / 2);
     const rec = { mesh, row, y, z: z + w / 2, color, h, w, def, slot: i };
     shelfBooks.push(rec);
     return rec;
@@ -205,6 +257,7 @@ export function buildRoom(scene) {
     shelfBooks.splice(k, 1);
     shelfGroup.remove(rec.mesh);
     rec.mesh.geometry.dispose();
+    if (rec.stack) layoutStack();
     return true;
   };
   objects.shelf.removable = false; // the bookshelf is where Guy learns: it can be moved but never removed
@@ -950,6 +1003,7 @@ export function buildRoom(scene) {
       if (o.removable === false || o.weight === 'heavy') return { fixed: name, hit: [] };
       hit.push(name);
     }
+    if (obstacles.some((o) => o.name === 'bookstack' && rectsOverlap(r, o))) return { fixed: 'bookstack', hit: [] };   // the books stacked beside the shelf
     for (const d of Object.values(decor)) {
       if (d.wall === wall && overlap1(d.u - d.hw, d.u + d.hw, u - DOOR.w / 2, u + DOOR.w / 2) && d.v - d.hh < DOOR.h) hit.push(d.name);
     }
@@ -989,15 +1043,20 @@ export function buildRoom(scene) {
     box(0.1, H, 0.14, frame, -0.55, H / 2, 0.07, g);
     box(0.1, H, 0.14, frame, 0.55, H / 2, 0.07, g);
     box(1.2, 0.12, 0.14, frame, 0, DOOR.h + 0.06, 0.07, g);
-    box(1.0, DOOR.h, 0.05, leaf, 0, DOOR.h / 2, 0.05, g);
+    // the leaf hangs from a hinge on the left post (local x = -0.5) and swings away from the room when the door opens
+    const hinge = new THREE.Group();
+    hinge.position.set(-0.5, 0, 0);
+    g.add(hinge);
+    g.userData.leaf = hinge;
+    box(1.0, DOOR.h, 0.05, leaf, 0.5, DOOR.h / 2, 0.05, hinge);
     for (const z of [0.08, 0.02]) {
-      box(0.7, 0.75, 0.01, mat(def.look.panel), 0, 1.55, z, g);
-      box(0.7, 0.75, 0.01, mat(def.look.panel), 0, 0.6, z, g);
+      box(0.7, 0.75, 0.01, mat(def.look.panel), 0.5, 1.55, z, hinge);
+      box(0.7, 0.75, 0.01, mat(def.look.panel), 0.5, 0.6, z, hinge);
     }
     for (const z of [0.1, 0]) {
       const knob = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 10), mat(0xe8c050, { metalness: 0.6, roughness: 0.3 }));
-      knob.position.set(0.36, 1.05, z);
-      g.add(knob);
+      knob.position.set(0.86, 1.05, z);
+      hinge.add(knob);
     }
     const c = document.createElement('canvas');
     c.width = 256; c.height = 64;
@@ -1055,9 +1114,33 @@ export function buildRoom(scene) {
     return { group: g, bounds };
   };
 
+  // The way from a wall into the room (the local +z of anything hung on it).
+  const inwardOf = (wall) => new THREE.Vector3(Math.sin(WALL[wall].rotY), 0, Math.cos(WALL[wall].rotY));
+
+  // A real doorway: the wall is left out and put back in three pieces (left of the door, right of it, and above it), so an open
+  // door shows the way through and Guy can walk through it. Built in the door's own frame (local x along the wall).
+  const buildDoorway = (wall, u) => {
+    const W = WALL[wall], sgn = W.rotY === Math.PI ? -1 : 1;
+    const g = new THREE.Group();
+    g.position.copy(W.at(u, 0));
+    g.rotation.y = W.rotY;
+    const a = sgn > 0 ? W.lo - u : u - W.hi, b = sgn > 0 ? W.hi - u : u - W.lo;     // the ends of the wall, in the door's x
+    const piece = (x0, x1, y0, y1) => {
+      if (x1 - x0 < 0.01 || y1 - y0 < 0.01) return;
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, y1 - y0), wallMat);
+      p.position.set((x0 + x1) / 2, (y0 + y1) / 2, 0);
+      p.receiveShadow = true;
+      g.add(p);
+    };
+    piece(a, -DOOR.w / 2, 0, ROOM.h);
+    piece(DOOR.w / 2, b, 0, ROOM.h);
+    piece(-DOOR.w / 2, DOOR.w / 2, DOOR.h, ROOM.h);
+    return g;
+  };
+
   const disposeTree = (g) => g.traverse((n) => {
     if (n.geometry) n.geometry.dispose();
-    if (n.material) { if (n.material.map) n.material.map.dispose(); n.material.dispose(); }
+    if (n.material && n.material !== wallMat) { if (n.material.map) n.material.map.dispose(); n.material.dispose(); }     // the wall material is shared with the room's own walls
   });
 
   const world = {
@@ -1071,19 +1154,54 @@ export function buildRoom(scene) {
     // Put a door for room `def` at (wall, u). The caller has already cleared whatever was in its way.
     addDoor(def, wall, u) {
       if (doors[def.id]) return doors[def.id];
-      const group = buildDoor(def, wall, u), shell = buildShell(def, wall, u);
+      const group = buildDoor(def, wall, u), shell = buildShell(def, wall, u), cut = buildDoorway(wall, u);
+      wallMeshes[wall].visible = false;                       // the wall is rebuilt round the doorway
       room.add(group);
       room.add(shell.group);
-      doors[def.id] = { id: def.id, wall, u, group, shell, rect: doorRect(wall, u) };
+      room.add(cut);
+      doors[def.id] = { id: def.id, name: def.name, wall, u, group, leaf: group.userData.leaf, shell, cut, rect: doorRect(wall, u), open: 0, openTo: 0 };
       return doors[def.id];
     },
     removeDoor(id) {
       const d = doors[id];
       if (!d) return false;
-      for (const g of [d.group, d.shell.group]) { room.remove(g); disposeTree(g); }
+      for (const g of [d.group, d.shell.group, d.cut]) { room.remove(g); disposeTree(g); }
+      if (!Object.values(doors).some((o) => o !== d && o.wall === d.wall)) wallMeshes[d.wall].visible = true;
       delete doors[id];
       return true;
     },
+    // ---- walking through a door ----
+    // A point `d` metres from the door along the way into Guy's room (negative: inside the added room), and the way to face
+    // to walk that way (`intoRoom`) or the other (into the added room).
+    doorPoint(id, d) { const dr = doors[id], n = inwardOf(dr.wall), p = WALL[dr.wall].at(dr.u, 0); return { x: p.x + n.x * d, z: p.z + n.z * d }; },
+    doorYaw(id, intoRoom) { const n = inwardOf(doors[id].wall), s = intoRoom ? 1 : -1; return Math.atan2(s * n.x, s * n.z); },
+    doorKnob(id) { return doors[id].group.localToWorld(new THREE.Vector3(0.36, 1.05, 0.1)); },       // for the hand to reach while the door is shut
+    setDoorOpen(id, open) { if (doors[id]) doors[id].openTo = open ? 1 : 0; },
+    isDoorOpen: (id) => !!doors[id] && doors[id].open > 0.85,
+    // Swing the doors towards open or shut (called every frame by the brain).
+    updateDoors(dt) {
+      for (const d of Object.values(doors)) {
+        if (d.open === d.openTo) continue;
+        d.open = Math.max(0, Math.min(1, d.open + Math.max(-1, Math.min(1, d.openTo - d.open)) * dt / 0.8));
+        if (Math.abs(d.open - d.openTo) < 0.001) d.open = d.openTo;
+        d.leaf.rotation.y = d.open * 1.75;                      // swings away from the room, about 100 degrees
+      }
+    },
+    // Where can Guy stand? Inside his own room, inside an added room, or in the doorway while its door is open.
+    walkable(x, z) {
+      if (Math.abs(x) <= 4.5 && z >= -3.5 && z <= 3.6) return true;
+      for (const d of Object.values(doors)) {
+        const b = d.shell.bounds;
+        if (x >= b.minX + 0.5 && x <= b.maxX - 0.5 && z >= b.minZ + 0.5 && z <= b.maxZ - 0.5) return true;
+        if (d.open < 0.3) continue;
+        const n = inwardOf(d.wall), p = WALL[d.wall].at(d.u, 0), dx = x - p.x, dz = z - p.z;
+        const dist = dx * n.x + dz * n.z, lateral = Math.abs(dx * n.z - dz * n.x);
+        if (dist >= -0.7 && dist <= 0.8 && lateral <= 0.4) return true;
+      }
+      return false;
+    },
+    // Is (x, z) inside Guy's own room (not an added room, not in a doorway)?
+    inMain: (x, z) => Math.abs(x) <= 4.9 && Math.abs(z) <= 3.9,
     // The floor area of the main room plus every added room, for framing the camera.
     extent() {
       const e = { minX: -ROOM.w / 2, maxX: ROOM.w / 2, minZ: -ROOM.d / 2, maxZ: ROOM.d / 2 };

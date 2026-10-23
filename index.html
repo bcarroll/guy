@@ -89,10 +89,11 @@
   #menu { position: fixed; z-index: 5; min-width: 150px; background: rgba(28,30,36,.96); color: #eee; border-radius: 10px;
           padding: 6px; box-shadow: 0 6px 24px rgba(0,0,0,.5); font-size: 14px; user-select: none; }
   #menu[hidden] { display: none; }
-  #albummenu { position: fixed; z-index: 5; min-width: 230px; max-width: 320px; background: rgba(28,30,36,.97); color: #eee; border-radius: 12px; padding: 6px;
-               box-shadow: 0 6px 24px rgba(0,0,0,.5); font-size: 14px; user-select: none; }
+  #albummenu { position: fixed; z-index: 5; box-sizing: border-box; min-width: 230px; max-width: 320px; background: rgba(28,30,36,.97); color: #eee; border-radius: 12px; padding: 6px;
+               box-shadow: 0 6px 24px rgba(0,0,0,.5); font-size: 14px; user-select: none;
+               max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); overflow-y: auto; overscroll-behavior: contain; }    /* a long list scrolls instead of running off the screen */
   #albummenu[hidden] { display: none; }
-  #albummenu .title { padding: 6px 10px 6px; font-weight: 600; color: #7fd1ff; }
+  #albummenu .title { padding: 6px 10px 6px; font-weight: 600; color: #7fd1ff; position: sticky; top: -6px; background: rgba(28,30,36,.97); z-index: 1; }
   #albummenu button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: 0; color: inherit;
                       font: inherit; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
   #albummenu .brow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
@@ -115,10 +116,13 @@
   #menu button[hidden] { display: none; }
   #menu button:hover { background: rgba(255,255,255,.12); }
   #menu button[data-act="remove"] { color: #ff8a8a; }
-  #sound-off { position: fixed; top: 12px; right: 12px; z-index: 5; width: 48px; height: 48px; border: 0; border-radius: 50%; padding: 0;
-               background: #d63031; color: #fff; font-size: 24px; line-height: 48px; cursor: pointer; touch-action: manipulation;
-               box-shadow: 0 2px 10px rgba(0,0,0,.5); animation: sound-pulse 1.8s ease-in-out infinite; }
-  #sound-off[hidden] { display: none; }
+  /* always there: red while the sound is off or muted (it pulses until the sound has started), faint while it is on; tap to turn on / mute */
+  #sound-btn { position: fixed; top: 12px; right: 12px; z-index: 5; width: 48px; height: 48px; border: 0; border-radius: 50%; padding: 0;
+               font-size: 24px; line-height: 48px; cursor: pointer; touch-action: manipulation; color: #fff; transition: opacity .3s, background .3s; }
+  #sound-btn.off { background: #d63031; box-shadow: 0 2px 10px rgba(0,0,0,.5); animation: sound-pulse 1.8s ease-in-out infinite; }
+  #sound-btn.muted { background: #d63031; box-shadow: 0 2px 10px rgba(0,0,0,.5); }
+  #sound-btn.on { background: rgba(255,255,255,.25); opacity: .35; }
+  #sound-btn.on:hover, #sound-btn.on:focus-visible { opacity: 1; }
   @keyframes sound-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
 </style>
 </head>
@@ -167,7 +171,7 @@
   <button data-act="rotr">⟳ Rotate right</button>
   <button data-act="remove">🗑 Remove</button>
 </div>
-<button id="sound-off" title="Sound is off: tap anywhere to turn it on" aria-label="Sound is off. Tap to turn it on.">🔇</button>
+<button id="sound-btn" class="off" title="Sound is off: tap to turn it on" aria-label="Sound is off. Tap to turn it on.">🔇</button>
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>

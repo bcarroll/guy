@@ -44,6 +44,16 @@ function shelfGrip(g, ctx) {
   const fwd = new THREE.Vector3(Math.sin(g.root.rotation.y), 0, Math.cos(g.root.rotation.y));
   return high ? { palm: fwd } : { side: UP };
 }
+// How far to squat to reach the shelf target: 0 at shelf height, 1 for a book lying on the floor stack beside it.
+const squatFor = (ctx) => clamp((0.85 - ctx.tgt.shelf.y) / 0.5, 0, 1);
+const squat = (g, k) => {
+  if (k <= 0.001) return;
+  for (const side of ['Left', 'Right']) {
+    g.set(`${side}UpLeg`, Q('x', -0.75 * k));
+    g.set(`${side}Leg`, Q('x', 1.5 * k));
+    g.set(`${side}Foot`, Q('x', -0.75 * k));
+  }
+};
 // The chord to strum at a given beat of a track: its own progression, or Am / C for the stereo's built-in beat.
 const GUITAR_AM = { notes: [45, 52, 57, 60, 64], fret: 0.0 };
 const GUITAR_C = { notes: [48, 52, 55, 60, 64], fret: -0.01 };
@@ -394,9 +404,11 @@ export const POSES = {
     const pull = smooth(clamp((t - 1.0) / 0.7, 0, 1));
     const fade = 1 - smooth(clamp((t - 1.8) / 0.6, 0, 1));
     const target = new THREE.Vector3().lerpVectors(ctx.tgt.shelf, ctx.tgt.carry, pull);
+    const sq = squatFor(ctx) * reachIn * fade;                              // a book on the floor stack: he squats down to it
+    squat(g, sq);
     g.reach('Right', target, reachIn * fade, true, shelfGrip(g, ctx));   // handshake grip at mid height, palm to the shelf when reaching up
     g.curl('Right', 0.1 + 0.65 * smooth(clamp((t - 0.75) / 0.25, 0, 1)));
-    g.set('Spine1', Q('x', 0.1 * reachIn * fade));
+    g.set('Spine1', Q('x', 0.1 * reachIn * fade + 0.3 * sq));
     g.set('Head', Q('x', 0.12 * reachIn * fade, 'y', -0.15 * reachIn * fade));
   },
 
@@ -405,9 +417,11 @@ export const POSES = {
     const raise = smooth(clamp(t / 0.9, 0, 1));
     const retreat = smooth(clamp((t - 1.5) / 0.7, 0, 1));
     const target = new THREE.Vector3().lerpVectors(ctx.tgt.carry, ctx.tgt.shelf, raise);
+    const sq = squatFor(ctx) * raise * (1 - retreat);
+    squat(g, sq);
     g.reach('Right', target, raise * (1 - retreat), true, shelfGrip(g, ctx));
     g.curl('Right', 0.75 - 0.65 * smooth(clamp((t - 1.25) / 0.3, 0, 1)));
-    g.set('Spine1', Q('x', 0.1 * raise * (1 - retreat)));
+    g.set('Spine1', Q('x', 0.1 * raise * (1 - retreat) + 0.3 * sq));
     g.set('Head', Q('x', 0.1 * raise * (1 - retreat), 'y', -0.15 * raise * (1 - retreat)));
   },
 
@@ -488,6 +502,7 @@ export class Brain {
     this.lock = null;          // { name }: locked in on an object (long-press > Lock in): he keeps using it until told to stop
     this.onLock = null;        // called with the lock (or null) whenever it changes
     this.onRiff = null;        // called with a message when he makes up a riff he wants to keep
+    this.visitId = null;       // the room he was asked to visit (long-press its door)
     this.beatLen = BEAT;        // length of a beat of whatever is playing on the stereo
     this.track = 'default';
     this.albumOnTable = false; // a record is standing by the stereo while it plays
@@ -661,27 +676,49 @@ export class Brain {
         this.play('pickup', 2.0, { ball: true, at: [0.9, () => { this.ballHeld = true; }] }),
         this.play('toss', 6.85, { ball: true }),
         this.play('putdown', 2.0, { ball: true, at: [1.0, () => this.releaseBall()] })],
-      guitar: () => ['playing the guitar', this.walkAt('guitar', 0, 0.62, Math.PI),
-        this.play('takeGuitar', 2.4, { guitar: true, at: [1.0, () => this.setGuitarHeld(true)] }),
-        this.play('guitar', 26, { guitar: true }),
-        this.play('putGuitar', 2.4, { guitar: true, at: [1.3, () => this.setGuitarHeld(false)] })],
+      guitar: () => ['playing the guitar', ...this.guitarBegin(), this.play('guitar', 26, { guitar: true }), ...this.guitarEnd()],
       // the stereo is on: strum along in time and in the key of whatever is playing
+      // through the door of an added room, a look round, and back (long-press the door, or he does it now and then)
+      visit: () => {
+        const w = this.w, id = this.visitId && w.doors[this.visitId] ? this.visitId : Object.keys(w.doors)[0], door = w.doors[id];
+        this.visitId = null;
+        const out = w.doorPoint(id, 0.8), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false), b = door.shell.bounds;
+        const direct = (p, yaw = null) => ({ ...this.walk(p.x, p.z, yaw), direct: true });
+        const steps = [this.walk(out.x, out.z, face),
+          this.play('reach', 1.6, { at: [0.8, () => w.setDoorOpen(id, true)], target: () => w.doorKnob(id) }),
+          this.play('idle', 0.7),                                               // the door swings open
+          direct(inn)];
+        for (let i = 0; i < 3; i++) steps.push(direct({ x: rand(b.minX + 1.2, b.maxX - 1.2), z: rand(b.minZ + 1.2, b.maxZ - 1.2) }), this.play('idle', rand(1.5, 3)));
+        steps.push(direct(inn), direct(out), this.walk(out.x, out.z, face),
+          this.play('reach', 1.6, { at: [0.8, () => w.setDoorOpen(id, false)], target: () => w.doorKnob(id) }));
+        return [`having a look in the ${door.name}`, ...steps];
+      },
+      // he is in an added room: straight back out through the door and shut it behind him
+      leave: () => {
+        const w = this.w, p = this.g.pos, id = Object.keys(w.doors).sort((a, c) => {
+          const f = (d) => { const bb = w.doors[d].shell.bounds; return Math.hypot((bb.minX + bb.maxX) / 2 - p.x, (bb.minZ + bb.maxZ) / 2 - p.z); };
+          return f(a) - f(c);
+        })[0];
+        if (!id) { this.g.root.position.set(0, 0, 2); return ['collecting himself', this.play('idle', 0.5)]; }      // the room is gone: back to the middle of his own
+        const out = w.doorPoint(id, 0.8), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false);
+        const direct = (q) => ({ ...this.walk(q.x, q.z), direct: true });
+        return [`coming back from the ${w.doors[id].name}`,
+          this.play('idle', 0.1, { at: [0, () => w.setDoorOpen(id, true)] }),
+          direct(inn), direct(out), this.walk(out.x, out.z, face),
+          this.play('reach', 1.6, { at: [0.8, () => w.setDoorOpen(id, false)], target: () => w.doorKnob(id) })];
+      },
       // making up riffs: a new idea (or two) and sometimes one of the favourites he kept. The good new ones are remembered (riffs.js).
       riff: () => {
         const picks = [nextRiff(), nextRiff()], list = picks.map((p) => p.riff);
         const fresh = picks.filter((p) => !p.favourite);
         const secs = 0.6 + list.length * RIFF_STEPS * 2 * 0.3 + 1;
-        return [fresh.length ? 'making up a riff on the guitar' : 'playing one of his favourite riffs', this.walkAt('guitar', 0, 0.62, Math.PI),
-          this.play('takeGuitar', 2.4, { guitar: true, at: [1.0, () => this.setGuitarHeld(true)] }),
+        return [fresh.length ? 'making up a riff on the guitar' : 'playing one of his favourite riffs', ...this.guitarBegin(),
           this.play('guitar', secs, { guitar: true, riff: list, onEnd: () => {
             if (fresh.some((p) => keepRiff(p.riff))) { this.ui('that one is a keeper!'); if (this.onRiff) this.onRiff("Guy made up a riff he likes! He'll remember it."); }
           } }),
-          this.play('putGuitar', 2.4, { guitar: true, at: [1.3, () => this.setGuitarHeld(false)] })];
+          ...this.guitarEnd()];
       },
-      jamguitar: () => [`playing the guitar along with ${this.nowPlaying().title}`, this.walkAt('guitar', 0, 0.62, Math.PI),
-        this.play('takeGuitar', 2.4, { guitar: true, at: [1.0, () => this.setGuitarHeld(true)] }),
-        this.play('guitar', rand(30, 45), { guitar: true, sync: true }),
-        this.play('putGuitar', 2.4, { guitar: true, at: [1.3, () => this.setGuitarHeld(false)] })],
+      jamguitar: () => [`playing the guitar along with ${this.nowPlaying().title}`, ...this.guitarBegin(), this.play('guitar', rand(30, 45), { guitar: true, sync: true }), ...this.guitarEnd()],
       // he was interrupted while holding the guitar: take it back to its stand
       putguitar: () => ['putting the guitar back', this.walkAt('guitar', 0, 0.62, Math.PI),
         this.play('putGuitar', 2.4, { guitar: true, at: [1.3, () => this.setGuitarHeld(false)] })],
@@ -1127,13 +1164,16 @@ export class Brain {
     this.held = book;
     sfx(book.kind === 'album' ? 'sleeve' : 'bookgrab');
     book.mesh.visible = false;
+    if (book.stack && shelf.layoutStack) shelf.layoutStack();               // the rest of the stack settles
     if (book.kind === 'album') { this.albumMesh.userData.setArt(book.def); this.albumMesh.visible = true; }
     else { this.bookMesh.userData.setTitle(book.def.title, book.color); this.bookMesh.visible = true; }
   }
 
   returnBook() {
     if (this.held) { this.held.mesh.visible = true; sfx(this.held.kind === 'album' ? 'sleeve' : 'bookclose'); }
+    const back = this.held, shelf = this.obj('shelf');
     this.held = null;
+    if (back && back.stack && shelf && shelf.layoutStack) shelf.layoutStack();   // it goes back on top of the stack
     this.albumOnTable = false;
     this.bookMesh.visible = false;
     this.albumMesh.visible = false;
@@ -1146,7 +1186,7 @@ export class Brain {
         if (!this.held) return [];
         if (this.held.kind === 'album' && !this.music) this.albumOnTable = false;   // the music stopped: he picks the record up off the stereo
         if (!this.obj('shelf')) { this.returnBook(); return []; }
-        return [this.walkAt('shelf', this.held.kind === 'album' ? -0.5 : -0.62, this.held.z, Math.PI / 2), this.play('putBook', 2.4, { at: [1.3, () => this.returnBook()] })];
+        return [this.walkAt('shelf', this.held.kind === 'album' || this.held.stack ? -0.5 : -0.62, this.held.z, Math.PI / 2), this.play('putBook', 2.4, { at: [1.3, () => this.returnBook()] })];
       },
     };
   }
@@ -1158,7 +1198,8 @@ export class Brain {
 
   readSteps(only = null) {
     const shelf = this.obj('shelf');
-    const books = only ? [only] : shelf.books.filter((b) => b.mesh.visible);
+    const top = shelf.stackTop ? shelf.stackTop() : null;           // from the stack beside the shelf he can only take the top book
+    const books = only ? [only] : shelf.books.filter((b) => b.mesh.visible && (!b.stack || b === top));
     const unread = books.filter((b) => !this.skills.has(b.def.teaches));
     const book = pick(unread.length ? unread : books); // he is curious about the books he has not read yet
     const speed = this.readSpeed();
@@ -1172,7 +1213,7 @@ export class Brain {
       this.play('readSit', Math.max(rand(25, 40) / speed, need + 7), { need, chairSit: true, chair: c.name, reading: { delay: 1.2, lead: 1.9 }, onEnd: done }),
     ];
     return [`${atShelf ? 'speed-reading' : 'reading'} "${book.def.title}"`,
-      this.walkAt('shelf', -0.62, book.z, Math.PI / 2),
+      this.walkAt('shelf', book.stack ? -0.5 : -0.62, book.z, Math.PI / 2),            // closer to the stack: he squats to reach it
       this.play('grab', 2.6, { book, at: [0.95, () => this.takeBook(book)] }),
       {
         type: 'plan',
@@ -1491,7 +1532,8 @@ export class Brain {
       const b = this.w.ball.position;
       if (this.w.obstacles.some((o) => o.active !== false && b.x > o.x0 - 0.5 && b.x < o.x1 + 0.5 && b.z > o.z0 - 0.5 && b.z < o.z1 + 0.5)) return false;
     }
-    if (act === 'putback' || act === 'dropball' || act === 'putguitar') return false;
+    if (act === 'putback' || act === 'dropball' || act === 'putguitar' || act === 'leave') return false;
+    if (act === 'visit') return Object.keys(this.w.doors).length > 0 && this.inMain();
     if (act === 'read' && !this.obj('shelf').books.some((b) => b.mesh.visible)) return false;
     if (act === 'rearrange' && !Object.values(this.w.objects).some((o) => o.weight !== 'heavy' && o.name !== 'bench')) return false;
     return need.every((n) => this.obj(n));
@@ -1500,6 +1542,34 @@ export class Brain {
   ballRemoved() {
     if (this.lock && this.lock.name === 'ball') this.unlock(false);
     if (this.last === 'ball') { this.queue = []; this.step = null; }
+  }
+
+  // Locked in on the guitar: he keeps it in his hands between songs and riffs, instead of putting it down and picking it up again.
+  guitarLocked() { return !!(this.lock && this.lock.name === 'guitar'); }
+  // Steps to start playing: walk to the stand and pick the guitar up, unless he is already holding it.
+  guitarBegin() {
+    if (this.gtr.held && this.guitarLocked()) return [];
+    return [this.walkAt('guitar', 0, 0.62, Math.PI), this.play('takeGuitar', 2.4, { guitar: true, at: [1.0, () => this.setGuitarHeld(true)] })];
+  }
+  // Steps to finish: put the guitar back on its stand, unless he is locked in on it (it stays in his hands for the next one).
+  guitarEnd() {
+    if (this.guitarLocked()) return [];
+    return [this.play('putGuitar', 2.4, { guitar: true, at: [1.3, () => this.setGuitarHeld(false)] })];
+  }
+
+  // Is he in his own room (not in an added room or its doorway)?
+  inMain() { return this.w.inMain(this.g.root.position.x, this.g.root.position.z); }
+
+  // The user asked Guy to go through a door (or, from inside, to come back). Returns { ok, message }.
+  visitRoom(id) {
+    const d = this.w.doors[id];
+    if (!d) return { ok: false, message: "There isn't a door like that." };
+    this.unlock(false);
+    this.skip();
+    this.visitId = id;
+    const inside = !this.inMain();
+    this.pendingActivity = inside ? 'leave' : 'visit';
+    return { ok: true, message: inside ? 'Guy is coming back.' : `Guy is going into the ${d.name}.` };
   }
 
   // ---- Lock in: keep using one object until the user says stop ----
@@ -1555,7 +1625,7 @@ export class Brain {
     const unread = shelf ? shelf.books.filter((b) => b.mesh.visible && !this.skills.has(b.def.teaches)).length : 0;
     const weights = {
       wander: 3, sit: 0.7, sitguitar: 1.1, slouch: 0.5, dancemoves: 1.5, ballroom: 1.5, piano: 1, sitpiano: 1.2, plink: 1.4, dance: 1.8, jam: 0.9, jampiano: 0.5, jamsit: 0.9, lamp: 1.2, mood: 1.1,
-      read: 1.8 + unread * 1.8, stretch: 1.3, wave: 0.7, ball: 2, dribble: 1.1, toss: 1.1, rearrange: 0.7, guitar: 1.6, riff: 1.0, plant: 0.6, jamguitar: 1.5,
+      read: 1.8 + unread * 1.8, stretch: 1.3, wave: 0.7, ball: 2, dribble: 1.1, toss: 1.1, rearrange: 0.7, guitar: 1.6, riff: 1.0, plant: 0.6, jamguitar: 1.5, visit: 0.4,
       bang: 1.3, drums: 1.6, drumsolo: 1.2, jamdrums: 1.5, scribble: 1.3, paint: 1.6, mixpaint: 1.3, portrait: 1.4,
       peek: 1.3, stargaze: 1.6, darkstargaze: 1.3, scopecare: 0.6, dust: 0.9,
     };
@@ -1576,7 +1646,8 @@ export class Brain {
     // the last two activities count, so he doesn't drift back to the same theme straight away
     const lastTags = [this.last, this.prev].flatMap((n) => tags[n] || []);
     let name = force;
-    if (!name && this.gtr.held && this.obj('guitar')) name = 'putguitar'; // still holding the guitar: back on its stand
+    if (!name && !this.inMain()) name = 'leave';             // he is in an added room: back through the door before anything else
+    if (!name && this.gtr.held && this.obj('guitar') && !this.guitarLocked()) name = 'putguitar'; // still holding the guitar: back on its stand (not while locked in on it)
     if (!name && this.lampOffByMe && this.obj('lamp') && !this.obj('lamp').on) name = 'lighton'; // he switched it off for the stars and never put it back
     if (!name && this.ballHeld) name = 'dropball'; // still holding the ball: put it down first
     // He's still carrying a book or record: take it back first. The one exception is a record that is really standing by the
@@ -1658,7 +1729,7 @@ export class Brain {
       bench: k('piano') ? (this.music ? ['jamsit', 'jam'] : ['sitpiano', 'piano']) : ['plink'],
       table: this.music ? ['stereooff'] : ['stereoon'],
       shelf: ['read'],
-      ...Object.fromEntries(this.chairs().map((c) => [c.name, ['read', 'sit', ...(k('guitar') && this.obj('guitar') ? ['sitguitar'] : [])]])),
+      ...Object.fromEntries(this.chairs().map((c) => [c.name, ['sit']])),          // the menu says "Sit Down": he sits (reading in it is what he does when he fancies a book)
       lamp: k('lighting') ? ['mood', 'lamp'] : ['lamp'],
       plant: ['plant'], flowerplant: ['plant'], tree: ['plant'],
       ball: k('ball') ? ['dribble', 'toss', 'ball'] : ['ball'],
@@ -1716,7 +1787,7 @@ export class Brain {
     } else if (s && s.type === 'play' && s.fx.chairSit) {
       s.t = Math.max(s.t, s.dur - 1.0); // stand up where he is; the book goes back next
     } else this.step = null;
-    if (this.music && !this.userMusic) this.queue.push(this.walkAt('table', 0, 0.55, Math.PI), this.play('reach', 1.8, { at: [0.9, () => { this.musicOff(); this.albumOnTable = false; }], target: () => this.stereoButton() }));
+    if (this.music && !this.userMusic && this.inMain()) this.queue.push(this.walkAt('table', 0, 0.55, Math.PI), this.play('reach', 1.8, { at: [0.9, () => { this.musicOff(); this.albumOnTable = false; }], target: () => this.stereoButton() }));
     this.ui('wrapping up');
   }
 
@@ -1744,6 +1815,7 @@ export class Brain {
 
   update(dt) {
     this.time += dt;
+    this.w.updateDoors(dt);               // doors swing open and shut
     this.skills.tick(dt);                 // skills whose book was forgotten fade away
     this.autoAdvance();
     const g = this.g;
@@ -1754,7 +1826,8 @@ export class Brain {
         // an activity the user asked for takes priority, once whatever he is holding has been put away
         const wanted = this.pendingActivity;
         const holding = this.held || this.ballHeld || this.gtr.held;
-        if (wanted && !holding) { this.pendingActivity = null; this.choose(wanted); } else this.choose();
+        // (an activity back in his room waits until he is back in it: choose() sends him through the door first)
+        if (wanted && !holding && (wanted === 'leave' || this.inMain())) { this.pendingActivity = null; this.choose(wanted); } else this.choose();
         next = this.queue.shift();
       }
       while (next && next.type === 'plan') {
@@ -2123,7 +2196,10 @@ export class Brain {
   moveBy(dx, dz) {
     const p = this.g.root.position;
     let nx = p.x + dx, nz = p.z + dz;
-    nx = clamp(nx, -4.5, 4.5); nz = clamp(nz, -3.5, 3.6);
+    // he stays inside his own room, an added room, or the doorway between them (while its door is open); at a wall he slides along it
+    const ok = (x, z) => this.w.walkable(x, z);
+    if (!ok(p.x, p.z)) { nx = clamp(nx, -4.5, 4.5); nz = clamp(nz, -3.5, 3.6); }          // he is somewhere he should not be: back into his room
+    else if (!ok(nx, nz)) { if (ok(nx, p.z)) nz = p.z; else if (ok(p.x, nz)) nx = p.x; else { nx = p.x; nz = p.z; } }
     for (const o of this.w.obstacles) {
       if (o.active === false) continue;
       const m = 0.2;

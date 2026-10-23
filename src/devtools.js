@@ -78,6 +78,7 @@ export const MANIFEST = {
     scopecare: { objects: ['telescope'], skills: ['telescope.care'], touches: ['telescope'] },
     // internal recovery activities and aliases: exercised through the interruption sweep, not on their own
     books: { alias: true }, putback: { internal: true }, putguitar: { internal: true }, dropball: { internal: true }, lighton: { internal: true },
+    visit: { internal: true }, leave: { internal: true },      // through the door of an added room and back: tested by sweepVisit
   },
   // what to do after reading each book: an activity that should now be possible
   books: { stereo: { then: 'dance' }, piano: { then: 'piano' }, ball: { then: 'dribble' }, lighting: { then: 'mood' }, piano2: { then: 'piano' }, guitar: { then: 'guitar' },
@@ -1309,6 +1310,118 @@ T.sweepLayout = () => {
   return out;
 };
 
+// ---- 16. The bookshelf holds 16 books; the rest lie flat in a stack on the floor beside it ----------------------------------------
+T.sweepShelf = () => {
+  const out = [], base = errors.length, w = W(), b = B(), sh = w.objects.shelf;
+  const recs = [];
+  T.settle(); T.home();
+  for (const r of [...sh.books]) if (!r.def.start) sh.removeBook(r);          // start from the shelf as it begins (earlier sweeps leave books on it)
+  for (const d of BOOK_CATALOG) if (!d.locked && !sh.books.some((r) => r.def.id === d.id)) recs.push(sh.addBook(d));
+  const onShelf = sh.books.filter((r) => !r.stack), stack = sh.books.filter((r) => r.stack).sort((x, y) => x.slot - y.slot);
+  out.push(result('shelf: with every book added, the shelf holds 16 and the rest are stacked', sh.books.length > 16 && onShelf.length === 16 && stack.length === sh.books.length - 16, { total: sh.books.length, onShelf: onShelf.length, stacked: stack.length }));
+  out.push(result('shelf: every book on the shelf is inside the frame, none sticks out of the end', onShelf.every((r) => r.z - r.w / 2 >= -0.875 && r.z + r.w / 2 <= 0.875), { out: onShelf.filter((r) => r.z - r.w / 2 < -0.875 || r.z + r.w / 2 > 0.875).map((r) => r.def.id) }));
+  const flat = stack.every((r) => Math.abs(r.mesh.rotation.x - Math.PI / 2) < 0.01);
+  const lowest = stack.length ? stack[0].mesh.position.y - stack[0].w / 2 : 0;
+  let resting = true;
+  for (let i = 1; i < stack.length; i++) resting = resting && Math.abs((stack[i].mesh.position.y - stack[i].w / 2) - (stack[i - 1].mesh.position.y + stack[i - 1].w / 2)) < 0.01;
+  out.push(result('shelf: stacked books lie flat on their side, the first on the floor and each resting on the one below (nothing floats)', stack.length > 0 && flat && Math.abs(lowest) < 0.01 && resting, { flat, lowest, resting }));
+  const l = stack.length ? stack[0].mesh.getWorldPosition(new THREE.Vector3()) : null;
+  out.push(result('shelf: the stack is beside the shelf, inside the room and clear of furniture', !!l && Math.abs(stack[0].z) > 1.15 && Math.abs(l.x) < 4.7 && Math.abs(l.z) < 3.6 && w.obstacles.some((o) => o.name === 'bookstack'), { l }));
+  const obs = w.obstacles.find((o) => o.name === 'bookstack');
+  const lamp = (T.addObject('lamp'), w.objects.lamp);
+  out.push(result('shelf: nothing can be put on top of the stack', !!obs && !w.fits(lamp, (obs.x0 + obs.x1) / 2, (obs.z0 + obs.z1) / 2)));
+  // the stack goes with the shelf when it is moved
+  const x0 = sh.x, z0 = sh.z, spot = w.findSpot(sh, { x: 2.5, z: -2.6 }, null);
+  if (spot) {
+    sh.set(spot.x, spot.z);
+    const o2 = w.obstacles.find((o) => o.name === 'bookstack'), p2 = stack[0].mesh.getWorldPosition(new THREE.Vector3());
+    out.push(result('shelf: the stack moves with the shelf', !!o2 && p2.x > o2.x0 && p2.x < o2.x1 && p2.z > o2.z0 && p2.z < o2.z1, { o2, p2 }));
+    sh.set(x0, z0);
+  }
+  // Guy reads the top book of the stack, squatting to it, and puts it back on top
+  const top = sh.stackTop(), topY = top.mesh.position.y;
+  b.forgetBook && skillsOf().known.delete(top.def.teaches);
+  b.requestRead(top.def.id);
+  let t = 0, held = false, squatted = false;
+  while (t < 120) {
+    step(0.25); t += 0.25;
+    if (b.held === top) held = true;
+    if (b.held === top && b.pose === 'grab' && b.step && b.step.t > 0.6 && b.step.t < 1.2) { const lg = b.g.bones.RightLeg && b.g.bones.RightLeg.rotation.x; if (Math.abs(lg) > 0.5) squatted = true; }
+    if (held && !b.held && top.mesh.visible && t > 15) break;
+  }
+  out.push(result('shelf: Guy reads the top book of the stack and puts it back where it was', held && top.mesh.visible && Math.abs(top.mesh.position.y - topY) < 0.005 && b.skills.has(top.def.teaches), { held, back: top.mesh.visible, t }));
+  out.push(result('shelf: he squats down to take it from the floor stack', squatted));
+  T.settle();
+  // the book list: all of them, on the screen, and scrolls when it is long
+  window.__guyOpenBooks();
+  const am = document.getElementById('albummenu'), r = am.getBoundingClientRect();
+  out.push(result('shelf: the long-press book list lists every book and stays on the screen (it scrolls when it is long)', r.top >= 0 && r.bottom <= innerHeight + 1 && r.left >= 0 && r.right <= innerWidth + 1 && am.querySelectorAll('.brow').length === sh.books.filter((x) => x.mesh.visible).length && getComputedStyle(am).overflowY === 'auto', { top: r.top, bottom: r.bottom, h: innerHeight, rows: am.querySelectorAll('.brow').length }));
+  am.hidden = true;
+  // taking stacked books away leaves the rest settled, and an empty stack leaves no obstacle
+  for (const r2 of stack.slice(0, 1)) sh.removeBook(r2);
+  const rest = sh.books.filter((x) => x.stack).sort((x, y) => x.slot - y.slot);
+  let settled = rest.length === 0 || Math.abs(rest[0].mesh.position.y - rest[0].w / 2) < 0.01;
+  for (let i = 1; i < rest.length; i++) settled = settled && Math.abs((rest[i].mesh.position.y - rest[i].w / 2) - (rest[i - 1].mesh.position.y + rest[i - 1].w / 2)) < 0.01;
+  out.push(result('shelf: when a stacked book is taken away the others settle', settled));
+  for (const r2 of recs) sh.removeBook(r2);
+  out.push(result('shelf: with the extra books gone there is no stack and no obstacle', !sh.books.some((x) => x.stack) && !w.obstacles.some((o) => o.name === 'bookstack')));
+  T.removeAll(); T.settle();
+  out.push(result('shelf: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
+// ---- 17. Doors: long-press a door and Guy goes in (src/room.js doors, brain.js visit / leave) -------------------------------------
+T.sweepVisit = () => {
+  const out = [], base = errors.length, w = W(), b = B(), g = G();
+  for (const wall of ['right', 'front', 'back']) {
+    T.resetRooms(); T.removeAll(); T.settle(); T.home();
+    const res = R().add('workshop', { walls: [wall] });
+    if (!res.ok) { out.push(result(`visit: ${wall} wall: a door could be put there`, false, { res })); continue; }
+    const door = w.doors.workshop, bnd = door.shell.bounds;
+    out.push(result(`visit: ${wall} wall: the wall has a real doorway and the door is shut`, !door.cut.parent === false && door.open === 0 && w.walkable(w.doorPoint('workshop', 0).x, w.doorPoint('workshop', 0).z) === false));
+    // the menu on the door
+    window.__guyOpenDoorMenu('workshop');
+    const menu = document.getElementById('menu'), visible = [...menu.querySelectorAll('[data-act]')].filter((x) => !x.hidden);
+    out.push(result(`visit: ${wall} wall: long-pressing the door offers just "Go into the Workshop"`, visible.length === 1 && /Go into the Workshop/.test(visible[0].textContent), { shown: visible.map((x) => x.textContent) }));
+    visible[0].click();
+    // he walks to the door, it opens, he goes in, looks round, comes out and shuts it
+    let t = 0, opened = false, inside = false, outside = 0, badSpot = 0, fullyOpen = false;
+    while (t < 150) {
+      step(0.25); t += 0.25;
+      if (door.open > 0.9) fullyOpen = true;
+      if (door.open > 0.05) opened = true;
+      const p = g.pos;
+      if (p.x > bnd.minX + 0.4 && p.x < bnd.maxX - 0.4 && p.z > bnd.minZ + 0.4 && p.z < bnd.maxZ - 0.4) inside = true;
+      if (!w.walkable(p.x, p.z) && !w.inMain(p.x, p.z)) badSpot++;
+      if (inside && b.inMain() && door.open === 0 && !b.step) outside++;
+      if (inside && b.inMain() && door.open === 0 && t > 30) break;
+    }
+    const back = b.inMain();
+    out.push(result(`visit: ${wall} wall: he opens the door, goes into the room, comes back and shuts the door`, opened && fullyOpen && inside && back && door.open === 0, { opened, fullyOpen, inside, back, open: door.open, t }));
+    out.push(result(`visit: ${wall} wall: he never stands anywhere he should not (walls, outside the rooms)`, badSpot === 0, { badSpot }));
+    // interrupted while inside: he leaves by the door (and does not try to path across the wall); a request for his own room waits until he is back
+    b.visitRoom('workshop');
+    let t2 = 0, nowInside = false;
+    while (t2 < 60 && !nowInside) { step(0.25); t2 += 0.25; const p = g.pos; nowInside = p.x > bnd.minX + 0.6 && p.x < bnd.maxX - 0.6 && p.z > bnd.minZ + 0.6 && p.z < bnd.maxZ - 0.6; }
+    T.addObject('plant');
+    b.skip(); b.interact('plant');
+    let t3 = 0, plantDone = false;
+    while (t3 < 120) { step(0.25); t3 += 0.25; if (b.last === 'plant' && b.inMain()) plantDone = true; if (plantDone && door.open === 0) break; }
+    out.push(result(`visit: ${wall} wall: cut short inside, he comes out through the door first and then does what was asked`, nowInside && b.inMain() && plantDone && door.open === 0, { nowInside, plantDone, open: door.open }));
+    // asked to come back while inside
+    b.visitRoom('workshop');
+    t2 = 0; nowInside = false;
+    while (t2 < 60 && !nowInside) { step(0.25); t2 += 0.25; const p = g.pos; nowInside = p.x > bnd.minX + 0.6 && p.x < bnd.maxX - 0.6 && p.z > bnd.minZ + 0.6 && p.z < bnd.maxZ - 0.6; }
+    const msg = b.visitRoom('workshop');
+    let t4 = 0; while (t4 < 60 && !(b.inMain() && door.open === 0)) { step(0.25); t4 += 0.25; }
+    out.push(result(`visit: ${wall} wall: asked to come back from inside, he does`, nowInside && /coming back/i.test(msg.message) && b.inMain() && door.open === 0, { msg: msg.message, t4 }));
+    T.settle();
+  }
+  T.resetRooms(); T.home(); T.removeAll(); T.settle(); machine().hidden = true; document.getElementById('menu').hidden = true;
+  out.push(result('visit: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 // ---- 13. Guitar riffs: made up, judged, and the good ones remembered (src/riffs.js) -----------------------------------------------
 T.sweepRiffs = () => {
   const out = [], base = errors.length, key = 'guy.riffs.test';
@@ -1382,12 +1495,17 @@ T.sweepLock = () => {
     try {
       r = b.lockOn(id);
       const unlockedEarly = [];
-      while (t < 150) { step(0.25); t += 0.25; if (!b.lock) { unlockedEarly.push(t); break; } }
+      const poseCount = {}; let lastPose = null;
+      while (t < 150) { step(0.25); t += 0.25; if (!b.lock) { unlockedEarly.push(t); break; } if (b.pose !== lastPose) { poseCount[b.pose] = (poseCount[b.pose] || 0) + 1; lastPose = b.pose; } }
+      if (id === 'guitar') {
+        out.push(result('lock: guitar: he keeps the guitar in his hands between riffs and songs (picked up once, never put down while locked)', (poseCount.takeGuitar || 0) <= 1 && !(poseCount.putGuitar) && chosen.length >= 3 && b.gtr.held, { poseCount, chosen, held: b.gtr.held }));
+      }
       const still = !!b.lock && b.lock.name === id;
       const outside = chosen.filter((n) => !allowed.has(n));
       out.push(result(`lock: ${id}: he keeps using it for 150 s, cycling through what he can do there`, r.ok && still && chosen.length >= 2 && !outside.length, { ok: r.ok, still, chosen, outside, message: r.message }));
       const when = b.unlock(true);
       step(8);
+      if (id === 'guitar') out.push(result('lock: guitar: told to stop, he puts the guitar back on its stand', !b.gtr.held));
       out.push(result(`lock: ${id}: telling him to stop lets him go and he wraps up`, when && !b.lock && !errors.length - base));
     } finally { b.choose = orig; if (b.lock) b.unlock(false); }
   }
@@ -1522,8 +1640,16 @@ T.sweepStart = () => {
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
   const ctx1 = window.__guyAudio ? window.__guyAudio().ctx : undefined;
   out.push(result('start: pretend (untrusted) events do not start the audio', ctx1 === ctx0));
-  const icon = document.getElementById('sound-off'), running = !!(ctx1 && ctx1.state === 'running');
-  out.push(result('start: the red speaker shows exactly while the audio is not running', !!icon && icon.hidden === running, { running, hidden: icon && icon.hidden }));
+  const icon = document.getElementById('sound-btn'), running = !!(ctx1 && ctx1.state === 'running');
+  out.push(result('start: the speaker is always shown, red and pulsing while the audio is not running', !!icon && !icon.hidden && (running || icon.className === 'off'), { running, cls: icon && icon.className }));
+  // the speaker is also the mute button (the audio itself may not be running in the harness, so the state is checked through the hook)
+  const snd = window.__guySound, before = snd.muted();
+  snd.mute(true);
+  out.push(result('start: muting turns the speaker red (muted) or keeps it red (off), and silences the master volume', icon.className !== 'on' && (!window.__guyAudio().master || window.__guyAudio().master.gain.value === 0) && snd.muted()));
+  snd.mute(false);
+  out.push(result('start: unmuting restores the master volume and, with the audio running, the faint speaker', (!window.__guyAudio().master || window.__guyAudio().master.gain.value === 0.5) && !snd.muted() && (!running || icon.className === 'on')));
+  out.push(result('start: the speaker is a 44 px button', icon.tagName === 'BUTTON' && icon.getBoundingClientRect().width >= 44 && icon.getBoundingClientRect().height >= 44));
+  snd.mute(before);
   out.push(result('start: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
 };
@@ -1557,6 +1683,8 @@ T.runAll = () => {
   report.riffs = summarise(T.sweepRiffs());
   report.lock = summarise(T.sweepLock());
   report.speed = summarise(T.sweepSpeed());
+  report.shelf = summarise(T.sweepShelf());
+  report.visit = summarise(T.sweepVisit());
   report.errorsLogged = errors.length;
   return report;
 };

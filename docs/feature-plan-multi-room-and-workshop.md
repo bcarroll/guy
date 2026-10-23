@@ -10,7 +10,7 @@
 **Phase 1 to 4 (rooms, gating, doors, the room behind the door) are built, with their QA sweeps.** Differences from the plan below:
 - Rooms are saved in their own key, `guy.rooms.v1`, so `guy.room.v1` is untouched and no migration was needed.
 - The Workshop is an empty grey room for now (floor, three walls, ceiling). Pegboard, lights and objects come with the later phases.
-- Guy cannot walk into the Workshop yet: pathing across the door (phase 5) is not built.
+- Guy can now go through the door (long-press it): straight-line walking through the doorway and round the empty room, an opening door and a real doorway in the wall. Full pathing across rooms (the grid) is still only his own room.
 - The door is closed (no opening animation yet) and has a sign on both faces, because the right and front walls are not drawn from the default camera.
 - The saved door is placed again at the start of a visit, before the Catalogue's extras. Core wall pieces the user removed come back on a new visit (existing behaviour), so anything in the door's way is taken out again.
 - Sweeps added: `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves` (in `runAll`). `sweepMachine` now counts only listed objects.
@@ -605,7 +605,9 @@ New requests, with what is built, what is planned, and what each planned part wa
 | A long-press option to lock Guy into an interaction until told to stop | **Built.** "Lock in" on the long-press menu (and "Unlock"), a "Locked on ..." chip, and Next also lets go. He cycles through everything he can do with that object. `sweepLock`. |
 | Locked on the guitar: play everything he knows, then make up riffs and remember the good ones | **Built.** The `riff` activity: single-note riffs over a bass note, judged on range, steps, a repeating phrase, density and coming home; the best 8 are kept between visits (`guy.riffs.v1`) and replayed. `sweepRiffs`. |
 
-### 17.2 Long-press a door to open it and go in (planned: needs phase 5)
+### 17.2 Long-press a door to open it and go in (built, first version)
+
+**Built:** doors are pickable; long-press > "Go into the Workshop" (or "Come back"); a real doorway in the wall; the leaf swings open and shut; Guy walks to the door, reaches for the knob, goes in, looks round three spots and comes back out and shuts it (`visit`, `leave`, `sweepVisit`). Walking through the doorway and round the room is in straight lines, which is fine while the Workshop is empty. **Still planned** (below): grid pathing across rooms once the Workshop holds objects.
 
 - **Pick target:** doors join `pick()` in `main.js`, so a long press on one opens a menu: "🚪 Go in" (from Guy's room) or "🚪 Come back" (from the Workshop).
 - **Opening:** the door leaf swings open in about a second and closes about three seconds after Guy has passed, if nobody is near. The doorway needs a real opening in the wall (today the wall is one plane, so the door is painted on it).
@@ -619,7 +621,9 @@ New requests, with what is built, what is planned, and what each planned part wa
 - **Both are optional choices** in his normal activity mix, with low weights and the usual "not the same thing twice" rule, and each can be a Lock in target for the Workshop.
 - **Waits for:** rooms with their own objects (object lookups must find the object in the room he is in), the Workshop objects (section 9), the inventory (9A), the build recipes, and pushing or carrying furniture across a door.
 
-### 17.4 Books overflow, and Guy builds another bookshelf (planned: needs 17.3)
+### 17.4 Books overflow, and Guy builds another bookshelf (stack built; the second shelf is planned)
+
+**Built:** the shelf holds 16 books; the rest lie flat on the floor in a stack beside it (spine to the room, each resting on the one below, an obstacle, moves with the shelf). Guy takes the top book, squatting to it, and puts it back on top. The long-press book list scrolls instead of running off the screen. `sweepShelf`. **Still planned:** Guy building another bookshelf in the Workshop, pushing it in and moving the stacked books onto it.
 
 - **Found while planning:** the shelf has no capacity. `addBook` in `room.js` keeps taking the next slot (rows 3 and 2, 0.2 m apart along the shelf). With all 19 unlocked books on the shelf, the last three (`stars`, `darksky`, `scopecare`) already stick out past the end of the shelf (z up to 1.1 m; the shelf ends at 0.9 m). This is a bug today, independent of the new request.
 - **Capacity:** the shelf holds 17 books on its two reachable rows. Past that a book goes into a **stack on the floor beside the shelf** (up to a few books high), still counted as "on the shelf" for the Catalogue.
