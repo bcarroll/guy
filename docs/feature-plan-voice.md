@@ -8,6 +8,9 @@ Status: plan only for voice (decisions below are Brett's, 2026-10-23). The scree
 - **Guy delegates to GAL when he is busy** (or when the user asks him to have GAL do it). Guy says so out loud ("GAL will get right on that"), tells GAL through the existing order channel (`gal.orderBuild` / `nextOrder`), and GAL **stops what she is doing** and does it. From then on GAL **answers the user herself** and **may take orders from the user until the request is satisfied**, then returns to taking orders only through Guy.
 - The user can also tell Guy to instruct GAL to use an object ("Guy, tell GAL to play the guitar").
 - Example: user "play the guitar" while Guy is busy -> Guy: "GAL will get right on that." -> GAL drops her task, picks up the guitar, plays. If the user then says "louder" or "play something slower" during that, GAL replies and handles it.
+- **Default: bots speak to the user only during an interaction** (a command, a reply, a refusal, a delegation). No unprompted chatter by default; this replaces the "chatty" default below (a chatty/quiet/silent setting stays, default quiet).
+- **Guy and GAL may talk to each other when it makes sense**, as part of what they are doing. Example: Guy is playing guitar and tells GAL "you want to jam"; GAL acknowledges and plays along on a different instrument (this is the existing jam flow in `gal.js` / `needs.js`, given spoken lines: "The boss wants to jam" / "On it, I'll take the keys"). Robot-to-robot lines are subtitled and spoken at the same low frequency; the user can mute them.
+- **Offline first:** speech should work with no network and no external service. See "Offline" below.
 - **Screen lock** (built): Off / Camera only / On, so a phone can sit in a stand and be driven by voice alone. "Lock the screen" / "unlock the screen" are voice commands (`window.__screenLock.setMode`).
 
 ## Goals
@@ -38,6 +41,11 @@ Status: plan only for voice (decisions below are Brett's, 2026-10-23). The scree
 - **When they speak**: replies to the user; refusals; starting an activity (one short bark per activity, from a table keyed by activity id, 2-3 variants); object use ("Time for some piano"); finishing/learning ("I learned astronomy!" from `onLearn`); GAL-Guy exchanges already logged by `say()` in `gal.js` (orders, jam, built things); restaurant lines (take order, "order up", "thank you"). Throttle: at most one unprompted line per robot every ~20 s, never during the other robot's line, and a "chatty / quiet / silent" setting.
 - Mouth/animation: simple head bob or jaw/eye-light pulse while speaking (`Guy` has IK and pose code; keep it a cheap visual cue, tracked as a `MANIFEST.visual` checkpoint).
 
+## Offline (local speech engines)
+- **Output (TTS):** use `speechSynthesis` but accept only voices with `voice.localService === true` (on-device). Many Android/Chrome "Google" voices are network voices and are skipped. If no local voice exists, fall back to a bundled WASM engine (candidates: eSpeak-NG compiled to WASM, or a small Piper voice), shipped with the app/service worker so it works offline. A bundled engine renders to an `AudioBuffer`, which also lets us play it through the existing `AudioContext` (robot voice filter, ducking the music, and `qa-audio.js` can measure it). Decision needed on size: eSpeak is small but robotic (fits two robots); Piper sounds better but is tens of MB.
+- **Input (STT):** this is the harder part. Chrome's `SpeechRecognition` normally streams audio to Google, which breaks "works offline". Options, to be verified when phase 4 starts: (a) the browser's on-device recognition mode where available (newer Chrome can use installed local language packs); (b) a bundled WASM recognizer (Vosk-style small English model, or whisper.cpp tiny/base) running in a worker, with a command-sized grammar to keep it fast and accurate on a phone. The typed command box is always available offline. Phases 1-3 need no STT, so offline TTS and the parser can ship first.
+- The cloud LLM fallback is dropped from the plan unless Brett asks for it later: rules-only keeps everything local.
+
 ## UI
 - Mic button (push-to-talk) and a hands-free toggle near the existing controls; listening indicator; typed command box; Settings: voices, chattiness, mute, wake word on/off. Preferences saved in `localStorage` (`guy.voice.v1`); `?fresh` neither reads nor writes it, like the other saves. Mobile layout checked at 390 px.
 
@@ -56,6 +64,5 @@ Status: plan only for voice (decisions below are Brett's, 2026-10-23). The scree
 5. Inferred actions, then (optional) LLM fallback.
 
 ## Open questions (still open)
-- How chatty by default: occasional lines, or only replies? (Plan: replies + one short bark per activity, with a chatty/quiet/silent setting.)
-- Is a cloud LLM for free-form sentences acceptable (needs a key and a small backend), or stay rules-only? (Plan: rules-only first.)
+- Offline speech-to-text: on-device browser recognition where available, or a bundled WASM model (adds download size)? And for the offline voice fallback, small/robotic (eSpeak) or nicer/larger (Piper)?
 - How long should GAL keep her audience with the user after finishing a delegated request (until the activity ends, or a fixed time)?
