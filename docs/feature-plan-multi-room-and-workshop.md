@@ -676,3 +676,17 @@ Recorded from the owner's description. Nothing is built.
 7. X Bot is told what to do by GUY, but she also starts things on her own (the prompts above). Does she act on her own at any time, or only when GUY is near and free to respond?
 
 **Testing.** To be written when planned: a second character needs its own sweep (its own activities, no interference with Guy's paths), the order-taking path, and the unprompted prompts.
+
+## 19. Future Idea: Guy Hangs His Own Paintings (not built yet)
+
+When Guy paints something at the easel and is proud of it, he can take the painting off the easel and hang it on a wall in any room that has space.
+
+- **Proud.** Not every painting is kept. After a painting is finished he decides (a random chance that is higher with the Colour Mixing and Portraits books) whether he is proud of it. A painting he is not proud of stays on the easel until he paints over it, as now.
+- **Taking it down.** He lifts the canvas off the easel with both hands (IK, like the shelf books), carrying it in front of him. The easel is blank afterwards.
+- **Hanging it.** He walks to a free spot on a wall of any room he can reach (his own room or an added room, through the door), holds it up and hangs it. It becomes a wall picture in `world.decor` like the Catalogue's pictures, so the user can drag it along the wall or put it away.
+- **Limit.** At most **3 of Guy's paintings per wall**. When every wall of every room has 3, he keeps the painting on the easel. If the user removes one, he can hang another.
+- **Free spot.** A spot on the wall that does not overlap a window, door, sconce or another picture, and is not behind a tall object.
+- **Saved.** Each hung painting is saved with the layout (which wall, position along it, and the painting's picture) so it is there after a reload. This needs the easel painting itself to be saved first (it is not yet, see "Build status").
+- **Testing.** A sweep that paints and hangs until a wall has 3, checks the 4th is refused, checks windows/doors are not covered, checks a painting in an added room, and checks removal and reload.
+
+Open questions: should the user be able to tell Guy to hang or keep a painting? Do the paintings show in the Catalogue (a "Guy's paintings" group)?
