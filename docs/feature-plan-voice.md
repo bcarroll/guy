@@ -43,7 +43,13 @@ Status: plan only for voice (decisions below are Brett's, 2026-10-23). The scree
 
 ## Offline (local speech engines)
 - **Output (TTS):** use `speechSynthesis` but accept only voices with `voice.localService === true` (on-device). Many Android/Chrome "Google" voices are network voices and are skipped. If no local voice exists, fall back to a bundled WASM engine (candidates: eSpeak-NG compiled to WASM, or a small Piper voice), shipped with the app/service worker so it works offline. A bundled engine renders to an `AudioBuffer`, which also lets us play it through the existing `AudioContext` (robot voice filter, ducking the music, and `qa-audio.js` can measure it). Decision needed on size: eSpeak is small but robotic (fits two robots); Piper sounds better but is tens of MB.
-- **Input (STT):** this is the harder part. Chrome's `SpeechRecognition` normally streams audio to Google, which breaks "works offline". Options, to be verified when phase 4 starts: (a) the browser's on-device recognition mode where available (newer Chrome can use installed local language packs); (b) a bundled WASM recognizer (Vosk-style small English model, or whisper.cpp tiny/base) running in a worker, with a command-sized grammar to keep it fast and accurate on a phone. The typed command box is always available offline. Phases 1-3 need no STT, so offline TTS and the parser can ship first.
+- **Input (STT), researched 2026-10-23.** Options for hearing the user offline:
+  1. **Chrome's on-device recognition** (`SpeechRecognition.available/install`, `processLocally`): audio never leaves the machine, about 60 MB language pack per language, installed through a permission prompt. Shipped for **desktop** Chrome (Windows, Mac, Linux, from about Chrome 138); the intent to ship says **Android is not covered**, and MDN still flags it experimental. Good as an optional upgrade on desktop, not a base.
+  2. **Vosk in the browser** (`vosk-browser`, WASM, Kaldi): streaming recognition in a Web Worker, small US-English model about **40 MB**, **Apache 2.0**, about 300 MB of memory at run time, works wherever WASM and `getUserMedia` do (including phones). Small Vosk models usually allow a restricted vocabulary (which suits a command set: our parser knows its words), but vosk-browser's README does not say whether it exposes that, so it has to be tried. Its maintenance status could not be confirmed (81 commits, last date not visible).
+  3. **Whisper in the browser** (`transformers.js` / whisper.cpp WASM): best accuracy, but the tiny model is about 120 MB, it is not streaming (we would cut speech into clips), and it is slow on phones without WebGPU.
+  - **Recommendation:** Vosk small English as the base offline engine (push-to-talk first, then hands-free with the "Guy, ..." wake word), Chrome on-device as an optional desktop upgrade, the typed box always. First step is a spike that feeds our own offline voices through Vosk in the headless test, to measure how many of the phrases in the sweep it recognises, before wiring a microphone.
+  - **Hosting caveat to check:** the 40 MB model is bigger than I believe Cloudflare static assets allow per file (about 25 MiB), so it may need splitting into parts, or hosting elsewhere. Not yet verified. It must be downloaded once and cached (so the game works offline afterwards), and only fetched when the user turns the microphone on.
+
 - The cloud LLM fallback is dropped from the plan unless Brett asks for it later: rules-only keeps everything local.
 
 ## UI
@@ -64,5 +70,5 @@ Status: plan only for voice (decisions below are Brett's, 2026-10-23). The scree
 5. Inferred actions, then (optional) LLM fallback.
 
 ## Open questions (still open)
-- Offline speech-to-text: on-device browser recognition where available, or a bundled WASM model (adds download size)? And for the offline voice fallback, small/robotic (eSpeak) or nicer/larger (Piper)?
+- Offline speech-to-text: go with Vosk small (about 40 MB, downloaded when the microphone is first turned on)? The robot voice decision is made: eSpeak first, a nicer one later.
 - How long should GAL keep her audience with the user after finishing a delegated request (until the activity ends, or a fixed time)?
