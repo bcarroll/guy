@@ -183,6 +183,7 @@ export class Gal {
     this.obs.guy = mk('guy'); this.obs.gal = mk('gal');
     guy.selfOb = this.obs.guy; this.brain.selfOb = this.obs.gal;
     this.present = true;
+    console.info(`GAL appeared: ${emerging ? 'built by Guy at the machine' : 'restored from saved state'} (guy.gal.v1=${(() => { try { return localStorage.getItem(KEY); } catch { return 'n/a'; } })()})`);
     this.emerge = emerging ? { t: 0, dur: 4.5 } : null;
     this.save();
     return true;
