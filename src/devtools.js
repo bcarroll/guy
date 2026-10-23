@@ -1813,6 +1813,71 @@ T.sweepRestaurant = () => {
   return out;
 };
 
+// ---- 20. Stations used from any side (src/approach.js): turned to face a wall, or pushed against one, he uses them from a free side ----
+// [object, activity, room, stock, customer, proof]: each is put against each of the four walls of its room, turned every way, and the job has to be
+// really done (`proof` is what must have happened), not just given up on
+const SIDES_TESTS = [
+  ['woodfactory', 'makewood', 'workshop', { wood: 0, parts: 0 }, null, (s) => s.wood >= 4], ['toolbox', 'tidytools', 'workshop', { wood: 0, parts: 0 }, null, (s) => s.lid],
+  ['saw', 'sawwood', 'workshop', { wood: 2, parts: 0 }, null, (s) => s.poses.has('workSaw')], ['mallet', 'tap', 'workshop', { wood: 0, parts: 0 }, null, (s) => s.poses.has('workTap')],
+  ['sander', 'sand', 'workshop', { wood: 2, parts: 0 }, null, (s) => s.poses.has('workSand')], ['workbench', 'sawwood', 'workshop', { wood: 2, parts: 0 }, null, (s) => s.poses.has('workSaw')],
+  ['stove', 'cook', 'restaurant', null, 'ordered', (s) => s.poses.has('workTap') && s.cooked], ['kitchencounter', 'serve', 'restaurant', null, 'cooked', (s) => s.served],
+  ['register', 'takepay', 'restaurant', null, 'paying', (s) => s.coins > 0],
+];
+T.sweepSides = (only = null, onlyRot = null, onlyWall = null) => {
+  const out = [], base = errors.length, w = W(), b = B(), g = G();
+  const wallSpots = (o, bnd) => {                              // the object's centre when it touches each wall, in the middle of that wall
+    const hw = o.w / 2, hd = o.d / 2, mx = (bnd.minX + bnd.maxX) / 2, mz = (bnd.minZ + bnd.maxZ) / 2;
+    return [['minX', bnd.minX + hw + 0.03, mz], ['maxX', bnd.maxX - hw - 0.03, mz], ['minZ', mx, bnd.minZ + hd + 0.03], ['maxZ', mx, bnd.maxZ - hd - 0.03]];
+  };
+  for (const [id, act, room, stock, customer, proof] of SIDES_TESTS) {
+    if (only && id !== only) continue;
+    let tried = 0, passed = 0; const bad = [];
+    for (let rot = 0; rot < 4; rot++) {
+      for (let wi = 0; wi < 4; wi++) {
+        if ((onlyRot !== null && rot !== onlyRot) || (onlyWall !== null && wi !== onlyWall)) continue;
+        // start from a clean room each time
+        T.settle(); T.resetRooms(); T.removeAll(); T.forget(); skillsOf().fading.clear(); T.settle(); T.home();
+        unlockRoom(room); R().add(room, { walls: ['right'] });
+        const m = MANIFEST.activities[act];
+        for (const need of m.objects) T.addObject(need);
+        T.learn(m.skills || []);
+        const o = w.objects[id], bnd = w.doors[room].shell.bounds;
+        const [wallName, x, z] = wallSpots(o, bnd)[wi];
+        while (o.rot !== rot) o.rotate(1);
+        const [, x2, z2] = wallSpots(o, bnd)[wi];                  // (the footprint changes with the turn)
+        o.set(x2, z2); void x; void z;
+        const clash = w.obstacles.some((p) => p !== o.obstacle && p.x0 < o.obstacle.x1 && p.x1 > o.obstacle.x0 && p.z0 < o.obstacle.z1 && p.z1 > o.obstacle.z0);
+        if (clash || !w.fits(o, o.x, o.z)) { o.rotate(0); continue; }          // that spot is taken by another piece: not a test of this one
+        if (stock) { Object.assign(w.stock, { wood: 0, parts: 0 }, stock); w.syncStock(); }
+        if (customer) { w.restaurant.clear(); w.restaurant.paused = true; w.restaurant.headless = true; w.restaurant.stage(customer); }
+        tried++;
+        b.queue = []; b.step = null; b.choose(act);
+        let t = 0, off = 0, done = false; const e0 = errors.length;
+        const labels = [];
+        const seen = { poses: new Set(), lid: false, cooked: false, served: false, wood: 0, coins: 0 };
+        while (t < 260) {
+          step(0.25); t += 0.25;
+          if (b.step) seen.poses.add(b.pose);
+          if (labels[labels.length - 1] !== label()) labels.push(label().slice(0, 50) + '@' + g.pos.x.toFixed(1) + ',' + g.pos.z.toFixed(1));
+          if (w.objects.toolbox && w.objects.toolbox.open > 0.2) seen.lid = true;
+          if (customer && w.restaurant.list[0] && ['cooked', 'eating'].includes(w.restaurant.list[0].state)) seen.cooked = true;
+          seen.served = w.restaurant.nServed > 0; seen.coins = w.stock.coins; seen.wood = Math.max(seen.wood, w.stock.wood);
+          if (!w.walkable(g.pos.x, g.pos.z) && !w.inMain(g.pos.x, g.pos.z)) off++;
+          if (b.last !== act && t > 1) { done = true; break; }
+        }
+        if (customer) w.restaurant.clear();
+        const ok = done && off === 0 && errors.length === e0 && b.carry === null && proof(seen);
+        if (ok) passed++; else bad.push({ rot, wall: wallName, done, off, t, errs: errors.slice(e0, e0 + 1), poses: [...seen.poses].join('/'), labels: labels.slice(0, 6), obj: [+o.x.toFixed(2), +o.z.toFixed(2), o.rot], wood: seen.wood });
+        T.settle();
+      }
+    }
+    out.push(result(`sides: ${id}: ${act} works against every wall, turned every way (${tried} placements)`, tried > 0 && passed === tried, { tried, passed, bad: bad.slice(0, 3) }));
+  }
+  T.resetRooms(); T.removeAll(); T.settle();
+  out.push(result('sides: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 // ---- 13. Guitar riffs: made up, judged, and the good ones remembered (src/riffs.js) -----------------------------------------------
 T.sweepRiffs = () => {
   const out = [], base = errors.length, key = 'guy.riffs.test';
@@ -2246,6 +2311,7 @@ T.runAll = () => {
   report.workshop = S(T.sweepWorkshop);
   report.visit = S(T.sweepVisit);
   report.restaurant = S(T.sweepRestaurant);
+  report.sides = S(T.sweepSides);
   report.paintings = S(T.sweepPaintings);
   report.errorsLogged = errors.length;
   return report;

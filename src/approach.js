@@ -27,13 +27,12 @@ export function installApproach(Brain) {
       let t = null;
       if (target) { const p = target(); t = o.toLocal(p.x - o.x, p.z - o.z); }
       const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-      const lat = t ? clamp(t.x, -hw + 0.12, hw - 0.12) : 0, dep = t ? clamp(t.z, -hd + 0.12, hd - 0.12) : 0;
-      // the four places to stand (object-local) and the way to face from each (relative to the object)
-      const spot = (k) => [
-        { x: lat, z: hd + margin, yaw: Math.PI },
-        { x: hw + margin, z: dep, yaw: -Math.PI / 2 },
-        { x: lat, z: -(hd + margin), yaw: 0 },
-        { x: -(hw + margin), z: dep, yaw: Math.PI / 2 },
+      // where he can stand along each side (object-local): the middle of the face, or nearer the target if that is free
+      const spot = (k, along) => [
+        { x: along, z: hd + margin, yaw: Math.PI },
+        { x: hw + margin, z: along, yaw: -Math.PI / 2 },
+        { x: along, z: -(hd + margin), yaw: 0 },
+        { x: -(hw + margin), z: along, yaw: Math.PI / 2 },
       ][k];
       const room = w.roomIdAt(o.x, o.z), fr = room !== 'main' && room !== 'door' ? w.frameOf(room) : MAIN_FRAME;
       const grid = makeGrid(w.obstacles, 0.2, 0, o.obstacle, fr);
@@ -43,14 +42,22 @@ export function installApproach(Brain) {
         const b = room !== 'main' && room !== 'door' ? w.doors[room].shell.bounds : { minX: -4.5, maxX: 4.5, minZ: -3.5, maxZ: 3.7 };
         return x > b.minX + 0.35 && x < b.maxX - 0.35 && z > b.minZ + 0.35 && z < b.maxZ - 0.35;
       };
-      const options = [];
+      const options = [], why = {};                                                    // (why: for each side, what ruled it out; read by the QA harness)
+      this.lastStand = { name, why };
       for (const k of sides) {
-        const s = spot(k), l = o.local(s.x, s.z), x = o.x + l.x, z = o.z + l.z;
-        if (!inside(x, z) || cellBlocked(grid, x, z)) continue;                       // a wall, or other furniture, is in the way
-        if (!findPath(grid, me.x, me.z, x, z, true)) continue;                         // and he can get there
-        let d = 0;
-        if (t) { const dx = s.x - t.x, dz = s.z - t.z; d = Math.hypot(dx, dz); }
-        options.push({ k, x, z, yaw: s.yaw + o.yaw, near: d <= REACH, d });
+        const ext = (k % 2 ? hd : hw) - 0.12, want = t ? clamp(k % 2 ? t.z : t.x, -ext, ext) : 0;
+        let best = null;
+        for (let i = 0; i <= 12; i++) {
+          const along = clamp(want + (i === 0 ? 0 : (i % 2 ? 1 : -1) * Math.ceil(i / 2) * 0.15), -ext, ext);        // the wanted spot, then either side of it
+          const s = spot(k, along), l = o.local(s.x, s.z), x = o.x + l.x, z = o.z + l.z;
+          if (!inside(x, z)) { why[k] ||= 'outside'; continue; }
+          if (cellBlocked(grid, x, z)) { why[k] ||= 'blocked'; continue; }
+          if (w.roomIdAt(me.x, me.z) === room && !findPath(grid, me.x, me.z, x, z, true)) { why[k] ||= 'no path'; continue; }
+          const d = t ? Math.hypot(s.x - t.x, s.z - t.z) : 0;
+          if (!best || d < best.d) best = { k, x, z, yaw: s.yaw + o.yaw, near: d <= REACH, d };
+          if (best.near) break;
+        }
+        if (best) { options.push(best); delete why[k]; }
       }
       // front first; among the sides he can use, one within reach of the target wins
       const best = options.find((c) => c.near) || options.sort((a, b) => a.d - b.d)[0];

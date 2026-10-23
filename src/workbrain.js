@@ -63,14 +63,13 @@ export function installWorkshop(Brain, POSES, H) {
     shopTrip(label, inner) {
       return [label, ...(this.inWorkshop() ? [] : this.doorIn(ID)), ...inner, ...(this.lockHere() ? [] : this.doorOut(ID))];
     },
-    stand(name, front = 0.7) { return this.walkAt(name, 0, front, Math.PI); },
 
     // ------------------------------------------------------------------ the stations
     // the toolbox: lift the lid, reach in, close it (getting the tools out, or putting them away)
     toolboxSteps() {
       if (!this.obj('toolbox')) return [];
       const tb = () => this.obj('toolbox');
-      return [this.stand('toolbox', 0.6),
+      return [this.stand('toolbox', 0.6, () => tb().lidPoint()),
         this.play('reach', 1.4, { needs: ['toolbox'], at: [0.6, () => { tb().setOpen(true); sfx('lid'); }], target: () => tb().lidPoint() }),
         this.play('reach', 1.3, { needs: ['toolbox'], target: () => tb().toolPoint() }),
         this.play('reach', 1.4, { needs: ['toolbox'], at: [0.6, () => { tb().setOpen(false); sfx('lid'); }], target: () => tb().lidPoint() })];
@@ -78,7 +77,7 @@ export function installWorkshop(Brain, POSES, H) {
     // press the factory's button, wait while it runs, then take the planks off its tray
     factorySteps() {
       const f = () => this.obj('woodfactory');
-      return [this.stand('woodfactory', 0.78),
+      return [this.stand('woodfactory', 0.78, () => f().buttonPoint()),
         this.play('reach', 1.6, { needs: ['woodfactory'], at: [0.7, () => { f().press(); f().run(3.4); sfx('click'); sfx('machine'); }], target: () => f().buttonPoint() }),
         this.play('idle', 3.6, { needs: ['woodfactory'], at: [3.0, () => { f().setTray(PLANKS_PER_RUN); sfx('thud', 0.5); }] }),
         this.play('reach', 1.8, { needs: ['woodfactory'], at: [0.9, () => { f().setTray(0); this.carry = 'planks'; sfx('bookgrab'); }], target: () => f().trayPoint() })];
@@ -86,15 +85,16 @@ export function installWorkshop(Brain, POSES, H) {
     // put what he carries on the workbench: planks on the wood pile, parts on the parts pile
     benchPlace(kind, n) {
       const wb = () => this.obj('workbench');
-      return [this.stand('workbench', 0.78),
-        this.play('reach', 1.6, { needs: ['workbench'], at: [0.8, () => { this.carry = null; this.w.addStock(kind, n); sfx('place', 0.2); }], target: () => (kind === 'wood' ? wb().pilePoint() : wb().partsPoint()) })];
+      const tgt = () => (kind === 'wood' ? wb().pilePoint() : wb().partsPoint());
+      return [this.stand('workbench', 0.78, tgt),
+        this.play('reach', 1.6, { needs: ['workbench'], at: [0.8, () => { this.carry = null; this.w.addStock(kind, n); sfx('place', 0.2); }], target: tgt })];
     },
     // take a plank off the workbench pile, put it on the sawhorse, saw it in two, and carry the parts back
     sawSteps() {
       const wb = () => this.obj('workbench'), sw = () => this.obj('saw');
-      return [this.stand('workbench', 0.78),
+      return [this.stand('workbench', 0.78, () => wb().pilePoint()),
         this.play('reach', 1.6, { needs: ['workbench'], at: [0.8, () => { this.w.addStock('wood', -1); this.carry = 'plank'; sfx('bookgrab'); }], target: () => wb().pilePoint() }),
-        this.stand('saw', 0.72),
+        this.stand('saw', 0.72, () => sw().at(0, 0.84, 0.05)),
         this.play('reach', 1.5, { needs: ['saw'], at: [0.8, () => { sw().setPlank('whole'); this.carry = null; sfx('place', 0.2); }], target: () => sw().at(0, 0.84, 0.05) }),
         this.play('workSaw', 6.2, { needs: ['saw'], work: { kind: 'saw', obj: 'saw' }, onEnd: () => sw().setPlank('cut') }),
         this.play('reach', 1.6, { needs: ['saw'], at: [0.8, () => { sw().setPlank(null); this.carry = 'parts'; sfx('bookgrab'); }], target: () => sw().at(0, 0.84, 0.05) }),
@@ -103,22 +103,22 @@ export function installWorkshop(Brain, POSES, H) {
     // take the parts to the mallet block and tap them together; pick up the finished piece
     assembleSteps(r) {
       const wb = () => this.obj('workbench'), ml = () => this.obj('mallet');
-      return [this.stand('workbench', 0.78),
+      return [this.stand('workbench', 0.78, () => wb().partsPoint()),
         this.play('reach', 1.6, { needs: ['workbench'], at: [0.8, () => { this.w.addStock('parts', -r.parts); this.carry = 'parts'; sfx('bookgrab'); }], target: () => wb().partsPoint() }),
-        this.stand('mallet', 0.55),
+        this.stand('mallet', 0.55, () => ml().at(0, ml().TOP + 0.1, 0.05)),
         this.play('reach', 1.5, { needs: ['mallet'], at: [0.8, () => { this.carry = null; this.assembling = r.parts; ml().setParts(Math.min(4, r.parts)); sfx('place', 0.2); }], target: () => ml().at(0, ml().TOP + 0.1, 0.05) }),
         this.play('workTap', 1.2 + r.taps * 0.85, { needs: ['mallet'], work: { kind: 'tap', obj: 'mallet', taps: r.taps } }),
         this.play('reach', 1.6, { needs: ['mallet'], at: [0.8, () => { ml().setParts(0); this.pieceParts = this.assembling; this.assembling = 0; this.carry = 'piece'; sfx('bookgrab'); }], target: () => ml().at(0, ml().TOP + 0.1, 0.05) })];
     },
     // carry the piece to the sander and smooth it
     sandSteps() {
-      return [this.stand('sander', 0.52),
+      return [this.stand('sander', 0.52, () => this.obj('sander').at(0, 0.8, 0.06)),
         this.play('workSand', 6.5, { needs: ['sander'], work: { kind: 'sand', obj: 'sander' } })];
     },
     // put the finished thing on the workbench, and count it in storage
     finishSteps(id) {
       const r = RECIPES[id], wb = () => this.obj('workbench');
-      return [this.stand('workbench', 0.78),
+      return [this.stand('workbench', 0.78, () => wb().productPoint()),
         this.play('reach', 1.6, { needs: ['workbench'], at: [0.8, () => {
           this.carry = null; this.pieceParts = 0;
           // what he made stands in the Workshop straight away (the user can move it or put it away); storage only if there is no room
@@ -174,9 +174,9 @@ export function installWorkshop(Brain, POSES, H) {
       return {
         makewood: () => this.shopTrip('making planks in the Wood Factory', [...this.factorySteps(), ...this.benchPlace('wood', PLANKS_PER_RUN)]),
         sawwood: () => this.shopTrip('sawing a plank into parts', this.sawSteps()),
-        tap: () => this.shopTrip('tapping on the assembly block with the rubber mallet', [this.stand('mallet', 0.55), this.play('workTap', 7.5, { needs: ['mallet'], work: { kind: 'tap', obj: 'mallet', taps: 8 } })]),
+        tap: () => this.shopTrip('tapping on the assembly block with the rubber mallet', [this.stand('mallet', 0.55, () => this.obj('mallet').at(0, this.obj('mallet').TOP + 0.1, 0.05)), this.play('workTap', 7.5, { needs: ['mallet'], work: { kind: 'tap', obj: 'mallet', taps: 8 } })]),
         sand: () => this.shopTrip('sanding a plank smooth', [
-          this.stand('workbench', 0.78),
+          this.stand('workbench', 0.78, () => this.obj('workbench').pilePoint()),
           this.play('reach', 1.6, { needs: ['workbench'], at: [0.8, () => { w.addStock('wood', -1); this.carry = 'plank'; sfx('bookgrab'); }], target: () => this.obj('workbench').pilePoint() }),
           ...this.sandSteps(),
           ...this.benchPlace('wood', 1)]),
@@ -220,25 +220,29 @@ export function installWorkshop(Brain, POSES, H) {
       const hl = g.limb.Right.handLen;
       o.group.updateWorldMatrix(true, false);
       const gq = o.group.getWorldQuaternion(new THREE.Quaternion());
-      const dirOf = (x, y, z) => V(x, y, z).normalize().applyQuaternion(gq);
-      const down = V(0, -1, 0), xAxis = V(1, 0, 0).applyQuaternion(gq), leftOf = V(-1, 0, 0).applyQuaternion(gq);
+      // he may be working from any side of the object (approach.js): the work is turned to face him, quarter turns about its centre
+      const side = this.sideOf(f.obj), sc = Math.cos(side * Math.PI / 2), ss = Math.sin(side * Math.PI / 2);
+      const rx = (x, z) => x * sc + z * ss, rz = (x, z) => -x * ss + z * sc;
+      const at = (x, y, z) => o.at(rx(x, z), y, rz(x, z));
+      const dirOf = (x, y, z) => V(rx(x, z), y, rz(x, z)).normalize().applyQuaternion(gq);
+      const down = V(0, -1, 0), xAxis = dirOf(1, 0, 0), leftOf = dirOf(-1, 0, 0);
       const out = { kind: f.kind, w, lean: f.kind === 'sand' ? 0.9 : f.kind === 'tap' ? 0.75 : 0.55, R: null, L: null };      // how far he bends over the work
       if (f.kind === 'saw') {
         const phase = (T - 0.6) * Math.PI * 2 / 0.9, stroke = Math.sin(phase);
         const sink = 0.035 * clamp((T - 0.8) / (D - 1.6), 0, 1);
-        const grip = o.at(0.12, 0.99 - sink, 0.27 + 0.1 * stroke), fd = dirOf(0, -0.3, -0.95);
+        const grip = at(0.12, 0.99 - sink, 0.27 + 0.1 * stroke), fd = dirOf(0, -0.3, -0.95);
         out.R = { wrist: grip.clone().addScaledVector(fd, -hl * 0.45), f: fd, palm: leftOf };
-        out.L = { wrist: o.at(-0.25, 0.87, 0.08), f: xAxis, palm: down };
+        out.L = { wrist: at(-0.25, 0.87, 0.08), f: xAxis, palm: down };
         out.tool = { o, kind: 'saw', f: fd, grip };
         const n = Math.floor(phase / Math.PI);
         if (T > 0.6 && n !== s.sawN) { s.sawN = n; sfx('saw'); }
       } else if (f.kind === 'tap') {
         const period = 0.85, k = (T - 0.8) / period, p = k - Math.floor(k), going = T > 0.8 && T < D - 0.8 && (T - 0.8) / period < f.taps;
         const lift = going ? (p < 0.35 ? (1 - sm(p / 0.35)) * 0.2 : sm((p - 0.35) / 0.3) * 0.2) : 0.1;
-        const head = o.at(0, o.TOP + 0.1 + lift, 0.0), fd = dirOf(0, -0.55, -0.83);
+        const head = at(0, o.TOP + 0.1 + lift, 0.0), fd = dirOf(0, -0.55, -0.83);
         const center = head.clone().addScaledVector(fd, -0.22);
         out.R = { wrist: center.clone().addScaledVector(fd, -hl * 0.45), f: fd, palm: leftOf };
-        out.L = { wrist: o.at(-0.2, o.TOP + 0.08, 0.17), f: xAxis, palm: down };
+        out.L = { wrist: at(-0.2, o.TOP + 0.08, 0.17), f: xAxis, palm: down };
         out.tool = { o, kind: 'tap', f: fd, head };
         const n = Math.floor(k);
         const base = o.TOP + 0.02;
@@ -246,9 +250,11 @@ export function installWorkshop(Brain, POSES, H) {
         o.assembly.position.y += (base - o.assembly.position.y) * 0.3;                      // the parts jump a little at every tap and settle
         o.assembly.rotation.z *= 0.85;
       } else {                                                       // sand: both hands slide the piece along the belt
+        // the belt runs along the sander's own x whichever side he stands at: the hand nearer his right goes on that end of the piece
+        const belt = V(1, 0, 0).applyQuaternion(gq), sgn = belt.dot(this.leftVec()) <= 0 ? 1 : -1;
         const C = o.at(0.12 * Math.sin((T - 0.6) * Math.PI * 2 / 1.1), o.BELT + 0.06, 0.06);
-        out.R = { wrist: C.clone().addScaledVector(xAxis, 0.2), f: xAxis.clone().negate(), palm: down };
-        out.L = { wrist: C.clone().addScaledVector(xAxis, -0.2), f: xAxis, palm: down };
+        out.R = { wrist: C.clone().addScaledVector(belt, 0.2 * sgn), f: belt.clone().multiplyScalar(-sgn), palm: down };
+        out.L = { wrist: C.clone().addScaledVector(belt, -0.2 * sgn), f: belt.clone().multiplyScalar(sgn), palm: down };
         out.sandAt = { pos: C, quat: gq.clone() };
         if (T > 0.8 && T < D - 0.8) { o.run(0.3); if (Math.floor(T / 0.33) !== s.sandN) { s.sandN = Math.floor(T / 0.33); sfx('sand'); } }
       }

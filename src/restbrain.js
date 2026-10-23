@@ -20,7 +20,6 @@ export const REST_JOBS = ['takeorder', 'cook', 'serve', 'takepay'];
 export function installRestaurant(Brain, POSES, H) {
   const { smooth, clamp, rand } = H;
   const sm = (x) => smooth(clamp(x, 0, 1));
-  const slotX = (slot) => -0.1 + slot * 0.28;               // where a plate sits along the kitchen counter (object-local x)
 
   // stirring the pot is a "work" step like sawing and tapping; the workbrain handles those, this handles the stirring
   const baseCompute = Brain.prototype.computeWork;
@@ -123,13 +122,13 @@ export function installRestaurant(Brain, POSES, H) {
           r.startCooking(c);
           const dish = DISHES[c.dish], slot = c.slot;
           return this.restTrip(`cooking ${dish.name} for ${c.name}`, [
-            this.stand('stove', 0.62),
+            this.stand('stove', 0.62, () => this.obj('stove').potPoint()),
             this.play('workTap', dish.cook + 2.4, {
               needs: ['stove'], work: { kind: 'stir', obj: 'stove' },
               at: [0.8, () => { this.obj('stove').cook(dish.cook); sfx('sizzle'); }],
               onEnd: () => { this.carry = 'plate'; this.workProps.plate.userData.setDish(c.dish); sfx('bookgrab'); },
             }),
-            this.walkAt('kitchencounter', slotX(slot), 0.62, Math.PI),
+            this.stand('kitchencounter', 0.62, () => this.obj('kitchencounter').platePoint(slot)),
             this.play('reach', 1.6, {
               needs: ['kitchencounter'], target: () => this.obj('kitchencounter').platePoint(slot),
               at: [0.8, () => { this.carry = null; if (r.alive(c)) { this.obj('kitchencounter').setPlate(slot, c.dish); r.cooked(c, slot); } sfx('plate'); }],
@@ -144,7 +143,7 @@ export function installRestaurant(Brain, POSES, H) {
           c.claim = true; this.restJob = { c, act: 'serve' };
           const slot = c.slot, tn = c.seat.table, i = c.seat.i;
           return this.restTrip(`serving ${c.name}`, [
-            this.walkAt('kitchencounter', slotX(slot), 0.62, Math.PI),
+            this.stand('kitchencounter', 0.62, () => this.obj('kitchencounter').platePoint(slot)),
             this.play('reach', 1.5, {
               needs: ['kitchencounter'], target: () => this.obj('kitchencounter').platePoint(slot),
               at: [0.8, () => { this.obj('kitchencounter').setPlate(slot, null); this.carry = 'plate'; this.workProps.plate.userData.setDish(c.dish); sfx('bookgrab'); }],
@@ -163,7 +162,7 @@ export function installRestaurant(Brain, POSES, H) {
           if (!c) return none('looking for somebody to take payment from');
           c.claim = true; this.restJob = { c, act: 'takepay' };
           return this.restTrip(`taking ${c.name}'s payment`, [
-            this.walkAt('register', -0.25, 0.62, Math.PI),
+            this.stand('register', 0.62, () => this.obj('register').buttonPoint()),
             this.play('reach', 1.8, {
               needs: ['register'], target: () => this.obj('register').buttonPoint(),
               at: [0.9, () => { this.obj('register').pay(); sfx('ding'); sfx('cash'); r.collect(c); }],
@@ -190,15 +189,17 @@ export function installRestaurant(Brain, POSES, H) {
       const hl = g.limb.Right.handLen;
       o.group.updateWorldMatrix(true, false);
       const gq = o.group.getWorldQuaternion(new THREE.Quaternion());
-      const dirOf = (x, y, z) => V(x, y, z).normalize().applyQuaternion(gq);
-      const down = V(0, -1, 0), xAxis = V(1, 0, 0).applyQuaternion(gq), leftOf = V(-1, 0, 0).applyQuaternion(gq);
+      // the spoon is in the pot wherever he stands; the way his hand points and where the other hand rests follow the side he is on
+      const side = this.sideOf(f.obj), sc = Math.cos(side * Math.PI / 2), ss = Math.sin(side * Math.PI / 2);
+      const dirOf = (x, y, z) => V(x * sc + z * ss, y, -x * ss + z * sc).normalize().applyQuaternion(gq);
+      const down = V(0, -1, 0), xAxis = dirOf(1, 0, 0), leftOf = dirOf(-1, 0, 0);
       const a = (T - 0.8) * 3.4;
       const head = o.at(-0.22 + Math.cos(a) * 0.045, 1.08, 0.16 + Math.sin(a) * 0.045), fd = dirOf(0, -0.55, -0.83);
       const center = head.clone().addScaledVector(fd, -0.22);
       const out = {
         kind: 'stir', w, lean: 0.8,
         R: { wrist: center.clone().addScaledVector(fd, -hl * 0.45), f: fd, palm: leftOf },
-        L: { wrist: o.at(0.3, 1.0, 0.3), f: xAxis, palm: down },
+        L: { wrist: g.root.localToWorld(V(0.18, 1.0, 0.42)), f: xAxis, palm: down },
         tool: { o, kind: 'tap', f: fd, head },
       };
       o.stirring = true;

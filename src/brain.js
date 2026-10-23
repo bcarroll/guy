@@ -7,6 +7,7 @@ import { randomSong, makeJam, plinkSong } from './songs.js';
 import { installHobbies } from './hobbybrain.js';
 import { installWorkshop } from './workbrain.js';
 import { installRestaurant, REST_OBJECTS, REST_JOBS } from './restbrain.js';
+import { installApproach } from './approach.js';
 import { installPaintings } from './paintbrain.js';
 
 const REST_ACTS = ['takepay', 'serve', 'takeorder', 'cook', 'rwait'];
@@ -1954,7 +1955,10 @@ export class Brain {
           let rem = Math.hypot(wp.x - root.position.x, wp.z - root.position.z);
           for (let k = 1; k < s.path.length; k++) rem += Math.hypot(s.path[k].x - s.path[k - 1].x, s.path[k].z - s.path[k - 1].z);
           if (s.rem === undefined || rem < s.rem - 0.2) { s.rem = rem; s.remT = 0; }
-          else if ((s.remT += dt) > 5) { this.queue.length = 0; finished = true; this.ui('could not get there'); }
+          else if ((s.remT += dt) > 5) {
+            finished = true;
+            if (finalDist > 0.35) { this.queue.length = 0; this.ui('could not get there'); }       // pressed against something a few centimetres short: close enough, carry on
+          }
         } else if (s.yaw !== null && Math.abs(angDiff(s.yaw, root.rotation.y)) > 0.05) {
           this.turnTo(s.yaw, dt * k, 5);
           this.walkPhase += dt * 3 * k;
@@ -2492,6 +2496,7 @@ function angDiff(a, b) {
 installHobbies(Brain, POSES, { sitLegs, env, smooth, clamp, lerp, rand, pick, makeGrid, cellBlocked, INFLATE });
 installWorkshop(Brain, POSES, { smooth, clamp, lerp, rand, pick });
 installRestaurant(Brain, POSES, { smooth, clamp, lerp, rand, pick });
+installApproach(Brain);                                      // stations are used from whichever side is free (approach.js)
 installPaintings(Brain);
 
 export { ROOM, basePose, sitLegs, makeGrid, findPath, cellBlocked, MAIN_FRAME, INFLATE };

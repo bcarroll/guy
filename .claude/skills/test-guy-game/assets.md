@@ -229,6 +229,12 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 - **Saved** (`guy.paintings.v1`): the pictures (small JPEGs), which wall and where, which are stored, and the picture on the easel (written about 3 s after a change; restored after the rooms are back).
 - **Tested by** `T.sweepPaintings` (the menu button's visibility, kind refusals, one hang through the real button with Guy's distance to the wall, three per wall, replacing the oldest, spread over the walls, the Catalogue thumbnails / Take down / Hang it, the Workshop and Restaurant walls, a room taken away, the user removing one, saving and loading, cut short with and without the easel), plus `sweepActivities` (`hangpaint`) and the visual checkpoint `paint-takedown`.
 
+## Using stations from any side (`src/approach.js`)
+
+- `brain.stand(name, front, target, sides)` (used by every Workshop and Restaurant station) looks at the four sides of the object (front, right, left, back), keeps the ones that are free floor inside the room, reachable, and within about 1 m of the point his hands go to (`target`), and walks to the first. Along a side he moves towards the target if the middle is taken. He remembers the side (`brain.sideOf(name)`); `computeWork` (saw, mallet, sander) and `computeStir` turn the working hands to match, so a station pushed against a wall or turned to face one is used from the free side. The belt sander's belt keeps its own direction (hands go on each end of the piece, the right hand on the end nearer his right). Objects with one working direction (drum kit, easel) do not use `stand`.
+- A walk that ends pressed against something less than 35 cm short counts as arrived (it used to abandon the whole activity).
+- Tested by `T.sweepSides`: every station is put against each wall of its room, turned all four ways, and the job must really happen (planks made, saw/tap/sand/stir pose reached, plate served, coins paid), with no errors and never off the floor.
+
 ## Doors (long-press a door)
 
 - A door is now a real doorway: the wall is rebuilt in three pieces round it, the leaf hangs from a hinge and swings away from the room (about 100 degrees in 0.8 s). Long-press the door > "🚪 Go into the <room>" (or "🚪 Come back" while he is inside): the menu has just that one button. Dragging a door does nothing.
@@ -242,6 +248,8 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 - **Speed** (the dropdown beside Follow, `#speed-sel`, 1x / 2x / 3x / 4x, remembered in `guy.speed.v1`, always 1x under `?fresh`): scales his walking (and turning and pushing furniture) and the idle pauses between interactions (`brain.speed`). The interactions themselves (playing, reading, painting, waving ...) run at normal speed. Tested by `T.sweepLock` and `T.sweepSpeed`.
 
 ## Regression watch (bugs found and fixed; make sure they stay fixed)
+
+- Guy walked into the wall trying to reach a Wood Factory (and any station) whose front faced a wall: stations were approached from the front only. Now any free side (`sweepSides`).
 
 - Restaurant: two customers leaving the elevator together stood on top of each other (`clearToExit`; customers also yield to older ones). `T.settle()` inside the restaurant with customers about runs for 90 s because he keeps working: tests `r.clear()` first (or stub `r.find`) before settling.
 
