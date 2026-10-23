@@ -657,10 +657,11 @@ Recorded from the owner's description. Nothing is built.
 - Guy tells her what to do. Example: Guy wants to play guitar, so he tells X Bot to play drums.
 - So X Bot needs her own activity queue (a second brain on the same world), taking orders from Guy's choices. Her orders can be any activity she can do, and she does what she is told.
 
-**Y Bot.** Engages with Guy unprompted, for example:
-- she turns on the stereo and asks Guy to dance;
-- she sits down at the piano and motions for Guy to come and play along (sitting on the bench, or standing beside the piano).
-- **Naming:** the main character is called **GUY**, which stands for Genetically Universal Ybot. He is built from the Mixamo Y Bot model. So "Y Bot" is the model name, not a second character. The prompts above therefore need a second Y Bot character (same model as GUY, a different one), to be confirmed.
+**X Bot's unprompted prompts.** X Bot also engages with GUY on her own, for example:
+- she turns on the stereo and asks GUY to dance;
+- she sits down at the piano and motions for GUY to come and play along (sitting on the bench, or standing beside the piano).
+
+**Two characters.** GUY is the main character, built from the Mixamo Y Bot model (GUY = Genetically Universal Ybot). X Bot is the second character. "Y Bot" is the model's name, not a second character.
 
 **Open questions for the owner**
 1. Is the machine consumed when it prints X Bot, or does it stay as something else?
@@ -669,6 +670,6 @@ Recorded from the owner's description. Nothing is built.
 4. Can X Bot learn skills of her own, or only use the ones Guy has (her skills = Guy's skills)?
 5. Does X Bot persist between visits (the saved layout)?
 6. Y Bot's prompts: are they in speech bubbles, gestures only, or both?
-7. The unprompted Y Bot: a second Y Bot character with the same model as GUY (and a different name), or someone else? Who is it: the prompts sound like a second Y Bot.
+7. X Bot is told what to do by GUY, but she also starts things on her own (the prompts above). Does she act on her own at any time, or only when GUY is near and free to respond?
 
 **Testing.** To be written when planned: a second character needs its own sweep (its own activities, no interference with Guy's paths), the order-taking path, and the unprompted prompts.
