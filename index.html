@@ -139,6 +139,11 @@
   #lockscreen-menu button.on { background: rgba(127,209,255,.25); }
   /* Screen lock: everything but the canvas and the lock control ignores touch; the canvas only takes the camera in "camera" mode. */
   body[data-lock="camera"] > *:not(canvas):not(.lockok), body[data-lock="on"] > *:not(.lockok) { pointer-events: none !important; }
+  #subs { position: fixed; left: 50%; bottom: 128px; transform: translateX(-50%); max-width: min(560px, 92vw); z-index: 6; background: rgba(0,0,0,.7); color: #fff; padding: 9px 16px; border-radius: 10px; font-size: 16px; pointer-events: none; text-align: center; }
+  #subs[hidden], #cmdbox[hidden] { display: none; }
+  #cmdbox { position: fixed; left: 50%; bottom: 76px; transform: translateX(-50%); width: min(560px, 92vw); z-index: 6; display: flex; gap: 6px; background: rgba(28,30,36,.96); border-radius: 12px; padding: 8px; box-sizing: border-box; }
+  #cmdbox input { flex: 1; min-width: 0; background: rgba(255,255,255,.1); color: #fff; border: 0; border-radius: 8px; padding: 10px 12px; font: inherit; font-size: 15px; }
+  #cmdbox select, #cmdbox button { background: rgba(255,255,255,.12); color: #eee; border: 0; border-radius: 8px; padding: 0 10px; font: inherit; font-size: 14px; min-height: 44px; }
 </style>
 </head>
 <body>
@@ -147,12 +152,15 @@
 <div id="hud">Guy is <b id="activity">waking up…</b><span id="galline" hidden><br>GAL is <b id="activity2" style="color:#ff7ac0"></b></span><br><small>drag empty space: orbit · drag furniture or the ball: move it · long-press: rotate / remove · tap the wall machine: add things · K: skills · scroll: zoom · F: follow · Space: new activity</small></div>
 <button id="lockscreen-btn" class="lockok" title="Screen lock: Off" aria-label="Screen lock: Off">🔓</button>
 <div id="lockscreen-menu" class="lockok" hidden><button data-lock="on">🔒 On: voice only</button><button data-lock="camera">🎥 Camera only</button><button data-lock="off">🔓 Off</button></div>
+<div id="subs" hidden aria-live="polite"></div>
+<form id="cmdbox" hidden><input id="cmd-in" type="text" autocomplete="off" placeholder="Tell Guy what to do…" aria-label="Command for Guy"><select id="cmd-chatter" title="How much they talk" aria-label="How much they talk"><option value="silent">🔇 Subtitles only</option><option value="quiet">🙂 Quiet</option><option value="chatty">💬 Chatty</option></select><button type="submit">Send</button></form>
 <div id="btns">
   <button id="player-btn" title="Stereo playback controls" hidden>🎵 Stereo</button>
   <button id="lock-btn" title="Let Guy stop" hidden></button>
   <select id="speed-sel" title="How fast Guy walks and how quickly he moves on between things" aria-label="Speed">
     <option value="1">🐢 1× Normal</option><option value="2">🐇 2× Quick</option><option value="3">🏃 3× Fast</option><option value="4">🚀 4× Zoom</option>
   </select>
+  <button id="talk-btn" title="Tell Guy what to do (type a command)">💬 Talk</button>
   <button id="follow-btn" title="Follow Guy (F)">🎥 Follow</button>
   <button id="skip-btn" title="Next activity (Space)">⏭ Next</button>
   <button id="fs-btn" title="Fullscreen">⛶ Full</button>

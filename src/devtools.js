@@ -1327,6 +1327,10 @@ T.sweepSaves = () => {
   const moved = R().restoreFrom({ rooms: { workshop: { added: true, wall: 'right', u: shelf.z } } });   // the saved spot is now taken by the bookshelf
   out.push(result('saves: a saved door whose spot is taken by something fixed finds a new spot', moved.some((x) => x.moved && x.ok) && !!w.doors.workshop && !doorProblems('workshop').length, { moved }));
   T.resetRooms(); putBackSince(before); machine().hidden = true;
+  // The premium unlock must be read before the saved rooms are restored (a premium room is refused while premium is locked: the Restaurant
+  // used to disappear on every reload). Also the saved Restaurant must come back when premium is unlocked, locked or not.
+  const boot = window.__boot || [];
+  out.push(result('saves: the saved premium unlock is applied before the saved rooms are restored (the Restaurant survives a reload)', boot.indexOf('devunlock') >= 0 && boot.indexOf('devunlock') < boot.indexOf('rooms.restore'), { boot }));
   out.push(result('saves: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
 };
@@ -2966,11 +2970,133 @@ T.sweepScreenLock = async () => {
   out.push(result('screenlock: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
 };
+// ---- Voice and typed commands (src/voice.js, src/tts.js): the parser, Guy handing a request to GAL, her audience, the offline voices ----
+const VOICE_PHRASES = [
+  ['play the piano', 'object', 'piano'], ['Guy, play the guitar please', 'object', 'guitar'], ['can you play the drums', 'object', 'drums'], ['turn on the lamp', 'object', 'lamp'],
+  ['it is dark in here', 'object', 'lamp'], ['put some music on', 'object', 'table'], ['play ball', 'object', 'ball'], ['let us paint something', 'object', 'easel'],
+  ['look at the stars', 'object', 'telescope'], ['water the plant', 'object', 'plant'], ['keep playing the guitar', 'object', 'guitar'],
+  ['stop the music', 'object', 'table'], ['dance', 'act', 'dance'], ['wave', 'act', 'wave'], ['read the astronomy book', 'read', null], ['read', 'read', null],
+  ['go into the workshop', 'visit', null], ['come back', 'comeback', null], ['lock the door', 'doorlock', null], ['unlock the workshop door', 'doorlock', null],
+  ['lock the screen', 'screen', null], ['unlock the screen', 'screen', null], ['lock the screen camera only', 'screen', null],
+  ['tell GAL to play the guitar', 'gal', null], ['ask gal to jam', 'gal', null], ['jam', 'jam', null], ['I am bored', 'next', null], ['something else', 'next', null],
+  ['xyzzy plugh', 'unknown', null], ['what is the capital of France', 'unknown', null], ['', 'empty', null],
+];
+T.sweepVoice = async () => {
+  const out = [], base = errors.length, w = W(), b = B(), V = window.__voice;
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const L = (r) => r.lines.map((l) => `${l.who}: ${l.text}`).join(' | ');
+  window.__voiceNoAudio = true;                                // the sentences are checked as text and subtitles here; the voices are rendered below
+  try {
+    galReset(); T.settle(); T.resetRooms(); T.removeAll(); T.forget(); T.home(); T.settle();
+    T.learn(['piano', 'guitar', 'stereo']); T.addObject('piano'); T.addObject('guitar'); T.addObject('lamp'); T.addObject('table');
+    R().add('workshop', { walls: ['right'] });
+    // 1. the parser: a table of sentences
+    const bad = [];
+    for (const [text, type, name] of VOICE_PHRASES) {
+      const it = V.parse(text);
+      if (it.type !== type || (name && (it.name || it.act) !== name)) bad.push(`${text} -> ${JSON.stringify(it)}`);
+    }
+    out.push(result(`voice: the parser understands ${VOICE_PHRASES.length} sentences`, !bad.length, { bad }));
+    const a = V.parse('tell GAL to play the drums'), c = V.parse('lock the screen camera only'), d = V.parse('unlock the workshop door');
+    out.push(result('voice: "tell GAL to ..." wraps the request; the screen and door requests carry their mode', a.type === 'gal' && a.inner.name === 'drums' && c.mode === 'camera' && V.parse('unlock the screen').mode === 'off' && d.lock === false && d.room === 'workshop'));
+    // 2. Guy is free: he answers and does it himself
+    b.unlock(false); b.queue = []; b.step = null; b.last = 'wander';
+    const r1 = V.run('play the guitar');
+    out.push(result('voice: Guy free: he answers and starts the activity himself', r1.ok && r1.lines.length === 1 && r1.lines[0].who === 'guy' && !!b.pendingActivity, { lines: L(r1), pending: b.pendingActivity }));
+    const r2 = V.run('xyzzy');
+    out.push(result('voice: an unknown sentence gets a polite "say it again" from Guy', !r2.ok && r2.lines.length === 1 && r2.lines[0].who === 'guy', { lines: L(r2) }));
+    // 3. no GAL yet: Guy cannot hand anything over
+    const r3 = V.run('tell GAL to play the guitar');
+    out.push(result('voice: with no GAL he says so (and nothing breaks)', !r3.ok && /GAL/.test(L(r3)), { lines: L(r3) }));
+    // 4. GAL arrives
+    const gb = galBuild();
+    if (!gb.ok) { out.push(result('voice: GAL could be built for the test', false, gb)); throw new Error('no GAL'); }
+    const gal = w.gal, gbr = gal.brain;
+    b.pendingActivity = null; b.skip(true); T.settle(); T.home();      // (the first command left Guy with the guitar)
+    gbr.skills.learn('guitar'); gbr.skills.learn('piano');
+    b.unlock(false); b.queue = []; b.step = null; b.last = 'wander'; b.pendingActivity = null; gbr.pendingActivity = null; gal.audience = null;
+    // 4a. explicitly: Guy tells GAL
+    const r4 = V.run('tell GAL to play the guitar');
+    out.push(result('voice: "tell GAL ..." Guy says GAL will do it, GAL answers, she is sent to do it and gets an audience', r4.ok && r4.lines.length === 2 && r4.lines[0].who === 'guy' && r4.lines[1].who === 'gal' && !!gbr.pendingActivity && V.audienceOn(), { lines: L(r4), pending: gbr.pendingActivity }));
+    out.push(result('voice: Guy himself did not start anything (GAL has it)', !b.pendingActivity, { pending: b.pendingActivity }));
+    // 4b. while she has the audience the user's orders go to her, and she answers
+    const r5 = V.run('turn on the lamp');
+    out.push(result('voice: while GAL has the audience, the next order goes to her and she answers', r5.lines.length >= 1 && r5.lines.every((l) => l.who === 'gal') && V.audienceOn(), { lines: L(r5) }));
+    // 4c. she plays; the audience lasts as long as the activity
+    const act = gal.audience && gal.audience.act;
+    runUntil(() => gbr.last === gbr.pendingActivity || !!gbr.step, 10);
+    out.push(result('voice: she starts (her activity is the one chosen for her)', !!gbr.last, { last: gbr.last, act }));
+    // 4d. locked in: she keeps the audience for as long as the lock lasts
+    gbr.lock = { name: 'guitar' };
+    runUntil(() => false, 20);
+    const stillLocked = V.audienceOn();
+    gbr.lock = null;
+    out.push(result('voice: locked in on an object, she keeps the audience while she keeps performing it', stillLocked));
+    // 4e. when she moves on to something else the audience ends and the user talks to Guy again
+    gbr.last = 'wander'; gbr.pendingActivity = null; gal.audience.fresh = 0; gal.audience.act = 'guitar';
+    out.push(result('voice: the audience ends when her activity is over', V.audienceOn() === false && !gal.audience));
+    const r6 = V.run('play the piano');
+    out.push(result('voice: after that the user is talking to Guy again', r6.lines[0] && r6.lines[0].who === 'guy', { lines: L(r6) }));
+    // 5. Guy busy: he hands it over by himself
+    gbr.skip(true); gbr.pendingActivity = null; b.pendingActivity = null; b.queue = []; b.step = null; b.last = 'wander'; gal.audience = null;
+    b.lock = { name: 'ball' };
+    const r7 = V.run('play the guitar');
+    out.push(result('voice: Guy busy (locked in on the ball): he says GAL will get right on that, and she answers', r7.ok && r7.lines[0].who === 'guy' && /GAL will get right on that/.test(r7.lines[0].text) && r7.lines[1] && r7.lines[1].who === 'gal' && !!gbr.pendingActivity, { lines: L(r7), pending: gbr.pendingActivity }));
+    b.lock = null; gal.audience = null; gbr.pendingActivity = null; gbr.skip(true);
+    // 6. refusal comes back in words, from the one who was asked
+    b.last = 'wander'; b.queue = []; b.step = null;
+    const r8 = V.run('read the quantum chromodynamics book');
+    out.push(result('voice: asked for something that cannot be done, Guy says why instead of doing nothing', !r8.ok && r8.lines.length >= 1 && r8.lines[0].text.length > 5, { lines: L(r8) }));
+    // 7. the screen and the door by voice
+    const r9 = V.run('lock the screen');
+    const lockedNow = window.__screenLock.mode === 'on';
+    V.run('unlock the screen');
+    out.push(result('voice: "lock the screen" / "unlock the screen" set the screen lock', r9.ok && lockedNow && window.__screenLock.mode === 'off'));
+    V.run('lock the door'); const dl = R().isDoorLocked('workshop'); V.run('unlock the door');
+    out.push(result('voice: "lock the door" / "unlock the door" lock the one door', dl && !R().isDoorLocked('workshop')));
+    // 8. jamming through voice: Guy asks GAL and she answers out loud, then plays along
+    gbr.skip(true); b.skip(true); T.settle(); b.last = 'wander'; b.lock = null;
+    const before = V.tts.log.length;
+    for (let i = 0; i < 5 && !gal.duo; i++) { V.run('jam'); step(1); }
+    const peer = V.tts.log.slice(before).filter((l) => l.kind === 'peer');
+    out.push(result('voice: "jam" starts the two of them jamming and each says a line to the other', !!gal.duo && peer.some((l) => l.who === 'guy') && peer.some((l) => l.who === 'gal'), { duo: !!gal.duo, peer: peer.map((l) => `${l.who}: ${l.text}`) }));
+    // 9. the quiet default: barks are not spoken
+    const n0 = V.tts.log.length; V.tts.say('guy', 'Starting the piano.', 'bark');
+    out.push(result('voice: by default they only speak in an interaction (a bark is not spoken)', V.tts.settings.chatter === 'quiet' && V.tts.log.length === n0));
+    V.tts.set('chatter', 'chatty'); V.tts.say('guy', 'Starting the piano.', 'bark'); const spoke = V.tts.log.length === n0 + 1; V.tts.set('chatter', 'quiet');
+    out.push(result('voice: "chatty" lets them remark on what they are doing', spoke));
+    V.tts.stop();
+  } catch (e) { if (e.message !== 'no GAL') out.push(result('voice: sweep ran without throwing', false, { error: String(e && e.stack || e).slice(0, 400) })); }
+  finally { window.__voiceNoAudio = false; window.__screenLock.setMode('off', { quiet: true }); b.lock = null; galReset(); T.resetRooms(); T.home(); T.removeAll(); T.settle(); }
+  // 10. the offline voices: each robot's line is rendered to real audio, and the two sound different
+  try {
+    const { render, VOICES } = await import('/src/tts.js');
+    const dec = async (who, text) => {
+      const bytes = await render(who, text);
+      if (!bytes) return null;
+      const ac = new OfflineAudioContext(1, 22050, 22050), buf = await ac.decodeAudioData(bytes.slice(0));
+      const x = buf.getChannelData(0); let e = 0, z = 0, peak = 0;
+      for (let i = 0; i < x.length; i++) { e += x[i] * x[i]; peak = Math.max(peak, Math.abs(x[i])); if (i && (x[i] >= 0) !== (x[i - 1] >= 0)) z++; }
+      return { seconds: buf.duration, rms: Math.sqrt(e / x.length), peak, zcr: z / buf.duration };
+    };
+    const t0 = performance.now();
+    const gy = await dec('guy', 'GAL will get right on that.'), gl = await dec('gal', 'GAL will get right on that.');
+    const ms = performance.now() - t0;
+    out.push(result('voice: the offline voices render real speech (0.5 to 6 s, audible, not clipped) with no network', !!gy && !!gl && [gy, gl].every((x) => x.seconds > 0.5 && x.seconds < 6 && x.rms > 0.02 && x.peak < 1.01), { guy: gy, gal: gl, ms: Math.round(ms) }));
+    out.push(result('voice: GAL sounds higher than Guy', !!gy && !!gl && gl.zcr > gy.zcr * 1.1, { guy: gy && gy.zcr, gal: gl && gl.zcr }));
+    out.push(result('voice: every robot has a voice, a colour and a subtitle name', ['guy', 'gal'].every((k) => VOICES[k] && VOICES[k].pitch && VOICES[k].color && VOICES[k].name)));
+    const subs = document.getElementById('subs'); V.tts.say('gal', 'Subtitle check.'); await wait(100);
+    out.push(result('voice: every line shows as a subtitle with the speaker named', !subs.hidden && /GAL/.test(subs.textContent) && /Subtitle check/.test(subs.textContent), { text: subs.textContent }));
+    V.tts.stop();
+  } catch (e) { out.push(result('voice: offline voices ran without throwing', false, { error: String(e && e.stack || e).slice(0, 400) })); }
+  out.push(result('voice: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
 // the sweeps that need real time (models load, pictures are taken): `await T.runAsync()`
 installCharacters(T, { result, summarise });
 installAudio(T, { result, summarise });
 installShots(T, { result, summarise });
-T.runAsync = async (which = ['sweepRigs', 'sweepCustomers', 'sweepAudio', 'sweepGuitarSongs', 'sweepScreenLock']) => {
+T.runAsync = async (which = ['sweepRigs', 'sweepCustomers', 'sweepAudio', 'sweepGuitarSongs', 'sweepScreenLock', 'sweepVoice']) => {
   const report = {};
   for (const k of which) { report[k.replace(/^sweep/, '').toLowerCase()] = summarise(await T[k]()); T.resetRooms(); }
   return report;

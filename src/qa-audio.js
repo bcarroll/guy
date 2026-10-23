@@ -18,7 +18,7 @@ const SPEC = {
   page: { dur: [0.1, 0.6], bright: 'high' }, bookopen: { dur: [0.05, 0.5], bright: 'low' }, bookclose: { dur: [0.05, 0.4], bright: 'any' }, bookgrab: { dur: [0.08, 0.5], bright: 'any' },
   sleeve: { dur: [0.08, 0.5], bright: 'high' }, guitar: { dur: [0.4, 2.2], bright: 'any' },
   click: { dur: [0.005, 0.1], bright: 'high' }, tick: { dur: [0.005, 0.1], bright: 'high' }, sit: { dur: [0.1, 0.8], bright: 'any' }, leaf: { dur: [0.08, 0.6], bright: 'high' },
-  brush: { dur: [0.03, 0.3], bright: 'high' }, dab: { dur: [0.03, 0.3], bright: 'any' }, wipe: { dur: [0.1, 0.6], bright: 'high' }, step: { dur: [0.02, 0.3], bright: 'low' },
+  brush: { dur: [0.03, 0.3], bright: 'high', soft: true }, dab: { dur: [0.03, 0.3], bright: 'any', soft: true }, wipe: { dur: [0.1, 0.6], bright: 'high' }, step: { dur: [0.02, 0.3], bright: 'low' },
   place: { dur: [0.05, 0.5], bright: 'low' },
   saw: { dur: [0.3, 0.8], bright: 'high' }, tap: { dur: [0.03, 0.3], bright: 'any' }, sand: { dur: [0.1, 0.6], bright: 'high' }, machine: { dur: [0.3, 1.0], bright: 'any' }, lid: { dur: [0.03, 0.4], bright: 'any' },
   ding: { dur: [0.2, 1.0], bright: 'mid' }, cash: { dur: [0.12, 0.6], bright: 'high' }, sizzle: { dur: [0.3, 1.2], bright: 'high' }, plate: { dur: [0.02, 0.3], bright: 'high' }, lift: { dur: [0.3, 1.0], bright: 'mid' },
@@ -65,18 +65,18 @@ async function render(play) {
   const restore = useAudio(ctx, master);
   try { play(ctx, master); } finally { restore(); }
   const buf = await ctx.startRendering(), x = buf.getChannelData(0);
-  let peak = 0, sum = 0, first = -1, last = -1, dc = 0;
+  let peak = 0, sum = 0, first = -1, last = -1, dc = 0, peakI = 0;
   const floor = 0.003;                                     // about -50 dBFS
   for (let i = 0; i < x.length; i++) {
     const a = Math.abs(x[i]);
     if (!Number.isFinite(x[i])) return { bad: true };
-    if (a > peak) peak = a;
+    if (a > peak) { peak = a; peakI = i; }
     sum += x[i] * x[i]; dc += x[i];
     if (a > floor) { if (first < 0) first = i; last = i; }
   }
   const audible = first < 0 ? 0 : (last - first) / SR;
   const tail = x.slice(Math.floor(SR * (LEN - 0.3))).reduce((m, v) => Math.max(m, Math.abs(v)), 0);       // anything still sounding at the end?
-  return { peak, rms: Math.sqrt(sum / x.length), dur: audible, onset: first < 0 ? null : first / SR, dc: Math.abs(dc / x.length), tail, centroid: first < 0 ? 0 : centroid(x, SR) };
+  return { peak, peakAfter: first < 0 ? 0 : (peakI - first) / SR, rms: Math.sqrt(sum / x.length), dur: audible, onset: first < 0 ? null : first / SR, dc: Math.abs(dc / x.length), tail, centroid: first < 0 ? 0 : centroid(x, SR) };
 }
 
 const brightOk = (cls, hz) => cls === 'any' || (cls === 'low' && hz < 1200) || (cls === 'mid' && hz >= 600 && hz < 3500) || (cls === 'high' && hz >= 1800);
@@ -100,6 +100,8 @@ export function install(T, h) {
         if (m.dur < sp.dur[0] || m.dur > sp.dur[1]) why.push(`lasts ${m.dur.toFixed(2)} s, expected ${sp.dur[0]} to ${sp.dur[1]}`);
         if (m.onset !== null && m.onset > 0.12) why.push(`starts late (${m.onset.toFixed(2)} s)`);
         if (m.dc > 0.01) why.push(`DC offset ${m.dc.toFixed(3)}`);
+        // a soft sound (a brush stroke is repeated many times a second) must swell, not strike: a sharp start repeated sounds like hammering
+        if (sp.soft && m.peakAfter < 0.02) why.push(`hits at once (loudest ${(m.peakAfter * 1000).toFixed(0)} ms after it starts): repeated, it sounds like hammering`);
         if (m.tail > 0.003) why.push('still sounding at the end (a stuck note)');
         if (!brightOk(sp.bright, m.centroid)) why.push(`sounds ${m.centroid < 700 ? 'too dull' : 'too bright'} for a ${sp.bright} sound (centre ${Math.round(m.centroid)} Hz)`);
       }
