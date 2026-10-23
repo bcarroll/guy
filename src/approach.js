@@ -63,7 +63,7 @@ export function installApproach(Brain) {
       const best = options.find((c) => c.near) || options.sort((a, b) => a.d - b.d)[0];
       if (!best) { const s = spot(0), l = o.local(s.x, s.z); (this.useSide ||= {})[name] = 0; return [this.walk(o.x + l.x, o.z + l.z, Math.PI + o.yaw)]; }
       (this.useSide ||= {})[name] = best.k;
-      return [this.walk(best.x, best.z, best.yaw)];
+      return [{ ...this.walk(best.x, best.z, best.yaw), tol: 0.3 }];
     },
   });
 }

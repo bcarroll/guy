@@ -2,6 +2,7 @@
 // telling the player about is deployed: new rooms, objects, books, things Guy can do. The update notice (src/update.js) lists the
 // entries the running page has not seen yet, and vite.config.js writes the whole list into version.json.
 export const WHATS_NEW = [
+  { id: 'gal', items: ['Meet GAL! Build her with the new Build a Bot Machine (premium). She is a second robot who reads books, plays and does what she likes.', 'Guy can ask her to learn something and find him so they can jam. She sometimes turns on the music and asks Guy to dance.', 'Guy and GAL can now use workshop and kitchen stations from any side.'] },
   { id: 'restaurant', items: ['New Restaurant room with an elevator: customers ride in, sit down, order, eat and pay.', 'Guy takes the orders, cooks, serves the plates and works the cash register. Add the stove to get his book.'] },
   { id: 'workshop-caps', items: ['Guy now stops building once he has enough: one foot stool, two sets of shelves and two chairs.'] },
   { id: 'workshop', items: ['New Workshop room: Guy builds a foot stool, wooden shelves and a chair from planks he saws, taps together and sands.', 'Built things stand in the Workshop, and the Catalogue keeps spares in storage.'] },

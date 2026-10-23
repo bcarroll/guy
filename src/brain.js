@@ -561,6 +561,7 @@ export class Brain {
       ...this.hobbyActivities(),
       ...this.workActivities(),
       ...this.restActivities(),
+      ...(this.galActivities ? this.galActivities() : {}),       // working with GAL (gal.js)
       ...this.paintActivities(),
       wander: () => {
         const p = this.freeSpot();
@@ -593,20 +594,21 @@ export class Brain {
           ...ss.pre,
           ...(lights ? lampStep(() => w.lamp.party()) : []),
           ...ss.on,
-          this.walk(0, 0.4, 0),
+          this.walk(this.danceSpot().x, this.danceSpot().z, 0),
           this.play(pick(['disco', 'robot', 'pump']), 9, { dance: true }),
           this.play(pick(['disco', 'robot', 'pump']), 9, { dance: true }),
           this.play(pick(['disco', 'robot', 'pump']), 9, { dance: true }),
           this.play('wave', 2.2, { dance: true }),
           ...ss.off,
           ...(lights ? lampStep(() => w.lamp.setLook(0xffd9a0, 6)) : []),
-          ...ss.post];
+          ...ss.post,
+          { type: 'plan', fn: () => this.partyTail() }];            // GAL's music: whoever stops last switches it off
       },
       // the dance books: the same stereo session as `dance`, with new moves
       dancemoves: () => {
         const ss = this.stereoSession();
         return [ss.title ? `doing the twist to "${ss.title}"` : 'practising his new dance moves', ...ss.pre, ...ss.on,
-          this.walk(0, 0.4, 0),
+          this.walk(this.danceSpot().x, this.danceSpot().z, 0),
           this.play('twist', 9, { dance: true }), this.play('shuffle', 9, { dance: true }),
           this.play('twirl', 5, { dance: true, spin: 5.2 }), this.play(pick(['twist', 'shuffle']), 8, { dance: true }),
           this.play('wave', 2.2, { dance: true }), ...ss.off, ...ss.post];
@@ -614,7 +616,7 @@ export class Brain {
       ballroom: () => {
         const ss = this.stereoSession();
         return [ss.title ? `waltzing and swinging to "${ss.title}"` : 'waltzing round the room', ...ss.pre, ...ss.on,
-          this.walk(0, 0.4, 0),
+          this.walk(this.danceSpot().x, this.danceSpot().z, 0),
           this.play('waltz', 11, { dance: true, spin: 0.9 }), this.play('swing', 9, { dance: true }),
           this.play('waltz', 9, { dance: true, spin: -0.9 }), this.play('swing', 8, { dance: true, spin: 1.6 }),
           this.play('wave', 2.2, { dance: true }), ...ss.off, ...ss.post];
@@ -647,7 +649,7 @@ export class Brain {
       books: () => this.readSteps(),
       putback: () => ['putting the book back', this.putBackStep()],
       stretch: () => ['stretching', this.play('stretch', 5)],
-      wave: () => { const p = this.openSpotNear(0, 2.2); return ['waving at you', this.walk(p.x, p.z, 0), this.play('wave', 3.5)]; },      // in front of the camera, but not inside the furniture there
+      wave: () => { const p = this.openSpotNear(this.waveSpot().x, this.waveSpot().z); return ['waving at you', this.walk(p.x, p.z, 0), this.play('wave', 3.5)]; },      // in front of the camera, but not inside the furniture there
       rearrange: () => this.rearrangeSteps(),
       // any of the plants in the room (the user can ask for a particular one: forcePlant)
       plant: () => ['tending the plants', {
@@ -1244,7 +1246,9 @@ export class Brain {
 
   // The chairs he can walk up to right now: the spot in front of the seat is inside the room and not blocked.
   openChairs() {
+    const taken = this.other && (this.other.chairClaim || (this.other.step && this.other.step.fx && this.other.step.fx.chair));        // the other robot is sitting in it, or on the way to it
     return this.chairs().filter((c) => {
+      if (taken && c.name === taken) return false;
       const l = c.local(0, c.sit.gap), x = c.x + l.x, z = c.z + l.z;
       const grid = makeGrid(this.w.obstacles, INFLATE, 0, c.obstacle);
       return Math.abs(x) < 4.5 && z > -3.5 && z < 3.6 && !cellBlocked(grid, x, z);
@@ -1255,7 +1259,9 @@ export class Brain {
   pickChair() {
     const open = this.openChairs();
     const wanted = this.activeChair && open.find((c) => c.name === this.activeChair);
-    return wanted || (open.length ? pick(open) : null);
+    const c = wanted || (open.length ? pick(open) : null);
+    this.chairClaim = c ? c.name : null;                          // (so the other robot picks a different one)
+    return c;
   }
 
   // Walk to a chair (chosen when he gets there) and do `build(chair)` on it.
@@ -1379,6 +1385,21 @@ export class Brain {
       this.play('reach', 1.8, { at: [0.9, () => this.musicOff()], target: () => this.stereoButton() })];
   }
 
+  // The music GAL turned on for a dance stays on until neither of them is dancing: the last one to finish switches it off.
+  partyTail() {
+    const g = this.w.gal;
+    if (!g || !g.partyMusic || !this.music) return [];
+    const o = this.other;
+    if (o && o.step && o.step.fx && o.step.fx.dance) return [];
+    g.partyMusic = false;
+    return [this.walkAt('table', 0, 0.55, Math.PI), this.play('reach', 1.8, { at: [0.9, () => { this.musicOff(); this.albumOnTable = false; }], needs: ['table'], target: () => this.stereoButton() })];
+  }
+
+  waveSpot() { return { x: 0, z: 2.2 }; }
+
+  // where he dances (GAL dances beside him, not on him)
+  danceSpot() { return { x: 0, z: 0.4 }; }
+
   freeSpot() {
     for (let i = 0; i < 30; i++) {
       const p = { x: rand(-4.2, 4.2), z: rand(-3.2, 3.4) };
@@ -1448,6 +1469,7 @@ export class Brain {
 
   // Called every frame: when a track has had its minute, play the next one on the same record.
   autoAdvance() {
+    if (this.isGal) return;                           // the stereo is shared: Guy's brain moves it on
     if (!this.music || this.track === 'default' || this.time - this.trackSince < this.trackFor) return;
     const next = this.nextOnAlbum(this.track);
     if (next) this.changeTrack(next);
@@ -1527,6 +1549,8 @@ export class Brain {
   }
 
   available(act) {
+    if (this.galBlocks && this.galBlocks(act)) return false;                // (GAL does not do some things; Guy needs GAL for others)
+    if (this.busyElsewhere(this.exclusiveFor(act))) return false;           // the other robot is using it
     const need = {
       piano: ['piano'], sitpiano: ['piano', 'bench'], plink: ['piano'], jam: ['piano', 'table'], jampiano: ['piano', 'table'],
       slouch: ['drums'], jamsit: ['piano', 'bench', 'table'], stereoon: ['table'], stereooff: ['table'], dance: ['table'], dancemoves: ['table'], ballroom: ['table'], lamp: ['lamp'], mood: ['lamp'], read: ['shelf'], books: ['shelf'],
@@ -1578,6 +1602,20 @@ export class Brain {
     if (act === 'rearrange' && !Object.values(this.w.objects).some((o) => o.weight !== 'heavy' && o.name !== 'bench')) return false;
     return need.every((n) => this.obj(n));
   }
+
+  // The objects only one robot can use at a time, for an activity.
+  exclusiveFor(act) {
+    const piano = ['sitpiano', 'piano', 'jam', 'jampiano', 'jamsit', 'plink'], drums = ['bang', 'drums', 'drumsolo', 'jamdrums', 'slouch'];
+    const guitar = ['guitar', 'riff', 'jamguitar', 'sitguitar'], easel = ['scribble', 'paint', 'mixpaint', 'portrait'], scope = ['peek', 'stargaze', 'darkstargaze', 'scopecare'];
+    if (piano.includes(act)) return act === 'sitpiano' || act === 'jamsit' ? ['piano', 'bench'] : ['piano'];
+    if (drums.includes(act)) return ['drums'];
+    if (guitar.includes(act)) return ['guitar'];
+    if (easel.includes(act)) return ['easel'];
+    if (scope.includes(act)) return ['telescope'];
+    if (act === 'read' || act === 'books') return ['shelf'];                // one at a time at the bookshelf
+    return [];
+  }
+  busyElsewhere(names) { const o = this.other; return !!o && names.some((n) => o.using && o.using.has(n)); }
 
   ballRemoved() {
     if (this.lock && this.lock.name === 'ball') this.unlock(false);
@@ -1673,6 +1711,7 @@ export class Brain {
       bang: 1.3, drums: 1.6, drumsolo: 1.2, jamdrums: 1.5, scribble: 1.3, paint: 1.6, mixpaint: 1.3, portrait: 1.4,
       peek: 1.3, stargaze: 1.6, darkstargaze: 1.3, scopecare: 0.6, dust: 0.9,
     };
+    if (this.extraWeights) Object.assign(weights, this.extraWeights());      // working with GAL, or (for GAL) inviting Guy
     // a skill that is being forgotten is used less and less
     for (const k of Object.keys(weights)) { const st = Math.min(1, ...this.skillNeeds(k).map((id) => this.skills.strength(id) || 1)); if (st < 1) weights[k] *= st; }
     // the music is on: he is in the mood to join in
@@ -1727,6 +1766,8 @@ export class Brain {
     if (name === 'rearrange') this.lastRearrange = this.time;
     this.prev = this.last;
     this.last = name;
+    this.chairClaim = null;
+    this.using = new Set(this.exclusiveFor(name));                  // so the other robot leaves those alone
     const [label, ...steps] = acts[name]();
     this.ui(this.lock ? `🔒 ${label}` : label);
     this.queue = steps;
@@ -1820,7 +1861,7 @@ export class Brain {
 
   // Cut the current activity short. Nothing gets reset: Guy stands up if he was seated, and if the stereo is
   // still playing he walks over and switches it off himself.
-  skip() {
+  skip(keepMusic = false) {
     const s = this.step;
     this.queue = [];
     if (s && s.type === 'play' && s.fx.sit) {
@@ -1840,7 +1881,7 @@ export class Brain {
     } else if (s && s.type === 'play' && s.fx.chairSit) {
       s.t = Math.max(s.t, s.dur - 1.0); // stand up where he is; the book goes back next
     } else this.step = null;
-    if (this.music && !this.userMusic && this.inMain()) this.queue.push(this.walkAt('table', 0, 0.55, Math.PI), this.play('reach', 1.8, { at: [0.9, () => { this.musicOff(); this.albumOnTable = false; }], target: () => this.stereoButton() }));
+    if (!keepMusic && this.music && !this.userMusic && this.inMain()) this.queue.push(this.walkAt('table', 0, 0.55, Math.PI), this.play('reach', 1.8, { at: [0.9, () => { this.musicOff(); this.albumOnTable = false; }], target: () => this.stereoButton() }));
     this.ui('wrapping up');
   }
 
@@ -1868,8 +1909,11 @@ export class Brain {
 
   update(dt) {
     this.time += dt;
-    this.w.updateDoors(dt);               // doors swing open and shut
-    if (this.w.restaurant) this.w.restaurant.update(dt);      // customers arrive, order, eat and pay (customers.js)
+    if (!this.isGal) {                    // (once a frame, by the first character: GAL's brain skips these)
+      this.w.updateDoors(dt);             // doors swing open and shut
+      if (this.w.restaurant) this.w.restaurant.update(dt);      // customers arrive, order, eat and pay (customers.js)
+      if (this.w.gal) this.w.gal.update(dt);                    // GAL, the second robot (gal.js)
+    }
     if (this.w.paintings) this.w.paintings.update(dt);        // Guy's paintings: saved when they change, and put away ones filed in the Catalogue
     this.skills.tick(dt);                 // skills whose book was forgotten fade away
     this.autoAdvance();
@@ -1898,6 +1942,7 @@ export class Brain {
     if (this.checkMoved(s)) return;       // the user dragged or turned something he was using: he lets go
     // Whatever Guy is pushing or sitting on doesn't block him while he's doing it.
     for (const o of this.w.obstacles) o.active = true;
+    if (this.selfOb) this.selfOb.active = false;             // the other robot is in his way; he is not
     if (s.push) s.push.obj.obstacle.active = false;
     if (s.fx && s.fx.sit) this.obj('bench').obstacle.active = false;
     if (s.fx && s.fx.chairSit && this.obj(s.fx.chair || 'armchair')) this.obj(s.fx.chair || 'armchair').obstacle.active = false;
@@ -1957,7 +2002,7 @@ export class Brain {
           if (s.rem === undefined || rem < s.rem - 0.2) { s.rem = rem; s.remT = 0; }
           else if ((s.remT += dt) > 5) {
             finished = true;
-            if (finalDist > 0.35) { this.queue.length = 0; this.ui('could not get there'); }       // pressed against something a few centimetres short: close enough, carry on
+            if (finalDist > (s.tol || 0)) { this.queue.length = 0; this.ui('could not get there'); }       // (a station's stand spot pressed against something a few centimetres short is close enough: s.tol)
           }
         } else if (s.yaw !== null && Math.abs(angDiff(s.yaw, root.rotation.y)) > 0.05) {
           this.turnTo(s.yaw, dt * k, 5);

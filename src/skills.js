@@ -122,7 +122,9 @@ export const FADE_SECONDS = { default: 150, speedreading: 300 };
 
 export class Skills {
   /** `initial`: 'all' | 'none' | comma separated ids | null (restore what he learned last time) */
-  constructor(initial = null) {
+  // `keys`: where it is saved ({ known, fade }); GAL has her own
+  constructor(initial = null, keys = null) {
+    this.keys = keys || { known: KEY, fade: FADE_KEY };
     this.known = new Set();
     this.fading = new Map();     // skill id -> strength left (1 = fully remembered ... 0 = gone); only skills whose book was forgotten
     this.listeners = [];
@@ -132,8 +134,8 @@ export class Skills {
     else if (initial === 'none') { /* start from scratch */ }
     else if (initial) initial.split(',').forEach((k) => this.known.add(k.trim()));
     else {
-      try { (JSON.parse(localStorage.getItem(KEY)) || []).forEach((k) => this.known.add(k)); } catch { /* no storage */ }
-      try { Object.entries(JSON.parse(localStorage.getItem(FADE_KEY)) || {}).forEach(([k, v]) => { if (this.known.has(k)) this.fading.set(k, v); }); } catch { /* no storage */ }
+      try { (JSON.parse(localStorage.getItem(this.keys.known)) || []).forEach((k) => this.known.add(k)); } catch { /* no storage */ }
+      try { Object.entries(JSON.parse(localStorage.getItem(this.keys.fade)) || {}).forEach(([k, v]) => { if (this.known.has(k)) this.fading.set(k, v); }); } catch { /* no storage */ }
     }
     this.persist = initial === null;
   }
@@ -146,8 +148,8 @@ export class Skills {
   save() {
     if (!this.persist) return;
     try {
-      localStorage.setItem(KEY, JSON.stringify([...this.known]));
-      localStorage.setItem(FADE_KEY, JSON.stringify(Object.fromEntries(this.fading)));
+      localStorage.setItem(this.keys.known, JSON.stringify([...this.known]));
+      localStorage.setItem(this.keys.fade, JSON.stringify(Object.fromEntries(this.fading)));
     } catch { /* no storage */ }
   }
 

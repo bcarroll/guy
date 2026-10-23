@@ -13,6 +13,7 @@ import { config as riffConfig } from './riffs.js';
 import { ALBUM_CATALOG } from './albums.js';
 import { initUpdateCheck } from './update.js';
 import { Restaurant } from './customers.js';
+import { Gal } from './gal.js';
 import { Paintings } from './paintings.js';
 import { dev } from './devunlock.js';
 
@@ -104,7 +105,15 @@ const params = new URLSearchParams(location.search);
 const skills = new Skills(params.get('skills'));
 const brain = new Brain(guy, world, (t) => (label.textContent = t), skills);
 // the Restaurant's customers (they only come once the room is added, stocked, and Guy has read "Restaurant Basics")
-world.restaurant = new Restaurant(world, { skillOk: () => skills.has('restaurant'), guyAt: () => guy.root.position });
+world.restaurant = new Restaurant(world, { skillOk: () => skills.has('restaurant') || !!(world.gal && world.gal.skills && world.gal.skills.has('restaurant')), guyAt: () => guy.root.position });
+// GAL, the second robot: built by Guy at the Build a Bot machine (gal.js). Her model loads at the start; she is saved unless ?fresh
+const galLine = document.getElementById('galline'), galLabel = document.getElementById('activity2');
+world.gal = new Gal(world, {
+  scene, guyBrain: brain, persist: !params.has('fresh'), skillsInit: params.get('skills') === 'all' || params.get('skills') === 'none' ? params.get('skills') : null,
+  ui: (t) => { galLine.hidden = false; galLabel.textContent = t; },
+  toast: (m) => showToast(m), onBuilt: (m) => showToast(m),
+});
+world.gal.preload();
 // Guy's paintings: hung on the walls of any room, the rest kept in the Catalogue (they are saved unless ?fresh)
 world.paintings = new Paintings(world, { persist: !params.has('fresh') });
 
@@ -185,6 +194,7 @@ rooms.restore();
 machineUI.restoreExtras();         // the rooms are back, so what belongs to them (the Workshop's furniture) can be added now ...
 layout.restore();                  // ... and put where it was left
 world.paintings.restore();         // then Guy's paintings, on the walls of the rooms that are back
+world.gal.restore();               // and GAL, if Guy built her on an earlier visit
 layout.start();
 initUpdateCheck();
 // The build this page is running, in the top-left corner: the short commit id (the first seven characters of the id). Checking

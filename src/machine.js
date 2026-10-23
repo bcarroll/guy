@@ -17,6 +17,7 @@ export const OBJECT_CATEGORIES = [
   { id: 'hobbies', name: 'Hobbies', icon: '🎨' },
   { id: 'workshop', name: 'Workshop', icon: '🛠️' },
   { id: 'restaurant', name: 'Restaurant', icon: '🍽️' },
+  { id: 'robots', name: 'Robots', icon: '🤖' },
   { id: 'furniture', name: 'Furniture', icon: '🛋️' },
   { id: 'decor', name: 'Decor & lighting', icon: '🖼️' },
   { id: 'games', name: 'Games', icon: '⚽' },
@@ -69,6 +70,8 @@ export const OBJECT_CATALOG = [
   { id: 'register', cat: 'restaurant', sub: 'Dining', name: 'Cash Register', icon: '💵', desc: 'Where customers pay when they have finished. Ding!', free: true, room: 'restaurant' },
   { id: 'diningtable', cat: 'restaurant', sub: 'Dining', name: 'Dining Table', icon: '🍽️', desc: 'A table for two with two chairs. Customers sit here to eat.', free: true, room: 'restaurant' },
   { id: 'diningtable2', cat: 'restaurant', sub: 'Dining', name: 'Second Dining Table', icon: '🍽️', desc: 'Another table for two, so more customers can eat at once.', free: true, room: 'restaurant' },
+  // Build a Bot: a super premium one-use printer. Guy uses it and it folds itself into GAL (src/gal.js).
+  { id: 'botprinter', cat: 'robots', name: 'Build a Bot Machine', icon: '🤖', desc: 'A 3D printer that can be used once: it prints a second robot, GAL, and folds itself away into her. Heavy: only you can move it.', locked: true },
   { id: 'drums', cat: 'music', name: 'Drum Kit', icon: '🥁', desc: 'Kick, snare, hi-hat and cymbals on a stool. Comes with the book "Drumming for Robots".', free: true, book: 'drumming' },
   { id: 'easel', cat: 'hobbies', name: 'Painting Easel', icon: '🎨', desc: 'A canvas that really gets painted. Comes with the book "Painting for Robots".', free: true, book: 'painting' },
   { id: 'telescope', cat: 'hobbies', name: 'Telescope', icon: '🔭', desc: 'On a tripod by the window. Comes with the book "Stargazing for Robots".', free: true, book: 'stars' },
@@ -88,6 +91,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
   const stored = (id) => (world.stock && world.stock.items && world.stock.items[id]) || 0;            // built things waiting in storage
   const objectStatus = (d) => {
     if (d.built) return 'built';
+    if (d.id === 'botprinter' && world.gal && world.gal.exists()) return 'used';       // it was used up making GAL
     if (d.locked && !dev.all) return 'locked';
     if (d.ball) return world.ballGone ? 'removed' : 'inroom';
     if (inRoom(d.id)) return 'inroom';
@@ -215,7 +219,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
     if (tab === 'objects') {
       // One section per category, each with how many of its items are in the room. Within a section: what is in the room first
       // (with a Remove button), then things you took out (Put back), then things you can add, then locked ones.
-      const rank = { inroom: 0, removed: 1, available: 2, built: 2, locked: 3 };
+      const rank = { inroom: 0, removed: 1, available: 2, built: 2, locked: 3, used: 3 };
       const sections = [];
       for (const c of OBJECT_CATEGORIES) {
         const subOf = (d) => (d.sub ? DECOR_SUBS.indexOf(d.sub) : -1);
@@ -245,6 +249,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
             const i = handlers.push(() => removeObject(d)) - 1;
             return card({ ...base, label: 'Remove', action: i, danger: true });
           }
+          if (st === 'used') return card({ ...base, status: 'locked', label: '✓ Used: GAL is here', note: 'It folded itself into GAL. There is only one.' });
           if (st === 'locked') return card({ ...base, label: '🔒 Locked' });
           const i = handlers.push(() => addObject(d)) - 1;
           return card({ ...base, label: st === 'removed' ? 'Put back' : 'Add', action: i,

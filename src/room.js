@@ -3,6 +3,7 @@ import { BOOK_DEFS } from './skills.js';
 import { sfx } from './sfx.js';
 import { makeWorkshopBuilders } from './workobjects.js';
 import { makeRestaurantBuilders } from './restobjects.js';
+import { makeBotBuilders } from './botobjects.js';
 
 export const ROOM = { w: 10, d: 8, h: 3.2 }; // x in [-5,5], z in [-4,4]
 
@@ -1034,6 +1035,7 @@ export function buildRoom(scene) {
 
   // ---- Restaurant furniture (src/restobjects.js), placed the same way in the Restaurant's own frame
   const rest = makeRestaurantBuilders({ makeObject, box, mat });
+  const bots = makeBotBuilders({ makeObject, box, mat });
   const REST_LAYOUT = {
     stove: (N, L) => ({ n: N - 0.5, lat: L / 2 - 0.8, face: 'door' }),
     kitchencounter: (N, L) => ({ n: N - 0.5, lat: L / 2 - 2.5, face: 'door' }),
@@ -1050,6 +1052,7 @@ export function buildRoom(scene) {
   };
 
   const NEW_OBJECTS = {            // object id -> [builder, preferred spot (or a function of the world that works it out)]
+    botprinter: [bots.botprinter, { x: -3.5, z: 2.5 }],
     stove: [rest.stove, restSpot('stove')],
     kitchencounter: [rest.kitchencounter, restSpot('kitchencounter')],
     register: [rest.register, restSpot('register')],

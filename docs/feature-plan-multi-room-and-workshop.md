@@ -651,9 +651,11 @@ Each built item has its sweep in section 13A. The planned items add: a door long
 
 ---
 
-## 18. Future Idea: The Build a Bot Machine and X Bot (not planned in detail)
+## 18. The Build a Bot Machine and GAL (first version built)
 
-Recorded from the owner's description. Nothing is built.
+**Built (see assets.md, "GAL and the Build a Bot machine"):** the premium one-use machine (Robots category), Guy building her, GAL as an autonomous second robot with her own brain and skills (she must read books), the two sharing the room and the stereo, Guy asking her to read the drumming books and find him before they jam, and her own invitation to dance. Not built: the piano invitation, a menu and skills panel for her, more orders. **Autonomy (from the owner):** GAL is an autonomous humanoid robot. If she is in the environment she is free to do whatever she wants; Guy can also instruct her to use her abilities (this answers open question 7). The rest of this section is the original description.
+
+Recorded from the owner's description.
 
 **The machine.** A 3D printer, a super premium object (it is unlocked through the same premium mechanism as later rooms, not for free). It can be used once: it prints a female robot, X Bot, by morphing itself into her, using itself as the material. After that it is gone (or is the same object as X Bot; to be decided).
 

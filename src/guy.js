@@ -42,7 +42,8 @@ export class Guy {
     this.loaded = false;
   }
 
-  // opts.keep: keep the model's own materials and textures (the customers); opts.height: how tall he or she is, in metres.
+  // opts.keep: keep the model's own materials and textures (the customers); opts.height: how tall he or she is, in metres;
+  // opts.colors: { body, joints } for the robot (Guy is gold; GAL is another colour).
   async load(url, opts = {}) {
     const loader = new FBXLoader();
     // single-file builds embed the model as base64 in window.__YBOT_B64
@@ -71,8 +72,8 @@ export class Guy {
         } else {
           // The FBX materials load with NaN colours, so give Guy his own.
           o.material = o.name.includes('Joints')
-            ? new THREE.MeshStandardMaterial({ color: 0x23262d, roughness: 0.5, metalness: 0.4 })
-            : new THREE.MeshStandardMaterial({ color: 0xf1c232, roughness: 0.35, metalness: 0.15 });
+            ? new THREE.MeshStandardMaterial({ color: (opts.colors && opts.colors.joints) || 0x23262d, roughness: 0.5, metalness: 0.4 })
+            : new THREE.MeshStandardMaterial({ color: (opts.colors && opts.colors.body) || 0xf1c232, roughness: 0.35, metalness: 0.15 });
         }
       }
       if (o.isBone) {
