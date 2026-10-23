@@ -3,7 +3,7 @@
 // To add a skill later (e.g. when the user adds an object with its own manual): add a BOOK_DEFS entry and a SKILL_INFO entry,
 // put the book on the shelf with world.objects.shelf.addBook(def), and gate the activity in Brain.available().
 
-// Every book that exists. `start` ones are on the shelf from the beginning; the rest are added from the Skill Machine.
+// Every book that exists. `start` ones are on the shelf from the beginning; the rest are added from the Catalogue.
 // requires.object: the object that has to be in the room first; locked: a future premium item.
 export const BOOK_CATALOG = [
   { id: 'stereo', title: 'Stereo User Manual', teaches: 'stereo', color: 0x2d6a9f, thick: 0.055, height: 0.31, blurb: 'how to use the stereo', start: true, desc: 'How to use the stereo.' },
@@ -15,6 +15,9 @@ export const BOOK_CATALOG = [
   { id: 'guitar', title: 'Guitar for Beginners', teaches: 'guitar', color: 0x2d8b5a, thick: 0.05, height: 0.3,
     blurb: 'how to play the guitar', requires: { object: 'guitar' }, desc: 'Open chords and strumming patterns.' },
   { id: 'woodwork', title: 'Woodworking for Robots', locked: true, requires: { object: 'workbench' }, desc: 'Build furniture from planks and nails (needs a workbench, tools and materials).' },
+  // ---- reading itself ----
+  { id: 'speedread', title: 'Speed Reading for Robots', teaches: 'speedreading', color: 0x00a3b4, thick: 0.045, height: 0.3,
+    blurb: 'how to read much faster', desc: 'Skim, flip, absorb. He reads at the bookshelf without sitting down, and learns from every book in a fraction of the time. Forgotten slowly.' },
   // ---- dancing (needs the stereo) ----
   { id: 'dancemoves', title: 'Dance Moves for Robots', teaches: 'dance.moves', color: 0xe91e8c, thick: 0.05, height: 0.3,
     blurb: 'the twist, the shuffle and a twirl', requires: { object: 'table' }, desc: 'Twist, shuffle and twirl on the spot.' },
@@ -36,7 +39,7 @@ export const BOOK_CATALOG = [
     blurb: 'how to paint portraits and landscapes', requires: { object: 'easel' }, desc: 'Faces, hills, suns and still lifes, then step back and admire.' },
   // ---- decorating (no object needed: the room always has something to dust) ----
   { id: 'decorating', title: 'Home Decorating for Robots', teaches: 'decorate', color: 0xc8744a, thick: 0.06, height: 0.32,
-    blurb: 'how to look after the room: dusting the picture frames and the windows', desc: 'Dust the frames, wipe the window sills and keep the room looking its best. Pictures, plants, rugs and more are in the Skill Machine under Decor.' },
+    blurb: 'how to look after the room: dusting the picture frames and the windows', desc: 'Dust the frames, wipe the window sills and keep the room looking its best. Pictures, plants, rugs and more are in the Catalogue under Decor.' },
   // ---- telescope ----
   { id: 'stars', title: 'Stargazing for Robots', teaches: 'telescope', color: 0x1b2a6b, thick: 0.055, height: 0.31,
     blurb: 'how to use a telescope', requires: { object: 'telescope' }, desc: 'Aim it, focus it, and look through the right end.' },
@@ -72,6 +75,7 @@ export const SKILL_INFO = {
     name: 'Guitar', book: 'Guitar for Beginners',
     unlocks: ['Take the guitar off its stand and strum chords'],
   },
+  speedreading: { name: 'Speed reading', book: 'Speed Reading for Robots', unlocks: ['Reads standing at the bookshelf: takes the book, opens and closes it, puts it back', 'Learns what is in every book much faster', 'If the book is forgotten, this fades slowly (about 5 minutes)'] },
   'dance.moves': { name: 'Dance moves', book: 'Dance Moves for Robots', unlocks: ['The twist, the shuffle and a twirl, in time with the music'] },
   'dance.ballroom': { name: 'Waltz & swing', book: 'Waltz & Swing', unlocks: ['A turning waltz and a bouncy swing, in time with the music'] },
   drums: { name: 'Drums', book: 'Drumming for Robots', unlocks: ['Sit at the kit and keep a steady beat', 'Before this he can only bang on it'] },
@@ -87,28 +91,79 @@ export const SKILL_INFO = {
 };
 
 const KEY = 'guy.skills.v1';
+const FADE_KEY = 'guy.skills.fade.v1';
+// How long a forgotten skill takes to fade away completely (seconds of game time). Speed reading is slow to go.
+export const FADE_SECONDS = { default: 150, speedreading: 300 };
 
 export class Skills {
   /** `initial`: 'all' | 'none' | comma separated ids | null (restore what he learned last time) */
   constructor(initial = null) {
     this.known = new Set();
+    this.fading = new Map();     // skill id -> strength left (1 = fully remembered ... 0 = gone); only skills whose book was forgotten
     this.listeners = [];
+    this.lostListeners = [];
+    this._since = 0;
     if (initial === 'all') Object.keys(SKILL_INFO).forEach((k) => this.known.add(k));
     else if (initial === 'none') { /* start from scratch */ }
     else if (initial) initial.split(',').forEach((k) => this.known.add(k.trim()));
     else {
       try { (JSON.parse(localStorage.getItem(KEY)) || []).forEach((k) => this.known.add(k)); } catch { /* no storage */ }
+      try { Object.entries(JSON.parse(localStorage.getItem(FADE_KEY)) || {}).forEach(([k, v]) => { if (this.known.has(k)) this.fading.set(k, v); }); } catch { /* no storage */ }
     }
     this.persist = initial === null;
   }
 
   has(id) { return this.known.has(id); }
 
+  /** 1 = fully known, between 0 and 1 while it is being forgotten, 0 = not known */
+  strength(id) { return this.known.has(id) ? (this.fading.has(id) ? this.fading.get(id) : 1) : 0; }
+
+  save() {
+    if (!this.persist) return;
+    try {
+      localStorage.setItem(KEY, JSON.stringify([...this.known]));
+      localStorage.setItem(FADE_KEY, JSON.stringify(Object.fromEntries(this.fading)));
+    } catch { /* no storage */ }
+  }
+
+  /** The book was forgotten: the lessons start to fade. Returns false if he did not know it. */
+  forget(id) {
+    if (!this.known.has(id)) return false;
+    if (!this.fading.has(id)) this.fading.set(id, 1);
+    this.save();
+    this.listeners.forEach((f) => f(id));
+    return true;
+  }
+
+  /** Called every frame with the time passed: forgotten skills lose strength, and disappear at zero. */
+  tick(dt) {
+    if (!this.fading.size) return;
+    const lost = [];
+    for (const [id, s] of this.fading) {
+      const left = s - dt / (FADE_SECONDS[id] || FADE_SECONDS.default);
+      if (left <= 0) lost.push(id); else this.fading.set(id, left);
+    }
+    for (const id of lost) { this.fading.delete(id); this.known.delete(id); }
+    this._since += dt;
+    if (lost.length || this._since > 5) { this._since = 0; this.save(); }
+    if (lost.length) { this.listeners.forEach((f) => f(lost[0])); this.lostListeners.forEach((f) => f(lost)); }
+    this._ui = (this._ui || 0) + dt;
+    if (this._ui > 2) { this._ui = 0; this.listeners.forEach((f) => f(null)); }     // keeps the skills panel's fading bars moving
+  }
+
+  onLose(fn) { this.lostListeners.push(fn); }
+
   /** returns true if this was new */
   learn(id) {
-    if (this.known.has(id)) return false;
+    if (this.known.has(id)) {
+      if (!this.fading.has(id)) return false;
+      this.fading.delete(id);                // read again while it was fading: remembered in full
+      this.save();
+      this.listeners.forEach((f) => f(id));
+      return true;
+    }
     this.known.add(id);
-    if (this.persist) { try { localStorage.setItem(KEY, JSON.stringify([...this.known])); } catch { /* no storage */ } }
+    this.save();
     this.listeners.forEach((f) => f(id));
     return true;
   }

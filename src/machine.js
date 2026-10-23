@@ -1,4 +1,4 @@
-// The Skill Machine's catalogue: what can go in the room, and which books can go on the shelf.
+// The Catalogue's catalogue: what can go in the room, and which books can go on the shelf.
 //
 // Objects come in four states:
 //   inroom    already here
@@ -29,6 +29,9 @@ export const OBJECT_CATALOG = [
   { id: 'shelf', cat: 'furniture', name: 'Bookshelf', icon: '📚', desc: 'Where the books live. Heavy: only you can move it.', core: true },
   { id: 'lamp', cat: 'decor', sub: 'Lighting', name: 'Floor Lamp', icon: '💡', desc: 'On and off, plus moods and light shows with the right book.', core: true },
   { id: 'armchair', cat: 'furniture', name: 'Armchair', icon: '🛋️', desc: 'A comfortable place to read.', core: true },
+  { id: 'armchair2', cat: 'furniture', name: 'Second Armchair', icon: '🛋️', desc: 'A burgundy armchair. Guy picks whichever chair he likes to read in or play in.', free: true },
+  { id: 'chair', cat: 'furniture', name: 'Wooden Chair', icon: '🪑', desc: 'A plain chair: for reading, resting, or playing the guitar sitting down.', free: true },
+  { id: 'chair2', cat: 'furniture', name: 'Second Wooden Chair', icon: '🪑', desc: 'Another plain chair.', free: true },
   { id: 'plant', cat: 'decor', sub: 'Plants', name: 'Potted Plant', icon: '🪴', desc: 'Makes the room feel lived in.', core: true },
   { id: 'ball', cat: 'games', name: 'Red Ball', icon: '⚽', desc: 'Kick it, dribble it, toss it.', core: true, ball: true },
   { id: 'rug', cat: 'decor', sub: 'Rugs', name: 'Round Rug', icon: '🟥', desc: 'A soft rug for the middle of the floor. Hold on it, then drag to move it.', core: true, decor: true },
@@ -90,7 +93,8 @@ export function initMachine({ world, guy, persist, notify, remove }) {
     if (!persist) return;
     const extras = { objects: OBJECT_CATALOG.filter((d) => d.free && inRoom(d.id)).map((d) => d.id),
       books: shelf() ? shelf().books.filter((r) => !r.def.start).map((r) => r.def.id) : [],
-      albums: shelf() ? shelf().albums.map((r) => r.def.id) : [] };
+      albums: shelf() ? shelf().albums.map((r) => r.def.id) : [],
+      forgotten: shelf() ? BOOK_CATALOG.filter((b) => b.start && !shelf().books.some((r) => r.def.id === b.id)).map((b) => b.id) : [] };   // starting books he forgot
     try { localStorage.setItem(KEY, JSON.stringify(extras)); } catch { /* no storage */ }
   };
   const addBookDef = (def) => {
@@ -112,6 +116,7 @@ export function initMachine({ world, guy, persist, notify, remove }) {
     try { extras = JSON.parse(localStorage.getItem(KEY)); } catch { extras = null; }
     if (!extras) return;
     for (const id of extras.objects || []) world.addNew(id, null);
+    for (const id of extras.forgotten || []) { const rec = shelf() && shelf().books.find((r) => r.def.id === id); if (rec) shelf().removeBook(rec); }
     for (const id of extras.books || []) { const def = BOOK_CATALOG.find((b) => b.id === id); if (def) addBookDef(def); }
     for (const id of extras.albums || []) { const def = ALBUM_CATALOG.find((a) => a.id === id); if (def && !def.premium) addAlbumDef(def); }
   }
@@ -244,5 +249,5 @@ export function initMachine({ world, guy, persist, notify, remove }) {
   root.addEventListener('pointerdown', (e) => { if (e.target === root) close(); });
   addEventListener('keydown', (e) => { if (e.key === 'Escape' && !root.hidden) close(); });
 
-  return { open() { render(); root.hidden = false; }, close, refresh: render, restoreExtras, isOpen: () => !root.hidden };
+  return { open() { render(); root.hidden = false; }, close, refresh: render, save, restoreExtras, isOpen: () => !root.hidden };
 }

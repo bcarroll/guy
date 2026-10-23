@@ -15,11 +15,11 @@ machine check of this list; this file adds the expectations a human or Claude ne
 | armchair | armchair, faces local -z | medium | none | `read` | sits back onto it; legs hang clear of the front | seat top 0.5 m |
 | plant | potted plant | light | none | `plant` | any free side, finger on a leaf | |
 | ball | red ball (not an obstacle) | n/a | `ball` | `dribble` / `toss` / `ball` (kick); unskilled: only pokes it | kinematic while he holds it | removable via the menu |
-| guitar | acoustic guitar on a stand (added from the Skill Machine; brings its own book) | light | `guitar` | `guitar`; stereo playing: `jamguitar` | takes it off the stand, strap over the left shoulder; right hand strums, left hand frets | |
+| guitar | acoustic guitar on a stand (added from the Catalogue; brings its own book) | light | `guitar` | `guitar`; stereo playing: `jamguitar` | takes it off the stand, strap over the left shoulder; right hand strums, left hand frets | |
 | drums | drum kit + stool (kit faces local -z, stool at +z; added free, brings `Drumming for Robots`) | medium | `drums`, `drums.solo`, `drums.band` | unskilled `bang`; `drums` / `drumsolo`; stereo playing + band skill: `jamdrums` | side-steps onto the stool from 0.55 m to its right; sticks come off the snare, tips follow the pads (`obj.pads`); right foot works the kick | stick tips land within ~10 cm of the pad at each hit (`hitErr` idea: compare fingertip-stick tip to pad at the trigger frame) |
 | easel | painting easel; canvas is a live `CanvasTexture` (`obj.paint`) | light | `easel`, `easel.colour`, `easel.portrait` | unskilled `scribble` (finger, grey); `paint`, `mixpaint`, `portrait` | stands 0.59 m in front of the canvas; palette picked up from the tray into the left hand and put back; brush tip draws the stroke as it moves; old paintings are washed over with white strokes, never cleared by magic | check the canvas in a screenshot: strokes must appear where the brush is |
 | telescope | tripod + aimable tube (`obj.setAim`) | light | `telescope`, `telescope.dark`, `telescope.care` | unskilled `peek` (wrong end); `stargaze`, `darkstargaze`, `scopecare` | swings the tube with one hand, then stands behind the eyepiece with knees bent / waist leaning, eye at the eyepiece, left hand on the focus knob | `darkstargaze` switches the lamp off first and back on afterwards (`lampOffByMe`, forced `lighton` if interrupted) |
-| rug | round rug (`world.decor`, category decor) | n/a (not an obstacle) | none | none | Guy walks over it | quick drag orbits the camera; **hold ~0.5 s then drag** moves it; hold and release for the menu (Remove; Turn only for rectangular rugs); Skill Machine Remove / Put back |
+| rug | round rug (`world.decor`, category decor) | n/a (not an obstacle) | none | none | Guy walks over it | quick drag orbits the camera; **hold ~0.5 s then drag** moves it; hold and release for the menu (Remove; Turn only for rectangular rugs); Catalogue Remove / Put back |
 | rug2 | **Blue Woven Rug** 2.4 x 1.6 (canvas texture, free, saved between visits) | n/a | none | none | | same rug controls; Turn (quarter turn) swaps its extents; lies 0.016 above the floor so overlapping rugs never z-fight |
 | rug3 | **Striped Runner** 0.8 x 2.6 (free) | n/a | none | none | | same rug controls; lies 0.022 above the floor |
 | art_mountains | **Mountain Picture** 0.9 x 0.6, left wall (free) | n/a | none | none | | wall piece: drag along its wall; Guy can dust it (`dust`) once he has read the decorating book |
@@ -31,17 +31,17 @@ machine check of this list; this file adds the expectations a human or Claude ne
 | coffeetable | **Coffee Table** (free; two books and a cup on it) | medium | none | none (Guy cannot use it) | | rearranged by Guy like other medium things |
 | nightstand | **Nightstand** (free) | light | none | none | | |
 | picture | framed sunset on the back wall (`world.decor`) | n/a | none | none | | drag along the back wall; kept off other wall pieces and off furniture taller than its lower edge |
-| window | window on the left wall (`world.decor`) | n/a | none | none | | drag along the left wall; cannot cover the Skill Machine |
-| window2 | **Second Window** on the back wall (added free from the Skill Machine, saved between visits) | n/a | none | none | | same wall rules |
+| window | window on the left wall (`world.decor`) | n/a | none | none | | drag along the left wall; cannot cover the Catalogue |
+| window2 | **Second Window** on the back wall (added free from the Catalogue, saved between visits) | n/a | none | none | | same wall rules |
 | workbench | **locked / premium**: listed, no builder yet | | | | | tests only check it stays locked |
 
-Decor is tested by `T.sweepDecor` (Remove through the Skill Machine button, "Put back", wall limits), not by interaction.
+Decor is tested by `T.sweepDecor` (Remove through the Catalogue button, "Put back", wall limits), not by interaction.
 
-Skill Machine Objects tab: filter chips (All + one per category) with in-room counts, one section per category (Music, Hobbies,
+Catalogue Objects tab: filter chips (All + one per category) with in-room counts, one section per category (Music, Hobbies,
 Furniture, Decor & lighting, Games), a Remove button on every in-room item except the shelf, "Put back" for removed ones.
 `cat` for each object is in `OBJECT_CATALOG` (`src/machine.js`); tested by `T.sweepMachine`.
 
-Skill Machine rules: removed objects show "Put back"; the shelf can never be removed; the machine itself is fixed to the
+Catalogue rules: removed objects show "Put back"; the shelf can never be removed; the machine itself is fixed to the
 left wall and cannot be removed, moved or rotated.
 
 ## Books (`BOOK_CATALOG` in `src/skills.js`)
@@ -52,20 +52,20 @@ left wall and cannot be removed, moved or rotated.
 | piano | Piano Playing for Robots | `piano` | | `piano` | yes |
 | ball | Let's Play Ball | `ball` | | `dribble` | yes |
 | lighting | The Power of Lighting | `lighting` | | `mood` | yes |
-| piano2 | Piano: Classics, Blues & Waltzes | `piano.advanced` | piano object | `piano` | no (Skill Machine) |
+| piano2 | Piano: Classics, Blues & Waltzes | `piano.advanced` | piano object | `piano` | no (Catalogue) |
 | guitar | Guitar for Beginners | `guitar` | guitar object | `guitar` | comes with the guitar |
-| dancemoves | Dance Moves for Robots | `dance.moves` | stereo (`table`) object | `dancemoves` (twist, shuffle, twirl) | no (Skill Machine) |
-| ballroom | Waltz & Swing | `dance.ballroom` | stereo (`table`) object | `ballroom` (waltz with a turn, swing) | no (Skill Machine) |
+| dancemoves | Dance Moves for Robots | `dance.moves` | stereo (`table`) object | `dancemoves` (twist, shuffle, twirl) | no (Catalogue) |
+| ballroom | Waltz & Swing | `dance.ballroom` | stereo (`table`) object | `ballroom` (waltz with a turn, swing) | no (Catalogue) |
 | drumming | Drumming for Robots | `drums` | drums object | `drums` | comes with the drum kit |
-| drumsolo | Fills & Solos | `drums.solo` | drums object | `drumsolo` | no (Skill Machine) |
-| drumband | Playing in the Band | `drums.band` | drums object | `jamdrums` (needs music) | no (Skill Machine) |
+| drumsolo | Fills & Solos | `drums.solo` | drums object | `drumsolo` | no (Catalogue) |
+| drumband | Playing in the Band | `drums.band` | drums object | `jamdrums` (needs music) | no (Catalogue) |
 | painting | Painting for Robots | `easel` | easel object | `paint` | comes with the easel |
-| colour | Colour Mixing | `easel.colour` | easel object | `mixpaint` | no (Skill Machine) |
-| portrait | Portraits & Landscapes | `easel.portrait` | easel object | `portrait` | no (Skill Machine) |
+| colour | Colour Mixing | `easel.colour` | easel object | `mixpaint` | no (Catalogue) |
+| portrait | Portraits & Landscapes | `easel.portrait` | easel object | `portrait` | no (Catalogue) |
 | stars | Stargazing for Robots | `telescope` | telescope object | `stargaze` | comes with the telescope |
-| darksky | Dark Sky Rules | `telescope.dark` | telescope object | `darkstargaze` | no (Skill Machine) |
-| scopecare | Looking After Your Telescope | `telescope.care` | telescope object | `scopecare` | no (Skill Machine) |
-| decorating | Home Decorating for Robots | `decorate` | none | `dust` (wipes along the bottom edge of a frame, wall light or sill) | no (Skill Machine) |
+| darksky | Dark Sky Rules | `telescope.dark` | telescope object | `darkstargaze` | no (Catalogue) |
+| scopecare | Looking After Your Telescope | `telescope.care` | telescope object | `scopecare` | no (Catalogue) |
+| decorating | Home Decorating for Robots | `decorate` | none | `dust` (wipes along the bottom edge of a frame, wall light or sill) | no (Catalogue) |
 | woodwork | premium | | workbench | | locked |
 
 Guy learns a skill only after keeping the book open for 8 s; interrupted reads teach nothing.
@@ -76,7 +76,7 @@ Every record has four songs (`tracks` in `src/albums.js`, ids `x`, `x2`, `x3`, `
 
 | record | songs (id, bpm) | status |
 |---|---|---|
-| Happy Time Parade | Parade Day (`happy` 132), Bubble Bounce (`happy2` 126), Sunny Side Skip (`happy3` 138), Pancake Polka (`happy4` 144) | free (Skill Machine > Records) |
+| Happy Time Parade | Parade Day (`happy` 132), Bubble Bounce (`happy2` 126), Sunny Side Skip (`happy3` 138), Pancake Polka (`happy4` 144) | free (Catalogue > Records) |
 | Garage Thunder (rock) | Garage Thunder (`rock` 124), Loose Gravel (112), Basement Lightning (138), Last Amp Standing (100) | free |
 | Rooftop Beats (hip-hop) | Rooftop Beats (`hiphop` 88), Late Bus Loop (84), Corner Store Cipher (92), Neon Puddles (78) | free |
 | Dusty Road Two-Step (upbeat country) | Dusty Road Two-Step (`twostep` 118), Barn Dance Hustle (126), Creekbed Shuffle (108), Sundown Hoedown (134) | free |
@@ -146,7 +146,7 @@ Needs and allowed arm contacts are in `MANIFEST.activities`.
 | record-carry | `T.moment('dance','walk',0,'front',{album:true})` | sleeve hangs from the hand by its top edge |
 
 Other things to eyeball once per release: the top shelf with all 12 records (`?records=all`: every title readable, no
-sleeves poking out of the shelf), the Skill Machine screen on the wall, the record list popup, the playback
+sleeves poking out of the shelf), the Catalogue screen on the wall, the record list popup, the playback
 panel, the skills panel (K), the strap on the guitar, record sleeves on the top shelf, spine titles on the books, and the
 book list popup (long-press a lower shelf at a book: title, read / not read).
 
@@ -170,7 +170,7 @@ book list popup (long-press a lower shelf at a book: title, read / not read).
 - The pose sweep (`T.sweepPoses`) found the fretting wrist bent ~153° (a wrist manages ~90): the guitar was slung too low, so the forearm ran steeply down to the neck while the fingers pointed up. The guitar is now held higher with the neck raised (hold y 1.05, tilt 0.55) and the fingers angled along the neck; the exact hand orientation applies only once the hand is on the neck. Also the `scopeWrong` hand on the barrel (115°).
 - Why the old sweeps missed these: they check completion, exceptions, feet and box overlap only. Anything about *how a pose looks* needs `sweepPoses` or a visual checkpoint. When a visual bug is reported, first ask which measurable invariant it violates and add that to `sweepPoses`.
 - The top shelf only had room for 5 record sleeves (a 6th stood outside the shelf): sleeves now overlap when crowded (`layoutAlbums` in `src/room.js`). `sweepRecords` must pass with `?records=all` (12 records).
-- The rug, picture and windows used to be fixed meshes that could not be removed; they are `world.decor` now. `fits()` also keeps furniture out of wall pieces, and `decorFits()` keeps wall pieces off the Skill Machine and each other. Run `T.sweepDecor()`.
+- The rug, picture and windows used to be fixed meshes that could not be removed; they are `world.decor` now. `fits()` also keeps furniture out of wall pieces, and `decorFits()` keeps wall pieces off the Catalogue and each other. Run `T.sweepDecor()`.
 - Putting a removed object back (`restoreObject`) only checked that it fitted at its old spot, so the easel could return right in front of the drum kit with its standing spot blocked (found as an intermittent `paint` / `scribble` failure with `drums` overlaps in the second `runAll`). It now also needs its own standing spot clear and must not sit on someone else's (`ownStandClear`, `onSomeonesStand` in `src/room.js`). Run `runAll` at least twice in a row: the second run starts with the room full.
 - Asking for another book while he was reading one made him wander off (tend plants, wave, play piano) still holding the first book, and only put it back much later. `choose()` skipped "put it back" whenever `albumOnTable` was true, and the flag could be left stuck on (for example by stopping the stereo from the player while a record was out). Now only a record that is really standing by the stereo with its music playing is exempt; taking a book clears the flag; putting a record back with the music off clears it. Covered by `T.sweepHolding`.
 - Guy kept playing the same tune: each record had one looping track and nothing ever moved on. Records now have four songs and the stereo hands over to the next one on the same record after about a minute; Guy avoids the last record and song he played. `T.sweepPlaylist`.

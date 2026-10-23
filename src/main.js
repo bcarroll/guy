@@ -104,8 +104,8 @@ function renderSkills() {
   const onShelf = (id) => !!world.objects.shelf && world.objects.shelf.books.some((b) => b.def.teaches === id);
   panel.querySelector('.list').innerHTML = Object.entries(SKILL_INFO).filter(([id]) => skills.has(id) || onShelf(id)).map(([id, info]) => `
     <div class="skill ${skills.has(id) ? 'known' : ''}">
-      <div class="name">${skills.has(id) ? '✓' : '○'} ${info.name}</div>
-      <div class="book">📕 ${info.book}${skills.has(id) ? '' : ' — not read yet'}</div>
+      <div class="name">${skills.has(id) ? (skills.strength(id) < 1 ? '◔' : '✓') : '○'} ${info.name}</div>
+      <div class="book">📕 ${info.book}${skills.has(id) ? (skills.strength(id) < 1 ? ` — forgetting (${Math.round(skills.strength(id) * 100)}% left)` : '') : ' — not read yet'}</div>
       <ul>${info.unlocks.map((u) => `<li>${u}</li>`).join('')}</ul>
     </div>`).join('');
 }
@@ -119,7 +119,7 @@ function showToast(msg) {
 }
 brain.onLearn = (def) => showToast(`Guy learned ${def.blurb}!`);
 
-// ---- the Skill Machine on the wall: tap it for the catalogue of objects and books ----
+// ---- the Catalogue on the wall: tap it for the catalogue of objects and books ----
 const machineUI = initMachine({
   world, guy, persist: !params.has('fresh'),
   notify: (msg) => { showToast(msg); renderSkills(); },
@@ -248,7 +248,7 @@ function planeAt(e, plane) {
   return raycaster.ray.intersectPlane(plane, hitPoint) ? hitPoint : null;
 }
 
-// Take something out of the room (the context menu and the Skill Machine both come through here).
+// Take something out of the room (the context menu and the Catalogue both come through here).
 function removeById(id) {
   if (id === 'ball') { world.removeBall(); brain.ballRemoved && brain.ballRemoved(); }
   else { world.removeObject(id); brain.objectRemoved(id); }
@@ -331,7 +331,10 @@ function openBookMenu(shelfObj, x, y) {
   albumMenu.querySelector('.title').textContent = '📚 Books on the shelf';
   albumMenu.querySelector('.list').innerHTML = shelfObj.books.filter((b) => b.mesh.visible).map((b) => {
     const read = skills.has(b.def.teaches);
-    return `<button class="book ${read ? 'done' : ''}" ${read ? 'disabled' : `data-book="${b.def.id}"`}><span class="ico">${read ? '✅' : '📕'}</span><span><b>${b.def.title}</b><small>${read ? 'Read — Guy knows ' + b.def.blurb : 'Not read yet — tap to have Guy read it'}</small></span></button>`;
+    const st = skills.strength(b.def.teaches);
+    const fading = read && st < 1;
+    const note = fading ? `Forgetting… ${Math.round(st * 100)}% of ${b.def.blurb} left` : read ? 'Read — Guy knows ' + b.def.blurb : 'Not read yet — tap to have Guy read it';
+    return `<div class="brow ${read ? 'done' : ''}" ${read ? '' : `data-book="${b.def.id}"`}><span class="ico">${fading ? '🌫️' : read ? '✅' : '📕'}</span><span class="grow"><b>${b.def.title}</b><small>${note}</small></span><button class="remove" data-remove="${b.def.id}" title="Take the book off the shelf. It goes back to the Catalogue and Guy keeps what he learned">Remove</button><button class="forget" data-forget="${b.def.id}" title="Take the book off the shelf; Guy gradually forgets what it taught">Forget</button></div>`;
   }).join('');
   placeAlbumMenu(x, y);
 }
@@ -342,7 +345,23 @@ function openAlbumMenu(shelfObj, x, y) {
   placeAlbumMenu(x, y);
 }
 albumMenu.addEventListener('click', (e) => {
-  const bk = e.target.closest('button[data-book]');
+  const rm = e.target.closest('button[data-remove]');
+  if (rm) {
+    const r = brain.removeBook(rm.dataset.remove);
+    albumMenu.hidden = true;
+    showToast(r.message);
+    if (r.ok) { machineUI.save(); machineUI.refresh(); renderSkills(); }
+    return;
+  }
+  const fg = e.target.closest('button[data-forget]');
+  if (fg) {
+    const r = brain.forgetBook(fg.dataset.forget);
+    albumMenu.hidden = true;
+    showToast(r.message);
+    if (r.ok) { machineUI.save(); machineUI.refresh(); renderSkills(); }
+    return;
+  }
+  const bk = e.target.closest('[data-book]');
   if (bk) {
     albumMenu.hidden = true;
     const r = brain.requestRead(bk.dataset.book);
@@ -368,11 +387,11 @@ function interactLabel(name) {
     case 'ball': return '⚽ Play with Ball';
     case 'lamp': return brain.skills.has('lighting') ? '💡 Set the Mood' : w.lamp && w.lamp.on === false ? '💡 Turn Lamp On' : '💡 Turn Lamp Off';
     case 'shelf': return '📖 Read a Book';
-    case 'armchair': return '📖 Sit and Read';
+    case 'armchair': return '🪑 Sit Down';
     case 'easel': return '🎨 Paint';
     case 'telescope': return '🔭 Look through Telescope';
     case 'plant': case 'flowerplant': case 'tree': return '🌱 Tend Plant';
-    default: return '▶ Use';
+    default: return brain.obj(name) && brain.obj(name).sit ? '🪑 Sit Down' : '▶ Use';
   }
 }
 

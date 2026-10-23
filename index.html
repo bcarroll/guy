@@ -91,8 +91,15 @@
   #albummenu .title { padding: 6px 10px 6px; font-weight: 600; color: #7fd1ff; }
   #albummenu button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: 0; color: inherit;
                       font: inherit; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
-  #albummenu button.book.done { cursor: default; opacity: 1; color: #eee; }
-  #albummenu button.book.done:hover { background: none; }
+  #albummenu .brow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+  #albummenu .brow:hover { background: rgba(255,255,255,.12); }
+  #albummenu .brow.done { cursor: default; }
+  #albummenu .brow.done:hover { background: none; }
+  #albummenu .brow .grow { flex: 1; }
+  #albummenu button.forget { width: auto; padding: 4px 9px; font-size: 12px; border-radius: 6px; background: rgba(255,255,255,.1); color: #f0a0a0; flex: none; }
+  #albummenu button.remove { width: auto; padding: 4px 9px; font-size: 12px; border-radius: 6px; background: rgba(255,255,255,.1); color: #cfd8e6; flex: none; }
+  #albummenu button.remove:hover { background: rgba(255,255,255,.2); }
+  #albummenu button.forget:hover { background: rgba(255,120,120,.25); }
   #albummenu button:hover { background: rgba(255,255,255,.12); }
   #albummenu .ico { font-size: 22px; }
   #albummenu small { display: block; color: #9aa6b8; font-size: 12px; margin-top: 1px; }
@@ -122,7 +129,7 @@
 <div id="toast"></div>
 <div id="machine" hidden>
   <div class="panel">
-    <header><h2>⚙️ SKILL MACHINE</h2><button class="close" title="Close (Esc)">✕</button></header>
+    <header><h2>⚙️ CATALOGUE</h2><button class="close" title="Close (Esc)">✕</button></header>
     <div class="sub">Add objects to the room, books and records to the shelf. Guy learns new things by reading.</div>
     <div class="tabs"><button class="tab on" data-tab="objects">Objects</button><button class="tab" data-tab="books">Books</button><button class="tab" data-tab="records">Records</button></div>
     <div class="chips"></div>

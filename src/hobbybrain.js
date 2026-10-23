@@ -177,7 +177,7 @@ export function installHobbies(Brain, POSES, H) {
     // whether the step is one of his hobbies (for the obstacle that must not block him while he uses it)
     hobbyAt(s) {
       if (!s) return null;
-      if (s.fx && s.fx.drums) return 'drums';
+      if (s.fx && (s.fx.drums || s.fx.sitDrum)) return 'drums';
       if (s.fx && s.fx.paint) return 'easel';
       if (s.type === 'walk' && s.direct && s.anchor && (s.anchor.name === 'drums' || s.anchor.name === 'easel')) return s.anchor.name;
       return null;
@@ -502,6 +502,45 @@ export function installHobbies(Brain, POSES, H) {
   const hold = (g, side, p, w, f, palm) => g.reach(side, p, w, false, { hand: { fingers: f, palm } });
 
   Object.assign(POSES, {
+    // sitting in a chair with nothing to do: hands on the thighs, looking round
+    sitRest(g, t, dur, ctx) {
+      const e = env(t, dur, 0.8);
+      sitLegs(g, e);
+      const knee = (side) => g.boneWorld(`${side}Leg`).add(V(0, 0.1, 0));
+      g.reach('Left', knee('Left'), e, false);
+      g.reach('Right', knee('Right'), e, false);
+      g.curl('Left', 0.4 * e); g.curl('Right', 0.4 * e);
+      g.set('Spine1', Q('x', -0.04 * e));
+      g.set('Head', Q('y', Math.sin(t * 0.5) * 0.5 * e, 'x', (0.04 + Math.sin(t * 0.8) * 0.03) * e));
+      g.hipsOffset.y = -0.02 * e;
+    },
+
+    // the guitar, played sitting down
+    sitGuitar(g, t, dur, ctx) {
+      POSES.guitar(g, t, dur, ctx);
+      const e = env(t, dur, 0.8), b = ctx.guitar ? ctx.guitar.beat : 0;
+      sitLegs(g, e);
+      g.set('RightFoot', Q('x', (0.05 - 0.22 * Math.max(0, Math.sin(b * Math.PI * 2))) * e));
+      g.hipsOffset.y = -0.02 * e;
+    },
+
+    // on the drum stool with nothing to play: knees apart, round-shouldered, hands hanging between the knees
+    slouch(g, t, dur, ctx) {
+      const e = env(t, dur, 0.9), br = Math.sin(t * 1.1) * 0.015;
+      sitLegs(g, e);
+      g.set('LeftUpLeg', Q('x', -1.4 * e, 'z', 0.3 * e));
+      g.set('RightUpLeg', Q('x', -1.4 * e, 'z', -0.3 * e));
+      g.set('Spine', Q('x', 0.3 * e));
+      g.set('Spine1', Q('x', (0.35 + br) * e));
+      g.set('Spine2', Q('x', 0.2 * e));
+      g.set('Head', Q('x', 0.3 * e, 'y', Math.sin(t * 0.3) * 0.25 * e));
+      const hang = (side) => g.boneWorld(`${side}Leg`).add(V(side === 'Left' ? -0.06 : 0.06, -0.12, 0.02));
+      g.reach('Left', hang('Left'), e, false);
+      g.reach('Right', hang('Right'), e, false);
+      g.curl('Left', 0.3 * e); g.curl('Right', 0.3 * e);
+      g.hipsOffset.y = -0.03 * e;
+    },
+
     drumSit(g, t, dur, ctx) {
       const e = env(t, dur, 0.8);
       sitLegs(g, e);

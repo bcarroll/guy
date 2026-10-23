@@ -19,9 +19,9 @@ export const MANIFEST = {
   // interact: the name passed to brain.interact (what the long-press "Interact" button does)
   objects: {
     piano: { skills: ['piano'] }, bench: { skills: ['piano'] }, table: { skills: ['stereo'] }, shelf: { skills: [], fixed: true },
-    lamp: { skills: ['lighting'] }, armchair: { skills: [] }, plant: { skills: [] }, ball: { skills: ['ball'] }, guitar: { skills: ['guitar'] },
+    lamp: { skills: ['lighting'] }, armchair: { skills: [] }, armchair2: { skills: [] }, chair: { skills: [] }, chair2: { skills: [] }, plant: { skills: [] }, ball: { skills: ['ball'] }, guitar: { skills: ['guitar'] },
     workbench: { locked: true }, drums: { skills: ['drums'] }, easel: { skills: ['easel'] }, telescope: { skills: ['telescope'] },
-    // decor (world.decor): no interaction; tested by sweepDecor (remove / put back through the Skill Machine, wall limits)
+    // decor (world.decor): no interaction; tested by sweepDecor (remove / put back through the Catalogue, wall limits)
     rug: { decor: true }, picture: { decor: true, wall: 'back' }, window: { decor: true, wall: 'left' }, window2: { decor: true, wall: 'back', startsOut: true },
     art_mountains: { decor: true, wall: 'left', startsOut: true }, art_abstract: { decor: true, wall: 'back', startsOut: true }, art_moon: { decor: true, wall: 'left', startsOut: true },
     sconce: { decor: true, wall: 'back', startsOut: true }, rug2: { decor: true, startsOut: true }, rug3: { decor: true, startsOut: true },
@@ -43,7 +43,7 @@ export const MANIFEST = {
     mood: { objects: ['lamp'], skills: ['lighting'], touches: ['lamp'] },
     plant: { objects: ['plant'], touches: ['plant', 'flowerplant', 'tree'] },
     dust: { objects: ['picture'], skills: ['decorate'], touches: [] },
-    read: { objects: ['shelf'], touches: ['shelf', 'armchair'] },
+    read: { objects: ['shelf'], touches: ['shelf', 'armchair', 'armchair2', 'chair', 'chair2'] },
     rearrange: { objects: ['lamp', 'plant', 'armchair'], touches: ['lamp', 'plant', 'armchair', 'table', 'bench', 'flowerplant', 'coffeetable', 'nightstand', 'guitar', 'easel', 'telescope'] },
     ball: { touches: [] },
     dribble: { skills: ['ball'], touches: [] },
@@ -52,6 +52,9 @@ export const MANIFEST = {
     jamguitar: { objects: ['guitar'], skills: ['guitar'], music: true, touches: ['guitar'] },
     dancemoves: { objects: ['table'], skills: ['dance.moves'], touches: ['table', 'shelf', 'lamp'] },
     ballroom: { objects: ['table'], skills: ['dance.ballroom'], touches: ['table', 'shelf', 'lamp'] },
+    sit: { objects: ['armchair'], touches: ['armchair', 'armchair2', 'chair', 'chair2'] },
+    sitguitar: { objects: ['guitar', 'armchair'], skills: ['guitar'], touches: ['guitar', 'armchair', 'armchair2', 'chair', 'chair2'] },
+    slouch: { objects: ['drums'], touches: ['drums'] },
     stereoon: { objects: ['table'], skills: ['stereo'], touches: ['table', 'shelf'] },
     stereooff: { objects: ['table'], skills: ['stereo'], music: true, touches: ['table', 'shelf'] },
     bang: { objects: ['drums'], touches: ['drums'] },
@@ -71,7 +74,7 @@ export const MANIFEST = {
   },
   // what to do after reading each book: an activity that should now be possible
   books: { stereo: { then: 'dance' }, piano: { then: 'piano' }, ball: { then: 'dribble' }, lighting: { then: 'mood' }, piano2: { then: 'piano' }, guitar: { then: 'guitar' },
-    dancemoves: { then: 'dancemoves' }, ballroom: { then: 'ballroom' },
+    speedread: { then: 'read' }, dancemoves: { then: 'dancemoves' }, ballroom: { then: 'ballroom' },
     drumming: { then: 'drums' }, drumsolo: { then: 'drumsolo' }, drumband: { then: 'jamdrums' },
     painting: { then: 'paint' }, colour: { then: 'mixpaint' }, portrait: { then: 'portrait' },
     stars: { then: 'stargaze' }, darksky: { then: 'darkstargaze' }, scopecare: { then: 'scopecare' },
@@ -110,6 +113,9 @@ export const MANIFEST = {
     { id: 'dance-twirl', activity: 'dancemoves', pose: 'twirl', t: 2.5, view: 'front', expect: 'arms out to the sides, spinning on the spot without drifting or hitting furniture' },
     { id: 'dance-waltz', activity: 'ballroom', pose: 'waltz', t: 5, view: 'front', expect: 'dance hold: left arm out and bent, right arm curved as if round a partner, slowly turning' },
     { id: 'dance-swing', activity: 'ballroom', pose: 'swing', t: 4, view: 'front', expect: 'arms swinging wide in opposition, alternate knee kicks on the beat' },
+    { id: 'sit-rest', activity: 'sit', pose: 'sitRest', t: 5, view: 'side', expect: 'sitting on the seat (not hovering), thighs level, hands resting on the knees, head turning slowly' },
+    { id: 'sit-guitar', activity: 'sitguitar', pose: 'sitGuitar', t: 6, view: 'front', expect: 'seated, the guitar held on the lap and chest, left hand on the neck, right hand strumming; the chair does not pass through the guitar' },
+    { id: 'slouch', activity: 'slouch', pose: 'slouch', t: 6, view: 'side', expect: 'on the drum stool, round-shouldered, knees apart, hands hanging between the knees' },
     { id: 'record-carry', activity: 'dance', pose: 'walk', t: 0, view: 'front', album: true, expect: 'sleeve hangs from his hand by its top edge (only when a record is used)' },
   ],
 };
@@ -165,7 +171,7 @@ T.coverage = () => {
 };
 
 // ---- state helpers ----------------------------------------------------------------------------------------------
-const OVERLAP_FAIL = 4;   // samples (one every 5 frames) before arm-inside-object counts as a failure rather than a graze
+const OVERLAP_FAIL = 6;   // samples (one every 5 frames) before arm-inside-object counts as a failure rather than a graze (every real clip so far was 8+; 4-5 was walking past a box at the edge of the safety margin)
 const serious = (o) => Object.fromEntries(Object.entries(o).filter(([, n]) => n >= OVERLAP_FAIL));
 const grazes = (o) => Object.fromEntries(Object.entries(o).filter(([, n]) => n < OVERLAP_FAIL));
 
@@ -217,7 +223,7 @@ T.removeAll = () => {
   if (!W().ballGone) { W().removeBall(); B().ballRemoved(); }
 };
 const isPresent = (id) => (id === 'ball' ? !W().ballGone : !!(W().objects[id] || W().decor[id]));
-T.addObject = (id) => { // through the Skill Machine, like a user would
+T.addObject = (id) => { // through the Catalogue, like a user would
   const def = OBJECT_CATALOG.find((d) => d.id === id);
   if (isPresent(id)) return true;
   if (def.locked) return false;
@@ -319,6 +325,7 @@ T.run = (name, { max = 150, prep = true } = {}) => {
   const s = T.settle();
   rep.idleAfter = s.ok;
   rep.warnings = grazes(rep.overlaps);
+  if (Object.keys(serious(rep.overlaps)).length) rep.where = T.lastOverlap;      // where the last overlap was (for chasing intermittent failures)
   rep.pass = rep.completed && !rep.errors.length && !Object.keys(serious(rep.overlaps)).length && rep.idleAfter && rep.minFeet > -0.05;
   return rep;
 };
@@ -353,7 +360,7 @@ T.interact = (name, { max = 150, partial = false } = {}) => {
 };
 
 // ---- the sweeps -------------------------------------------------------------------------------------------------
-// 1. Add the objects one at a time (Skill Machine UI), check placement, interact before and after he has the skill.
+// 1. Add the objects one at a time (Catalogue UI), check placement, interact before and after he has the skill.
 T.sweepObjects = () => {
   T.removeAll();
   T.forget();
@@ -788,7 +795,7 @@ T.sweepRemovals = () => {
   return out;
 };
 
-// 8. Decor (rug, windows, picture): remove each through the Skill Machine's Remove button, check it is really gone and offered
+// 8. Decor (rug, windows, picture): remove each through the Catalogue's Remove button, check it is really gone and offered
 // as "Put back", put it back, and check the wall pieces keep to their wall and out of each other's and the machine's way.
 const machineCard = (title) => [...machine().querySelectorAll('.card')].find((c) => c.querySelector('.title').textContent === title);
 const openObjects = (cat = 'all') => {
@@ -820,11 +827,11 @@ T.sweepDecor = () => {
     const back = !!W().decor[id] && W().decor[id].group.parent === W().room && W().decorFits(W().decor[id], W().decor[id].u, W().decor[id].v);
     out.push(result(`decor:${id}`, placed && !!rm && gone && offered && back && errors.length === base, { placed, hadRemoveButton: !!rm, gone, offeredPutBack: offered, back, errors: errors.slice(base) }));
   }
-  // wall limits: a window may not be dragged over the Skill Machine, the other window, or below a piano standing against its wall
+  // wall limits: a window may not be dragged over the Catalogue, the other window, or below a piano standing against its wall
   const w = W();
   T.addObject('window2'); T.addObject('picture'); T.addObject('window'); T.addObject('piano');
   const win = w.decor.window, pic = w.decor.picture, win2 = w.decor.window2, piano = w.objects.piano;
-  out.push(result('decor:window keeps off the Skill Machine', !!win && !w.decorFits(win, -2.3, 1.5) && w.decorFits(win, win.u, win.v)));
+  out.push(result('decor:window keeps off the Catalogue', !!win && !w.decorFits(win, -2.3, 1.5) && w.decorFits(win, win.u, win.v)));
   out.push(result('decor:window stays on its wall', !!win && !w.decorFits(win, 4.5, 1.8) && !w.decorFits(win, 0, 3.4)));
   out.push(result('decor:two windows and the picture do not overlap', !!win2 && !!pic && !w.decorFits(win2, pic.u, pic.v) && w.decorFits(win2, win2.u, win2.v)));
   // a rectangular rug turns a quarter, a round one does not; the wall light glows with the floor lamp
@@ -858,7 +865,7 @@ T.sweepDecor = () => {
   return out;
 };
 
-// 9. The Skill Machine's Objects tab: category chips, one section per category, counts that match the room.
+// 9. The Catalogue's Objects tab: category chips, one section per category, counts that match the room.
 T.sweepMachine = () => {
   const out = [];
   const cats = [...new Set(OBJECT_CATALOG.map((d) => d.cat))];
@@ -929,7 +936,7 @@ T.sweepMoves = () => {
     const base = errors.length;
     let reached = false;
     for (let attempt = 0; attempt < 3 && !reached; attempt++) {      // some layouts leave no room to use the telescope: try again
-      T.removeAll(); T.prep(act); T.addObject(name); T.settle(); T.home(); b.queue = []; b.step = null; b.pendingActivity = null; b.choose(act);
+      T.removeAll(); T.forget(); skillsOf().fading.clear(); T.prep(act); T.addObject(name); T.settle(); T.home(); b.queue = []; b.step = null; b.pendingActivity = null; b.choose(act);
       let t = 0; while (t < 80 && !(b.step && b.pose === pose && b.step.t > 4)) { step(0.1); t += 0.1; }
       reached = !!(b.step && b.pose === pose);
     }
@@ -942,6 +949,67 @@ T.sweepMoves = () => {
     o.set(ox, oz);
     out.push(result(`moved while in use: ${act}`, reached && letGo && settled.ok && errors.length === base, { reached, letGo, pose: b.pose, idleAfter: settled.ok, errors: errors.slice(base) }));
   }
+  return out;
+};
+
+// Forgetting a book, and Speed Reading.
+T.sweepBookRules = () => {
+  const out = [], b = B(), sk = skillsOf(), w = W();
+  T.removeAll(); T.forget(); sk.fading.clear(); T.settle(); T.home();
+  T.addObject('armchair');
+  const onShelf = (id) => w.objects.shelf.books.some((x) => x.def.id === id);
+  const base = errors.length;
+
+  // forgetting: the book goes back to the catalogue at once, what it taught fades gradually, and reading it again restores it
+  sk.known.add('piano');
+  const r = b.forgetBook('piano');
+  const listed = (() => { const root = document.getElementById('machine'); return r.ok && !onShelf('piano') && T.addBook('piano') === true && onShelf('piano'); })();
+  b.forgetBook('piano');                                   // (put back through the catalogue, forget again)
+  const s0 = sk.strength('piano'); step(60); const s60 = sk.strength('piano'); step(120);
+  out.push(result('forget: the book returns to the catalogue and the lesson fades gradually (150 s)', listed && s0 === 1 && s60 > 0.4 && s60 < 0.8 && !sk.has('piano') && !b.available('piano'), { s0, s60, gone: !sk.has('piano') }));
+  T.addBook('piano'); sk.known.add('piano'); b.forgetBook('piano'); step(30); T.addBook('piano');
+  const rec = w.objects.shelf.books.find((x) => x.def.id === 'piano');
+  const relearn = (() => { sk.learn('piano'); return sk.strength('piano') === 1; })();
+  out.push(result('forget: reading it again while it fades restores it in full', !!rec && relearn));
+
+  // "Remove" is not "Forget": the book goes back to the catalogue but he keeps what he learned
+  sk.known.add('stereo');
+  const rem = b.removeBook('stereo');
+  const kept = sk.has('stereo') && sk.strength('stereo') === 1 && !onShelf('stereo');
+  step(200);
+  const stillKept = sk.has('stereo') && sk.strength('stereo') === 1;
+  const putBack = T.addBook('stereo') === true && onShelf('stereo');
+  out.push(result('remove: the book leaves the shelf, comes back from the catalogue, and Guy keeps the skill (no fading)', rem.ok && kept && stillKept && putBack, { kept, stillKept, putBack, message: rem.message }));
+  // an unread book can be forgotten too, and a book in his hands cannot
+  const held = w.objects.shelf.books.find((x) => x.def.id === 'ball');
+  b.takeBook(held);
+  const refuse = b.forgetBook('ball');
+  b.returnBook();
+  out.push(result('forget: refused while he is holding the book', !refuse.ok && onShelf('ball'), { message: refuse.message }));
+
+  // Speed Reading: at the shelf, quick, and he still learns from the book
+  T.settle(); T.home(); sk.known.delete('speedreading'); sk.fading.clear(); sk.known.delete('ball');
+  T.addBook('speedread');
+  // read one exact book (settle first: while settling he may start reading something else and use up the request)
+  const readRun = (id) => {
+    const rec2 = w.objects.shelf.books.find((x) => x.def.id === id);
+    sk.known.delete(rec2.def.teaches);
+    T.settle(); T.home(); b.queue = []; b.step = null; b.pendingActivity = null; b.forceBook = rec2; b.choose('read');
+    const poses = new Set(); let t = 0; const labels = [label()];
+    while (t < 150 && b.last === 'read') { step(0.1); t += 0.1; if (b.step) poses.add(b.pose); }
+    return { seconds: +t.toFixed(1), poses: [...poses], learned: sk.has(rec2.def.teaches), labels };
+  };
+  const normal = readRun('lighting');
+  sk.known.add('speedreading');
+  const fast = readRun('lighting');
+  out.push(result('speed reading: reads standing at the shelf, much faster, and still learns from the book', normal.learned && fast.learned && !fast.poses.includes('readSit') && fast.seconds < normal.seconds * 0.7, { normal, fast }));
+  out.push(result('speed reading: without it he sits in a chair to read', normal.poses.includes('readSit'), { poses: normal.poses }));
+
+  // forgetting Speed Reading is slow (5 minutes) and the effect fades with it
+  b.forgetBook('speedread');
+  const sp0 = b.readSpeed(); step(150); const sp150 = b.readSpeed(); step(160);
+  out.push(result('speed reading: forgetting takes 5 minutes, the reading speed falls gradually back to normal', sp0 === 2.5 && sp150 > 1.4 && sp150 < 2.0 && b.readSpeed() === 1 && !sk.has('speedreading'), { sp0, sp150, end: b.readSpeed() }));
+  out.push(result('forget: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
 };
 
@@ -958,6 +1026,7 @@ T.runAll = () => {
   report.interrupts = summarise(T.sweepInterrupts());
   report.removals = summarise(T.sweepRemovals());
   report.moves = summarise(T.sweepMoves());
+  report.bookRules = summarise(T.sweepBookRules());
   report.holding = summarise(T.sweepHolding());
   report.walls = summarise(T.sweepWalls());
   report.decor = summarise(T.sweepDecor());

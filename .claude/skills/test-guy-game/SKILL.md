@@ -1,6 +1,6 @@
 ---
 name: test-guy-game
-description: Run the full QA pass on Guy's room (the Three.js robot game in this repo). Adds every object, book and record to the room one at a time through the real Skill Machine UI, makes Guy interact with each, checks the animations are visually correct (numeric checks plus screenshots), and tests multi-object combinations such as the stereo with an instrument. Use whenever the user asks to test, verify or QA the game, and after adding any object, book, record, track, activity or pose.
+description: Run the full QA pass on Guy's room (the Three.js robot game in this repo). Adds every object, book and record to the room one at a time through the real Catalogue UI, makes Guy interact with each, checks the animations are visually correct (numeric checks plus screenshots), and tests multi-object combinations such as the stereo with an instrument. Use whenever the user asks to test, verify or QA the game, and after adding any object, book, record, track, activity or pose.
 ---
 
 # Test Guy's room
@@ -47,7 +47,7 @@ individually. Current baseline: everything passing, `T.errors` empty (run it 3-4
 
 | Sweep | What it does | Pass means |
 |---|---|---|
-| `T.sweepObjects()` | Removes every removable object, then adds them **one at a time through the Skill Machine UI** (click the card). Checks placement (fits, not on Guy), then makes Guy interact (the same code path as the long-press **Interact** button) first without and then with the object's skill. Locked/premium objects are listed and skipped. | added, fits, interaction runs to completion, no exceptions, no sustained arm-in-object, he is empty-handed afterwards |
+| `T.sweepObjects()` | Removes every removable object, then adds them **one at a time through the Catalogue UI** (click the card). Checks placement (fits, not on Guy), then makes Guy interact (the same code path as the long-press **Interact** button) first without and then with the object's skill. Locked/premium objects are listed and skipped. | added, fits, interaction runs to completion, no exceptions, no sustained arm-in-object, he is empty-handed afterwards |
 | `T.sweepActivities()` | Every activity in the manifest, after preparing the objects/skills it needs (and music for `jamguitar`). | completed, no exceptions, no sustained overlap, idle afterwards, feet on the floor |
 | `T.sweepPoses()` | **Pose sanity**, every frame of every activity (`T.poseStats(name)` gives the raw numbers per pose): hand behind his body (limit 0.45 m), wrist bend (limit 100°), hand vs the wrist position the game asked for (limit 0.32 m, 90th percentile; drums, brush, guitar). Limits are `POSE_LIMITS` in `devtools.js`. | no pose exceeds a limit. Catches what the overlap check cannot: a hand reaching a lost target behind him, impossible wrists |
 | `T.sweepTracks()` | Selects each track (stereo beat + every record), checks tempo, makes Guy play piano and guitar along with it. | tempo matches, he joins in, no exceptions |
@@ -60,12 +60,12 @@ individually. Current baseline: everything passing, `T.errors` empty (run it 3-4
 | `T.sweepPlaylist()` | The stereo's playlist: every record has 3+ playable songs with unique titles, the player lists them all, select / next / previous change the song, a song hands over to the next one on its record after its minute (and wraps), and Guy does not repeat a song or a record back to back. | all pass |
 | `T.sweepWalls()` | The drum kit and the easel pushed against the back and left walls in every rotation: where the stool or easel spot is reachable he uses it within 15 s; where it is not he declines (the Interact button says why) and a forced attempt is dropped in under 20 s. | all pass |
 | `T.sweepHolding()` | Asks for another book while he reads one (also with the "record by the stereo" flag stuck on), and stops the stereo from the player while a record is out. | he puts the first book back and reads the new one without wandering off carrying it; the record ends up back on the shelf with the flag cleared |
-| `T.sweepDecor()` | The rug, windows and picture: Remove through the Skill Machine button, check it is gone and offered as "Put back", put it back; wall limits (not over the Skill Machine, not over each other, furniture cannot be pushed into them). | all pass, no exceptions |
+| `T.sweepDecor()` | The rug, windows and picture: Remove through the Catalogue button, check it is gone and offered as "Put back", put it back; wall limits (not over the Catalogue, not over each other, furniture cannot be pushed into them). | all pass, no exceptions |
 | `T.sweepMachine()` | The Objects tab: every object has a category, All lists each once, each category chip lists exactly its items under one heading, the All chip counts what is in the room, the shelf has no Remove. | all pass |
 
 Each result row has `pass`, plus details (`labels`, `poses`, `overlaps`, `warnings`, `errors`). `T.errors` is the list of
 every `console.error` since load; **it must stay empty**. A few overlap samples are a *graze* (reported as `warnings`,
-for example an arm swinging past furniture); 4 or more samples (about 0.7 s) is a real clip and fails.
+for example an arm swinging past furniture); 6 or more samples (about 1 s) is a real clip and fails.
 
 When a row fails, reproduce it on its own (`T.run('dance')`, `T.interact('piano')`), read `T.lastOverlap` (which object,
 which pose, where) and `T.state()`, then fix the game, not the test, unless the test is wrong. Flaky = investigate; the
@@ -107,7 +107,7 @@ Judge every shot against this standing checklist, not just the item's `expect`:
 
 Use synthetic pointer events on the canvas, as the tests in this repo did (wrap `setPointerCapture` in try/catch, call
 `scene.updateMatrixWorld(true)` first, and project a world point to screen):
-- tap the wall **Skill Machine**: modal opens with Objects / Books / Records tabs, correct groups
+- tap the wall **Catalogue**: modal opens with Objects / Books / Records tabs, correct groups
   (In the room / Add / Premium), Add buttons work, premium shows 🔒; long-press does nothing (cannot be removed)
 - long-press every object: the first button is named for what the object does (Play Piano, Play Guitar, Play Drums, Play with Ball, Turn Stereo On/Off, Paint, Tend Plant, Set the Mood / Turn Lamp On/Off ...; `interactLabel` in `main.js`), then Rotate, Remove (Remove hidden for the bookshelf; rotate hidden for
   the ball). The stereo's playback controls are the **🎵 Stereo** button left of Follow, visible only while a stereo is in the room; the stereo's menu button turns it on or off (Guy walks over and presses the button)

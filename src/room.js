@@ -180,7 +180,8 @@ export function buildRoom(scene) {
 
   // Put a book on the shelf in the next free slot (rows 3 and 2 are within Guy's reach).
   const addBook = (def) => {
-    const i = shelfBooks.length;
+    let i = 0;                                      // the lowest free slot: a forgotten book leaves a gap, nothing slides along
+    while (shelfBooks.some((r) => r.slot === i)) i++;
     const row = i % 2 === 0 ? 3 : 2;
     const z = -0.72 + Math.floor(i / 2) * 0.2;
     const h = def.height || 0.3, w = def.thick || 0.05;
@@ -192,9 +193,18 @@ export function buildRoom(scene) {
     mesh.position.set(-0.03, y, z + w / 2);
     mesh.castShadow = mesh.receiveShadow = true;
     shelfGroup.add(mesh);
-    const rec = { mesh, row, y, z: z + w / 2, color, h, w, def };
+    const rec = { mesh, row, y, z: z + w / 2, color, h, w, def, slot: i };
     shelfBooks.push(rec);
     return rec;
+  };
+  // Take a book off the shelf for good (it goes back to the catalogue); the other books stay where they are.
+  objects.shelf.removeBook = (rec) => {
+    const k = shelfBooks.indexOf(rec);
+    if (k < 0) return false;
+    shelfBooks.splice(k, 1);
+    shelfGroup.remove(rec.mesh);
+    rec.mesh.geometry.dispose();
+    return true;
   };
   objects.shelf.removable = false; // the bookshelf is where Guy learns: it can be moved but never removed
   objects.shelf.books = shelfBooks;
@@ -294,15 +304,31 @@ export function buildRoom(scene) {
     },
   };
 
-  // Armchair (medium)
-  const chairMat = mat(0x3d5a73);
-  makeObject('armchair', 3.4, 3.2, 1.0, 1.0, 1.2, 'medium', (g) => {
-    // faces local -z; the seat block stops 0.5 m short of the front of the footprint's far side so shins hang clear of it
-    box(0.9, 0.5, 0.75, chairMat, 0, 0.25, -0.125, g);   // seat block (z -0.5..0.25), top at 0.5 m
-    box(0.9, 0.7, 0.18, chairMat, 0, 0.85, 0.16, g);     // backrest on top of the rear of the seat
-    box(0.18, 0.3, 0.75, chairMat, -0.45, 0.65, -0.125, g);
-    box(0.18, 0.3, 0.75, chairMat, 0.45, 0.65, -0.125, g);
-  });
+  // Chairs. Every chair has obj.sit = { seat, gap }: local z of the pelvis when sitting, and of the spot where he stands in front of it
+  // (he steps back onto the seat from there). Guy may sit on any chair in the room.
+  const buildArmchair = (name, x, z, color) => {
+    const chairMat = mat(color);
+    const o = makeObject(name, x, z, 1.0, 1.0, 1.2, 'medium', (g) => {
+      // faces local -z; the seat block stops 0.5 m short of the front of the footprint's far side so shins hang clear of it
+      box(0.9, 0.5, 0.75, chairMat, 0, 0.25, -0.125, g);   // seat block (z -0.5..0.25), top at 0.5 m
+      box(0.9, 0.7, 0.18, chairMat, 0, 0.85, 0.16, g);     // backrest on top of the rear of the seat
+      box(0.18, 0.3, 0.75, chairMat, -0.45, 0.65, -0.125, g);
+      box(0.18, 0.3, 0.75, chairMat, 0.45, 0.65, -0.125, g);
+    });
+    o.sit = { seat: -0.22, gap: -0.95 };                   // pelvis well back from the front edge so the shins hang clear
+    return o;
+  };
+  const buildWoodenChair = (name, x, z) => {
+    const wood = mat(0x9a6b3d, { roughness: 0.7 });
+    const o = makeObject(name, x, z, 0.55, 0.55, 1.0, 'light', (g) => {
+      box(0.46, 0.05, 0.46, wood, 0, 0.475, 0, g);          // seat, top at 0.5 m
+      box(0.46, 0.5, 0.04, wood, 0, 0.75, 0.21, g);         // backrest at the +z side (the chair faces local -z)
+      for (const [lx, lz] of [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]]) box(0.04, 0.45, 0.04, wood, lx, 0.225, lz, g);
+    });
+    o.sit = { seat: 0.0, gap: -0.75 };
+    return o;
+  };
+  buildArmchair('armchair', 3.4, 3.2, 0x3d5a73);
 
   // Potted plant (light)
   makeObject('plant', -4.4, -1.2, 0.5, 0.5, 0.9, 'light', (g) => {
@@ -320,7 +346,7 @@ export function buildRoom(scene) {
 
   // ---- Decor: the rug, the windows and the picture ----
   // Not obstacles (Guy walks over the rug and never touches the wall pieces), but first-class objects all the same: the user can
-  // remove them, put them back from the Skill Machine, and slide the wall pieces along their wall.
+  // remove them, put them back from the Catalogue, and slide the wall pieces along their wall.
   // A wall piece sits at (u, v): u along the wall (z on the left wall, x on the back wall), v = height of its centre.
   // The rug sits at (u, v) = (x, z). Its group's local +z points into the room for wall pieces.
   const decor = {};
@@ -330,7 +356,7 @@ export function buildRoom(scene) {
     back: { rotY: 0, lo: -ROOM.w / 2, hi: ROOM.w / 2, plane: new THREE.Plane(new THREE.Vector3(0, 0, 1), ROOM.d / 2),
       at: (u, v) => new THREE.Vector3(u, v, -ROOM.d / 2), near: (x0, x1, z0) => z0 < -ROOM.d / 2 + 0.1, span: (x0, x1) => [x0, x1] },
   };
-  const MACHINE_RECT = { u0: -2.7, u1: -1.9, v0: 1.0, v1: 2.3 };   // the Skill Machine on the left wall
+  const MACHINE_RECT = { u0: -2.7, u1: -1.9, v0: 1.0, v1: 2.3 };   // the Catalogue on the left wall
   const overlap1 = (a0, a1, b0, b1) => a1 > b0 && a0 < b1;
 
   const makeDecor = (name, label, o, build) => {
@@ -366,7 +392,7 @@ export function buildRoom(scene) {
     return d;
   };
 
-  // Room on its wall (or, for the rug, on the floor) for `d` at (u, v)? Clear of the other pieces, the Skill Machine and furniture
+  // Room on its wall (or, for the rug, on the floor) for `d` at (u, v)? Clear of the other pieces, the Catalogue and furniture
   // standing against the wall that is taller than the piece's lower edge.
   const decorFits = (d, u, v) => {
     if (!d.wall) return Math.abs(u) <= ROOM.w / 2 - d.ex && Math.abs(v) <= ROOM.d / 2 - d.ez;     // a rug stays inside the room (rugs may overlap: each lies a little above the last)
@@ -540,7 +566,7 @@ export function buildRoom(scene) {
   makeDecor('rug', 'rug', { hx: 1.8, hz: 1.8, u: 0, v: 0.4 }, buildRug);
   makeDecor('window', 'window', { wall: 'left', hw: 0.95, hh: 0.7, u: 0.2, v: 1.8 }, buildWindow);
   makeDecor('picture', 'picture', { wall: 'back', hw: 0.5, hh: 0.35, u: 0.2, v: 1.9 }, buildPicture);
-  const DECOR_NEW = {              // decor that starts out of the room and can be added from the Skill Machine
+  const DECOR_NEW = {              // decor that starts out of the room and can be added from the Catalogue
     window2: () => makeDecor('window2', 'second window', { wall: 'back', hw: 0.95, hh: 0.7, u: 2.6, v: 1.9 }, buildWindow),
     art_mountains: () => makeDecor('art_mountains', 'mountain picture', { wall: 'left', hw: 0.5, hh: 0.345, u: 2.7, v: 1.9 }, buildMountainArt),
     art_abstract: () => makeDecor('art_abstract', 'abstract picture', { wall: 'back', hw: 0.345, hh: 0.345, u: -3.6, v: 2.1 }, buildAbstractArt),
@@ -557,7 +583,7 @@ export function buildRoom(scene) {
   ball.userData = { vel: new THREE.Vector3(), r: 0.18 };
   scene.add(ball);
 
-  // ---- Skill machine: fixed to the left wall. Tapping it opens the catalogue of objects and books. ----
+  // ---- Catalogue: fixed to the left wall. Tapping it opens the catalogue of objects and books. ----
   const machine = new THREE.Group();
   {
     const bodyMat = mat(0x232a36, { roughness: 0.45, metalness: 0.5 });
@@ -572,7 +598,7 @@ export function buildRoom(scene) {
     g2.fillStyle = grad; g2.fillRect(0, 0, 256, 192);
     g2.strokeStyle = '#46d6ff'; g2.lineWidth = 4; g2.strokeRect(6, 6, 244, 180);
     g2.fillStyle = '#9fe9ff'; g2.font = 'bold 34px sans-serif'; g2.textAlign = 'center';
-    g2.fillText('SKILL', 128, 62); g2.fillText('MACHINE', 128, 100);
+    g2.fillText('CATALOGUE', 128, 82);
     g2.font = '18px sans-serif'; g2.fillStyle = '#6fbfd6'; g2.fillText('tap to browse', 128, 150);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -798,7 +824,7 @@ export function buildRoom(scene) {
     return obj;
   };
 
-  // ---- Decor furniture and plants (added from the Skill Machine under Decor) ----
+  // ---- Decor furniture and plants (added from the Catalogue under Decor) ----
   // Flowering plant: a cream pot, green leaves and a crown of pink, yellow and white blooms
   const buildFlowerPlant = (x = 0, z = 0) => makeObject('flowerplant', x, z, 0.5, 0.5, 0.95, 'light', (g) => {
     const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.15, 0.32, 16), mat(0xe2d3b3));
@@ -862,6 +888,9 @@ export function buildRoom(scene) {
   });
 
   const NEW_OBJECTS = {            // object id -> [builder, preferred spot]
+    armchair2: [(x = 0, z = 0) => buildArmchair('armchair2', x, z, 0x8a3b4a), { x: 1.7, z: 3.0 }],
+    chair: [(x = 0, z = 0) => buildWoodenChair('chair', x, z), { x: -2.4, z: 3.0 }],
+    chair2: [(x = 0, z = 0) => buildWoodenChair('chair2', x, z), { x: -3.2, z: 3.2 }],
     flowerplant: [buildFlowerPlant, { x: -4.3, z: -3.3 }],
     tree: [buildTree, { x: 4.3, z: -2.0 }],
     coffeetable: [buildCoffeeTable, { x: 3.2, z: 1.9 }],
@@ -871,6 +900,8 @@ export function buildRoom(scene) {
     easel: [buildEasel, { x: -0.4, z: -2.8 }],
     telescope: [buildTelescope, { x: -3.5, z: 1.5 }],
   };
+
+  const chairStands = () => Object.values(objects).filter((o) => o.sit).map((o) => [o.name, 0, o.sit.gap]);   // where he stands to sit down
 
   // Footprint (w x d, centred at x,z) inside the room and clear of every other object?
   const fits = (obj, x, z, w = obj.w, d = obj.d) => {
@@ -913,7 +944,7 @@ export function buildRoom(scene) {
     },
     // Would `obj` at (x, z) sit on top of a place where Guy has to stand to use something else?
     onSomeonesStand(obj, x, z) {
-      return [['piano', 0, 0.95], ['piano', 0, 1.65], ['table', 0, 0.55], ['lamp', 0.55, 0], ['shelf', -0.7, 0], ['armchair', 0, -0.95], ['guitar', 0, 0.62], ['drums', 0.55, 1.15], ['easel', 0, 0.8]]
+      return [['piano', 0, 0.95], ['piano', 0, 1.65], ['table', 0, 0.55], ['lamp', 0.55, 0], ['shelf', -0.7, 0], ...chairStands(), ['guitar', 0, 0.62], ['drums', 0.55, 1.15], ['easel', 0, 0.8]]
         .filter(([n]) => objects[n] && objects[n] !== obj)
         .map(([n, dx, dz]) => { const o = objects[n], l = o.local(dx, dz); return { x: o.x + l.x, z: o.z + l.z }; })
         .some((q) => Math.abs(q.x - x) < obj.w / 2 + 0.55 && Math.abs(q.z - z) < obj.d / 2 + 0.55);
@@ -932,7 +963,7 @@ export function buildRoom(scene) {
           if (standsBlocked(obj, x, z)) continue;
           if (!world.ownStandClear(obj, x, z)) continue;                       // the spot he stands on to use it must be clear too
           // the middle of the room is where he dances: keep new things out of it (the last-resort pass may not)
-          if (margin > 0.1 && obj.name !== 'guitar' && Math.abs(x) < obj.w / 2 + 1.3 && Math.abs(z - 0.4) < obj.d / 2 + 1.3) continue;
+          if (margin > 0.1 && obj.name !== 'guitar' && Math.abs(x) < obj.w / 2 + 1.5 && Math.abs(z - 0.4) < obj.d / 2 + 1.5) continue;
           // leave room to walk round the back of it (the fallback pass may squeeze it in)
           if (margin > 0.1 && obj.name !== 'guitar' && Math.min(x - obj.w / 2 + 4.6, 4.6 - x - obj.w / 2, z - obj.d / 2 + 3.6, 3.6 - z - obj.d / 2) < 0.55) continue;
           return { x, z };
@@ -978,7 +1009,7 @@ export function buildRoom(scene) {
       }
       return false;
     },
-    // Objects that do not exist yet but can be added from the Skill Machine.
+    // Objects that do not exist yet but can be added from the Catalogue.
     addNew(id, avoid) {
       if (DECOR_NEW[id]) {
         if (decor[id]) return false;
