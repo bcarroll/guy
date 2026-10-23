@@ -652,7 +652,7 @@ Recorded from the owner's description. Nothing is built.
 
 **The machine.** A 3D printer, a super premium object (it is unlocked through the same premium mechanism as later rooms, not for free). It can be used once: it prints a female robot, X Bot, by morphing itself into her, using itself as the material. After that it is gone (or is the same object as X Bot; to be decided).
 
-**X Bot.** A second robot character, a female version of Guy, built from the Mixamo  model (). Rules from the description:
+**X Bot.** A second robot character, a female version of Guy, built from the Mixamo `X Bot` model (`models/mixamo/X Bot.fbx`). Rules from the description:
 - X Bot is controlled only by Guy. The user does not command her directly.
 - Guy tells her what to do. Example: Guy wants to play guitar, so he tells X Bot to play drums.
 - So X Bot needs her own activity queue (a second brain on the same world), taking orders from Guy's choices. Her orders can be any activity she can do, and she does what she is told.
