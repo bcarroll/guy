@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { Q } from './guy.js';
 import { drumHit, TRACKS } from './audio.js';
+import { sfx, drag as sfxDrag } from './sfx.js';
 import { drumStep, handFor, polyPoint, paintPlan, makeStick, makeBrush, makePalette, DRUM_STYLE_BY_TRACK } from './hobbies.js';
 
 const UPV = new THREE.Vector3(0, 1, 0);
@@ -335,7 +336,7 @@ export function installHobbies(Brain, POSES, H) {
           desired = e.group.localToWorld(V(loc.x, loc.y, loc.z + zoff));
           if (zoff < 0.012) {
             const col = finger ? seg.color : seg.color;
-            if (pp.lastUV) e.paint.stroke(pp.lastUV[0], pp.lastUV[1], pu, pv, col, seg.width);
+            if (pp.lastUV) { e.paint.stroke(pp.lastUV[0], pp.lastUV[1], pu, pv, col, seg.width); sfx('brush', Math.hypot(pu - pp.lastUV[0], pv - pp.lastUV[1]) * 30); }
             else e.paint.dab(pu, pv, col, seg.width / 2);
             pp.lastUV = [pu, pv];
             e.painted = true;
@@ -350,7 +351,7 @@ export function installHobbies(Brain, POSES, H) {
             desired.addScaledVector(fwd, Math.cos(ph) * 0.035).addScaledVector(left, Math.sin(ph) * 0.045);
             brushColor = u > 0.7 ? seg.color : pp.color;
           }
-          if (seg.type === 'dip' && u > 0.45) pp.color = seg.color;
+          if (seg.type === 'dip' && u > 0.45) { if (pp.color !== seg.color) sfx('dab'); pp.color = seg.color; }
           if (seg.type === 'mix' && u > 0.7) pp.color = seg.color;
         }
       } else pp.lastUV = null;
@@ -401,6 +402,7 @@ export function installHobbies(Brain, POSES, H) {
         out.target = t.tubePoint(0.72).add(up);
         out.w = sm((T - 0.2) / 0.7) * (1 - sm((T - (D - 0.9)) / 0.7));
         out.pushing = k > 0 && k < 1;
+        if (out.pushing) sfxDrag(0.35, 'light');          // the tube turning on its mount
         return out;
       }
       t.tube.updateWorldMatrix(true, true);
@@ -413,6 +415,7 @@ export function installHobbies(Brain, POSES, H) {
         const target = eyeT.clone().addScaledVector(d, -away).add(V(0, away * 0.6, 0));
         out.sc = this.peerControl(s, target, T > 0.3 ? 1 : 0);
         out.knob = t.tube.localToWorld(V(0.09, 0.013 * Math.cos(T * 4), -0.33 + 0.013 * Math.sin(T * 4)));
+        if (fade > 0.9 && Math.sin(T * 4) > 0.95) sfx('tick');          // the focus knob clicks round
         out.barrel = t.tubePoint(0.55).add(up);
         out.w = fade;
         out.look = away;
@@ -435,6 +438,7 @@ export function installHobbies(Brain, POSES, H) {
       const dh = V(d.x, 0, d.z).normalize();
       const ph = T < 6 ? 0 : T < 11 ? 1 : 2;
       out.ph = ph;
+      if (ph < 2 && fade > 0.5) sfx('wipe');
       if (ph === 0) {
         const a = (T - 0.8) * 6;
         const ring = t.tube.localToWorld(V(Math.cos(a) * 0.07, Math.sin(a) * 0.07 + 0.0, 0.58));

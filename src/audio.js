@@ -10,6 +10,9 @@ export function initAudio() {
   master.connect(ctx.destination);
 }
 
+// for sfx.js: the audio context and the output every sound goes through (null until the user has started the game)
+export const audio = () => ({ ctx, master });
+
 const midiToHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
 
 export function playNote(midi, dur = 0.8, gain = 0.25) {

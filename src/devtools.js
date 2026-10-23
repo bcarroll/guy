@@ -11,6 +11,7 @@ import { BOOK_CATALOG, SKILL_INFO } from './skills.js';
 import { ALBUM_CATALOG } from './albums.js';
 import { TRACKS, trackSeconds } from './audio.js';
 import { POSES } from './brain.js';
+import { counts as sfxCounts } from './sfx.js';
 
 // ---------------------------------------------------------------------------------------------------------------
 // MANIFEST: what the test knows about each asset. Keep in sync with the game (T.coverage() tells you what is missing).
@@ -518,7 +519,7 @@ T.sweepBooks = () => {
     const then = MANIFEST.books[def.id] && MANIFEST.books[def.id].then;
     const use = then ? T.run(then) : null;
     out.push(result(`book:${def.id}`, added && learned && (!use || use.pass) && errors.length === base, {
-      added, learned, seconds: t, trail: learned ? undefined : trail, stateWhenStuck: where, then, usedOk: use ? use.pass : null, useDetail: use && !use.pass ? { completed: use.completed, overlaps: use.overlaps, errors: use.errors, idleAfter: use.idleAfter } : null, errors: errors.slice(base),
+      added, learned, seconds: t, trail: learned ? undefined : trail, stateWhenStuck: where, then, usedOk: use ? use.pass : null, useDetail: use && !use.pass ? { completed: use.completed, overlaps: use.overlaps, errors: use.errors, idleAfter: use.idleAfter, where: use.where } : null, errors: errors.slice(base),
     }));
   }
   return out;
@@ -1013,6 +1014,39 @@ T.sweepBookRules = () => {
   return out;
 };
 
+// Sound effects: every kind of event must ask for its sound (sfx.js counts the requests even with no audio running).
+T.sweepSounds = () => {
+  const out = [], b = B(), w = W();
+  const heard = (name, fn) => { const c0 = sfxCounts[name] || 0; fn(); return (sfxCounts[name] || 0) - c0; };
+  const sound = (label, name, fn, min = 1) => { const base = errors.length; let n = 0; try { n = heard(name, fn); } catch (e) { out.push(result(`sound: ${label}`, false, { error: String(e) })); return; } out.push(result(`sound: ${label}`, n >= min && errors.length === base, { name, heard: n })); };
+  T.removeAll(); T.forget(); skillsOf().fading.clear(); T.settle(); T.home();
+  for (const id of ['table', 'armchair', 'lamp', 'plant', 'guitar', 'easel', 'telescope', 'piano', 'bench']) T.addObject(id);
+  // the ball
+  T.addObject('ball');
+  const ball = w.ball;
+  sound('the ball hits the floor', 'bounce', () => { ball.position.set(-1.5, 2.2, 2.4); ball.userData.vel.set(0, 0, 0); step(2); });
+  sound('the ball is kicked', 'kick', () => { b.kickBall(new THREE.Vector3(1, 0, 0), true); });
+  sound('the ball hits a wall', 'wallbump', () => { ball.position.set(3.5, 0.18, 2.8); ball.userData.vel.set(9, 0, 0); step(1.5); });
+  sound('the ball hits furniture', 'knock', () => { const o = w.objects.armchair; ball.position.set(o.x - 1.6, 0.18, o.z); ball.userData.vel.set(5, 0, 0); step(1.2); });
+  // reading: grab, open, page turns, close, sit
+  T.learn([]); T.settle(); T.home();
+  const readBase = {}; for (const k of ['bookgrab', 'bookopen', 'page', 'bookclose', 'sit', 'step']) readBase[k] = sfxCounts[k] || 0;
+  b.queue = []; b.step = null; b.pendingActivity = null; b.choose('read'); let t = 0; while (t < 120 && b.last === 'read') { step(0.25); t += 0.25; }
+  for (const k of ['bookgrab', 'bookopen', 'page', 'bookclose', 'sit', 'step']) out.push(result(`sound: reading makes a "${k}" sound`, (sfxCounts[k] || 0) > readBase[k], { heard: (sfxCounts[k] || 0) - readBase[k] }));
+  // activities
+  const act = (label, name, activity, min = 1) => sound(label, name, () => { T.prep(activity); T.run(activity, { prep: false }); }, min);
+  act('the guitar is lifted and put back', 'guitar', 'guitar', 2);
+  act('the lamp switch clicks', 'click', 'lamp');
+  act('furniture is pushed along the floor', 'drag', 'rearrange');
+  act('a plant leaf rustles', 'leaf', 'plant');
+  act('the brush and the paint', 'brush', 'paint');
+  act('the telescope focus ticks', 'tick', 'stargaze');
+  act('wiping the telescope', 'wipe', 'scopecare');
+  act('he sits down in a chair', 'sit', 'sit');
+  sound('learning something chimes', 'chime', () => { /* main.js asks for it when brain.onLearn fires */ if (brain.onLearn) brain.onLearn({ blurb: 'a test' }); });
+  return out;
+};
+
 T.runAll = () => {
   const report = { coverage: T.coverage() };
   report.objects = summarise(T.sweepObjects());
@@ -1027,6 +1061,7 @@ T.runAll = () => {
   report.removals = summarise(T.sweepRemovals());
   report.moves = summarise(T.sweepMoves());
   report.bookRules = summarise(T.sweepBookRules());
+  report.sounds = summarise(T.sweepSounds());
   report.holding = summarise(T.sweepHolding());
   report.walls = summarise(T.sweepWalls());
   report.decor = summarise(T.sweepDecor());

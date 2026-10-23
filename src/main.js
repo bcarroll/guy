@@ -5,6 +5,7 @@ import { Guy } from './guy.js';
 import { Brain } from './brain.js';
 import { initAudio } from './audio.js';
 import { Skills, SKILL_INFO } from './skills.js';
+import { sfx, drag as sfxDrag, setMuted, isMuted } from './sfx.js';
 import { initMachine } from './machine.js';
 import { ALBUM_CATALOG } from './albums.js';
 
@@ -117,12 +118,12 @@ function showToast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove('show'), 6000);
 }
-brain.onLearn = (def) => showToast(`Guy learned ${def.blurb}!`);
+brain.onLearn = (def) => { showToast(`Guy learned ${def.blurb}!`); sfx('chime'); };
 
 // ---- the Catalogue on the wall: tap it for the catalogue of objects and books ----
 const machineUI = initMachine({
   world, guy, persist: !params.has('fresh'),
-  notify: (msg) => { showToast(msg); renderSkills(); },
+  notify: (msg) => { showToast(msg); renderSkills(); sfx('pop'); },
   remove: (id) => removeById(id),
 });
 machineUI.restoreExtras();
@@ -173,7 +174,7 @@ function collideBall(b, v, r) {
       }
       p.x += nx * pen; p.z += nz * pen;
       const vn = v.x * nx + v.z * nz;
-      if (vn < 0) { v.x -= 1.6 * vn * nx; v.z -= 1.6 * vn * nz; } // restitution 0.6
+      if (vn < 0) { if (-vn > 0.6) sfx('knock', -vn); v.x -= 1.6 * vn * nx; v.z -= 1.6 * vn * nz; } // restitution 0.6
     }
   }
 }
@@ -189,15 +190,15 @@ function updateBall(dt) {
   v.y -= 9.8 * dt;
   if (b.position.y < r) {
     b.position.y = r;
-    if (Math.abs(v.y) > 0.6) v.y *= -0.55; else v.y = 0;
+    if (Math.abs(v.y) > 0.6) { sfx('bounce', Math.abs(v.y)); v.y *= -0.55; } else v.y = 0;
     v.x *= 0.995; v.z *= 0.995;
   }
   if (b.position.y <= r + 0.001) { const f = Math.exp(-dt * 0.9); v.x *= f; v.z *= f; }
   const lim = [4.95 - r, 3.95 - r];
-  if (Math.abs(b.position.x) > lim[0]) { b.position.x = Math.sign(b.position.x) * lim[0]; v.x *= -0.7; }
-  if (Math.abs(b.position.z) > lim[1]) { b.position.z = Math.sign(b.position.z) * lim[1]; v.z *= -0.7; }
+  if (Math.abs(b.position.x) > lim[0]) { b.position.x = Math.sign(b.position.x) * lim[0]; if (Math.abs(v.x) > 0.7) sfx('wallbump', Math.abs(v.x)); v.x *= -0.7; }
+  if (Math.abs(b.position.z) > lim[1]) { b.position.z = Math.sign(b.position.z) * lim[1]; if (Math.abs(v.z) > 0.7) sfx('wallbump', Math.abs(v.z)); v.z *= -0.7; }
   collideBall(b, v, r);
-  if (b.position.y > 3.2 - r) { b.position.y = 3.2 - r; v.y *= -0.5; }
+  if (b.position.y > 3.2 - r) { b.position.y = 3.2 - r; if (Math.abs(v.y) > 1) sfx('knock', Math.abs(v.y)); v.y *= -0.5; }
   b.rotation.x += v.z * dt / r; b.rotation.z -= v.x * dt / r;
   if (guy.loaded) {
     tmp.copy(b.position).sub(guy.pos).setY(0);
@@ -452,6 +453,7 @@ menu.addEventListener('click', (e) => {
   }
 });
 addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
+addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') { setMuted(!isMuted()); showToast(isMuted() ? 'Sound effects off (M to turn them back on)' : 'Sound effects on'); } });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 // Capture phase so we run before OrbitControls and can keep it from orbiting while we handle an object.
@@ -529,12 +531,16 @@ canvas.addEventListener('pointermove', (e) => {
   if (!p) return;
   const o = drag.obj;
   const nx = p.x + drag.off.x, nz = p.z + drag.off.z;
+  const ox = o.x, oz = o.z;
   if (canPlace(o, nx, nz)) o.set(nx, nz);
   else if (canPlace(o, nx, o.z)) o.set(nx, o.z); // slide along obstacles
   else if (canPlace(o, o.x, nz)) o.set(o.x, nz);
+  const moved = Math.hypot(o.x - ox, o.z - oz);
+  if (moved > 0.004) sfxDrag(Math.min(1, moved * 25), o.weight);          // scraping along the floor
 });
 
 const endPress = (e) => {
+  if (drag && drag.obj && !drag.ball) sfx('place', drag.obj.weight === 'heavy' ? 0.8 : drag.obj.weight === 'medium' ? 0.5 : 0.3);   // set down
   if (pending) {
     clearTimeout(pending.timer);
     // let go of a held rug without moving it: open its menu

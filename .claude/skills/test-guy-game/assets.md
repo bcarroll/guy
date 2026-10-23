@@ -189,3 +189,19 @@ book list popup (long-press a lower shelf at a book: title, read / not read).
 - Forgetting a book leaves a gap on the shelf (books keep their slots; nothing slides along), and `takeBook` ignores a book that was forgotten on the way to the shelf.
 - `sweepBookRules` must set `forceBook` after `T.settle()` (settling can start a random read that uses the request up).
 - `OVERLAP_FAIL` is now 6 samples: 4-5 sample overlaps were walking past a box at the edge of the 0.28 m safety margin (easel, chairs); every real clip so far was 8+.
+
+## Sound effects (`src/sfx.js`; hooks in brain.js, hobbybrain.js, main.js, room.js)
+
+| Event | Sound |
+|---|---|
+| ball hits floor / wall / furniture / ceiling | `bounce`, `wallbump`, `knock` (by speed); kicked: `kick`; dribble bounce; set down |
+| book taken from the shelf / returned, opened, page turned, closed | `bookgrab`, `bookclose`, `bookopen`, `page`, `bookclose`; record sleeves: `sleeve` |
+| furniture pushed by Guy or dragged by the user | continuous `drag` scrape (pitch by weight); drop: `place` |
+| guitar picked up / put back | `guitar` (knock + soft strum) |
+| lamp switch, stereo button | `click` |
+| sitting on a chair, bench, stool | `sit` (thud + creak) |
+| plant leaf, brush stroke, paint dab, telescope focus, wiping | `leaf`, `brush`, `dab`, `tick`, `wipe` |
+| footsteps | `step` |
+| Guy learns something, Catalogue adds | `chime`, `pop` |
+
+Checked by `T.sweepSounds` (event -> counted request). Whether it *sounds* right can only be judged by listening. Press **M** to mute the effects.

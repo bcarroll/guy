@@ -5,6 +5,7 @@ import { ALBUM_CATALOG } from './albums.js';
 import { ROOM } from './room.js';
 import { randomSong, makeJam, plinkSong } from './songs.js';
 import { installHobbies } from './hobbybrain.js';
+import { sfx, drag as sfxDrag } from './sfx.js';
 
 const PLANT_NAMES = ['plant', 'flowerplant', 'tree'];   // objects Guy can tend with the 'plant' activity
 const lerp = THREE.MathUtils.lerp;
@@ -588,10 +589,10 @@ export class Brain {
       // from the stereo's long-press menu: switch it on (the song the player has selected) or off
       sit: () => ['sitting down for a rest', this.chairStep((c) => [this.play('sitRest', rand(10, 16), { chairSit: true, chair: c.name })])],
       sitguitar: () => ['sitting down to play the guitar', this.walkAt('guitar', 0, 0.62, Math.PI),
-        this.play('takeGuitar', 2.4, { guitar: true, at: [1.0, () => { this.gtr.held = true; }] }),
+        this.play('takeGuitar', 2.4, { guitar: true, at: [1.0, () => this.setGuitarHeld(true)] }),
         this.chairStep((c) => [this.play('sitGuitar', rand(22, 32), { guitar: true, chairSit: true, chair: c.name }),
           { ...this.walkAt('guitar', 0, 0.62, Math.PI), fx: { guitar: true } },
-          this.play('putGuitar', 2.4, { guitar: true, at: [1.3, () => { this.gtr.held = false; }] })], true)],
+          this.play('putGuitar', 2.4, { guitar: true, at: [1.3, () => this.setGuitarHeld(false)] })], true)],
       slouch: () => ['slouching on the drum stool', this.walkAt('drums', 0.55, 1.15), this.walkAt('drums', 0.55, 0.6, Math.PI, true),
         this.play('slouch', rand(11, 16), { sitDrum: true }), this.walkAt('drums', 0.55, 1.15, null, true)],
       stereoon: () => ['switching the stereo on', this.walkAt('table', 0, 0.55, Math.PI),
@@ -622,7 +623,7 @@ export class Brain {
           const want = this.forcePlant; this.forcePlant = null;
           const name = want && this.obj(want) ? want : pick(PLANT_NAMES.filter((n) => this.obj(n)));
           if (!name) { this.queue.length = 0; return []; }
-          return [...this.sideStep(name, name === 'tree' ? 0.75 : 0.62).fn(), this.play('reach', 2.6, { needs: [name], target: () => this.plantLeaf(name) })];
+          return [...this.sideStep(name, name === 'tree' ? 0.75 : 0.62).fn(), this.play('reach', 2.6, { needs: [name], at: [1.3, () => sfx('leaf')], target: () => this.plantLeaf(name) })];
         },
       }],
       // decorating book: dust a picture frame, wall light or window sill, wiping along its lower edge
@@ -656,17 +657,17 @@ export class Brain {
         this.play('toss', 6.85, { ball: true }),
         this.play('putdown', 2.0, { ball: true, at: [1.0, () => this.releaseBall()] })],
       guitar: () => ['playing the guitar', this.walkAt('guitar', 0, 0.62, Math.PI),
-        this.play('takeGuitar', 2.4, { guitar: true, at: [1.0, () => { this.gtr.held = true; }] }),
+        this.play('takeGuitar', 2.4, { guitar: true, at: [1.0, () => this.setGuitarHeld(true)] }),
         this.play('guitar', 26, { guitar: true }),
-        this.play('putGuitar', 2.4, { guitar: true, at: [1.3, () => { this.gtr.held = false; }] })],
+        this.play('putGuitar', 2.4, { guitar: true, at: [1.3, () => this.setGuitarHeld(false)] })],
       // the stereo is on: strum along in time and in the key of whatever is playing
       jamguitar: () => [`playing the guitar along with ${this.nowPlaying().title}`, this.walkAt('guitar', 0, 0.62, Math.PI),
-        this.play('takeGuitar', 2.4, { guitar: true, at: [1.0, () => { this.gtr.held = true; }] }),
+        this.play('takeGuitar', 2.4, { guitar: true, at: [1.0, () => this.setGuitarHeld(true)] }),
         this.play('guitar', rand(30, 45), { guitar: true, sync: true }),
-        this.play('putGuitar', 2.4, { guitar: true, at: [1.3, () => { this.gtr.held = false; }] })],
+        this.play('putGuitar', 2.4, { guitar: true, at: [1.3, () => this.setGuitarHeld(false)] })],
       // he was interrupted while holding the guitar: take it back to its stand
       putguitar: () => ['putting the guitar back', this.walkAt('guitar', 0, 0.62, Math.PI),
-        this.play('putGuitar', 2.4, { guitar: true, at: [1.3, () => { this.gtr.held = false; }] })],
+        this.play('putGuitar', 2.4, { guitar: true, at: [1.3, () => this.setGuitarHeld(false)] })],
       // he was interrupted while holding the ball: put it down
       dropball: () => ['putting the ball down', this.play('putdown', 2.0, { ball: true, at: [1.0, () => this.releaseBall()] })],
     };
@@ -825,7 +826,10 @@ export class Brain {
     };
   }
 
-  releaseBall() { this.ballHeld = false; }
+  releaseBall() { this.ballHeld = false; sfx('bounce', 1.5); }   // set down on the floor
+
+  // picking the guitar up off its stand or putting it back makes a noise
+  setGuitarHeld(held) { this.gtr.held = held; sfx('guitar'); }
 
   // Where the ball is while Guy handles it, and where his hands go: hands on either side, a hand on top, ...
   computeBall(s) {
@@ -856,6 +860,8 @@ export class Brain {
         this.ballPos = c;
       } else if (t < s.dur - 0.9) {                          // bounce: hand follows the top of the ball, then pushes down
         const u = ((t - 0.7) / 0.7) % 1;
+        const cyc = Math.floor((t - 0.7) / 0.7);
+        if (cyc !== s.cyc) { s.cyc = cyc; sfx('bounce', 3.5); }          // the ball hits the floor
         const y = 0.18 + 0.52 * 4 * u * (1 - u);
         const c = D(y);
         st = { R: P(-0.28, Math.max(y + 0.18, 0.7), 0.36), wR: 1, L: c, wL: 0, stop: handLen * 0.75, look: 0.25 };
@@ -1058,6 +1064,7 @@ export class Brain {
     const s = pick(spots), d = s.d, name = d.name, t0 = this.time;
     const y = clamp(d.v - d.hh + 0.12, 0.95, 1.7), span = Math.min(d.hw * 0.6, 0.35);
     const target = () => {
+      sfx('wipe');
       const u = d.u + Math.sin((this.time - t0) * 2.4) * span;
       return d.wall === 'back' ? new THREE.Vector3(u, y, -ROOM.d / 2 + 0.06) : new THREE.Vector3(-ROOM.w / 2 + 0.06, y, u);
     };
@@ -1084,14 +1091,16 @@ export class Brain {
     const shelf = this.obj('shelf');
     if (!shelf || (!shelf.books.includes(book) && !(shelf.albums || []).includes(book))) { this.queue = []; this.step = null; return; }   // it was forgotten on the way
     if (book.kind !== 'album') this.albumOnTable = false;   // a book in his hand is not a record standing by the stereo
+    if (this.held && this.held !== book) this.held.mesh.visible = true;   // never lose a book he was still holding (it goes back on the shelf)
     this.held = book;
+    sfx(book.kind === 'album' ? 'sleeve' : 'bookgrab');
     book.mesh.visible = false;
     if (book.kind === 'album') { this.albumMesh.userData.setArt(book.def); this.albumMesh.visible = true; }
     else { this.bookMesh.userData.setTitle(book.def.title, book.color); this.bookMesh.visible = true; }
   }
 
   returnBook() {
-    if (this.held) this.held.mesh.visible = true;
+    if (this.held) { this.held.mesh.visible = true; sfx(this.held.kind === 'album' ? 'sleeve' : 'bookclose'); }
     this.held = null;
     this.albumOnTable = false;
     this.bookMesh.visible = false;
@@ -1296,6 +1305,7 @@ export class Brain {
     const v = this.w.ball.userData.vel;
     v.copy(dir).multiplyScalar(skilled ? rand(4, 6.5) : rand(0.9, 1.6));
     v.y = skilled ? 1.5 : 0;
+    sfx('kick', skilled ? 1 : 0.4);
   }
 
   currentBeat() { return this.music ? (performance.now() / 1000 - this.musicT0) / this.beatLen : this.time / BEAT; }
@@ -1313,6 +1323,7 @@ export class Brain {
     const rec = this.albumOf(playable);
     if (rec) { this.lastTrackOf ||= {}; this.lastTrackOf[rec.id] = playable; }          // so the next time that record plays, it starts somewhere else
     this.w.boombox.led.material.color.set(0x22ff66);
+    sfx('click');
   }
 
   // The record a track belongs to (and the track after it on that record, wrapping round to the first).
@@ -1348,6 +1359,7 @@ export class Brain {
     this.music = null;
     this.userMusic = false;
     this.w.boombox.led.material.color.set(0x333333);
+    sfx('click');
   }
 
   // ---- Playback controls (long-press the stereo): previous / play / stop / next ----
@@ -1699,6 +1711,10 @@ export class Brain {
         }
         if (!finished) {
           this.grid = makeGrid(this.w.obstacles, INFLATE);
+          if (s.fx && s.fx.guitar) {                               // carrying the guitar sticks his hands out: give furniture more room when the way is clear
+            const wide = makeGrid(this.w.obstacles, INFLATE + 0.14);
+            if (!cellBlocked(wide, s.x, s.z) && !cellBlocked(wide, root.position.x, root.position.z)) this.grid = wide;
+          }
           s.path = s.direct ? [{ x: s.x, z: s.z }] : findPath(this.grid, root.position.x, root.position.z, s.x, s.z);
         }
       }
@@ -1713,7 +1729,8 @@ export class Brain {
           const facing = Math.abs(angDiff(want, root.rotation.y));
           const speed = clamp(finalDist * 2, 0.4, 1.25) * (facing < 0.8 ? 1 : 0.15) * (s.push ? s.push.spd / 1.1 : 1);
           this.moveBy(Math.sin(root.rotation.y) * speed * dt, Math.cos(root.rotation.y) * speed * dt);
-          if (s.push) s.push.obj.set(root.position.x + s.push.relx, root.position.z + s.push.relz);
+          if (s.push) { s.push.obj.set(root.position.x + s.push.relx, root.position.z + s.push.relz); sfxDrag(clamp(speed / 1.1, 0.25, 1), s.push.obj.weight); }   // furniture scraping along the floor
+          else if (Math.floor(this.walkPhase / Math.PI) !== Math.floor((this.walkPhase + speed * dt * 5.2) / Math.PI)) sfx('step');
           this.walkPhase += speed * dt * 5.2;
           this.moving = true;
           this.stuckT += dt;
@@ -1802,6 +1819,12 @@ export class Brain {
       if (turnT >= 2.0) { tn.start = null; tn.next = s.t + rand(4.5, 7); turnT = 0; }
       else if (turnT > 0.35 && turnT < 1.15) sheet = Math.PI * sm((turnT - 0.4) / 0.7);
     }
+    // sounds: the cover opens and closes, and the page rustles as it crosses
+    const wasOpen = this._wasOpen || false;
+    if (open > 0.5 && !wasOpen) { this._wasOpen = true; sfx('bookopen'); }
+    else if (open < 0.4 && wasOpen) { this._wasOpen = false; sfx('bookclose'); }
+    if (sheet !== null && !this._pageSound) { this._pageSound = true; sfx('page'); }
+    else if (sheet === null) this._pageSound = false;
     this.read = { open, turning: tn.start !== null, turnT, sheet };
   }
 
@@ -1935,6 +1958,7 @@ export class Brain {
     const sm = (x) => smooth(clamp(x, 0, 1));
     const T = s.t, D = s.dur, gap = c.sit.gap, seat = c.sit.seat;
     const z = T < 0.9 ? lerp(gap, seat, sm(T / 0.9)) : T < D - 0.9 ? seat : lerp(seat, gap, sm((T - (D - 0.9)) / 0.9));
+    if (T >= 0.8 && !s.satSound) { s.satSound = true; sfx('sit', c.weight === 'light' ? 0.35 : 0.6); }
     const l = c.local(0, z);
     root.position.x = c.x + l.x;
     root.position.z = c.z + l.z;
@@ -1954,6 +1978,7 @@ export class Brain {
     else if (T < D - 1.6) z = seat2;
     else if (T < D - 0.8) z = lerp(seat2, seat1, sm((T - (D - 1.6)) / 0.8));
     else z = lerp(seat1, gap, sm((T - (D - 0.8)) / 0.8));
+    if (T >= 0.8 && !s.satSound) { s.satSound = true; sfx('sit', 0.4); }
     const l = p.local(0, z), lb = p.local(0, z + 0.05);
     root.position.x = p.x + l.x;
     root.position.z = p.z + l.z;

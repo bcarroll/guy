@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { BOOK_DEFS } from './skills.js';
+import { sfx } from './sfx.js';
 
 export const ROOM = { w: 10, d: 8, h: 3.2 }; // x in [-5,5], z in [-4,4]
 
@@ -292,7 +293,7 @@ export function buildRoom(scene) {
       shadeMat.emissiveIntensity = this.on ? 0.9 : 0;
       for (const f of this.followers || []) f(this.on, this.color);     // wall lights glow with the lamp
     },
-    set(on) { this.on = on; if (!on) this.mode = 'normal'; this.apply(); },
+    set(on) { this.on = on; if (!on) this.mode = 'normal'; sfx('click'); this.apply(); },
     toggle() { this.set(!this.on); },
     setLook(hex, base) { this.mode = 'normal'; this.color.set(hex); this.base = base; this.on = true; this.apply(); },
     party() { this.mode = 'party'; this.on = true; this.apply(); },

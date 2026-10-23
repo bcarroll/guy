@@ -57,6 +57,7 @@ individually. Current baseline: everything passing, `T.errors` empty (run it 3-4
 | `T.sweepInterrupts()` | Interrupts every activity part-way (`skip()`); he must tidy up and end idle. | idle, no exceptions |
 | `T.sweepMoves()` | While Guy uses the piano (standing and seated), drums, easel, telescope, guitar or armchair, drags the object 0.6 m. He must let go (stand up / step away) instead of having his arms pulled along. | pose changes or the step is wound down within ~1 s, no exceptions, idle afterwards |
 | `T.sweepBookRules()` | **Remove vs Forget** on a shelf book (Remove: back to the Catalogue, skill kept; Forget: back to the Catalogue, skill fades over 150 s, Speed Reading over 300 s, reading again restores it; refused while he holds the book) and **Speed Reading** (stays at the shelf, much faster, still learns; without it he sits; the effect fades gradually). | all pass |
+| `T.sweepSounds()` | Sound effects: each kind of event must ask for its sound (`src/sfx.js` counts requests even without audio): ball floor / wall / furniture bounce and kick, reading (grab, open, page turn, close, sit), guitar lift and put-down, lamp and stereo clicks, furniture dragging, leaf, brush, telescope tick and wipe, chair, learning chime. Audio itself cannot be heard from the harness. | each event heard at least once |
 | `T.sweepRemovals()` | Removes each object an activity depends on, part-way through, then restores it. | no exceptions, he recovers |
 | `T.sweepPlaylist()` | The stereo's playlist: every record has 3+ playable songs with unique titles, the player lists them all, select / next / previous change the song, a song hands over to the next one on its record after its minute (and wraps), and Guy does not repeat a song or a record back to back. | all pass |
 | `T.sweepWalls()` | The drum kit and the easel pushed against the back and left walls in every rotation: where the stool or easel spot is reachable he uses it within 15 s; where it is not he declines (the Interact button says why) and a forced attempt is dropped in under 20 s. | all pass |
@@ -115,7 +116,7 @@ Use synthetic pointer events on the canvas, as the tests in this repo did (wrap 
 - long-press a **book** on the lower shelves: popup lists the books with read / not read (✅ / 📕), updating as Guy reads; clicking an unread book makes Guy read exactly that one next (`brain.requestRead(id)`), read books are not clickable; each book has **Remove** (back to the Catalogue, Guy keeps what he learned) and **Forget** (back to the Catalogue, the skill fades gradually) buttons
 - long-press the **top shelf** when it holds records: record list; long-press lower shelves: normal menu
 - playback panel: play / stop / previous / next, track list updates, Guy joins in
-- drag furniture (heavy things too), drop onto Guy or walls is refused
+- drag furniture (heavy things too), drop onto Guy or walls is refused; dragging scrapes, dropping thuds, **M** mutes the sound effects
 
 ## 5. Reporting
 
