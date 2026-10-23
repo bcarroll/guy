@@ -23,6 +23,7 @@ import { install as installCharacters } from './qa-characters.js';
 import { install as installAudio } from './qa-audio.js';
 import { install as installShots } from './qa-shots.js';
 import { counts as sfxCounts } from './sfx.js';
+import { BARKS, NO_BARK, resetBarks } from './barks.js';
 
 // ---------------------------------------------------------------------------------------------------------------
 // MANIFEST: what the test knows about each asset. Keep in sync with the game (T.coverage() tells you what is missing).
@@ -3133,7 +3134,8 @@ T.sweepVoice = async () => {
     out.push(result('voice: the audience ends when her activity is over', V.audienceOn() === false && !gal.audience));
     const r6 = V.run('play the piano');
     out.push(result('voice: after that the user is talking to Guy again', r6.lines[0] && r6.lines[0].who === 'guy', { lines: L(r6) }));
-    // 5. Guy busy: he hands it over by himself
+    // 5. Guy busy: he hands it over by himself (first he puts down whatever he picked up on his own while the clock ran)
+    b.skip(true); b.queue = []; b.step = null; T.settle(); T.home();
     gbr.skip(true); gbr.pendingActivity = null; b.pendingActivity = null; b.queue = []; b.step = null; b.last = 'wander'; gal.audience = null;
     b.lock = { name: 'ball' };
     const r7 = V.run('play the guitar');
@@ -3161,6 +3163,20 @@ T.sweepVoice = async () => {
     out.push(result('voice: by default they only speak in an interaction (a bark is not spoken)', V.tts.settings.chatter === 'quiet' && V.tts.log.length === n0));
     V.tts.set('chatter', 'chatty'); V.tts.say('guy', 'Starting the piano.', 'bark'); const spoke = V.tts.log.length === n0 + 1; V.tts.set('chatter', 'quiet');
     out.push(result('voice: "chatty" lets them remark on what they are doing', spoke));
+    // 10. remarks as they start something (chatty only): every activity has a line or is on the silent list; quiet says nothing; chatty speaks, at most one every 25 s
+    const acts = Object.keys(MANIFEST.activities).filter((k) => !MANIFEST.activities[k].alias);
+    const noLine = acts.filter((k) => !BARKS[k] && !NO_BARK.includes(k)), stale = Object.keys(BARKS).filter((k) => !acts.includes(k)), both = Object.keys(BARKS).filter((k) => NO_BARK.includes(k));
+    out.push(result('voice: every activity has a line to say as it starts, or is on the silent list (a new activity needs one)', !noLine.length && !stale.length && !both.length, { noLine, stale, both }));
+    V.tts.stop(); for (let i = 0; i < 40 && V.tts.speaking; i++) await wait(100);            // (a robot does not remark over a line being spoken)
+    resetBarks(); V.tts.set('chatter', 'quiet'); const nb = V.tts.log.length;
+    b.queue = []; b.step = null; b.choose('stretch');
+    out.push(result('voice: quiet (the default): starting an activity says nothing', V.tts.log.length === nb));
+    V.tts.set('chatter', 'chatty'); resetBarks(); b.queue = []; b.step = null; b.choose('stretch');
+    const first = V.tts.log.slice(nb).filter((l) => l.kind === 'bark');
+    b.queue = []; b.step = null; b.choose('wave');
+    const second = V.tts.log.slice(nb).filter((l) => l.kind === 'bark');
+    out.push(result('voice: chatty: Guy remarks as he starts something, but not twice within 25 s', first.length === 1 && first[0].who === 'guy' && BARKS.stretch.includes(first[0].text) && second.length === 1, { first, second: second.length }));
+    V.tts.set('chatter', 'quiet'); V.tts.stop(); resetBarks();
     V.tts.stop();
   } catch (e) { if (e.message !== 'no GAL') out.push(result('voice: sweep ran without throwing', false, { error: String(e && e.stack || e).slice(0, 400) })); }
   finally { window.__voiceNoAudio = false; window.__screenLock.setMode('off', { quiet: true }); b.lock = null; galReset(); T.resetRooms(); T.home(); T.removeAll(); T.settle(); }

@@ -183,6 +183,7 @@ export class Gal {
     root.position.set(x, 0, z);
     this.brain = new GalBrain(this.g, this.w, (t) => this.opts.ui && this.opts.ui(t), skills, guy);
     this.brain.onLearnMany = (defs) => { if (this.opts.toast) this.opts.toast(`GAL learned ${defs.length} skills!`); sfx('chime'); };
+    this.brain.onStart = (n) => { if (this.opts.onStart) this.opts.onStart(n); };
     this.brain.onWorkstation = (b) => { if (this.opts.onWorkstation) this.opts.onWorkstation(b); };
     this.brain.onLearn = (def) => { if (this.opts.toast) this.opts.toast(`GAL learned ${def.blurb}!`); sfx('chime'); };
     // each is an obstacle for the other
