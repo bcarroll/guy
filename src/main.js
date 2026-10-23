@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { initScreenLock } from './screenlock.js';
 import { initVoice as initTTS } from './tts.js';
 import { createVoice } from './voice.js';
+import { initWorkstation } from './workstation.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { buildRoom, ROOM } from './room.js';
 import { Guy } from './guy.js';
@@ -117,7 +118,7 @@ world.gal = new Gal(world, {
   scene, guyBrain: brain, persist: !params.has('fresh'), skillsInit: params.get('skills') === 'all' || params.get('skills') === 'none' ? params.get('skills') : null,
   ui: (t) => { galLine.hidden = false; galLabel.textContent = t; },
   toast: (m) => { showToast(m); if (machineUI.isOpen()) machineUI.refresh(); }, onBuilt: (m) => showToast(m),
-  speak: (who, text, kind) => tts.say(who, text, kind),
+  speak: (who, text, kind) => tts.say(who, text, kind), onWorkstation: (b) => workstation.open(b),
 });
 world.gal.preload();
 // Guy's paintings: hung on the walls of any room, the rest kept in the Catalog (they are saved unless ?fresh)
@@ -541,6 +542,7 @@ function interactLabel(name) {
     case 'welder': return '🔥 Weld Something';
     case 'anvil': return '🔨 Hammer Metal';
     case 'botprinter': return '🤖 Build GAL';
+    case 'workstation': return '🖥️ Use Workstation';
     case 'plant': case 'flowerplant': case 'tree': return '🌱 Tend Plant';
     default: return brain.obj(name) && brain.obj(name).guitar ? '🎸 Play Guitar' : brain.obj(name) && brain.obj(name).kind === 'footstool' ? '🪜 Stand on It to Clean' : brain.obj(name) && brain.obj(name).sit ? '🪑 Sit Down' : '▶ Use';
   }
@@ -672,6 +674,11 @@ const screenLock = initScreenLock({
 });
 screenLock.onChange(() => { controls.enabled = screenLock.cameraOk(); });
 window.__screenLock = screenLock;
+
+// The Learning Workstation's panel opens for whichever robot tapped the screen
+const workstation = initWorkstation({ world, toast: showToast });
+brain.onWorkstation = (b) => workstation.open(b);
+window.__workstation = workstation;
 
 // Typed commands (the same path the microphone will use): the 💬 button opens a box; Enter sends it to Guy.
 const voice = createVoice({ world, brain, screen: screenLock, say: (who, text, kind) => tts.say(who, text, kind), toast: showToast });

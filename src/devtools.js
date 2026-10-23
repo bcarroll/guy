@@ -43,6 +43,7 @@ export const MANIFEST = {
     workbench: { room: 'workshop', skills: ['workshop'] }, toolbox: { room: 'workshop', skills: ['workshop'] }, mallet: { room: 'workshop', skills: ['workshop'] },
     woodfactory: { room: 'workshop', skills: ['workshop.materials'] }, saw: { room: 'workshop', skills: ['workshop.materials'] }, sander: { room: 'workshop', skills: ['workshop.materials'] },
     botprinter: { skills: [] },       // the Build a Bot machine (premium, one use): tested by sweepGal
+    workstation: { skills: [] },      // the Learning Workstation (premium): tested by sweepWorkstation
     footstool: { room: 'workshop', built: true }, woodshelves: { room: 'workshop', built: true }, builtchair: { room: 'workshop', built: true }, metalchair: { room: 'workshop', built: true }, bookshelf2: { room: 'workshop', built: true }, eguitar: { room: 'workshop', built: true },
     diningtable3: { room: 'workshop', built: true, alsoRoom: 'restaurant' }, diningtable4: { room: 'workshop', built: true, alsoRoom: 'restaurant' },       // (they go in the Restaurant, so it has to be there)
     // the metal line (tested by sweepMetal)
@@ -115,6 +116,7 @@ export const MANIFEST = {
     // internal recovery activities and aliases: exercised through the interruption sweep, not on their own
     books: { alias: true }, putback: { internal: true }, putguitar: { internal: true }, dropball: { internal: true }, lighton: { internal: true },
     hangpaint: { objects: ['easel'], painted: true, max: 220, touches: ['easel'] }, putcanvas: { internal: true },      // hanging a painting (sweepPaintings tests it in depth)
+    learn: { internal: true },      // using the Learning Workstation: tested by sweepWorkstation
     buildbot: { internal: true }, bandjam: { internal: true }, bandplay: { internal: true }, orderbuild: { internal: true },      // Guy and GAL: tested by sweepGal
     visit: { internal: true }, leave: { internal: true }, stuck: { internal: true }, rwait: { internal: true },      // rwait: waiting by the till for customers (tested by sweepRestaurant)
          // through the door of an added room and back: tested by sweepVisit
@@ -2911,9 +2913,73 @@ T.runAll = () => {
   report.metal = S(T.sweepMetal);
   report.needs = S(T.sweepNeeds);
   report.gal = S(T.sweepGal);
+  report.workstation = S(T.sweepWorkstation);
   report.paintings = S(T.sweepPaintings);
   report.errorsLogged = errors.length;
   return report;
+};
+// ---- The Learning Workstation (premium): a panel of the shelf's books, Learn teaches at once, the book stays for the other robot ----
+T.sweepWorkstation = () => {
+  const out = [], base = errors.length, w = W(), b = B(), ws = window.__workstation;
+  const panel = document.getElementById('wstation'), row = (id) => panel.querySelector(`.row[data-book="${id}"]`), btnOf = (id) => row(id) && row(id).querySelector('button');
+  const gone = () => { if (w.objects.workstation) { w.removeObject('workstation'); b.objectRemoved('workstation'); if (w.gal && w.gal.brain) w.gal.brain.objectRemoved('workstation'); } delete w.removed.workstation; };
+  try {
+    galReset(); T.settle(); T.resetRooms(); T.removeAll(); T.forget(); T.home(); T.settle(); gone();
+    // 1. premium: listed in the Catalog as locked, no Add button, until the development unlock
+    const wasDev = dev.all; dev.all = false; openObjects('all');
+    const card0 = [...document.querySelectorAll('#machine .card')].find((c) => /Learning Workstation/.test(c.textContent));
+    out.push(result('workstation: listed in the Catalog as a locked premium object (no Add button)', !!card0 && !card0.querySelector('.act') && /Locked/.test(card0.textContent) && !T.addObject('workstation')));
+    dev.all = true; w.addNew('workstation', null); dev.all = wasDev;
+    const m = w.objects.workstation;
+    out.push(result('workstation: with the premium unlock it is added and fits in the room', !!m && w.fits(m, m.x, m.z)));
+    if (!m) throw new Error('no workstation');
+    // 2. what is on the shelf, and what Guy knows
+    T.addObject('telescope'); T.addBook('stars');
+    skillsOf().known.clear(); skillsOf().learn('ball');
+    const shelfBooks = w.objects.shelf.books.length;
+    window.__guyOpenMenu('workstation');
+    const mb = [...document.getElementById('menu').querySelectorAll('[data-act="interact"]')].map((x) => x.textContent).join('|');
+    document.getElementById('menu').hidden = true;
+    out.push(result('workstation: its long-press menu offers "Use Workstation"', /Use Workstation/.test(mb), { mb }));
+    // 3. Guy goes to it, taps the screen and the panel opens
+    b.queue = []; b.step = null;
+    const r = b.interact('workstation');
+    const t = runUntil(() => ws.isOpen(), 60);
+    const sp = m.screenPoint(), gp = G().root.position;
+    out.push(result('workstation: asked to use it, Guy walks up, taps the screen and the panel opens for GUY', r.ok && ws.isOpen() && /GUY/.test(panel.querySelector('.who').textContent) && Math.hypot(sp.x - gp.x, sp.z - gp.z) < 1.6, { msg: r.message, t, d: Math.hypot(sp.x - gp.x, sp.z - gp.z) }));
+    const rows = [...panel.querySelectorAll('.row')];
+    out.push(result('workstation: every book on the shelf is a row with its title, the skill it teaches and a Learn button', rows.length === shelfBooks && rows.every((x) => x.querySelector('b').textContent.length > 2 && /Teaches:/.test(x.textContent) && x.querySelector('button')), { rows: rows.length, shelfBooks }));
+    out.push(result('workstation: a skill he already has shows "Learned" with a disabled button; the others show an enabled Learn', btnOf('ball').disabled && btnOf('ball').textContent === 'Learned' && !btnOf('stars').disabled && btnOf('stars').textContent === 'Learn'));
+    // 4. Learn: instant, no reading
+    const t0 = performance.now(), had = skillsOf().has('telescope');
+    btnOf('stars').click();
+    out.push(result('workstation: pressing Learn teaches the skill at once (no reading step) and the row switches to Learned, disabled', !had && skillsOf().has('telescope') && btnOf('stars').disabled && btnOf('stars').textContent === 'Learned', { ms: Math.round(performance.now() - t0) }));
+    const rec = w.objects.shelf.books.find((x) => x.def.id === 'stars');
+    out.push(result('workstation: the book is not used up: it stays on the shelf', !!rec && w.objects.shelf.books.length === shelfBooks));
+    const before = skillsOf().known.size; btnOf('stars').click();
+    out.push(result('workstation: a disabled row does nothing', skillsOf().known.size === before));
+    // 5. the other robot: the book is still there for her, and she can use the workstation too
+    ws.close(); out.push(result('workstation: the panel closes', !ws.isOpen()));
+    const gb = galBuild();
+    if (!gb.ok) { out.push(result('workstation: GAL could be built for the test', false, gb)); throw new Error('no GAL'); }
+    const gal = w.gal, gbr = gal.brain;
+    gbr.skills.known.clear();
+    out.push(result('workstation: the book Guy learned from is still there for GAL to read (and she does not know it)', !!gbr.shelfBook('stars') && !gbr.skills.has('telescope')));
+    gbr.queue = []; gbr.step = null; gbr.pendingActivity = null;
+    const r2 = gbr.interact('workstation');
+    const t2 = runUntil(() => ws.isOpen(), 80);
+    out.push(result('workstation: GAL can use it too: the panel opens for GAL', r2.ok && ws.isOpen() && /GAL/.test(panel.querySelector('.who').textContent), { msg: r2.message, t: t2 }));
+    if (btnOf('stars')) btnOf('stars').click();
+    out.push(result('workstation: Learn there teaches GAL, and not Guy a second time', gbr.skills.has('telescope') && btnOf('stars') && btnOf('stars').disabled));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    out.push(result('workstation: Escape closes the panel', !ws.isOpen()));
+    // 6. a voice request goes through the same door
+    const V = window.__voice, it = V.parse('use the workstation');
+    out.push(result('workstation: "use the workstation" is understood by the voice commands', it.type === 'object' && it.name === 'workstation', { it }));
+  } catch (e) { if (!/no workstation|no GAL/.test(e.message)) out.push(result('workstation: sweep ran without throwing', false, { error: String(e && e.stack || e).slice(0, 400) })); }
+  finally { try { ws.close(); } catch { /* none */ } gone(); galReset(); T.resetRooms(); T.home(); T.removeAll(); T.settle(); }
+  out.push(result('workstation: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
 };
 // ---- Screen lock: off / camera only / on (needs real time for the hold-to-unlock, so it runs with runAsync) ----
 T.sweepScreenLock = async () => {

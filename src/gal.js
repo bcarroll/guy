@@ -182,6 +182,7 @@ export class Gal {
     this.opts.scene.add(root);
     root.position.set(x, 0, z);
     this.brain = new GalBrain(this.g, this.w, (t) => this.opts.ui && this.opts.ui(t), skills, guy);
+    this.brain.onWorkstation = (b) => { if (this.opts.onWorkstation) this.opts.onWorkstation(b); };
     this.brain.onLearn = (def) => { if (this.opts.toast) this.opts.toast(`GAL learned ${def.blurb}!`); sfx('chime'); };
     // each is an obstacle for the other
     const mk = (name) => { const ob = { x0: 0, x1: 0, z0: 0, z1: 0, h: 1.8, active: true, name, char: true }; this.w.obstacles.push(ob); return ob; };
