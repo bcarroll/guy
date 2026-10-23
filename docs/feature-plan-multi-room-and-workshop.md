@@ -377,7 +377,11 @@ Each phase can be tested on its own. No phase needs the Restaurant.
 
 ---
 
-## 12. Future Room: Restaurant (note only)
+## 12. Restaurant (first version built)
+
+**Built:** the Restaurant room with an elevator on its far wall, a stove, kitchen counter, cash register and two dining tables; customers (3D models from `public/models/customers/`, listed in `src/customermodels.js`) arrive by the elevator, sit, order, eat, pay and leave; Guy takes orders, cooks, serves and takes payment (`src/restbrain.js`); coins are saved with the layout. Guy runs it for now (GAL does not exist yet) and, as below, that is a default, not a rule. Details and tests: `assets.md` ("The Restaurant"). Not built yet: premium gating (it is free for now), GAL, clearing and washing plates, more customer packs, optimised models for the large packs.
+
+The original notes:
 
 - Guy cooks, serves food to customers and handles payment.
 - New 3D model characters enter the restaurant through an **elevator on the Restaurant's wall**.
@@ -677,16 +681,17 @@ Recorded from the owner's description. Nothing is built.
 
 **Testing.** To be written when planned: a second character needs its own sweep (its own activities, no interference with Guy's paths), the order-taking path, and the unprompted prompts.
 
-## 19. Future Idea: Guy Hangs His Own Paintings (not built yet)
+## 19. Future Idea: Guy Hangs His Paintings on Walls (not built yet)
 
-When Guy paints something at the easel and is proud of it, he can take the painting off the easel and hang it on a wall in any room that has space.
+Guy leaves each painting on the easel when he finishes it, as now. If the user likes a painting, they can have Guy hang it on a wall.
 
-- **Proud.** Not every painting is kept. After a painting is finished he decides (a random chance that is higher with the Colour Mixing and Portraits books) whether he is proud of it. A painting he is not proud of stays on the easel until he paints over it, as now.
-- **Taking it down.** He lifts the canvas off the easel with both hands (IK, like the shelf books), carrying it in front of him. The easel is blank afterwards.
-- **Hanging it.** He walks to a free spot on a wall of any room he can reach (his own room or an added room, through the door), holds it up and hangs it. It becomes a wall picture in `world.decor` like the Catalogue's pictures, so the user can drag it along the wall or put it away.
-- **Limit.** At most **3 of Guy's paintings per wall**. When every wall of every room has 3, he keeps the painting on the easel. If the user removes one, he can hang another.
-- **Free spot.** A spot on the wall that does not overlap a window, door, sconce or another picture, and is not behind a tall object.
-- **Saved.** Each hung painting is saved with the layout (which wall, position along it, and the painting's picture) so it is there after a reload. This needs the easel painting itself to be saved first (it is not yet, see "Build status").
-- **Testing.** A sweep that paints and hangs until a wall has 3, checks the 4th is refused, checks windows/doors are not covered, checks a painting in an added room, and checks removal and reload.
+- **The menu.** When the easel has a painting on it, its long-press menu shows **Hang painting**. Guy never hangs one by himself, and there is no "proud" roll.
+- **Taking it down.** Guy lifts the canvas off the easel with both hands (IK, like the shelf books), carrying it in front of him. The easel is blank afterwards.
+- **Guy chooses where.** The user does not pick the spot. Guy looks at every wall of every room he can reach (his own room, and added rooms through their doors) and picks a free spot, then walks there and hangs it. It becomes a wall picture in `world.decor`, so the user can still drag it along the wall or put it away.
+- **Free spot.** A spot that does not overlap a window, door, sconce or another picture, and is not behind a tall object.
+- **Limit.** At most **3 of Guy's paintings per wall**.
+- **No room anywhere.** If every wall already has 3, Guy picks one of his existing paintings (the oldest) and replaces it with the new one. The painting he takes down is not thrown away: it goes into the skill machine (the Catalogue) as an item the user can put back, like any removed object. Nothing is ever deleted.
+- **Saved.** Each hung painting, and each stored one, is saved (wall, position along it, and the picture) so they survive a reload. This needs the easel painting itself to be saved first (it is not yet, see "Build status").
+- **Testing.** A sweep that paints and hangs until a wall has 3, checks Guy spreads them over other walls and rooms before replacing, checks that with every wall full the oldest is replaced and the old one appears in the Catalogue, checks windows and doors are not covered, and checks removal and reload.
 
-Open questions: should the user be able to tell Guy to hang or keep a painting? Do the paintings show in the Catalogue (a "Guy's paintings" group)?
+Open question: does the Catalogue show Guy's stored paintings as thumbnails of the actual pictures?
