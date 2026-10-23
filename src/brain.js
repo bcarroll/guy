@@ -861,6 +861,8 @@ export class Brain {
     out.fingersDir = new THREE.Vector3(0, -1, 0).applyQuaternion(cur.q).multiplyScalar(0.9).addScaledVector(out.axisZ, -0.4).normalize();
     out.cur = cur;
     out.beat = s.fx.sync && this.music ? this.currentBeat() : (t - 0.6) / 0.6;
+    // free playing keeps a tempo (an eighth note every 0.3 s from 0.6 s in); a skilled drummer joining in locks onto it
+    if (pose === 'guitar' || pose === 'sitGuitar') this.bandClock = s.fx.sync && this.music ? null : { t0: this.time - t + 0.6, bl: 0.6, seen: this.time };
     return out;
   }
 

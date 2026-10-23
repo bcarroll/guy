@@ -2011,6 +2011,35 @@ T.sweepGal = () => {
   const said6 = gal.log.join(' | ');
   out.push(result('gal: her own idea: she switches the stereo on, asks Guy to dance, he stops what he is doing, they dance, and the music goes off when they have both finished', wasOn && !b.music && /GAL asks GUY: dance/.test(said6) && seen6.some((s) => s === 'dance/dance') && errors.length === e6, { seen6: seen6.slice(0, 10), said6, t6 }));
   out.push(result('gal: she asks nothing of Guy while he is locked on something', (() => { const was = b.lock; b.lock = { name: 'piano' }; const ok = !gal.canInvite() && !gal.askGuy('dance'); b.lock = was; return ok; })()));
+  // 6b. keeping time: Guy plays the guitar on his own tempo and GAL drums beside him. With only the basic book her beat is her own;
+  // once she has read an advanced one (Fills & Solos / Playing in the Band) she locks onto his tempo
+  for (const skilled of [false, true]) {
+    galReset(); galBuild(); gb = gal.brain;
+    for (const id of ['drums', 'guitar']) T.addObject(id);
+    skillsOf().known.clear(); T.learn(['guitar']); gb.skills.known.clear(); gb.skills.learn('drums'); if (skilled) gb.skills.learn('drums.solo');
+    T.settle();
+    const e6b = errors.length; let n6 = 0, maxOff = 0, minOff = 9, tt = 0, nearPhase = 0;
+    const origDrums = gb.computeDrums;
+    gb.computeDrums = function (s) {
+      const o = origDrums.call(this, s);
+      const clk = b.bandClock;
+      if (o && o.playing && clk && b.time - clk.seen < 0.5) {
+        const mine = o.beat, his = (b.time - clk.t0) / clk.bl;
+        const d = Math.abs(((mine - his) % 1 + 1.5) % 1 - 0.5);          // distance between the two beats, in beats (0 = together)
+        n6++; maxOff = Math.max(maxOff, d); minOff = Math.min(minOff, d); if (d < 0.1) nearPhase++;
+      }
+      return o;
+    };
+    try {
+      b.queue = []; b.step = null; b.skip(true); gb.queue = []; gb.step = null; gb.skip(true);
+      b.choose('riff'); gb.choose('drums');
+      while (tt < 90) { step(0.25); tt += 0.25; }
+    } finally { gb.computeDrums = origDrums; }
+    out.push(result(skilled
+      ? 'gal: with an advanced drumming book she keeps time with the tempo Guy is playing (beats line up)'
+      : 'gal: with only the basic drumming book her beat is her own (not locked to his)',
+      n6 > 20 && (skilled ? nearPhase / n6 > 0.9 : nearPhase / n6 < 0.9) && errors.length === e6b, { samples: n6, nearPhase, maxOff, minOff }));
+  }
   // 7. both help in the restaurant: customers are looked after by whoever gets there, nothing is done twice
   galReset(); galBuild(); gb = gal.brain;
   const wasHead = w.restaurant.headless; w.restaurant.headless = true;
