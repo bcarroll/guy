@@ -13,6 +13,7 @@ import { config as riffConfig } from './riffs.js';
 import { ALBUM_CATALOG } from './albums.js';
 import { initUpdateCheck } from './update.js';
 import { Restaurant } from './customers.js';
+import { dev } from './devunlock.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -183,6 +184,19 @@ layout.start();
 initUpdateCheck();
 // The build this page is running, in the top-left corner: the short commit id (the first seven characters of the id). Checking
 // this against a new commit shows whether a deployed update reached the phone.
+// development: one button turns every premium thing on (there is no way to pay yet); remembered unless ?fresh
+{
+  const btn = document.getElementById('devunlock'), key = 'guy.dev.unlock', keep = !params.has('fresh');
+  const show = () => { btn.classList.toggle('on', dev.all); btn.textContent = dev.all ? '🔒 lock premium' : '🔓 unlock premium'; };
+  try { if (keep && localStorage.getItem(key) === '1') dev.all = true; } catch { /* no storage */ }
+  show();
+  btn.addEventListener('click', () => {
+    dev.all = !dev.all;
+    try { if (keep) localStorage.setItem(key, dev.all ? '1' : '0'); } catch { /* no storage */ }
+    show(); machineUI.refresh();
+    showToast(dev.all ? 'Premium rooms, records and items are unlocked' : 'Premium is locked again');
+  });
+}
 document.getElementById('build').textContent = `build ${typeof __BUILD_ID__ === 'string' ? __BUILD_ID__.slice(0, 7) : 'dev'}`;
 if (params.get('records') === 'all' && world.objects.shelf) ALBUM_CATALOG.forEach((a) => { if (!world.objects.shelf.albums.some((r) => r.def.id === a.id)) world.objects.shelf.addAlbum(a); }); // testing aid
 renderSkills();

@@ -8,6 +8,7 @@
 // Books: shelf (on the shelf), available, needs-object / needs-shelf (can't be added yet), locked.
 import { BOOK_CATALOG } from './skills.js';
 import { ALBUM_CATALOG } from './albums.js';
+import { dev } from './devunlock.js';
 
 // cat: the category the Objects tab files it under (see OBJECT_CATEGORIES). decor: not furniture Guy uses; the rug, the windows
 // and the picture live in world.decor and can be removed and put back like everything else.
@@ -87,7 +88,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms }) {
   const stored = (id) => (world.stock && world.stock.items && world.stock.items[id]) || 0;            // built things waiting in storage
   const objectStatus = (d) => {
     if (d.built) return 'built';
-    if (d.locked) return 'locked';
+    if (d.locked && !dev.all) return 'locked';
     if (d.ball) return world.ballGone ? 'removed' : 'inroom';
     if (inRoom(d.id)) return 'inroom';
     if (world.removed[d.id]) return 'removed';
@@ -98,14 +99,14 @@ export function initMachine({ world, guy, persist, notify, remove, rooms }) {
   const live = (d) => !d.room || (!!rooms && rooms.isLive(d.room));
   const shelf = () => world.objects.shelf;
   const albumStatus = (a) => {
-    if (a.premium) return 'locked';
+    if (a.premium && !dev.all) return 'locked';
     if (shelf() && shelf().albums.some((r) => r.def.id === a.id)) return 'shelf';
     if (!shelf()) return 'needs-shelf';
     if (!hasObject('table')) return 'needs-object';          // the records are for the stereo
     return 'available';
   };
   const bookStatus = (b) => {
-    if (b.locked) return 'locked';
+    if (b.locked && !dev.all) return 'locked';
     if (shelf() && shelf().books.some((r) => r.def.id === b.id)) return 'shelf';
     if (!shelf()) return 'needs-shelf';
     if (b.requires && b.requires.object && !hasObject(b.requires.object)) return 'needs-object';
@@ -141,7 +142,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms }) {
     for (const id of extras.objects || []) world.addNew(id, null);
     for (const id of extras.forgotten || []) { const rec = shelf() && shelf().books.find((r) => r.def.id === id); if (rec) shelf().removeBook(rec); }
     for (const id of extras.books || []) { const def = BOOK_CATALOG.find((b) => b.id === id); if (def) addBookDef(def); }
-    for (const id of extras.albums || []) { const def = ALBUM_CATALOG.find((a) => a.id === id); if (def && !def.premium) addAlbumDef(def); }
+    for (const id of extras.albums || []) { const def = ALBUM_CATALOG.find((a) => a.id === id); if (def && (!def.premium || dev.all)) addAlbumDef(def); }
   }
 
   function addObject(d) {

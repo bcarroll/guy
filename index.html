@@ -7,6 +7,8 @@
 <style>
   html, body { margin: 0; height: 100%; background: #111; overflow: hidden; font-family: system-ui, sans-serif; }
   canvas { display: block; }
+  #devunlock { position: fixed; top: 0; left: 88px; z-index: 4; font: 10px/1 ui-monospace, Menlo, Consolas, monospace; color: #fff; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.4); border-radius: 4px; padding: 3px 6px; opacity: .7; cursor: pointer; }
+  #devunlock.on { background: #2e7d32; opacity: .9; }
   #build { position: fixed; top: 2px; left: 6px; z-index: 4; font: 10px/1 ui-monospace, Menlo, Consolas, monospace; color: #fff; opacity: .55; pointer-events: none; letter-spacing: .3px; }
   #hud { position: fixed; left: 16px; bottom: 16px; color: #eee; font-size: 14px; line-height: 1.5;
          background: rgba(0,0,0,.45); padding: 10px 14px; border-radius: 8px; pointer-events: none; }
@@ -128,6 +130,7 @@
 </style>
 </head>
 <body>
+<button id="devunlock" title="Development only: add all premium rooms, records and items">🔓 unlock premium</button>
 <div id="build" title="The version of the game running here (the commit it was built from)">build …</div>
 <div id="hud">Guy is <b id="activity">waking up…</b><br><small>drag empty space: orbit · drag furniture or the ball: move it · long-press: rotate / remove · tap the wall machine: add things · K: skills · scroll: zoom · F: follow · Space: new activity</small></div>
 <div id="btns">

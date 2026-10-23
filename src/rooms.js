@@ -4,6 +4,7 @@
 // A room is "added" once the user adds it, and "unlocked" when it is free or paid for. Things that belong to a room (catalogue
 // entries with `room: '<id>'`) are listed only while the room is added and unlocked: see `isLive`.
 import { OBJECT_CATALOG } from './machine.js';
+import { dev } from './devunlock.js';
 
 export const ROOM_CATALOG = [
   // `size` ({ w: depth away from the door, d: width along the wall }) is optional: left out, a room is as big as Guy's room.
@@ -23,7 +24,7 @@ export function initRooms({ world, remove, persist, refit }) {
   const state = {};                  // room id -> { added, wall, u, unlocked? }
   const listeners = [];
   const def = (id) => ROOM_CATALOG.find((r) => r.id === id);
-  const unlocked = (id) => { const s = state[id]; return s && s.unlocked !== undefined ? s.unlocked : !!(def(id) || {}).unlocked; };
+  const unlocked = (id) => { if (dev.all && (def(id) || {}).premium) return true; const s = state[id]; return s && s.unlocked !== undefined ? s.unlocked : !!(def(id) || {}).unlocked; };
   const added = (id) => !!(state[id] && state[id].added && world.doors[id]);
   const label = (name) => {
     const o = world.objects[name] || world.decor[name] || world.removed[name];

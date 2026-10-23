@@ -1644,6 +1644,13 @@ T.sweepRestaurant = () => {
     const rc = machineCard('Restaurant');
     const refused = R().add('restaurant');
     out.push(result('restaurant: the Rooms tab lists it as premium and locked (no Add button), and adding it is refused', !!rc && !rc.querySelector('.act') && /Premium/.test(rc.textContent) && !refused.ok && !R().isAdded('restaurant'), { refused: refused.messages }));
+    // the development button beside the build id turns every premium thing on (and off again)
+    const dbtn = document.getElementById('devunlock');
+    dbtn.click();
+    const onNow = R().isUnlocked('restaurant') && R().isLive('restaurant') === false;
+    openTab('rooms'); const rc2 = machineCard('Restaurant'); const canAdd = !!(rc2 && rc2.querySelector('.act'));
+    dbtn.click();
+    out.push(result('restaurant: the development unlock button makes the premium room addable, and pressing it again locks it', onNow && canAdd && !R().isUnlocked('restaurant') && dbtn.textContent === '🔓 unlock premium', { onNow, canAdd }));
     // 1. nothing of the Restaurant is listed until the room is added
     openObjects('all');
     out.push(result('restaurant: before the room is added none of its furniture or its book is listed', !REST.some((id) => machineCard(OBJECT_CATALOG.find((d) => d.id === id).name)) && !machineCard('Restaurant Basics')));
