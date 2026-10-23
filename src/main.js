@@ -7,9 +7,10 @@ import { initAudio } from './audio.js';
 import { Skills, SKILL_INFO } from './skills.js';
 import { sfx, drag as sfxDrag, setMuted, isMuted } from './sfx.js';
 import { initMachine } from './machine.js';
+import { initRooms } from './rooms.js';
 import { ALBUM_CATALOG } from './albums.js';
-
 import { initUpdateCheck } from './update.js';
+
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
@@ -122,12 +123,26 @@ function showToast(msg) {
 brain.onLearn = (def) => { showToast(`Guy learned ${def.blurb}!`); sfx('chime'); };
 
 // ---- the Catalogue on the wall: tap it for the catalogue of objects and books ----
+// Rooms the user adds from the Catalogue: a door on a wall, and a room behind it. Frame the camera round all of them.
+const rooms = initRooms({
+  world, persist: !params.has('fresh'), remove: (id) => removeById(id),
+  refit: () => {
+    const e = world.extent();
+    roomBox.length = 0;
+    for (const x of [e.minX, e.maxX]) for (const y of [0, 3.2]) for (const z of [e.minZ, e.maxZ]) roomBox.push(new THREE.Vector3(x, y, z));
+    if (!userMoved) controls.target.set((e.minX + e.maxX) / 2, 1, (e.minZ + e.maxZ) / 2);
+    fitRoom();
+  },
+});
+world.rooms = rooms;
 const machineUI = initMachine({
-  world, guy, persist: !params.has('fresh'),
+  world, guy, persist: !params.has('fresh'), rooms,
   notify: (msg) => { showToast(msg); renderSkills(); sfx('pop'); },
   remove: (id) => removeById(id),
 });
+rooms.restore();            // before the extras, so the strip in front of a door is already clear for them
 machineUI.restoreExtras();
+initUpdateCheck();
 if (params.get('records') === 'all' && world.objects.shelf) ALBUM_CATALOG.forEach((a) => { if (!world.objects.shelf.albums.some((r) => r.def.id === a.id)) world.objects.shelf.addAlbum(a); }); // testing aid
 renderSkills();
 let machinePress = null;
@@ -142,7 +157,6 @@ followBtn.classList.toggle('on', follow);
 followBtn.addEventListener('click', toggleFollow);
 document.getElementById('skip-btn').addEventListener('click', () => brain.skip());
 addEventListener('keydown', (e) => {
-initUpdateCheck();
   if (e.key === 'f' || e.key === 'F') toggleFollow();
   if (e.code === 'Space') { e.preventDefault(); brain.skip(); }
 });

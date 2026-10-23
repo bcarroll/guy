@@ -356,9 +356,28 @@ export function buildRoom(scene) {
       at: (u, v) => new THREE.Vector3(-ROOM.w / 2, v, u), near: (x0, x1, z0) => x0 < -ROOM.w / 2 + 0.1, span: (x0, x1, z0, z1) => [z0, z1] },
     back: { rotY: 0, lo: -ROOM.w / 2, hi: ROOM.w / 2, plane: new THREE.Plane(new THREE.Vector3(0, 0, 1), ROOM.d / 2),
       at: (u, v) => new THREE.Vector3(u, v, -ROOM.d / 2), near: (x0, x1, z0) => z0 < -ROOM.d / 2 + 0.1, span: (x0, x1) => [x0, x1] },
+    // the right and front walls face away from the default camera, so no wall pieces hang on them; only doors (see below) use them
+    right: { rotY: -Math.PI / 2, lo: -ROOM.d / 2, hi: ROOM.d / 2, plane: new THREE.Plane(new THREE.Vector3(-1, 0, 0), ROOM.w / 2),
+      at: (u, v) => new THREE.Vector3(ROOM.w / 2, v, u), near: (x0, x1) => x1 > ROOM.w / 2 - 0.1, span: (x0, x1, z0, z1) => [z0, z1] },
+    front: { rotY: Math.PI, lo: -ROOM.w / 2, hi: ROOM.w / 2, plane: new THREE.Plane(new THREE.Vector3(0, 0, -1), ROOM.d / 2),
+      at: (u, v) => new THREE.Vector3(u, v, ROOM.d / 2), near: (x0, x1, z0, z1) => z1 > ROOM.d / 2 - 0.1, span: (x0, x1) => [x0, x1] },
   };
   const MACHINE_RECT = { u0: -2.7, u1: -1.9, v0: 1.0, v1: 2.3 };   // the Catalogue on the left wall
   const overlap1 = (a0, a1, b0, b1) => a1 > b0 && a0 < b1;
+
+  // ---- Doors: a doorway on a wall of the main room leads to a room the user added (src/rooms.js) ----
+  // A door keeps a strip of floor in front of it clear (`zone`): furniture cannot be put or pushed into it and wall pieces cannot
+  // cover the doorway. u runs along the wall like a wall piece's u (z on the right wall, x on the front and back walls).
+  const DOOR = { w: 1.0, h: 2.2, zone: 1.0, margin: 0.15 };
+  const doors = {};                                                    // room id -> { id, wall, u, group, shell, rect }
+  const doorRect = (wall, u) => {                                       // the floor strip in front of a door at (wall, u)
+    const hw = DOOR.w / 2 + DOOR.margin;
+    if (wall === 'right') return { x0: ROOM.w / 2 - DOOR.zone, x1: ROOM.w / 2, z0: u - hw, z1: u + hw };
+    if (wall === 'front') return { x0: u - hw, x1: u + hw, z0: ROOM.d / 2 - DOOR.zone, z1: ROOM.d / 2 };
+    return { x0: u - hw, x1: u + hw, z0: -ROOM.d / 2, z1: -ROOM.d / 2 + DOOR.zone };   // back
+  };
+  const rectsOverlap = (a, b) => a.x1 > b.x0 && a.x0 < b.x1 && a.z1 > b.z0 && a.z0 < b.z1;
+  const doorBlocks = (x0, x1, z0, z1) => Object.values(doors).some((d) => rectsOverlap(d.rect, { x0, x1, z0, z1 }));
 
   const makeDecor = (name, label, o, build) => {
     const group = new THREE.Group();
@@ -403,8 +422,11 @@ export function buildRoom(scene) {
       if (o !== d && o.wall === d.wall && overlap1(u - d.hw, u + d.hw, o.u - o.hw, o.u + o.hw) && overlap1(v - d.hh, v + d.hh, o.v - o.hh, o.v + o.hh)) return false;
     }
     if (d.wall === 'left' && overlap1(u - d.hw, u + d.hw, MACHINE_RECT.u0, MACHINE_RECT.u1) && overlap1(v - d.hh, v + d.hh, MACHINE_RECT.v0, MACHINE_RECT.v1)) return false;
+    for (const dr of Object.values(doors)) {                                     // never over a doorway
+      if (dr.wall === d.wall && overlap1(u - d.hw, u + d.hw, dr.u - DOOR.w / 2, dr.u + DOOR.w / 2) && v - d.hh < DOOR.h) return false;
+    }
     for (const o of obstacles) {
-      if (!W.near(o.x0, o.x1, o.z0)) continue;
+      if (!W.near(o.x0, o.x1, o.z0, o.z1)) continue;
       const [a, b] = W.span(o.x0, o.x1, o.z0, o.z1);
       if (overlap1(u - d.hw, u + d.hw, a, b) && v - d.hh < o.h) return false;
     }
@@ -908,14 +930,131 @@ export function buildRoom(scene) {
   const fits = (obj, x, z, w = obj.w, d = obj.d) => {
     const x0 = x - w / 2, x1 = x + w / 2, z0 = z - d / 2, z1 = z + d / 2;
     if (x0 < -ROOM.w / 2 || x1 > ROOM.w / 2 || z0 < -ROOM.d / 2 || z1 > ROOM.d / 2) return false;
+    if (doorBlocks(x0, x1, z0, z1)) return false;                       // the strip in front of a door stays clear
     // furniture taller than the lower edge of a window or picture must not be pushed into it
     for (const dc of Object.values(decor)) {
-      if (!dc.wall || !WALL[dc.wall].near(x0, x1, z0)) continue;
+      if (!dc.wall || !WALL[dc.wall].near(x0, x1, z0, z1)) continue;
       const [a, b] = WALL[dc.wall].span(x0, x1, z0, z1);
       if (overlap1(a, b, dc.u - dc.hw, dc.u + dc.hw) && obj.h > dc.v - dc.hh) return false;
     }
     return !obstacles.some((o) => o !== obj.obstacle && x1 > o.x0 && x0 < o.x1 && z1 > o.z0 && z0 < o.z1);
   };
+
+  // What is in the way of a door at (wall, u)? `fixed` names something that never moves (the bookshelf, heavy furniture), so the
+  // door cannot go there; otherwise `hit` lists the pieces that would have to come out of the room.
+  const doorBlockers = (wall, u) => {
+    const r = doorRect(wall, u), hit = [];
+    for (const [name, o] of Object.entries(objects)) {
+      const ob = o.obstacle;
+      if (!rectsOverlap(r, { x0: ob.x0, x1: ob.x1, z0: ob.z0, z1: ob.z1 })) continue;
+      if (o.removable === false || o.weight === 'heavy') return { fixed: name, hit: [] };
+      hit.push(name);
+    }
+    for (const d of Object.values(decor)) {
+      if (d.wall === wall && overlap1(d.u - d.hw, d.u + d.hw, u - DOOR.w / 2, u + DOOR.w / 2) && d.v - d.hh < DOOR.h) hit.push(d.name);
+    }
+    return { fixed: null, hit };
+  };
+  const doorSpotFree = (wall, u) => !Object.values(doors).some((d) => rectsOverlap(d.rect, doorRect(wall, u)));
+
+  // Where should the next door go? Fewest pieces to move first, then the wall order given, then nearest the middle of the wall.
+  // The left wall holds the Catalogue and is never used.
+  const planDoor = (walls = ['right', 'front', 'back']) => {
+    let best = null;
+    walls.forEach((wall, wi) => {
+      const W = WALL[wall];
+      if (!W || wall === 'left') return;
+      const steps = Math.floor((W.hi - W.lo - 1.8) / 0.1 + 1e-6);
+      for (let i = 0; i <= steps; i++) {
+        const u = +(W.lo + 0.9 + i * 0.1).toFixed(2);
+        if (!doorSpotFree(wall, u)) continue;
+        const b = doorBlockers(wall, u);
+        if (b.fixed) continue;
+        const better = !best || b.hit.length < best.hit.length
+          || (b.hit.length === best.hit.length && (wi < best.wi || (wi === best.wi && Math.abs(u) < Math.abs(best.u) - 1e-6)));
+        if (better) best = { wall, u, hit: b.hit, wi };
+      }
+    });
+    return best && { wall: best.wall, u: best.u, displace: best.hit };
+  };
+
+  // A closed door in a wooden frame with the room's name above it. Both faces are drawn: the right and front walls are not
+  // drawn from the default camera, so the door is often seen from the other side.
+  const buildDoor = (def, wall, u) => {
+    const g = new THREE.Group();
+    g.position.copy(WALL[wall].at(u, 0));
+    g.rotation.y = WALL[wall].rotY;
+    const frame = mat(def.look.frame), leaf = mat(def.look.door);
+    const H = DOOR.h + 0.12;
+    box(0.1, H, 0.14, frame, -0.55, H / 2, 0.07, g);
+    box(0.1, H, 0.14, frame, 0.55, H / 2, 0.07, g);
+    box(1.2, 0.12, 0.14, frame, 0, DOOR.h + 0.06, 0.07, g);
+    box(1.0, DOOR.h, 0.05, leaf, 0, DOOR.h / 2, 0.05, g);
+    for (const z of [0.08, 0.02]) {
+      box(0.7, 0.75, 0.01, mat(def.look.panel), 0, 1.55, z, g);
+      box(0.7, 0.75, 0.01, mat(def.look.panel), 0, 0.6, z, g);
+    }
+    for (const z of [0.1, 0]) {
+      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 10), mat(0xe8c050, { metalness: 0.6, roughness: 0.3 }));
+      knob.position.set(0.36, 1.05, z);
+      g.add(knob);
+    }
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 64;
+    const cx = c.getContext('2d');
+    cx.fillStyle = '#fff6e0'; cx.fillRect(0, 0, 256, 64);
+    cx.strokeStyle = '#6b4a2b'; cx.lineWidth = 6; cx.strokeRect(3, 3, 250, 58);
+    cx.fillStyle = '#3a2a1c'; cx.font = 'bold 30px sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+    cx.fillText(`${def.icon} ${def.name}`, 128, 34);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    for (const [z, ry] of [[0.145, 0], [-0.005, Math.PI]]) {
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.225), new THREE.MeshBasicMaterial({ map: tex }));
+      sign.position.set(0, DOOR.h + 0.3, z);
+      sign.rotation.y = ry;
+      g.add(sign);
+    }
+    return g;
+  };
+
+  // The room behind a door: a floor and three walls (the main room's own wall closes the fourth side) that open to the sky like
+  // the main room. It sits just outside the door wall, kept within that wall's length. `bounds` is its footprint on the floor.
+  const buildShell = (def, wall, u) => {
+    const { w: N, d: L } = def.size, W = WALL[wall];
+    const c = Math.max(W.lo + L / 2, Math.min(W.hi - L / 2, u));
+    const g = new THREE.Group();
+    g.position.copy(W.at(c, 0));
+    g.rotation.y = W.rotY;
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(L, N), new THREE.MeshStandardMaterial({ color: def.look.floor, roughness: 0.9 }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(0, 0.002, -N / 2);
+    floor.receiveShadow = true;
+    g.add(floor);
+    const wm = new THREE.MeshStandardMaterial({ color: def.look.wall, roughness: 0.95 });
+    const side = (len, x, z, ry) => {
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(len, ROOM.h), wm);
+      p.position.set(x, ROOM.h / 2, z);
+      p.rotation.y = ry;
+      p.receiveShadow = true;
+      g.add(p);
+    };
+    side(L, 0, -N, 0);                       // the far wall, facing the door
+    side(N, -L / 2, -N / 2, Math.PI / 2);
+    side(N, L / 2, -N / 2, -Math.PI / 2);
+    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(L, N), mat(0xeeeeee));
+    ceil.rotation.x = Math.PI / 2;
+    ceil.position.set(0, ROOM.h, -N / 2);
+    g.add(ceil);
+    const bounds = wall === 'right' ? { minX: ROOM.w / 2, maxX: ROOM.w / 2 + N, minZ: c - L / 2, maxZ: c + L / 2 }
+      : wall === 'front' ? { minX: c - L / 2, maxX: c + L / 2, minZ: ROOM.d / 2, maxZ: ROOM.d / 2 + N }
+        : { minX: c - L / 2, maxX: c + L / 2, minZ: -ROOM.d / 2 - N, maxZ: -ROOM.d / 2 };
+    return { group: g, bounds };
+  };
+
+  const disposeTree = (g) => g.traverse((n) => {
+    if (n.geometry) n.geometry.dispose();
+    if (n.material) { if (n.material.map) n.material.map.dispose(); n.material.dispose(); }
+  });
 
   const world = {
     room, obstacles, objects, fits, ballGone: false,
@@ -923,6 +1062,33 @@ export function buildRoom(scene) {
     skillMachine: machine,
     removed: {},                  // objects (and decor) the user took out, kept so they can be put back
     decor, decorFits,
+    // ---- doors and the rooms behind them (see src/rooms.js) ----
+    doors, DOOR, planDoor, doorBlockers,
+    // Put a door for room `def` at (wall, u). The caller has already cleared whatever was in its way.
+    addDoor(def, wall, u) {
+      if (doors[def.id]) return doors[def.id];
+      const group = buildDoor(def, wall, u), shell = buildShell(def, wall, u);
+      room.add(group);
+      room.add(shell.group);
+      doors[def.id] = { id: def.id, wall, u, group, shell, rect: doorRect(wall, u) };
+      return doors[def.id];
+    },
+    removeDoor(id) {
+      const d = doors[id];
+      if (!d) return false;
+      for (const g of [d.group, d.shell.group]) { room.remove(g); disposeTree(g); }
+      delete doors[id];
+      return true;
+    },
+    // The floor area of the main room plus every added room, for framing the camera.
+    extent() {
+      const e = { minX: -ROOM.w / 2, maxX: ROOM.w / 2, minZ: -ROOM.d / 2, maxZ: ROOM.d / 2 };
+      for (const d of Object.values(doors)) {
+        const b = d.shell.bounds;
+        e.minX = Math.min(e.minX, b.minX); e.maxX = Math.max(e.maxX, b.maxX); e.minZ = Math.min(e.minZ, b.minZ); e.maxZ = Math.max(e.maxZ, b.maxZ);
+      }
+      return e;
+    },
     removeObject(name) {
       const dc = decor[name];
       if (dc) { room.remove(dc.group); delete decor[name]; world.removed[name] = dc; return; }

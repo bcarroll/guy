@@ -155,7 +155,23 @@ sleeves poking out of the shelf), the Catalogue screen on the wall, the record l
 panel, the skills panel (K), the strap on the guitar, record sleeves on the top shelf, spine titles on the books, and the
 book list popup (long-press a lower shelf at a book: title, read / not read).
 
+## Rooms and doors (`ROOM_CATALOG` in `src/rooms.js`; door and room geometry in `src/room.js`)
+
+| id | what | doorWalls | size (depth x width) | Notes |
+|---|---|---|---|---|
+| workshop | **Workshop**: free, unlocked by default. Adds a closed door with a sign and a grey room (floor, three walls, ceiling) behind it | right, front, back (never left: the Catalogue) | 8 x 6 | Guy cannot enter yet (pathing is a later phase). The room is empty until the Workshop objects exist |
+
+Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
+- A door is 1.0 m wide and 2.2 m tall, with a 1.0 m floor strip in front of it that furniture cannot be put or pushed into and wall pieces cannot cover.
+- The placement search prefers the fewest pieces to move, then the wall order (right, front, back), then the middle of the wall. Light and medium furniture and wall pieces in the way go to the Catalogue (like a user removal; nothing is deleted or moved silently). The bookshelf and heavy furniture never move: the door goes elsewhere, or the Catalogue says "No clear wall for a door right now".
+- The right and front walls face away from the default camera, so the door is built from solid parts and the sign is drawn on both sides.
+- Saved in `guy.rooms.v1` (separate from `guy.room.v1`). A new visit starts with the core pieces back on the walls, so the saved door is placed again first and anything in its way is taken out again; if its saved spot is now taken by something fixed it finds a new one.
+- Entries with `room: '<id>'` are not listed (not even as locked) until that room is added and unlocked.
+- Test aids: `T.resetRooms()`, `R().add(id, { at, walls })`, `R().setUnlocked(id, bool)`, `R().snapshot()` / `R().restoreFrom()` (`R()` is `window.brain.w.rooms`).
+
 ## Regression watch (bugs found and fixed; make sure they stay fixed)
+
+- Intermittent, cause not found yet: `sweepBookRules` "speed reading: without it he sits in a chair to read" failed once in the first full `runAll()` after the Rooms and doors work and passed on the next 5 runs. No door is in the room during that sweep, so it is probably an older layout-dependent flake. If it comes back, check which chairs were reachable.
 
 - Removing an object mid-interaction used to throw every frame and freeze rendering: `sweepRemovals` and `brain.safeUpdate`.
 - Negative beat index right after a track starts crashed the guitar/piano jam ("reading 'bass'"): `sweepTracks`.

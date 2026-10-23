@@ -57,7 +57,7 @@ export const OBJECT_CATALOG = [
 
 const KEY = 'guy.room.v1';
 
-export function initMachine({ world, guy, persist, notify, remove }) {
+export function initMachine({ world, guy, persist, notify, remove, rooms }) {
   const root = document.getElementById('machine');
   const body = root.querySelector('.body');
   const chipBar = root.querySelector('.chips');
@@ -73,6 +73,8 @@ export function initMachine({ world, guy, persist, notify, remove }) {
     return 'available';
   };
   const hasObject = inRoom;
+  // things that belong to a room the user has not added (or that is not unlocked) are not listed at all
+  const live = (d) => !d.room || (!!rooms && rooms.isLive(d.room));
   const shelf = () => world.objects.shelf;
   const albumStatus = (a) => {
     if (a.premium) return 'locked';
@@ -142,6 +144,12 @@ export function initMachine({ world, guy, persist, notify, remove }) {
     render();
   }
 
+  function addRoom(r) {
+    const res = rooms.add(r.id);
+    notify(res.messages.join(' '));
+    render();
+  }
+
   function addAlbum(a) {
     const ok = addAlbumDef(a);
     notify(ok ? `"${a.title}" is on the top shelf` : 'Could not add the record');
@@ -172,6 +180,7 @@ export function initMachine({ world, guy, persist, notify, remove }) {
     const groups = { 'In the room': [], 'Add to the room': [], 'Premium · coming soon': [] };
     const albumGroups = { 'On the shelf': [], 'Add to the shelf': [], 'Not available yet': [], 'Premium · coming soon': [] };
     const bookGroups = { 'On the shelf': [], 'Add to the shelf': [], 'Not available yet': [], 'Premium · coming soon': [] };
+    const roomGroups = { 'In your home': [], 'Add a room': [] };
     const handlers = [];
     chipBar.hidden = tab !== 'objects';
     if (tab === 'objects') {
@@ -181,11 +190,11 @@ export function initMachine({ world, guy, persist, notify, remove }) {
       const sections = [];
       for (const c of OBJECT_CATEGORIES) {
         const subOf = (d) => (d.sub ? DECOR_SUBS.indexOf(d.sub) : -1);
-        const items = OBJECT_CATALOG.filter((d) => d.cat === c.id).sort((a, b) => subOf(a) - subOf(b) || rank[objectStatus(a)] - rank[objectStatus(b)]);
+        const items = OBJECT_CATALOG.filter((d) => d.cat === c.id && live(d)).sort((a, b) => subOf(a) - subOf(b) || rank[objectStatus(a)] - rank[objectStatus(b)]);
         const here = items.filter((d) => objectStatus(d) === 'inroom').length;
         sections.push({ c, items, here });
       }
-      chipBar.innerHTML = [{ id: 'all', name: 'All', icon: '', here: sections.reduce((n, s) => n + s.here, 0), total: OBJECT_CATALOG.length }]
+      chipBar.innerHTML = [{ id: 'all', name: 'All', icon: '', here: sections.reduce((n, s) => n + s.here, 0), total: sections.reduce((n, s) => n + s.items.length, 0) }]
         .concat(sections.map((s) => ({ id: s.c.id, name: s.c.name, icon: s.c.icon, here: s.here, total: s.items.length })))
         .map((c) => `<button class="chip${cat === c.id ? ' on' : ''}" data-cat="${c.id}">${c.icon ? c.icon + ' ' : ''}${c.name} <span>${c.here}/${c.total}</span></button>`).join('');
       for (const { c, items, here } of sections) {
@@ -224,8 +233,16 @@ export function initMachine({ world, guy, persist, notify, remove }) {
         else if (st === 'needs-shelf') albumGroups['Not available yet'].push(card({ ...base, label: 'Needs a bookshelf', note: 'Put the bookshelf back first.' }));
         else albumGroups['Premium · coming soon'].push(card({ ...base, label: '🔒 Premium' }));
       }
+    } else if (tab === 'rooms') {
+      // a room that is not unlocked is not listed at all
+      for (const r of rooms ? rooms.catalog : []) {
+        if (!rooms.isUnlocked(r.id)) continue;
+        const base = { icon: r.icon, name: r.name, desc: r.desc, status: 'room' };
+        if (rooms.isAdded(r.id)) roomGroups['In your home'].push(card({ ...base, status: 'inroom', label: '✓ In your home' }));
+        else { const i = handlers.push(() => addRoom(r)) - 1; roomGroups['Add a room'].push(card({ ...base, label: 'Add to my home', action: i, note: 'Puts a door on a wall. Anything in the way goes back to the Catalogue.' })); }
+      }
     } else {
-      for (const b of BOOK_CATALOG) {
+      for (const b of BOOK_CATALOG.filter(live)) {
         const st = bookStatus(b);
         const i = handlers.push(() => addBook(b)) - 1;
         const base = { icon: '📕', name: b.title, desc: b.desc, status: st };
@@ -237,11 +254,12 @@ export function initMachine({ world, guy, persist, notify, remove }) {
         else bookGroups['Premium · coming soon'].push(card({ ...base, label: '🔒 Locked', note: reqName ? `Needs the ${reqName}.` : '' }));
       }
     }
-    const use = tab === 'objects' ? groups : tab === 'records' ? albumGroups : bookGroups;
+    const use = tab === 'objects' ? groups : tab === 'records' ? albumGroups : tab === 'rooms' ? roomGroups : bookGroups;
     body.innerHTML = Object.entries(use).filter(([, c]) => c.length).map(([h, c]) => `<h4>${h}</h4>${c.join('')}`).join('');
     body.querySelectorAll('[data-action]').forEach((el) => el.addEventListener('click', () => handlers[+el.dataset.action]()));
   }
 
+  if (rooms) rooms.onChange(() => { if (!root.hidden) render(); });
   root.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => { tab = t.dataset.tab; render(); }));
   chipBar.addEventListener('click', (e) => { const b = e.target.closest('[data-cat]'); if (b) { cat = b.dataset.cat; render(); } });
   const close = () => { root.hidden = true; };

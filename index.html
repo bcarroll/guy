@@ -46,6 +46,7 @@
   #machine .chip.on { background: #2a7fb0; border-color: #2a7fb0; color: #fff; }
   #machine .chip.on span { color: #d6ecf8; }
   #machine .subhead { margin: 12px 0 6px 2px; font-size: 12px; font-weight: 600; color: #9fb0c8; }
+  @media (pointer: coarse) { #machine .tab, #machine .act, #machine .chip { min-height: 44px; } }
   #machine .act.rm { background: rgba(255,255,255,.08); color: #ff9a9a; }
   #machine .act.rm:hover { background: rgba(255,120,120,.2); }
   #machine .body { overflow: auto; padding: 0 18px 18px; }
@@ -131,7 +132,7 @@
   <div class="panel">
     <header><h2>⚙️ CATALOGUE</h2><button class="close" title="Close (Esc)">✕</button></header>
     <div class="sub">Add objects to the room, books and records to the shelf. Guy learns new things by reading.</div>
-    <div class="tabs"><button class="tab on" data-tab="objects">Objects</button><button class="tab" data-tab="books">Books</button><button class="tab" data-tab="records">Records</button></div>
+    <div class="tabs"><button class="tab on" data-tab="objects">Objects</button><button class="tab" data-tab="books">Books</button><button class="tab" data-tab="records">Records</button><button class="tab" data-tab="rooms">Rooms</button></div>
     <div class="chips"></div>
     <div class="body"></div>
   </div>

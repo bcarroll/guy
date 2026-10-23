@@ -63,6 +63,10 @@ individually. Current baseline: everything passing, `T.errors` empty (run it 3-4
 | `T.sweepWalls()` | The drum kit and the easel pushed against the back and left walls in every rotation: where the stool or easel spot is reachable he uses it within 15 s; where it is not he declines (the Interact button says why) and a forced attempt is dropped in under 20 s. | all pass |
 | `T.sweepHolding()` | Asks for another book while he reads one (also with the "record by the stereo" flag stuck on), and stops the stereo from the player while a record is out. | he puts the first book back and reads the new one without wandering off carrying it; the record ends up back on the shelf with the flag cleared |
 | `T.sweepDecor()` | The rug, windows and picture: Remove through the Catalogue button, check it is gone and offered as "Put back", put it back; wall limits (not over the Catalogue, not over each other, furniture cannot be pushed into them). | all pass, no exceptions |
+| `T.sweepRooms()` | **Rooms tab**: the Workshop is offered ("Add to my home", the main room is not listed), tapping Add puts exactly one door on an allowed wall with nothing in the way and a kind toast, the card then says "In your home", the camera frames both rooms, adding it again does nothing and says so, taking the room away (test-only `T.resetRooms()`) removes the door and the room, no free wall explains and changes nothing, every message under 80 characters and free of banned words | all pass |
+| `T.sweepDoors()` | **Door placement**: each wall on its own, a plant pinned in the doorway is moved to the Catalogue and can be put back clear of the door, a picture over the doorway comes down and goes back up beside it, wall pieces and furniture cannot be put into the doorway or its floor strip, a door never goes over the bookshelf or the heavy piano (nothing fixed moves), the default plan never uses the left wall (the Catalogue) | all pass |
+| `T.sweepGating()` | **Premium room gating**: a catalogue entry with `room: 'workshop'` (a fake object and book are added for the test) is not listed while the room is not added, is listed once it is, is hidden entirely (not shown locked) when the room is locked, is listed again on unlock, and the Objects count follows; premium records keep their "Premium · coming soon" listing | all pass |
+| `T.sweepSaves()` | **Saved rooms**: `R().snapshot()` records the room and its door, `R().restoreFrom()` brings the door back where it was and takes the pieces in its way out again (what a new visit does), a locked room stays locked, nothing or junk restores nothing, a saved spot now held by the bookshelf finds a new spot | all pass |
 | `T.sweepMachine()` | The Objects tab: every object has a category, All lists each once, each category chip lists exactly its items under one heading, the All chip counts what is in the room, the shelf has no Remove. | all pass |
 
 Each result row has `pass`, plus details (`labels`, `poses`, `overlaps`, `warnings`, `errors`). `T.errors` is the list of
@@ -109,20 +113,21 @@ Judge every shot against this standing checklist, not just the item's `expect`:
 
 Use synthetic pointer events on the canvas, as the tests in this repo did (wrap `setPointerCapture` in try/catch, call
 `scene.updateMatrixWorld(true)` first, and project a world point to screen):
-- tap the wall **Catalogue**: modal opens with Objects / Books / Records tabs, correct groups
+- tap the wall **Catalogue**: modal opens with Objects / Books / Records / Rooms tabs, correct groups
   (In the room / Add / Premium), Add buttons work, premium shows 🔒; long-press does nothing (cannot be removed)
+- the **Rooms** tab: "Add to my home" on the Workshop puts a door (brown frame, red door, sign above it) on the right wall by default and a grey room behind it; on a phone (`resize_window` mobile) the tabs and buttons are at least 44 px tall. Orbit round to the right wall to see the door from inside the room. The room behind the door is not walkable yet: Guy cannot enter it
 - long-press every object: the first button is named for what the object does (Play Piano, Play Guitar, Play Drums, Play with Ball, Turn Stereo On/Off, Paint, Tend Plant, Set the Mood / Turn Lamp On/Off ...; `interactLabel` in `main.js`), then Rotate, Remove (Remove hidden for the bookshelf; rotate hidden for
   the ball). The stereo's playback controls are the **🎵 Stereo** button left of Follow, visible only while a stereo is in the room; the stereo's menu button turns it on or off (Guy walks over and presses the button)
 - long-press a **book** on the lower shelves: popup lists the books with read / not read (✅ / 📕), updating as Guy reads; clicking an unread book makes Guy read exactly that one next (`brain.requestRead(id)`), read books are not clickable; each book has **Remove** (back to the Catalogue, Guy keeps what he learned) and **Forget** (back to the Catalogue, the skill fades gradually) buttons
 - long-press the **top shelf** when it holds records: record list; long-press lower shelves: normal menu
 - playback panel: play / stop / previous / next, track list updates, Guy joins in
 - drag furniture (heavy things too), drop onto Guy or walls is refused; dragging scrapes, dropping thuds, **M** mutes the sound effects
+- **update bar** (`src/update.js`; only in a production build, not the dev server): `npm run build`, serve `dist` (`npx vite preview`), open the page, then overwrite `dist/version.json` with a different id and run `await __guyUpdate.check()` in the console. A "✨ A new version of Guy's room is ready!" bar must appear above the bottom buttons (Refresh / Later, 44 px high, no sideways scroll at 375 px wide); **Later** hides it for 30 minutes, **Refresh** reloads. With the same id nothing shows
 
 ## 5. Reporting
 
 Report a table per sweep (passed/total, failures with the cause), the visual checklist with a verdict for each shot,
 and anything you fixed. Say plainly what you did **not** verify (audio cannot be heard from here; motion is judged from
-- **update bar** (`src/update.js`; only in a production build, not the dev server): `npm run build`, serve `dist` (`npx vite preview`), open the page, then overwrite `dist/version.json` with a different id and run `await __guyUpdate.check()` in the console. A "✨ A new version of Guy's room is ready!" bar must appear above the bottom buttons (Refresh / Later, 44 px high, no sideways scroll at 375 px wide); **Later** hides it for 30 minutes, **Refresh** reloads. With the same id nothing shows
 frozen frames). If everything passes, say which parts were checked only numerically.
 
 ## 6. Keeping this skill current
@@ -136,6 +141,8 @@ Whenever you add or change any of these, update **in the same change**:
 | a book (`BOOK_CATALOG` in `src/skills.js`) | `MANIFEST.books` (`then`: an activity that proves the skill works); `assets.md` |
 | a record or track (`src/albums.js`, `TRACKS` in `src/audio.js`) | `MANIFEST.albums`, `MANIFEST.tracks`; `assets.md` |
 | a skill (`SKILL_INFO`) | its book in `MANIFEST.books`; `assets.md` |
+| a room (`ROOM_CATALOG` in `src/rooms.js`) | `MANIFEST.rooms`; the Rooms section of `assets.md`; the door sweeps already cover any room (wall list, size, look come from the catalog) |
+| a catalogue entry that belongs to a room (`room: '<id>'` on an object or book) | its `MANIFEST` entry as usual; it is listed only while the room is added and unlocked, so `sweepObjects`, `sweepBooks` and `sweepMachine` must add the room first (`R().add(id)`) |
 | a pose (`POSES`) or new hand/arm logic | a visual checkpoint in `MANIFEST.visual` and in `assets.md` |
 | a new menu item / panel / UI route | section 4 of this file |
 | a bug you fixed | a regression line in `assets.md` ("Regression watch") |
