@@ -112,19 +112,25 @@ export function startBeat() {
 export const audioNow = () => (ctx ? ctx.currentTime : 0);
 
 // A plucked guitar-ish string: bright attack that darkens as it decays. `delay` staggers the strings of a strum.
-export function playPluck(midi, delay = 0, dur = 1.6, gain = 0.15) {
+let driveCurve = null;
+// `electric`: an overdriven electric guitar (a saw and a square through a soft clipper) instead of the acoustic's soft pluck
+export function playPluck(midi, delay = 0, dur = 1.6, gain = 0.15, electric = false) {
   if (!ctx) return;
   const t = ctx.currentTime + delay;
   const f = ctx.createBiquadFilter();
   f.type = 'lowpass';
-  f.frequency.setValueAtTime(3200, t);
-  f.frequency.exponentialRampToValueAtTime(450, t + dur * 0.8);
+  f.frequency.setValueAtTime(electric ? 4200 : 3200, t);
+  f.frequency.exponentialRampToValueAtTime(electric ? 900 : 450, t + dur * 0.8);
   const g = ctx.createGain();
   g.gain.setValueAtTime(0, t);
-  g.gain.linearRampToValueAtTime(gain, t + 0.004);
+  g.gain.linearRampToValueAtTime(electric ? gain * 0.7 : gain, t + 0.004);
   g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  f.connect(g).connect(master);
-  for (const [type, mult, level] of [['triangle', 1, 1], ['sawtooth', 1.004, 0.35]]) {
+  if (electric) {
+    if (!driveCurve) { driveCurve = new Float32Array(256); for (let i = 0; i < 256; i++) { const x = (i / 255) * 2 - 1; driveCurve[i] = Math.tanh(x * 5); } }
+    const ws = ctx.createWaveShaper(); ws.curve = driveCurve;
+    f.connect(ws).connect(g).connect(master);
+  } else f.connect(g).connect(master);
+  for (const [type, mult, level] of electric ? [['sawtooth', 1, 1], ['square', 1.003, 0.4]] : [['triangle', 1, 1], ['sawtooth', 1.004, 0.35]]) {
     const o = ctx.createOscillator();
     const og = ctx.createGain();
     o.type = type;

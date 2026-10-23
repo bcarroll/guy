@@ -96,6 +96,7 @@ export function buildRoom(scene) {
       toLocal(wx, wz) { const c = Math.cos(this.yaw), sn = Math.sin(this.yaw); return { x: wx * c - wz * sn, z: wx * sn + wz * c }; },
       // ease the visible rotation towards the target angle
       update(dt) {
+        if (this.hauled) { group.rotation.y = this.hauledYaw ?? group.rotation.y; return; }               // being carried: it turns with him
         let d = this.yaw - group.rotation.y;
         while (d > Math.PI) d -= Math.PI * 2;
         while (d < -Math.PI) d += Math.PI * 2;
@@ -228,6 +229,28 @@ export function buildRoom(scene) {
   // the book on top of the stack (the one he can pick up), or null
   objects.shelf.stackTop = () => shelfBooks.filter((r) => r.stack && r.mesh.visible).sort((a, b) => b.slot - a.slot)[0] || null;
 
+  // A bookshelf Guy or GAL built (kind 'bookshelf2') is the same as this one: 16 places on the two rows within reach, the spines facing the
+  // room, and the books on it are read from like any other (rec.host names the shelf a book stands on; the main shelf if it is null).
+  // The books past this shelf's 16 go on the built shelves in turn (16 each) and only then on the floor stack.
+  const bookHosts = () => Object.values(objects).filter((o) => o.kind === 'bookshelf2' && !o.removing).sort((a, b) => (a.name < b.name ? -1 : 1));
+  const hostBook = (rec, host, j) => {
+    host.group.add(rec.mesh);
+    const row = j % 2 === 0 ? 3 : 2, z = -0.72 + Math.floor(j / 2) * 0.2;
+    rec.mesh.rotation.set(0, 0, 0);
+    rec.mesh.position.set(-0.03, 0.045 + row * 0.43 + rec.h / 2 + 0.02, z + rec.w / 2);
+    Object.assign(rec, { host: host.name, stack: false, row, y: rec.mesh.position.y, z: z + rec.w / 2, reachX: undefined });
+  };
+  const toStack = (rec) => {
+    if (stackZ === null) stackZ = pickStackEnd();
+    shelfGroup.add(rec.mesh);
+    Object.assign(rec, { host: null, stack: true, row: -1, z: stackZ, reachX: STACK_X });
+  };
+  const rehome = () => {
+    const over = shelfBooks.filter((r) => r.slot >= SHELF_CAPACITY).sort((a, b) => a.slot - b.slot), hosts = bookHosts();
+    over.forEach((rec, n) => { const hi = Math.floor(n / 16); if (hi < hosts.length) hostBook(rec, hosts[hi], n % 16); else toStack(rec); });
+    if (stackZ !== null || over.some((r) => r.stack)) layoutStack();
+  };
+
   // Put a book on the shelf in the next free slot (rows 3 and 2 are within Guy's reach), or on the stack if the shelf is full.
   const addBook = (def) => {
     let i = 0;                                      // the lowest free slot: a forgotten book leaves a gap, nothing slides along
@@ -242,10 +265,9 @@ export function buildRoom(scene) {
     mesh.castShadow = mesh.receiveShadow = true;
     shelfGroup.add(mesh);
     if (i >= SHELF_CAPACITY) {
-      if (stackZ === null) stackZ = pickStackEnd();
-      const rec = { mesh, row: -1, y: 0, z: stackZ, color, h, w, def, slot: i, stack: true, reachX: STACK_X };
+      const rec = { mesh, row: -1, y: 0, z: 0, color, h, w, def, slot: i, stack: false, host: null };
       shelfBooks.push(rec);
-      layoutStack();
+      rehome();                                      // on a built bookshelf if one has room, otherwise on the floor
       return rec;
     }
     const y = 0.045 + row * 0.43 + h / 2 + 0.02;
@@ -259,7 +281,7 @@ export function buildRoom(scene) {
     const k = shelfBooks.indexOf(rec);
     if (k < 0) return false;
     shelfBooks.splice(k, 1);
-    shelfGroup.remove(rec.mesh);
+    (rec.mesh.parent || shelfGroup).remove(rec.mesh);
     rec.mesh.geometry.dispose();
     if (rec.stack) layoutStack();
     return true;
@@ -744,10 +766,10 @@ export function buildRoom(scene) {
 
   // Acoustic guitar standing on a stand. `obj.guitar` is the instrument itself (neck along its local +x, soundboard facing +z)
   // so Guy can lift it off; `obj.rest` is where it sits on the stand.
-  const buildGuitar = (x = 0, z = 0) => {
-    const wood = mat(0xb5772f, { roughness: 0.45 }), dark = mat(0x1b120a, { roughness: 0.6 }), metal = mat(0x2a2a2a, { roughness: 0.4 });
+  const buildGuitar = (x = 0, z = 0, name = 'guitar', electric = false) => {
+    const wood = mat(electric ? 0xb02a2a : 0xb5772f, { roughness: 0.45 }), dark = mat(0x1b120a, { roughness: 0.6 }), metal = mat(0x2a2a2a, { roughness: 0.4 });
     let gtr = null;
-    const obj = makeObject('guitar', x, z, 0.5, 0.45, 1.05, 'light', (g) => {
+    const obj = makeObject(name, x, z, 0.5, 0.45, 1.05, 'light', (g) => {
       box(0.5, 0.03, 0.05, metal, 0, 0.015, 0.0, g);                     // base bar
       box(0.03, 0.03, 0.4, metal, -0.2, 0.015, 0.0, g);                   // feet
       box(0.03, 0.03, 0.4, metal, 0.2, 0.015, 0.0, g);
@@ -765,13 +787,22 @@ export function buildRoom(scene) {
       hole.position.set(0.0, 0, 0.0455);
       const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.1, 0.012), dark);
       bridge.position.set(-0.1, 0, 0.05);
+      if (electric) {                                                  // a solid body (red, with a horn and two pickups) instead of the hollow acoustic one
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.3, 0.045), wood); body.position.set(-0.02, 0, 0);
+        const horn = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.1, 0.045), wood); horn.position.set(0.15, 0.17, 0);
+        const guard = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.2, 0.01), dark); guard.position.set(-0.04, -0.02, 0.026);
+        const pick1 = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.1, 0.014), metal); pick1.position.set(0.06, 0, 0.034);
+        const pick2 = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.1, 0.014), metal); pick2.position.set(-0.04, 0, 0.034);
+        const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.02, 12), metal); knob.rotation.x = Math.PI / 2; knob.position.set(-0.15, -0.08, 0.04);
+        gtr.add(body, horn, guard, pick1, pick2, knob, bridge);
+      } else gtr.add(lower, upper, waist, hole, bridge);
       const neck = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.045, 0.026), wood);
       neck.position.set(0.45, 0, 0.0);
       const board = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.04, 0.01), dark);
       board.position.set(0.4, 0, 0.017);
       const head = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.062, 0.022), dark);
       head.position.set(0.83, 0, 0.0);
-      gtr.add(lower, upper, waist, hole, bridge, neck, board, head);
+      gtr.add(neck, board, head);
       for (let i = 0; i < 6; i++) {
         const str = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.0016, 0.0016), mat(0xd8d8d8, { roughness: 0.3 }));
         str.position.set(0.33, -0.0125 + i * 0.005, 0.031);
@@ -784,6 +815,7 @@ export function buildRoom(scene) {
     });
     obj.guitar = gtr;
     obj.rest = { pos: gtr.position.clone(), quat: gtr.quaternion.clone() };
+    if (electric) obj.electric = true;
     return obj;
   };
 
@@ -1033,12 +1065,27 @@ export function buildRoom(scene) {
     for (const y of [0.04, 0.4, 0.76, 1.12, 1.34]) box(0.86, 0.03, 0.34, light, 0, y, 0, g);
     for (const [x2, y, c] of [[-0.25, 0.44, 0xd9534f], [-0.2, 0.44, 0x4a90d9], [0.2, 0.8, 0x6bbf59], [0.3, 0.8, 0xe9c46a]]) box(0.06, 0.2, 0.16, mat(c), x2, y + 0.1, 0.0, g);
   });
+  const buildBookshelf2 = (name, x = 0, z = 0) => makeObject(name, x, z, 0.5, 1.9, 2.2, 'medium', (g) => {
+    const m = mat(0xa87a4a);
+    box(0.4, 2.2, 0.05, m, 0, 1.1, -0.9, g);
+    box(0.4, 2.2, 0.05, m, 0, 1.1, 0.9, g);
+    box(0.05, 2.2, 1.8, m, 0.18, 1.1, 0, g);
+    for (let i = 0; i <= 5; i++) box(0.4, 0.04, 1.8, m, 0, 0.02 + i * 0.43, 0, g);
+  });
   const INSTANCE_KINDS = {
-    footstool: { build: buildFootStool, pref: { x: -3.4, z: -1.2 } },
+    eguitar: { build: (name, x, z) => buildGuitar(x, z, name, true), pref: { x: 2.2, z: -1.6 } },
+    bookshelf2: { build: buildBookshelf2, pref: { x: 4.1, z: -2.2 } },
+    // the foot stool stands in front of a window whose top is out of reach (the owner's rule: built where it is needed), right by the wall
+    footstool: { build: buildFootStool, pref: () => {
+      const d = Object.values(decor).find((x) => x.wall && /^window/.test(x.name) && x.v + x.hh > 2.1);
+      if (!d) return { x: -3.4, z: -1.2 };
+      return d.wall === 'back' ? { x: d.u, z: -ROOM.d / 2 + 0.55, exact: true } : { x: -ROOM.w / 2 + 0.55, z: d.u, exact: true };
+    } },
     woodshelves: { build: buildWoodShelves, pref: { x: -4.2, z: 1.2 } },
     builtchair: { build: (name, x, z) => buildWoodenChair(name, x, z), pref: { x: -2.4, z: 2.6 } },
     metalchair: { build: (name, x, z) => buildWoodenChair(name, x, z, true), pref: { x: -2.9, z: 2.6 } },
   };
+  // (the restaurant's extra tables are further instance kinds, added below once the restaurant's layout is known)
 
   // ---- Restaurant furniture (src/restobjects.js), placed the same way in the Restaurant's own frame
   const rest = makeRestaurantBuilders({ makeObject, box, mat });
@@ -1049,6 +1096,8 @@ export function buildRoom(scene) {
     register: (N, L) => ({ n: 2.6, lat: -L / 2 + 1.7, face: 'plusLat' }),
     diningtable: (N, L) => ({ n: N * 0.5, lat: L * 0.14, face: 'door' }),
     diningtable2: (N, L) => ({ n: N * 0.5, lat: -L * 0.12, face: 'door' }),
+    diningtable3: (N, L) => ({ n: N * 0.5, lat: L * 0.36, face: 'door' }),               // the tables Guy builds when the restaurant is full
+    diningtable4: (N, L) => ({ n: N * 0.5, lat: -L * 0.34, face: 'door' }),
   };
   const restSpot = (id) => (w) => {
     if (!w.doors.restaurant) return null;
@@ -1057,6 +1106,9 @@ export function buildRoom(scene) {
     const face = s.face === 'door' ? ax.toDoor : s.face === 'minusLat' ? ax.lat.clone().negate() : ax.lat;
     return { x: p.x, z: p.z, rot: w.rotFacing(face.x, face.z) };
   };
+
+  INSTANCE_KINDS.diningtable3 = { build: (name, x, z) => rest.diningtable(name, x, z), pref: (w) => restSpot('diningtable3')(w) };
+  INSTANCE_KINDS.diningtable4 = { build: (name, x, z) => rest.diningtable(name, x, z, true), pref: (w) => restSpot('diningtable4')(w) };
 
   const NEW_OBJECTS = {            // object id -> [builder, preferred spot (or a function of the world that works it out)]
     botprinter: [bots.botprinter, { x: -3.5, z: 2.5 }],
@@ -1428,6 +1480,7 @@ export function buildRoom(scene) {
       if (dc) { room.remove(dc.group); delete decor[name]; world.removed[name] = dc; return; }
       const o = objects[name];
       if (!o || o.removable === false) return;
+      if (o.kind === 'bookshelf2') { o.removing = true; rehome(); }      // its books go back to the stack on the floor first
       obstacles.splice(obstacles.indexOf(o.obstacle), 1);
       delete objects[name];
       room.remove(o.group);
@@ -1542,10 +1595,16 @@ export function buildRoom(scene) {
       if (objects[name]) return name;
       const o = k.build(name, 0, 0);
       o.kind = kind;
-      const spot = world.findSpot(o, pref || k.pref, avoid);
+      const kp = typeof k.pref === 'function' ? k.pref(world) : k.pref;          // (a table for the restaurant goes where that room is)
+      if (!pref && kp && kp.rot !== undefined) { o.rot = kp.rot; o.group.rotation.y = o.yaw; }
+      const want = pref || kp;
+      let spot = null;
+      if (want && want.exact && fits(o, want.x, want.z) && world.ownStandClear(o, want.x, want.z) && !world.onSomeonesStand(o, want.x, want.z)) spot = { x: want.x, z: want.z };
+      if (!spot && want) spot = world.findSpot(o, want, avoid);
       if (!spot) { world.removeObject(name); delete world.removed[name]; return null; }
       o.home = { x: spot.x, z: spot.z };
       o.set(spot.x, spot.z);
+      if (kind === 'bookshelf2') rehome();                           // the books that were stacked on the floor go on it
       if (!free) world.stock.items[kind] = (world.stock.items[kind] || 0) - 1;
       if (!world.stock.items[kind]) delete world.stock.items[kind];
       return name;
@@ -1561,6 +1620,13 @@ export function buildRoom(scene) {
       return true;
     },
     instanceKinds: () => Object.keys(INSTANCE_KINDS),
+    // where a built kind goes when it is wanted: { x, z, room, rot? } (null if it has nowhere to go, e.g. the restaurant is not there)
+    instanceSite(kind) {
+      const k = INSTANCE_KINDS[kind];
+      if (!k) return null;
+      const p = typeof k.pref === 'function' ? k.pref(world) : k.pref;
+      return p ? { ...p, room: world.roomIdAt(p.x, p.z) } : null;
+    },
     // Guy has just built `kind`: it goes straight into the Workshop (the middle of the room, or the nearest free spot there).
     // Returns its name, or null if there is no room for it (the caller then puts it in storage).
     placeBuilt(kind) {

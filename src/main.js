@@ -532,7 +532,7 @@ function interactLabel(name) {
     case 'anvil': return '🔨 Hammer Metal';
     case 'botprinter': return '🤖 Build GAL';
     case 'plant': case 'flowerplant': case 'tree': return '🌱 Tend Plant';
-    default: return brain.obj(name) && brain.obj(name).sit ? '🪑 Sit Down' : '▶ Use';
+    default: return brain.obj(name) && brain.obj(name).guitar ? '🎸 Play Guitar' : brain.obj(name) && brain.obj(name).kind === 'footstool' ? '🪜 Stand on It to Clean' : brain.obj(name) && brain.obj(name).sit ? '🪑 Sit Down' : '▶ Use';
   }
 }
 

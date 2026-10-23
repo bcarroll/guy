@@ -43,6 +43,8 @@ export function installWorkshop(Brain, POSES, H) {
       const steel = new THREE.MeshStandardMaterial({ color: 0xb4bcc6, metalness: 0.75, roughness: 0.3 });
       const sbar = (l, t, w) => { const m = new THREE.Mesh(new THREE.BoxGeometry(l, t, w), steel); m.castShadow = true; return m; };
       Object.assign(this.workProps, {
+        flat: group(...[0, 1, 2].map((i) => { const m = bar(0.5 - i * 0.04, 0.035, 0.34); m.position.set(0, i * 0.038, 0); m.rotation.y = i * 0.15; return m; })),
+        mflat: group(...[0, 1, 2].map((i) => { const m = sbar(0.5 - i * 0.04, 0.035, 0.34); m.position.set(0, i * 0.038, 0); m.rotation.y = i * 0.15; return m; })),
         bar: sbar(0.5, 0.035, 0.07),
         bars: group(...[0, 1, 2, 3].map((i) => { const m = sbar(0.4, 0.035, 0.07); m.position.set(0, (i % 2) * 0.037, (i < 2 ? -0.05 : 0.05)); return m; })),
         mparts: group(...[0, 1].map((i) => { const m = sbar(0.3, 0.035, 0.05); m.position.set(0, i * 0.037, 0); m.rotation.y = i * 0.2; return m; })),
@@ -70,8 +72,15 @@ export function installWorkshop(Brain, POSES, H) {
     },
     doorOut(id) {
       const w = this.w, out = this.doorStand(id), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false);
-      return [this.walk(inn.x, inn.z), { ...this.walk(out.x, out.z), direct: true }, this.walk(out.x, out.z, face),
-        this.play('reach', 1.6, { at: [0.8, () => w.setDoorOpen(id, false)], target: () => w.doorKnob(id) })];
+      return [this.play('idle', 0.05, { at: [0, () => w.setDoorOpen(id, true)] }),            // (the other robot may have shut it behind her while he was inside)
+        this.walk(inn.x, inn.z), { ...this.walk(out.x, out.z), direct: true }, this.walk(out.x, out.z, face),
+        this.play('reach', 1.6, { at: [0.8, () => this.closeDoor(id)], target: () => w.doorKnob(id) })];
+    },
+    // the door is shut behind whoever leaves, unless the other robot is still in there (or in the doorway)
+    closeDoor(id) {
+      const o = this.other, r = o && o.g ? this.w.roomIdAt(o.g.root.position.x, o.g.root.position.z) : null;
+      if (r === id || r === 'door') return;
+      this.w.setDoorOpen(id, false);
     },
     // A trip: in through the door (unless he is already inside), the steps, and out again (unless he is locked on something in here).
     shopTrip(label, inner) {
@@ -171,14 +180,117 @@ export function installWorkshop(Brain, POSES, H) {
         this.play('reach', 1.6, { needs: ['workbench'], at: [0.8, () => {
           this.setCarry(null); this.pieceParts = 0;
           if (r.metal && r.parts) this.w.addStock('hw', -1);                  // the metal hardware that was waiting on the bench is fitted to the body
+          if (this.siteFor(id)) {                                           // it is wanted somewhere: he carries it there flat-packed and puts it together on the spot
+            this.setCarry(r.metal && !r.parts ? 'mflat' : 'flat', 1); this.flatKind = id; sfx('bookgrab');
+            return;
+          }
           this.endBuild();
-          // what he made stands in the Workshop straight away (the user can move it or put it away); storage only if there is no room
+          // nowhere in particular: it stands in the Workshop straight away (the user can move it or put it away); storage only if there is no room
           const placed = this.w.placeBuilt(r.object);
           if (!placed) { const items = this.w.stock.items; items[r.object] = Math.min(STORAGE_CAP, (items[r.object] || 0) + 1); }
           sfx('chime');
-          if (this.onBuilt) this.onBuilt(placed ? `Guy built a ${r.name}! It is in the Workshop.` : `Guy built a ${r.name}! There is no room in the Workshop, so it is in storage.`);
+          if (this.onBuilt) this.onBuilt(placed ? `${this.who()} built a ${r.name}! It is in the Workshop.` : `${this.who()} built a ${r.name}! There is no room in the Workshop, so it is in storage.`);
         }], target: () => wb().productPoint() }),
-        this.play('idle', 2.0, { needs: ['workbench'] })];
+        this.play('idle', 1.2, { needs: ['workbench'] }),
+        { type: 'plan', fn: () => this.deliverSteps(id) }];
+    },
+    who() { return this.isGal ? 'GAL' : 'Guy'; },
+
+    // ------------------------------------------------------------------ the foot stool: carried to a window and stood on to clean the top
+    // The high windows (their top is out of reach from the floor) and the stool: what he could do now, or null.
+    stoolJob() {
+      const w = this.w, stool = Object.values(w.objects).find((o) => o.kind === 'footstool' && w.roomIdAt(o.x, o.z) === 'main');
+      if (!stool) return null;
+      const wins = Object.values(w.decor).filter((d) => d.wall && /^window/.test(d.name) && d.v + d.hh > 2.1);
+      if (!wins.length) return null;
+      return { stool, wins };
+    },
+    startHaul(name) {
+      const o = this.obj(name); if (!o) return;
+      this.hauling = { o, k: 0, dir: 1, from: { x: o.x, z: o.z }, to: null };
+      o.hauled = true; o.hauledYaw = o.group.rotation.y; o.obstacle.active = false;
+    },
+    // set it down at (x, z): it lowers into place from where he holds it
+    endHaul(x, z) {
+      if (!this.hauling) return;
+      this.hauling.dir = -1; this.hauling.to = { x, z };
+    },
+    // where his hands go while he holds it (left and right of the piece, in front of him)
+    haulHands() {
+      const h = this.hauling, root = this.g.root, yaw = root.rotation.y, fx = Math.sin(yaw), fz = Math.cos(yaw), lx = Math.cos(yaw), lz = -Math.sin(yaw);
+      const c = new THREE.Vector3(root.position.x + fx * 0.5, 0.62, root.position.z + fz * 0.5), half = h.o.bw / 2 + 0.03;
+      return { L: c.clone().add(new THREE.Vector3(lx * half, 0, lz * half)), R: c.clone().add(new THREE.Vector3(-lx * half, 0, -lz * half)) };
+    },
+    updateHaul() {
+      const h = this.hauling;
+      if (!h) return;
+      const dt = Math.min(0.1, this.time - (this.haulT0 ?? this.time)); this.haulT0 = this.time;
+      h.k = Math.min(1, Math.max(0, h.k + h.dir * dt / 0.9));
+      const root = this.g.root, yaw = root.rotation.y, k = h.k * h.k * (3 - 2 * h.k);
+      const cx = root.position.x + Math.sin(yaw) * 0.5, cz = root.position.z + Math.cos(yaw) * 0.5, o = h.o;
+      const base = h.dir > 0 ? h.from : (h.to || h.from);
+      o.group.position.set(base.x + (cx - base.x) * k, 0.62 * k, base.z + (cz - base.z) * k);
+      o.hauledYaw = o.group.rotation.y + (yaw - o.group.rotation.y) * 0.3;
+      if (h.dir < 0 && h.k <= 0) {                                             // down on the floor: it is a piece of furniture again
+        o.hauled = false; o.obstacle.active = true; o.hauledYaw = undefined;
+        o.set(h.to ? h.to.x : o.x, h.to ? h.to.z : o.z);
+        this.hauling = null; this.haulT0 = undefined;
+      }
+    },
+    // stepping up on the stool and down again: his feet are on top of it (0.34 m) while the step lasts
+    updateStool(s) {
+      const f = s.fx.stool, o = this.obj(f.name), root = this.g.root;
+      if (!o) return;
+      const k = Math.min(1, s.t / 0.9) * (1 - Math.min(1, Math.max(0, (s.t - (s.dur - 0.9)) / 0.9)));
+      const e = k * k * (3 - 2 * k);
+      root.position.set(f.from.x + (o.x - f.from.x) * e, 0.34 * e, f.from.z + (o.z - f.from.z) * e);
+      this.onStool = e > 0.02 ? f : null;
+    },
+    // where it is wanted: { room, pref, stand } or null (nowhere in particular)
+    siteFor(id) {
+      const r = RECIPES[id], w = this.w, p = r && w.instanceSite(r.object);
+      if (!p || !r.serves) return null;
+      const room = p.room, b = room === 'main' || room === 'door' ? { minX: -4.5, maxX: 4.5, minZ: -3.5, maxZ: 3.6 } : w.doors[room] && w.doors[room].shell.bounds;
+      if (!b) return null;
+      const cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2, d = Math.hypot(cx - p.x, cz - p.z) || 1;
+      const stand = { x: Math.min(b.maxX - 0.7, Math.max(b.minX + 0.7, p.x + (cx - p.x) / d * 0.95)), z: Math.min(b.maxZ - 0.7, Math.max(b.minZ + 0.7, p.z + (cz - p.z) / d * 0.95)) };
+      return { room, pref: p, stand };
+    },
+    // out of the Workshop with it, through the other room's door if it goes there, put it together where it is wanted, and back out
+    deliverSteps(id) {
+      if (this.carry !== 'flat' && this.carry !== 'mflat') return [];
+      const site = this.siteFor(id);
+      if (!site) return [{ type: 'plan', fn: () => [this.play('idle', 0.3, { at: [0.1, () => this.setUp(id, null)] })] }];
+      const steps = [...(this.inWorkshop() ? this.doorOut(ID) : [])];
+      if (site.room !== 'main' && site.room !== 'door') steps.push(...this.doorIn(site.room));
+      steps.push({ type: 'plan', fn: () => this.setupSteps(id) });
+      if (site.room !== 'main' && site.room !== 'door') steps.push(...this.doorOut(site.room));
+      return steps;
+    },
+    setupSteps(id) {
+      const site = this.siteFor(id);
+      if (!site) return [this.play('idle', 0.3, { at: [0.1, () => this.setUp(id, null)] })];
+      const { stand, pref } = site, yaw = Math.atan2(pref.x - stand.x, pref.z - stand.z);
+      return [this.walk(stand.x, stand.z, yaw),
+        this.play('reach', 3.4, { target: () => V(pref.x, 0.3, pref.z), at: [2.0, () => this.setUp(id, site)] }),
+        this.play('idle', 0.6)];
+    },
+    // the flat-pack becomes the real thing: it grows into place (and is counted in storage if there is no room for it)
+    setUp(id) {
+      const r = RECIPES[id];
+      this.setCarry(null); this.flatKind = null;
+      this.endBuild();
+      const name = this.w.addInstance(r.object, null, null, true);
+      if (name) { const o = this.w.objects[name]; (this.popping ||= []).push({ o, t: 0 }); sfx('chime'); }
+      else { const items = this.w.stock.items; items[r.object] = Math.min(STORAGE_CAP, (items[r.object] || 0) + 1); sfx('chime'); }
+      if (this.onBuilt) this.onBuilt(name ? `${this.who()} built a ${r.name} and put it where it is needed!` : `${this.who()} built a ${r.name}! There is no room for it, so it is in storage.`);
+    },
+    // new things grow into place over a moment
+    lateWork2() {
+      if (!this.popping || !this.popping.length) return;
+      const dt = Math.min(0.1, this.time - (this.popT0 ?? this.time)); this.popT0 = this.time;
+      for (const p of this.popping) { p.t += dt; const k = Math.min(1, p.t / 0.9), s = k * k * (3 - 2 * k); p.o.group.scale.setScalar(0.4 + 0.6 * s); if (k >= 1) p.done = true; }
+      this.popping = this.popping.filter((p) => !p.done);
     },
     // Why he cannot do what the user asked with a Workshop object (a kind message), or null if he can.
     workRefusal(name) {
@@ -265,7 +377,7 @@ export function installWorkshop(Brain, POSES, H) {
         steps.push(...this.assembleSteps(r));
         if (r.sand) steps.push(...this.sandSteps());
       }
-      steps.push(...this.finishSteps(id), ...this.toolboxSteps());
+      steps.push(...this.toolboxSteps(), ...this.finishSteps(id));
       return steps;
     },
     // ------------------------------------------------------------------ the activities
@@ -285,10 +397,36 @@ export function installWorkshop(Brain, POSES, H) {
           ...this.sandSteps(),
           ...this.benchPlace('wood', 1)]),
         tidytools: () => this.shopTrip('tidying the toolbox', this.toolboxSteps()),
+        // clean the top of a high window: carry the foot stool there (unless it is there already), step up on it and wipe along the top of the frame
+        dusttop: () => {
+          const job = this.stoolJob();
+          if (!job) return ['no window to clean', this.play('idle', 0.5)];
+          const w = this.w, win = pick(job.wins), sp = win.wall === 'back' ? { x: win.u, z: -4 + 0.55 } : { x: -5 + 0.55, z: win.u }, yaw = win.wall === 'back' ? Math.PI : -Math.PI / 2;
+          const inward = win.wall === 'back' ? { x: 0, z: 1 } : { x: 1, z: 0 };
+          const name = job.stool.name, steps = [];
+          const there = Math.hypot(job.stool.x - sp.x, job.stool.z - sp.z) < 0.3;
+          if (!there) {                                                         // fetch it: lift it, carry it to the window, set it down by the wall
+            steps.push(this.stand(name, 0.6),
+              this.play('reach', 1.6, { at: [0.6, () => this.startHaul(name)], target: () => { const o = this.obj(name); if (!o) return null; return V(o.x, 0.3, o.z); } }),         // (no 'needs': the stool is moved by this very step)
+              { type: 'plan', fn: () => [this.walk(sp.x + inward.x * 0.5, sp.z + inward.z * 0.5, yaw)] },
+              this.play('reach', 1.6, { at: [0.5, () => this.endHaul(sp.x, sp.z)], target: () => V(sp.x, 0.3, sp.z) }),
+              this.play('idle', 0.4));
+          } else steps.push({ type: 'plan', fn: () => [this.walk(sp.x + inward.x * 0.55, sp.z + inward.z * 0.55, yaw)] });
+          const t0 = this.time, top = win.v + win.hh - 0.12, span = Math.min(win.hw * 0.7, 0.55);
+          const target = () => {
+            sfx('wipe');
+            const u = win.u + Math.sin((this.time - t0) * 2.0) * span;
+            return win.wall === 'back' ? V(u, top, -4 + 0.04) : V(-5 + 0.04, top, u);
+          };
+          steps.push({ type: 'plan', fn: () => { const p = this.g.root.position, from = { x: p.x, z: p.z }; return [this.play('reach', 7.5, { needs: [name], target, stool: { name, from } })]; } });
+          return [`cleaning the top of the ${win.label} from the foot stool`, ...steps];
+        },
         build: () => {
           const id = this.pickRecipe();
           if (!id) return ['wondering what to build', this.play('idle', 1)];
-          return this.shopTrip(`building a ${RECIPES[id].name.toLowerCase()}`, this.buildSteps(id));
+          const label = `building a ${RECIPES[id].name.toLowerCase()}`;
+          if (this.siteFor(id)) return [label, ...(this.inWorkshop() ? [] : this.doorIn(ID)), ...this.buildSteps(id)];          // (the delivery takes him out again)
+          return this.shopTrip(label, this.buildSteps(id));
         },
       };
     },
@@ -296,6 +434,11 @@ export function installWorkshop(Brain, POSES, H) {
     // Put things back if he was cut short: what he carries and what is on the sawhorse go back to the stock.
     workCleanup() {
       const w = this.w;
+      if (this.carry === 'flat' || this.carry === 'mflat') {                                  // flat-packed, on the way: set down where he stands (storage if there is no room)
+        const r = RECIPES[this.flatKind], p = this.g.root.position;
+        if (r) { const name = w.addInstance(r.object, null, null, true, { x: p.x, z: p.z }); if (!name) { const items = w.stock.items; items[r.object] = Math.min(STORAGE_CAP, (items[r.object] || 0) + 1); } }
+        this.flatKind = null;
+      }
       if (this.carry === 'plank') w.addStock('wood', 1);
       else if (this.carry === 'planks') w.addStock('wood', PLANKS_PER_RUN);
       else if (this.carry === 'parts') w.addStock('parts', this.carryN || PARTS_PER_PLANK);
@@ -304,7 +447,7 @@ export function installWorkshop(Brain, POSES, H) {
       else if (this.carry === 'bars') w.addStock('metal', METAL_PER_RUN);
       else if (this.carry === 'mparts') w.addStock('mparts', this.carryN || MPARTS_PER_BAR);
       else if (this.carry === 'mpiece') w.addStock('mparts', this.pieceParts || 0);
-      if (this.carry !== 'canvas') this.setCarry(null); this.pieceParts = 0;
+      if (this.carry !== 'canvas') this.setCarry(null); this.pieceParts = 0;                 // (the flat-pack case below has already been looked at)
       if (this.assembling) {                                                               // parts left on a station
         const at = this.assembleAt || { obj: 'mallet', kind: 'parts' };
         w.addStock(at.kind, this.assembling); this.assembling = 0;
@@ -312,6 +455,8 @@ export function installWorkshop(Brain, POSES, H) {
         this.assembleAt = null;
       }
       this.endBuild();
+      if (this.hauling) { const o = this.hauling.o; o.hauled = false; o.obstacle.active = true; o.hauledYaw = undefined; const p = this.g.root.position; o.set(p.x + Math.sin(this.g.root.rotation.y) * 0.6, p.z + Math.cos(this.g.root.rotation.y) * 0.6); o.group.position.y = 0; this.hauling = null; this.haulT0 = undefined; }
+      if (this.onStool) { const f = this.onStool; this.g.root.position.set(f.from.x, 0, f.from.z); this.onStool = null; }
       const cu = this.obj('metalcutter');
       if (cu && cu.barA.visible) { if (cu.barB.visible) w.addStock('mparts', MPARTS_PER_BAR); else w.addStock('metal', 1); cu.setBar(null); }
       const mf = this.obj('metalfactory');
@@ -403,6 +548,8 @@ export function installWorkshop(Brain, POSES, H) {
     lateWork() {
       const P = this.workProps;
       if (!P) return;
+      this.lateWork2();
+      this.updateHaul();
       const g = this.g, hp = this.hobProps || {};
       const sandPiece = !!hp.sandPiece;
       for (const [key, m] of Object.entries(P)) m.visible = (key === this.carry && !sandPiece) || (key === 'sandPiece' && sandPiece);

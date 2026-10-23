@@ -130,8 +130,8 @@ export function makeRestaurantBuilders({ makeObject, box, mat }) {
   };
 
   // ------------------------------------------------------------------------------------------------ dining table and its chairs
-  const diningtable = (name, x = 0, z = 0) => {
-    const wood = mat(WOOD), dark = mat(WOOD_DARK), cloth = mat(0xf2e8d5);
+  const diningtable = (name, x = 0, z = 0, metal = false) => {
+    const wood = metal ? mat(0xb4bcc6, { metalness: 0.7, roughness: 0.3 }) : mat(WOOD), dark = metal ? mat(0x8a929c, { metalness: 0.7, roughness: 0.3 }) : mat(WOOD_DARK), cloth = mat(0xf2e8d5);
     const o = makeObject(name, x, z, 0.95, 1.95, 1.0, 'medium', (g) => {
       box(0.9, 0.05, 0.9, wood, 0, 0.75, 0, g);                                   // the table top
       box(0.5, 0.01, 0.5, cloth, 0, 0.78, 0, g);

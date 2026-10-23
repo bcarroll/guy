@@ -14,6 +14,7 @@ import { Guy } from './guy.js';
 import { Brain, POSES, basePose } from './brain.js';
 import { Skills } from './skills.js';
 import { sfx } from './sfx.js';
+import { RECIPES } from './workshop.js';
 
 const KEY = 'guy.gal.v1';
 const SKILL_KEYS = { known: 'guy.gal.skills.v1', fade: 'guy.gal.fade.v1' };
@@ -49,7 +50,7 @@ export class GalBrain extends Brain {
 
   // she does not use the Workshop, push furniture about or build robots; and she needs the stereo for her invitation
   galBlocks(act) {
-    if (['makewood', 'sawwood', 'tap', 'sand', 'tidytools', 'makemetal', 'cutmetal', 'hammer', 'weld', 'rearrange', 'buildbot', 'bandjam', 'bandplay'].includes(act)) return true;       // (she does build what the house needs: 'build')
+    if (['makewood', 'sawwood', 'tap', 'sand', 'tidytools', 'makemetal', 'cutmetal', 'hammer', 'weld', 'rearrange', 'buildbot', 'bandjam', 'bandplay', 'orderbuild'].includes(act)) return true;       // (she does build what the house needs: 'build')
     if (act === 'invitedance') return !(this.obj('table') && this.skills.has('stereo') && !this.music && this.w.gal.canInvite());
     return false;
   }
@@ -215,6 +216,8 @@ export class Gal {
   // test aid: take her away again (the machine does not come back)
   remove() {
     if (!this.present) return;
+    if (this.brain && this.brain.held) this.brain.returnBook();                // a book in her hands goes back on the shelf
+    if (this.brain && this.brain.hauling) { this.brain.hauling.o.hauled = false; this.brain.hauling.o.obstacle.active = true; this.brain.hauling = null; }
     this.opts.scene.remove(this.g.root);
     for (const k of ['guy', 'gal']) { const i = this.w.obstacles.indexOf(this.obs[k]); if (i >= 0) this.w.obstacles.splice(i, 1); }
     this.guyBrain.selfOb = null; this.guyBrain.other = null;
@@ -257,6 +260,17 @@ export class Gal {
 
   // ---------------------------------------------------------------- how they talk
   canInvite() { return this.present && !this.emerge && !this.duo && !this.guyBrain.lock && this.guyBrain.inMain() && this.brain.inMain(); }
+
+  // Guy asks GAL to build something the house needs and he cannot make himself (he has not read the book): she goes and does it
+  orderBuild(id) {
+    const r = RECIPES[id];
+    if (!this.present || !r || this.brain.forceRecipe) return false;
+    this.say(`GUY asks GAL: build a ${r.name}`);
+    this.brain.forceRecipe = id;
+    this.brain.skip(true);
+    this.brain.pendingActivity = 'build';
+    return true;
+  }
 
   // GAL asks Guy to do something (he finishes the step he is on, then does it)
   askGuy(act) {
@@ -363,6 +377,15 @@ export function installGalGuy(Brain) {
             this.play('wave', 2.6, { at: [1.0, () => gal.startDuo(plan)] }),
             this.play('idle', 0.8)];
         },
+        // the house needs something he cannot build (he has not read the book) but GAL can: he tells her to
+        orderbuild: () => {
+          const gal = w.gal, id = gal && gal.exists() && this.recipeForHelper(gal.brain);
+          if (!id) return ['thinking about what to build', this.play('idle', 0.5)];
+          return [`asking GAL to build a ${RECIPES[id].name.toLowerCase()}`,
+            { type: 'plan', fn: () => { const q = gal.g.root.position; return [this.walk(q.x + 1.1, q.z + 0.3, Math.atan2(-1.1, -0.3))]; } },
+            this.play('wave', 2.6, { at: [1.0, () => gal.orderBuild(id)] }),
+            this.play('idle', 0.8)];
+        },
         // she is ready: the music on, and then he plays his part (she starts hers when the music is on)
         bandplay: () => {
           const d = w.gal && w.gal.duo;
@@ -380,12 +403,13 @@ export function installGalGuy(Brain) {
     galBlocks(act) {
       if (act === 'buildbot') return !(this.obj('botprinter') && this.w.gal && !this.w.gal.exists() && this.w.gal.g && this.w.gal.g.loaded && this.w.gal.ready);
       if (act === 'bandjam') return !(this.w.gal && this.w.gal.planDuo());
+      if (act === 'orderbuild') { const g = this.w.gal; return !(g && g.exists() && g.canInvite() && !g.brain.forceRecipe && this.recipeForHelper(g.brain)); }
       if (act === 'bandplay') return !(this.w.gal && this.w.gal.duo);
       return false;
     },
     extraWeights() {
       const gal = this.w.gal;
-      const out = { buildbot: 30, bandjam: 1.2 };
+      const out = { buildbot: 30, bandjam: 1.2, orderbuild: 8 };
       if (gal && gal.exists()) {                          // with GAL about he leaves most of the restaurant to her
         for (const k of ['takeorder', 'cook', 'serve', 'takepay']) out[k] = 12;
       }

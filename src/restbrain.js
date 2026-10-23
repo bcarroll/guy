@@ -65,7 +65,7 @@ export function installRestaurant(Brain, POSES, H) {
 
     // Why he cannot do what the user asked with a restaurant object (a kind message), or null if he can.
     restRefusal(name) {
-      if (!REST_OBJECTS.includes(name)) return null;
+      if (!REST_OBJECTS.includes(name) && !(this.obj(name) && this.obj(name).seats)) return null;
       if (!this.skills.has('restaurant')) return `Guy doesn't know how to run a restaurant yet. Add the book "Restaurant Basics" to the shelf and he'll read it.`;
       const r = this.w.restaurant;
       if (!r || !r.isOpen()) return 'The restaurant needs a stove, a kitchen counter, a cash register and a table before it can open.';
@@ -73,7 +73,7 @@ export function installRestaurant(Brain, POSES, H) {
     },
     // what he does when the user points at a restaurant object: the job that fits it if there is one, otherwise wait for customers
     restTries(name) {
-      const job = { stove: 'cook', kitchencounter: 'serve', register: 'takepay', diningtable: 'takeorder', diningtable2: 'takeorder' }[name];
+      const job = { stove: 'cook', kitchencounter: 'serve', register: 'takepay', diningtable: 'takeorder', diningtable2: 'takeorder' }[name] || (this.obj(name) && this.obj(name).seats ? 'takeorder' : null);
       return this.available(job) ? [job] : ['rwait'];
     },
 

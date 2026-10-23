@@ -23,7 +23,6 @@ export const ID = 'restaurant';
 export const MAX_CUSTOMERS = 3;
 export const PATIENCE = 75;                       // seconds a customer waits to order or to have the cooking started
 export const SPAWN_EVERY = [35, 70];              // seconds between arrivals while the restaurant is open
-const TABLES = ['diningtable', 'diningtable2'];
 const SPEED = 0.9;
 
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -52,13 +51,18 @@ export class Restaurant {
     this.paused = false;                 // QA: no new arrivals
     this.nServed = 0; this.left = 0;      // counters, for the tests
     this.stats = { arrived: 0, paid: 0, gaveUp: 0 };
+    this.turnedAway = 0; this.tableCount = 0;           // arrivals that found the restaurant full since the last table was added
     this.coinsShown = -1;
     this.liftOpen = false;
   }
 
   // ---------------------------------------------------------------- the room
   obj(n) { return this.w.objects[n]; }
-  tables() { return TABLES.map((n) => this.obj(n)).filter(Boolean); }
+  tables() { return Object.values(this.w.objects).filter((o) => o.seats); }          // the two it comes with and any that Guy builds
+  seatCount() { return this.tables().reduce((n, t) => n + t.seats.length, 0); }
+  maxCustomers() { return Math.max(MAX_CUSTOMERS, this.seatCount() - 1); }           // more tables, more customers
+  // customers keep arriving while it is full (the owner's rule: then Guy or GAL builds another table); counted from the last table added
+  needsSeats() { return this.turnedAway >= 3 && this.tables().length < 4 && this.isOpen(); }
   roomOn() { return !!this.w.doors[ID]; }
   // Can customers come? The room is there with its kitchen, a till and a table, and Guy knows how to run it.
   isOpen() {
@@ -97,7 +101,7 @@ export class Restaurant {
 
   // ---------------------------------------------------------------- customers
   spawn(model = null) {
-    if (!this.isOpen() || this.list.length >= MAX_CUSTOMERS) return null;
+    if (!this.isOpen() || this.list.length >= this.maxCustomers()) return null;
     const seat = this.seatFree();
     if (!seat) return null;
     const pool = availableCustomers();
@@ -229,8 +233,12 @@ export class Restaurant {
     if (reg && this.coinsShown !== this.w.stock.coins) { reg.setCoins(this.w.stock.coins); this.coinsShown = this.w.stock.coins; }
     // arrivals
     if (this.isOpen() && !this.paused) {
-      if ((this.spawnIn -= dt) <= 0) { this.spawnIn = rand(...SPAWN_EVERY); this.spawn(); }
+      if ((this.spawnIn -= dt) <= 0) {
+        this.spawnIn = rand(...SPAWN_EVERY);
+        if (this.list.length >= this.maxCustomers()) this.turnedAway++; else this.spawn();
+      }
     } else this.spawnIn = Math.max(this.spawnIn, 6);
+    if (this.tables().length !== this.tableCount) { this.tableCount = this.tables().length; this.turnedAway = 0; }
     for (const c of this.list.slice()) this.tick(c, dt);
     this.doors(dt);
     for (const c of this.list) this.draw(c, dt);
