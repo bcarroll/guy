@@ -697,7 +697,7 @@ export class Brain {
       visit: () => {
         const w = this.w, id = this.visitId && w.doors[this.visitId] ? this.visitId : Object.keys(w.doors)[0], door = w.doors[id];
         this.visitId = null;
-        const out = w.doorPoint(id, 0.8), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false), b = door.shell.bounds;
+        const out = this.doorStand(id), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false), b = door.shell.bounds;
         const direct = (p, yaw = null) => ({ ...this.walk(p.x, p.z, yaw), direct: true });
         const steps = [this.walk(out.x, out.z, face),
           this.play('reach', 1.6, { at: [0.8, () => w.setDoorOpen(id, true)], target: () => w.doorKnob(id) }),
@@ -715,7 +715,7 @@ export class Brain {
           return f(a) - f(c);
         })[0];
         if (!id) { this.g.root.position.set(0, 0, 2); return ['collecting himself', this.play('idle', 0.5)]; }      // the room is gone: back to the middle of his own
-        const out = w.doorPoint(id, 0.8), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false);
+        const out = this.doorStand(id), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false);
         const direct = (q) => ({ ...this.walk(q.x, q.z), direct: true });
         return [`coming back from the ${w.doors[id].name}`,
           this.play('idle', 0.1, { at: [0, () => w.setDoorOpen(id, true)] }),
@@ -1828,7 +1828,13 @@ export class Brain {
       easel: ['scribble', 'paint', 'mixpaint', 'portrait'],
       telescope: ['peek', 'stargaze', 'darkstargaze', 'scopecare'],
       workbench: ['build'], toolbox: ['tidytools'], woodfactory: ['makewood'], saw: ['sawwood'], mallet: ['tap'], sander: ['sand'],
+      botprinter: ['buildbot'],
     }[name];
+    if (name === 'botprinter') {
+      const g = this.w.gal;
+      if (g && g.exists()) return { ok: false, message: 'GAL is already here: the machine can only be used once.' };
+      if (!g || !g.g || !g.g.loaded) return { ok: false, message: 'GAL is still getting ready. Try again in a moment.' };
+    }
     const wmsg = this.workRefusal(name) || this.restRefusal(name);
     if (wmsg) return { ok: false, message: wmsg };
     if (name === 'table' && !k('stereo') && !this.music) return { ok: false, message: "Guy doesn't know how to use the stereo yet. Maybe there's a manual on the shelf." };

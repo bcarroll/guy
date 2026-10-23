@@ -48,14 +48,14 @@ export function installWorkshop(Brain, POSES, H) {
 
     // ------------------------------------------------------------------ going in and out through the door
     doorIn(id) {
-      const w = this.w, out = w.doorPoint(id, 0.8), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false);
+      const w = this.w, out = this.doorStand(id), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false);
       return [this.walk(out.x, out.z, face),
         this.play('reach', 1.6, { at: [0.8, () => { w.setDoorOpen(id, true); sfx('click'); }], target: () => w.doorKnob(id) }),
         this.play('idle', 0.7),
         { ...this.walk(inn.x, inn.z), direct: true }];
     },
     doorOut(id) {
-      const w = this.w, out = w.doorPoint(id, 0.8), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false);
+      const w = this.w, out = this.doorStand(id), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false);
       return [this.walk(inn.x, inn.z), { ...this.walk(out.x, out.z), direct: true }, this.walk(out.x, out.z, face),
         this.play('reach', 1.6, { at: [0.8, () => w.setDoorOpen(id, false)], target: () => w.doorKnob(id) })];
     },

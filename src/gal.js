@@ -345,6 +345,7 @@ export function installGalGuy(Brain) {
         // use the Build a Bot machine: press the button, watch it print, and it folds itself into GAL
         buildbot: () => {
           const m = () => this.obj('botprinter');
+          if (!m() || (w.gal && w.gal.exists())) return ['nothing to build with', this.play('idle', 0.5)];            // (asked for, but the machine has gone or GAL is already here)
           return ['building GAL', this.stand('botprinter', 0.95, () => m().buttonPoint()),
             this.play('reach', 1.8, { needs: ['botprinter'], at: [0.8, () => { m().run(7); sfx('machine'); }], target: () => m().buttonPoint() }),
             this.play('idle', 8, { needs: ['botprinter'], at: [7.4, () => sfx('chime')] }),

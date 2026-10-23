@@ -10,6 +10,20 @@ const REACH = 1.0;
 
 export function installApproach(Brain) {
   Object.assign(Brain.prototype, {
+    // Where he stands in front of a door of an added room to open it: 0.8 m out, in line with it, unless something is there (the other
+    // robot, furniture): then the nearest free place in front of it, so he never heads for a spot he cannot reach.
+    doorStand(id) {
+      const w = this.w, face = w.doorYaw(id, false), tx = Math.cos(face), tz = -Math.sin(face);
+      const grid = makeGrid(w.obstacles, 0.22, 0, this.selfOb || null, MAIN_FRAME);
+      for (const d of [0.8, 1.0, 0.65, 1.25]) {
+        for (const lat of [0, 0.3, -0.3, 0.5, -0.5]) {
+          const p = w.doorPoint(id, d), x = p.x + tx * lat, z = p.z + tz * lat;
+          if (w.roomIdAt(x, z) === 'main' && !cellBlocked(grid, x, z)) return { x, z };
+        }
+      }
+      return w.doorPoint(id, 0.8);
+    },
+
     // the side he last stood at for `name`: 0 front, 1 right (+x), 2 back, 3 left (-x)
     sideOf(name) { return (this.useSide && this.useSide[name]) || 0; },
 
@@ -25,7 +39,12 @@ export function installApproach(Brain) {
       const w = this.w, hw = o.bw / 2, hd = o.bd / 2, margin = Math.max(0.2, front - hd);
       // where the hands go, in the object's own frame
       let t = null;
-      if (target) { const p = target(); t = o.toLocal(p.x - o.x, p.z - o.z); }
+      if (target) {
+        let p = null;
+        try { p = target(); } catch { p = null; }                         // the thing he was going to work at has been taken away
+        if (!p) { this.queue.length = 0; return []; }
+        t = o.toLocal(p.x - o.x, p.z - o.z);
+      }
       const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
       // where he can stand along each side (object-local): the middle of the face, or nearer the target if that is free
       const spot = (k, along) => [

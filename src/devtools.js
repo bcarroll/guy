@@ -1921,6 +1921,14 @@ T.sweepGal = () => {
   card1.querySelector('.act').click(); machine().hidden = true; dev.all = false;
   const m = w.objects.botprinter;
   out.push(result('gal: the machine stands in the room, clear of everything', !!m && w.fits(m, m.x, m.z)));
+  // the long-press menu: its button makes Guy use it (it used to say he could not do anything with it)
+  window.__guyOpenMenu('botprinter');
+  const menu = document.getElementById('menu'), useBtn = [...menu.querySelectorAll('[data-act]')].find((x) => !x.hidden && /Build GAL|Use/.test(x.textContent));
+  b.queue = []; b.step = null; b.skip();
+  if (useBtn) useBtn.click();
+  menu.hidden = true;
+  out.push(result('gal: long-pressing the machine and choosing its button sends Guy to build her (not the old refusal)', !!useBtn && b.pendingActivity === 'buildbot', { btn: useBtn && useBtn.textContent, pending: b.pendingActivity }));
+  b.pendingActivity = null;
   // 2. Guy uses it and it folds itself into GAL
   b.queue = []; b.step = null; b.choose('buildbot');
   const seen = [], s0 = sfxNow();

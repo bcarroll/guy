@@ -260,6 +260,9 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 
 ## Regression watch (bugs found and fixed; make sure they stay fixed)
 
+- The Build a Bot machine's menu button (Use) said "Guy can't do anything with that yet": `interact` had no entry for it. Now `botprinter: ['buildbot']` with kind messages (`sweepGal` presses the real menu button).
+- Reported: Guy once walked into the wall beside a workshop door before turning to the door (not reproduced: 27+ trials of every wall, random starts, GAL standing at the door, furniture near it). Guard added: `doorStand` (approach.js) picks the nearest free spot in front of a door instead of always 0.8 m out, and a stand plan whose target has gone aborts instead of throwing. If it happens again note where Guy and GAL were and which room he had come from.
+
 - GAL: the two robots read in the same chair and stood on the same spot at the bookshelf. Chairs are claimed (`chairClaim`), the shelf is one at a time, dance and wave spots differ. A sweep that keeps `gal.brain` across `galReset()` tests a dead brain: re-read it after every rebuild.
 - GAL: `autoAdvance` ran in her brain with undefined `trackSince` and changed the track every frame; only Guy's brain advances the shared stereo (`isGal` guard), and her music fields are proxies to his.
 

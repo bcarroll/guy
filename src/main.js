@@ -525,6 +525,7 @@ function interactLabel(name) {
     case 'saw': return '🪚 Saw a Plank';
     case 'mallet': return '🔨 Tap Things Together';
     case 'sander': return '🧽 Sand Some Wood';
+    case 'botprinter': return '🤖 Build GAL';
     case 'plant': case 'flowerplant': case 'tree': return '🌱 Tend Plant';
     default: return brain.obj(name) && brain.obj(name).sit ? '🪑 Sit Down' : '▶ Use';
   }
