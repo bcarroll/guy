@@ -2973,6 +2973,35 @@ T.sweepWorkstation = () => {
     out.push(result('workstation: Learn there teaches GAL, and not Guy a second time', gbr.skills.has('telescope') && btnOf('stars') && btnOf('stars').disabled));
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     out.push(result('workstation: Escape closes the panel', !ws.isOpen()));
+    // 5b. Learn all (the panel): every book on the shelf at once
+    skillsOf().known.clear(); gbr.queue = []; gbr.step = null;
+    ws.open(b);
+    const allBtn = panel.querySelector('.all'), left0 = [...panel.querySelectorAll('.learn:not(:disabled)')].length;
+    const t5 = performance.now(); allBtn.click();
+    out.push(result('workstation: "Learn all" teaches every book on the shelf at once and every row switches to Learned', left0 === shelfBooks && w.objects.shelf.books.every((x) => skillsOf().has(x.def.teaches)) && [...panel.querySelectorAll('.learn')].every((x) => x.disabled && x.textContent === 'Learned') && allBtn.disabled, { left0, shelfBooks, ms: Math.round(performance.now() - t5) }));
+    ws.close();
+    // 5c. Guy tells GAL: read one book, or use the workstation for one skill or for everything
+    const V5 = window.__voice, L5 = (r) => r.lines.map((l) => `${l.who}: ${l.text}`).join(' | ');
+    skillsOf().known.clear(); gbr.skills.known.clear(); b.unlock(false); b.queue = []; b.step = null; b.last = 'wander'; b.pendingActivity = null; gbr.queue = []; gbr.step = null; gbr.pendingActivity = null; gal.audience = null;
+    const rr = V5.run('tell GAL to read the stargazing book');
+    out.push(result('workstation: "tell GAL to read the stargazing book": Guy hands it over and she is sent to read that very book', rr.ok && rr.lines[0].who === 'guy' && gbr.pendingActivity === 'read' && !!gbr.forceBook && gbr.forceBook.def.id === 'stars', { lines: L5(rr), pending: gbr.pendingActivity, book: gbr.forceBook && gbr.forceBook.def.id }));
+    gbr.pendingActivity = null; gbr.forceBook = null; gbr.skip(true); gal.audience = null; gbr.queue = []; gbr.step = null; b.pendingActivity = null;
+    const r1 = V5.run('tell GAL to use the workstation to learn stargazing');
+    const t6 = runUntil(() => gbr.skills.has('telescope'), 90);
+    out.push(result('workstation: "tell GAL to use the workstation to learn stargazing": she walks up, taps the screen and learns just that, with no panel', r1.ok && r1.lines.some((l) => l.who === 'gal') && gbr.skills.has('telescope') && !gbr.skills.has('stereo') && !skillsOf().has('telescope') && !ws.isOpen(), { lines: L5(r1), t: t6, galKnows: [...gbr.skills.known], guyKnows: [...skillsOf().known] }));
+    gbr.skip(true); gbr.queue = []; gbr.step = null; gal.audience = null;
+    const r2b = V5.run('tell GAL to learn everything');
+    const t7 = runUntil(() => w.objects.shelf.books.every((x) => gbr.skills.has(x.def.teaches)), 120);
+    out.push(result('workstation: "tell GAL to learn everything": she uses the workstation and knows every book on the shelf, and Guy is unchanged', r2b.ok && w.objects.shelf.books.every((x) => gbr.skills.has(x.def.teaches)) && skillsOf().known.size === 0 && !ws.isOpen(), { lines: L5(r2b), t: t7 }));
+    gbr.skip(true); gbr.queue = []; gbr.step = null; gal.audience = null; b.queue = []; b.step = null; b.last = 'wander'; b.pendingActivity = null;
+    const r3b = V5.run('learn everything');
+    const t8 = runUntil(() => w.objects.shelf.books.every((x) => skillsOf().has(x.def.teaches)), 120);
+    out.push(result('workstation: Guy told "learn everything" uses it himself and knows every book on the shelf', r3b.ok && r3b.lines[0].who === 'guy' && w.objects.shelf.books.every((x) => skillsOf().has(x.def.teaches)), { lines: L5(r3b), t: t8 }));
+    const r4b = V5.run('learn everything');
+    out.push(result('workstation: when there is nothing left to learn he says so', !r4b.ok && /already knows/.test(L5(r4b)), { lines: L5(r4b) }));
+    gone(); b.queue = []; b.step = null; skillsOf().known.clear();
+    const r5b = V5.run('learn everything');
+    out.push(result('workstation: with no workstation in the room the request is refused in words', !r5b.ok && /workstation/.test(L5(r5b)), { lines: L5(r5b) }));
     // 6. a voice request goes through the same door
     const V = window.__voice, it = V.parse('use the workstation');
     out.push(result('workstation: "use the workstation" is understood by the voice commands', it.type === 'object' && it.name === 'workstation', { it }));
@@ -3045,6 +3074,7 @@ const VOICE_PHRASES = [
   ['go into the workshop', 'visit', null], ['come back', 'comeback', null], ['lock the door', 'doorlock', null], ['unlock the workshop door', 'doorlock', null],
   ['lock the screen', 'screen', null], ['unlock the screen', 'screen', null], ['lock the screen camera only', 'screen', null],
   ['tell GAL to play the guitar', 'gal', null], ['ask gal to jam', 'gal', null], ['jam', 'jam', null], ['I am bored', 'next', null], ['something else', 'next', null],
+  ['learn everything', 'learn', null], ['use the workstation to learn piano', 'learn', null], ['tell GAL to learn all skills', 'gal', null], ['use the workstation', 'object', 'workstation'],
   ['xyzzy plugh', 'unknown', null], ['what is the capital of France', 'unknown', null], ['', 'empty', null],
 ];
 T.sweepVoice = async () => {

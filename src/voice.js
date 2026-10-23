@@ -45,6 +45,13 @@ export function parse(text, ctx = {}) {
   if (/ (its|it s|is) (too )?dark | cant see /.test(t)) return { type: 'object', name: 'lamp' };
   // jamming and reading
   if (/ (jam|play together|play along|band) /.test(t)) return { type: 'jam' };
+  // the Learning Workstation: "learn everything", "use the workstation to learn piano", "download the stargazing book"
+  if (/ (learn|know|download|study|absorb) (everything|all|every skill|all skills|all the skills|all of the skills|all the books|every book) /.test(t) || / (everything|all skills|all the skills) /.test(t) && / (learn|know|download) /.test(t)) return { type: 'learn', query: null };
+  if (/ (workstation|work station|terminal|computer|download|instantly|immediately|at once) /.test(t) && / (learn|know|download|study|teach|skill) /.test(t)) {
+    const stop = new Set('use using the a an to at on with workstation work station terminal computer download instantly immediately once learn know study teach skill skills book about how and then go over her him it please now'.split(' '));
+    const q = t.trim().split(' ').filter((w) => w && !stop.has(w)).join(' ');
+    return q ? { type: 'learn', query: q } : { type: 'object', name: 'workstation' };
+  }
   if (/ read /.test(t) || / (study|learn) /.test(t)) {
     const q = t.replace(/ (read|study|learn|the|a|an|book|called|named|about|me|some|something|from|shelf) /g, ' ').replace(/ (read|study|learn|the|a|an|book|about|from|shelf) /g, ' ').trim();
     return { type: 'read', query: q };
@@ -101,6 +108,7 @@ export function createVoice({ world, brain, say = () => {}, screen = null, toast
         if (q && words.length) return { ok: false, message: `I cannot find a book about ${q}.` };
         return b.interact('shelf');
       }
+      case 'learn': return b.learnOrder(it.query);
       case 'visit': return b.visitRoom(it.room);
       case 'comeback': { if (b.inMain()) return { ok: false, message: 'I am already here.' }; const p = b.g.root.position, r = world.roomIdAt(p.x, p.z); return b.visitRoom(r); }
       case 'next': b.unlock(false); b.skip(); return { ok: true };
