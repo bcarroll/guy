@@ -112,7 +112,7 @@ playback panel or the top-shelf record list; Guy then joins in without touching 
 ## Activities (`activities()` in `src/brain.js`)
 
 wander, stretch, wave, stereoon, stereooff (menu only), piano, sitpiano, plink, jam, jampiano, jamsit, dance, lamp, mood, plant, read (alias `books`),
-rearrange, ball, dribble, toss, guitar, jamguitar, bang, drums, drumsolo, jamdrums, scribble, paint, mixpaint, portrait, peek,
+rearrange, ball, dribble, toss, guitar, riff (makes up riffs on the guitar, see below), jamguitar, bang, drums, drumsolo, jamdrums, scribble, paint, mixpaint, portrait, peek,
 stargaze, darkstargaze, scopecare, dancemoves, ballroom, dust (needs `decorate` and a wall piece with clear floor in front); internal recovery: putback, putguitar, dropball, lighton.
 Needs and allowed arm contacts are in `MANIFEST.activities`.
 
@@ -159,7 +159,7 @@ book list popup (long-press a lower shelf at a book: title, read / not read).
 
 | id | what | doorWalls | size (depth x width) | Notes |
 |---|---|---|---|---|
-| workshop | **Workshop**: free, unlocked by default. Adds a closed door with a sign and a grey room (floor, three walls, ceiling) behind it | right, front, back (never left: the Catalogue) | 8 x 6 | Guy cannot enter yet (pathing is a later phase). The room is empty until the Workshop objects exist |
+| workshop | **Workshop**: free, unlocked by default. Adds a closed door with a sign and a grey room (floor, three walls, ceiling) behind it | right, front, back (never left: the Catalogue) | same as Guy's room: 10 wide x 8 deep, whichever wall (no `size` in the catalogue entry) | Guy cannot enter yet (pathing is a later phase). The room is empty until the Workshop objects exist |
 
 Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 - A door is 1.0 m wide and 2.2 m tall, with a 1.0 m floor strip in front of it that furniture cannot be put or pushed into and wall pieces cannot cover.
@@ -175,8 +175,20 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 - **Not saved:** the easel painting, the lamp (on/off, colour), which record is on the stereo's table, Guy's own position and what he is doing.
 - **Update refresh:** when the live `version.json` id differs from the running build: a tab coming back into view refreshes at once (no bar); a watched tab shows "Refreshing…" for 4 s with **Refresh** / **Later**; the layout is written first (`window.__guySave`); the same build is never refreshed for twice within 2 minutes (the bar then offers a manual Refresh, so a stale cache cannot cause a loop). Test hooks: `__guyUpdate.apply(id, source)`, `.flush()`, `.reset()`, `.reloadFn`.
 
+## Guitar riffs (`src/riffs.js`, activity `riff`)
+
+- A riff is two bars of eighth notes (16 steps of a MIDI note or a rest) in a key (`root`, `minor`/`major` pentatonic). `invent()` wanders up and down the scale and answers its own phrase; `judge()` scores 0..1 on range (<= an octave), mostly steps (few leaps), a repeating phrase, density (6-13 notes), landing on the key note; **0.72 or more is good**. Tidy ideas are good ~76% of the time, messy ones ~30%, and he picks the best of 3 ideas.
+- The `riff` activity: he takes the guitar, plays one or two riffs (each twice through: single notes over a bass note on each bar, the fretting hand following the pitch, the right hand picking), and puts it back. New riffs that score well are kept (the best 8, no duplicates) in `guy.riffs.v1` and replayed later ("playing one of his favourite riffs", about 4 in 10 sessions once he has any); a toast says "Guy made up a riff he likes! He'll remember it." `?fresh` keeps them in memory only. Needs the guitar object and the `guitar` skill. Weight 1.0 in his normal choices; it is one of the things a **Lock in** on the guitar cycles through (with `guitar` and `jamguitar`).
+- Tested by `T.sweepRiffs` (pure logic with a test storage key) and, as an activity, by `sweepActivities`, `sweepInterrupts` and the pose sweep.
+
+## Lock in and the speed control
+
+- **Lock in** (long-press an object > "🔒 Lock in", or "🔓 Unlock" when he is already locked on it): `brain.lockOn(name)` runs the same checks and messages as Interact, then he keeps choosing from `brain.lockActs(name)` (only what he can do right now, never the same twice in a row when there is a choice) until told to stop. The HUD label starts with 🔒 and a "🔒 Locked on <object> · tap to stop" chip shows above the bottom buttons. Ends when: the chip or Unlock is used (`brain.unlock(true)` also wraps up the current activity), **Next** / Space is pressed, the object is removed, or he is told to use something else (Interact on another object, a book from the shelf list). Cutting an activity short does not end it. Chores still come first (put the guitar back, drop the ball). Not saved between visits. Lock-able objects and what they cycle: guitar (guitar, riff, jamguitar), piano and bench (sitpiano, piano, jam*, plink), drums (bang, drums, drumsolo, jamdrums), easel (scribble, paint, mixpaint, portrait), telescope (peek, stargaze, darkstargaze, scopecare), lamp (mood, lamp), ball (dribble, toss, ball), stereo table (stereoon, then dance, dancemoves, ballroom, jam*), plants, shelf (read), any chair (read, sit, sitguitar). Things he cannot use (coffee table, nightstand, ...) have no Lock in.
+- **Speed** (the dropdown beside Follow, `#speed-sel`, 1x / 2x / 3x / 4x, remembered in `guy.speed.v1`, always 1x under `?fresh`): scales his walking (and turning and pushing furniture) and the idle pauses between interactions (`brain.speed`). The interactions themselves (playing, reading, painting, waving ...) run at normal speed. Tested by `T.sweepLock` and `T.sweepSpeed`.
+
 ## Regression watch (bugs found and fixed; make sure they stay fixed)
 
+- **Open bug, not fixed:** the bookshelf has no capacity. With all 19 unlocked books added, `stars`, `darksky` and `scopecare` sit past the end of the shelf (z up to 1.1 m, the shelf ends at 0.9 m). Planned fix: a capacity of 17 and a floor stack beside the shelf (section 17.4 of the plan); then add a sweep that adds every book and checks each is inside the frame.
 - Intermittent, older than the Rooms work (cause not found yet): reading-related sweeps fail now and then on a random layout: `sweepBookRules` ("speed reading: ... sits in a chair"), `sweepSounds` ("reading makes a sit sound"), `sweepMoves` ("moved while in use: read"), and `sweepActivities` `read` (arm inside the easel while walking past, 8 samples). Measured on 12 loops of objects, activities, moves, bookRules and sounds: the checkout before the Rooms work failed bookRules 1 and sounds 1; the checkout with rooms, doors, layout and update failed activities 3 and bookRules 1. Too few runs to say the second is worse. If it comes back, note the layout (`T.state()`, `Object.keys(brain.w.objects)`) and which chairs were reachable.
 
 - Removing an object mid-interaction used to throw every frame and freeze rendering: `sweepRemovals` and `brain.safeUpdate`.

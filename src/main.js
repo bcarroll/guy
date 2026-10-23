@@ -9,6 +9,7 @@ import { sfx, drag as sfxDrag, setMuted, isMuted } from './sfx.js';
 import { initMachine } from './machine.js';
 import { initRooms } from './rooms.js';
 import { initLayout } from './layout.js';
+import { config as riffConfig } from './riffs.js';
 import { ALBUM_CATALOG } from './albums.js';
 import { initUpdateCheck } from './update.js';
 
@@ -122,6 +123,30 @@ function showToast(msg) {
   toastTimer = setTimeout(() => toast.classList.remove('show'), 6000);
 }
 brain.onLearn = (def) => { showToast(`Guy learned ${def.blurb}!`); sfx('chime'); };
+brain.onRiff = (msg) => { showToast(msg); sfx('chime'); };
+riffConfig.persist = !params.has('fresh');           // ?fresh keeps the riffs he makes up in memory only
+
+// ---- speed: how fast Guy walks and how short his pauses are between interactions (the dropdown beside Follow) ----
+const speedSel = document.getElementById('speed-sel');
+{
+  let saved = 1;
+  try { saved = Number(localStorage.getItem('guy.speed.v1')) || 1; } catch { /* no storage */ }
+  if (![...speedSel.options].some((o) => Number(o.value) === saved) || params.has('fresh')) saved = 1;
+  speedSel.value = String(saved);
+  brain.speed = saved;
+  speedSel.addEventListener('change', () => {
+    brain.speed = Number(speedSel.value) || 1;
+    if (!params.has('fresh')) { try { localStorage.setItem('guy.speed.v1', String(brain.speed)); } catch { /* no storage */ } }
+  });
+}
+
+// ---- Lock in: the chip shows while Guy is locked on an object; tap it to let him go ----
+const lockBtn = document.getElementById('lock-btn');
+brain.onLock = (L) => {
+  lockBtn.hidden = !L;
+  if (L) lockBtn.textContent = `🔒 Locked on ${L.name.replace(/\d+$/, '')} · tap to stop`;
+};
+lockBtn.addEventListener('click', () => { brain.unlock(true); showToast('Guy is free to do what he likes.'); });
 
 // ---- the Catalogue on the wall: tap it for the catalogue of objects and books ----
 // Rooms the user adds from the Catalogue: a door on a wall, and a room behind it. Frame the camera round all of them.
@@ -162,10 +187,11 @@ const followBtn = document.getElementById('follow-btn');
 const toggleFollow = () => { follow = !follow; followBtn.classList.toggle('on', follow); };
 followBtn.classList.toggle('on', follow);
 followBtn.addEventListener('click', toggleFollow);
-document.getElementById('skip-btn').addEventListener('click', () => brain.skip());
+const nextActivity = () => { brain.unlock(false); brain.skip(); };      // Next also lets go of a lock: it is the user telling him to move on
+document.getElementById('skip-btn').addEventListener('click', nextActivity);
 addEventListener('keydown', (e) => {
   if (e.key === 'f' || e.key === 'F') toggleFollow();
-  if (e.code === 'Space') { e.preventDefault(); brain.skip(); }
+  if (e.code === 'Space') { e.preventDefault(); nextActivity(); }
 });
 // There is no "click to start" screen. Browsers keep the sound off until the page has been touched once, so the first real tap, drag
 // or key press anywhere starts the audio quietly; until then Guy carries on in silence. Fullscreen on phones is the Full button.
@@ -179,7 +205,7 @@ function unlockAudio(e) {
   initAudio();
   const ctx = audio().ctx;
   ctx.onstatechange = syncSoundIcon;
-  const done = () => UNLOCK_EVENTS.forEach((t) => removeEventListener(t, unlockAudio, true));
+  const done =() => UNLOCK_EVENTS.forEach((t) => removeEventListener(t, unlockAudio, true));
   if (ctx.state === 'running') done();
   else ctx.resume().then(() => { if (ctx.state === 'running') done(); syncSoundIcon(); }).catch(() => {});
   syncSoundIcon();
@@ -441,8 +467,14 @@ function openMenu(hit, x, y) {
   menu.querySelectorAll('[data-act="interact"]').forEach((b) => (b.hidden = !!hit.decor));
   menu.querySelectorAll('[data-act="remove"]').forEach((b) => (b.hidden = !!(hit.obj && hit.obj.removable === false)));
   // the first button says what the object is for
+  const oname = hit.ball ? 'ball' : hit.obj && hit.obj.name;
   const iact = menu.querySelector('[data-act="interact"]');
-  if (iact) iact.textContent = interactLabel(hit.ball ? 'ball' : hit.obj && hit.obj.name);
+  if (iact) iact.textContent = interactLabel(oname);
+  // Lock in: keep using this object until told to stop (or Unlock, when he already is). Only for things he can use right now.
+  const lact = menu.querySelector('[data-act="lock"]');
+  const locked = !!(brain.lock && brain.lock.name === oname);
+  lact.hidden = !!hit.decor || !(locked || brain.lockActs(oname).length);
+  lact.textContent = locked ? '🔓 Unlock' : '🔒 Lock in';
   menu.hidden = false;
   menu.style.left = Math.min(x, innerWidth - menu.offsetWidth - 8) + 'px';
   menu.style.top = Math.min(y, innerHeight - menu.offsetHeight - 8) + 'px';
@@ -474,6 +506,13 @@ menu.addEventListener('click', (e) => {
     closeMenu();
     return;
   }
+  if (act === 'lock') {
+    const oname = t.ball ? 'ball' : t.obj.name;
+    if (brain.lock && brain.lock.name === oname) { brain.unlock(true); showToast('Guy is free to do what he likes.'); }
+    else showToast(brain.lockOn(oname).message);
+    closeMenu();
+    return;
+  }
   if (act === 'remove') {
     if (t.obj && t.obj.removable === false) return;
     removeById(t.ball ? 'ball' : (t.obj || t.decor).name);
@@ -489,6 +528,7 @@ menu.addEventListener('click', (e) => {
   }
 });
 addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
+window.__guyOpenMenu = (name) => openMenu(name === 'ball' ? { ball: true } : { obj: brain.obj(name) }, 120, 120);     // for the QA harness
 addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') { setMuted(!isMuted()); showToast(isMuted() ? 'Sound effects off (M to turn them back on)' : 'Sound effects on'); } });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 

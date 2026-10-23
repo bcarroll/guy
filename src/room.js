@@ -1019,8 +1019,12 @@ export function buildRoom(scene) {
 
   // The room behind a door: a floor and three walls (the main room's own wall closes the fourth side) that open to the sky like
   // the main room. It sits just outside the door wall, kept within that wall's length. `bounds` is its footprint on the floor.
+  // Every added room is as big as Guy's room (same floor area, same depth) unless its catalogue entry gives a `size` (depth away
+  // from the door x width along the wall): a room that is cramped cannot hold what is built in it.
   const buildShell = (def, wall, u) => {
-    const { w: N, d: L } = def.size, W = WALL[wall];
+    const W = WALL[wall];
+    const N = def.size ? def.size.w : (wall === 'right' ? ROOM.w : ROOM.d);          // away from the door wall
+    const L = def.size ? def.size.d : W.hi - W.lo;                                    // along the door wall
     const c = Math.max(W.lo + L / 2, Math.min(W.hi - L / 2, u));
     const g = new THREE.Group();
     g.position.copy(W.at(c, 0));

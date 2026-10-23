@@ -6,7 +6,8 @@
 import { OBJECT_CATALOG } from './machine.js';
 
 export const ROOM_CATALOG = [
-  { id: 'workshop', name: 'Workshop', icon: '🛠️', unlocked: true, size: { w: 8, d: 6 }, doorWalls: ['right', 'front', 'back'],
+  // `size` ({ w: depth away from the door, d: width along the wall }) is optional: left out, a room is as big as Guy's room.
+  { id: 'workshop', name: 'Workshop', icon: '🛠️', unlocked: true, doorWalls: ['right', 'front', 'back'],
     desc: 'A place to build things. Adds a door to your room.',
     look: { frame: 0x6b4a2b, door: 0xb5532f, panel: 0xc9683f, floor: 0x8c9096, wall: 0xb4b8bd } },
 ];

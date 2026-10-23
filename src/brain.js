@@ -6,6 +6,7 @@ import { ROOM } from './room.js';
 import { randomSong, makeJam, plinkSong } from './songs.js';
 import { installHobbies } from './hobbybrain.js';
 import { sfx, drag as sfxDrag } from './sfx.js';
+import { nextRiff, keepRiff, riffAt, STEPS as RIFF_STEPS } from './riffs.js';
 
 const PLANT_NAMES = ['plant', 'flowerplant', 'tree'];   // objects Guy can tend with the 'plant' activity
 const lerp = THREE.MathUtils.lerp;
@@ -483,6 +484,10 @@ export class Brain {
     this.skills = skills;      // what Guy has learned from books
     this.onLearn = null;       // called with the book def when he learns something
     this.gtr = { held: false, override: null, moved: false, y: 0, fret: 0, n: -1 }; // the guitar, while he handles it
+    this.speed = 1;            // how fast he walks and how short his pauses between interactions are (the speed dropdown); never the interactions themselves
+    this.lock = null;          // { name }: locked in on an object (long-press > Lock in): he keeps using it until told to stop
+    this.onLock = null;        // called with the lock (or null) whenever it changes
+    this.onRiff = null;        // called with a message when he makes up a riff he wants to keep
     this.beatLen = BEAT;        // length of a beat of whatever is playing on the stereo
     this.track = 'default';
     this.albumOnTable = false; // a record is standing by the stereo while it plays
@@ -661,6 +666,18 @@ export class Brain {
         this.play('guitar', 26, { guitar: true }),
         this.play('putGuitar', 2.4, { guitar: true, at: [1.3, () => this.setGuitarHeld(false)] })],
       // the stereo is on: strum along in time and in the key of whatever is playing
+      // making up riffs: a new idea (or two) and sometimes one of the favourites he kept. The good new ones are remembered (riffs.js).
+      riff: () => {
+        const picks = [nextRiff(), nextRiff()], list = picks.map((p) => p.riff);
+        const fresh = picks.filter((p) => !p.favourite);
+        const secs = 0.6 + list.length * RIFF_STEPS * 2 * 0.3 + 1;
+        return [fresh.length ? 'making up a riff on the guitar' : 'playing one of his favourite riffs', this.walkAt('guitar', 0, 0.62, Math.PI),
+          this.play('takeGuitar', 2.4, { guitar: true, at: [1.0, () => this.setGuitarHeld(true)] }),
+          this.play('guitar', secs, { guitar: true, riff: list, onEnd: () => {
+            if (fresh.some((p) => keepRiff(p.riff))) { this.ui('that one is a keeper!'); if (this.onRiff) this.onRiff("Guy made up a riff he likes! He'll remember it."); }
+          } }),
+          this.play('putGuitar', 2.4, { guitar: true, at: [1.3, () => this.setGuitarHeld(false)] })];
+      },
       jamguitar: () => [`playing the guitar along with ${this.nowPlaying().title}`, this.walkAt('guitar', 0, 0.62, Math.PI),
         this.play('takeGuitar', 2.4, { guitar: true, at: [1.0, () => this.setGuitarHeld(true)] }),
         this.play('guitar', rand(30, 45), { guitar: true, sync: true }),
@@ -726,6 +743,20 @@ export class Brain {
     if (pose === 'takeGuitar') { st.n = -1; st.yGoal = 0; st.fretGoal = 0; }
     if (pose === 'guitar' || pose === 'sitGuitar') {
       let n, chord;
+      if (s.fx.riff) {
+        // a riff: single notes picked on top of a bass note, the fretting hand following the pitch
+        n = Math.floor((t - 0.6) / 0.3);
+        if (n !== st.n && n >= 0 && n < s.fx.riff.length * RIFF_STEPS * 2) {
+          st.n = n;
+          const r = riffAt(s.fx.riff, n);
+          if (r.bass) playPluck(r.bass, 0, 1.4, 0.07);
+          if (r.note) {
+            playPluck(r.note, 0, 0.9, 0.15);
+            st.fretGoal = clamp((r.note - r.root) / 12 * 0.1, -0.01, 0.1);
+            st.yGoal = n % 2 ? 0.06 : -0.08;
+          }
+        }
+      } else {
       if (s.fx.sync && this.music) { const b = this.currentBeat(); n = Math.floor(b * 2); chord = guitarChordAt(this.track, b); } // locked to the stereo
       else { n = Math.floor((t - 0.6) / 0.3); chord = GUITAR_CHORDS[Math.floor(n / 8) % GUITAR_CHORDS.length]; }
       if (n !== st.n && n >= 0) {
@@ -737,6 +768,7 @@ export class Brain {
           notes.forEach((m, i) => playPluck(m, i * 0.018, 1.8, pat === 'D' ? 0.15 : 0.11));
           st.yGoal = pat === 'D' ? -0.1 : 0.07;
         }
+      }
       }
     }
     st.y += ((st.yGoal ?? 0) - st.y) * 0.35;
@@ -1418,7 +1450,7 @@ export class Brain {
   skillNeeds(act) {
     return {
       dance: ['stereo'], dancemoves: ['dance.moves'], ballroom: ['dance.ballroom'], jam: ['stereo', 'piano'], jampiano: ['stereo', 'piano'], jamsit: ['stereo', 'piano'],
-      piano: ['piano'], sitpiano: ['piano'], dribble: ['ball'], toss: ['ball'], mood: ['lighting'], guitar: ['guitar'], sitguitar: ['guitar'],
+      piano: ['piano'], sitpiano: ['piano'], dribble: ['ball'], toss: ['ball'], mood: ['lighting'], guitar: ['guitar'], sitguitar: ['guitar'], riff: ['guitar'],
       drums: ['drums'], drumsolo: ['drums.solo'], jamdrums: ['drums.band'], paint: ['easel'], mixpaint: ['easel.colour'], portrait: ['easel.portrait'],
       stargaze: ['telescope'], darkstargaze: ['telescope.dark'], scopecare: ['telescope.care'], dust: ['decorate'],
     }[act] || [];
@@ -1428,7 +1460,7 @@ export class Brain {
     const need = {
       piano: ['piano'], sitpiano: ['piano', 'bench'], plink: ['piano'], jam: ['piano', 'table'], jampiano: ['piano', 'table'],
       slouch: ['drums'], jamsit: ['piano', 'bench', 'table'], stereoon: ['table'], stereooff: ['table'], dance: ['table'], dancemoves: ['table'], ballroom: ['table'], lamp: ['lamp'], mood: ['lamp'], read: ['shelf'], books: ['shelf'],
-      guitar: ['guitar'], jamguitar: ['guitar'],
+      guitar: ['guitar'], jamguitar: ['guitar'], riff: ['guitar'],
       bang: ['drums'], drums: ['drums'], drumsolo: ['drums'], jamdrums: ['drums'],
       scribble: ['easel'], paint: ['easel'], mixpaint: ['easel'], portrait: ['easel'],
       peek: ['telescope'], stargaze: ['telescope'], darkstargaze: ['telescope'], scopecare: ['telescope'], lighton: ['lamp'],
@@ -1466,11 +1498,47 @@ export class Brain {
   }
 
   ballRemoved() {
+    if (this.lock && this.lock.name === 'ball') this.unlock(false);
     if (this.last === 'ball') { this.queue = []; this.step = null; }
+  }
+
+  // ---- Lock in: keep using one object until the user says stop ----
+  // The activities he cycles through while locked on `name` (only the ones he can do right now).
+  lockActs(name) {
+    const piano = ['sitpiano', 'piano', 'jamsit', 'jampiano', 'jam', 'plink'];
+    const list = {
+      piano, bench: piano,
+      table: ['stereoon', 'dance', 'dancemoves', 'ballroom', 'jam', 'jamsit', 'jampiano', 'jamguitar', 'jamdrums'],
+      shelf: ['read'], lamp: ['mood', 'lamp'], plant: ['plant'], flowerplant: ['plant'], tree: ['plant'],
+      ball: ['dribble', 'toss', 'ball'], guitar: ['guitar', 'riff', 'jamguitar'], drums: ['bang', 'drums', 'drumsolo', 'jamdrums'],
+      easel: ['scribble', 'paint', 'mixpaint', 'portrait'], telescope: ['peek', 'stargaze', 'darkstargaze', 'scopecare'],
+    }[name] || (this.obj(name) && this.obj(name).sit ? ['read', 'sit', 'sitguitar'] : []);
+    return list.filter((a) => this.available(a));
+  }
+
+  // The user asked Guy to lock in on `name`. Returns { ok, message }.
+  lockOn(name) {
+    const had = this.lock;
+    this.lock = null;
+    const r = this.interact(name);                  // the same checks and messages as a plain Interact
+    if (!r.ok) { this.lock = had; return r; }
+    this.lock = { name };
+    if (this.onLock) this.onLock(this.lock);
+    return { ok: true, message: 'Guy will keep going until you tell him to stop.' };
+  }
+
+  // Let him go. `stop`: wrap up what he is doing now (the user told him to stop); otherwise he just finishes it.
+  unlock(stop = true) {
+    if (!this.lock) return false;
+    this.lock = null;
+    if (this.onLock) this.onLock(null);
+    if (stop) this.skip();
+    return true;
   }
 
   // The user removed `name`: drop whatever Guy was doing with it.
   objectRemoved(name) {
+    if (this.lock && this.lock.name === name) this.unlock(false);
     if (name === 'table') { this.musicOff(); this.albumOnTable = false; }
     if (name === 'lamp') this.lampOffByMe = false;
     if (name === 'guitar') { this.gtr.held = false; this.gtr.override = null; this.resetGuitarMesh(); }
@@ -1487,7 +1555,7 @@ export class Brain {
     const unread = shelf ? shelf.books.filter((b) => b.mesh.visible && !this.skills.has(b.def.teaches)).length : 0;
     const weights = {
       wander: 3, sit: 0.7, sitguitar: 1.1, slouch: 0.5, dancemoves: 1.5, ballroom: 1.5, piano: 1, sitpiano: 1.2, plink: 1.4, dance: 1.8, jam: 0.9, jampiano: 0.5, jamsit: 0.9, lamp: 1.2, mood: 1.1,
-      read: 1.8 + unread * 1.8, stretch: 1.3, wave: 0.7, ball: 2, dribble: 1.1, toss: 1.1, rearrange: 0.7, guitar: 1.6, plant: 0.6, jamguitar: 1.5,
+      read: 1.8 + unread * 1.8, stretch: 1.3, wave: 0.7, ball: 2, dribble: 1.1, toss: 1.1, rearrange: 0.7, guitar: 1.6, riff: 1.0, plant: 0.6, jamguitar: 1.5,
       bang: 1.3, drums: 1.6, drumsolo: 1.2, jamdrums: 1.5, scribble: 1.3, paint: 1.6, mixpaint: 1.3, portrait: 1.4,
       peek: 1.3, stargaze: 1.6, darkstargaze: 1.3, scopecare: 0.6, dust: 0.9,
     };
@@ -1499,7 +1567,7 @@ export class Brain {
     const tags = {
       piano: ['piano'], sitpiano: ['piano'], jam: ['piano', 'stereo'], jampiano: ['piano', 'stereo'], jamsit: ['piano', 'stereo'],
       dance: ['stereo'], dancemoves: ['stereo'], ballroom: ['stereo'], lamp: ['fidget'], mood: ['fidget'], plant: ['fidget'], rearrange: ['fidget'], plink: ['piano'],
-      ball: ['ball'], dribble: ['ball'], toss: ['ball'], guitar: ['guitar'], jamguitar: ['guitar', 'stereo'],
+      ball: ['ball'], dribble: ['ball'], toss: ['ball'], guitar: ['guitar'], riff: ['guitar'], jamguitar: ['guitar', 'stereo'],
       bang: ['drums'], drums: ['drums'], drumsolo: ['drums'], jamdrums: ['drums', 'stereo'],
       sit: ['rest'], sitguitar: ['guitar'], slouch: ['drums', 'rest'],
       scribble: ['paint'], paint: ['paint'], mixpaint: ['paint'], portrait: ['paint'],
@@ -1515,6 +1583,19 @@ export class Brain {
     // stereo while its music plays (the session puts it away itself). A stuck flag must never excuse carrying a book around.
     const recordPlaying = this.held && this.held.kind === 'album' && this.albumOnTable && this.music;
     if (!name && this.held && !recordPlaying) name = 'putback';
+    // Locked in on an object (long-press > Lock in): he keeps going back to it until the user tells him to stop. The chores above
+    // (put the guitar back, drop the ball) still come first.
+    if (!name && this.lock) {
+      const L = this.lock, gone = L.name === 'ball' ? this.w.ballGone : !this.obj(L.name);
+      const opts = gone ? [] : this.lockActs(L.name);
+      if (!opts.length) { this.unlock(false); this.ui(gone ? `wondering where the ${L.name} went` : 'nothing more to do there'); }
+      else {
+        const fresh = opts.filter((a) => a !== this.last);
+        name = pick(fresh.length ? fresh : opts);
+        if (PLANT_NAMES.includes(L.name)) this.forcePlant = L.name;
+        if (this.obj(L.name) && this.obj(L.name).sit) this.activeChair = L.name;
+      }
+    }
     if (!name) {
       const entries = Object.entries(weights)
         .filter(([k]) => this.available(k))
@@ -1528,7 +1609,7 @@ export class Brain {
     this.prev = this.last;
     this.last = name;
     const [label, ...steps] = acts[name]();
-    this.ui(label);
+    this.ui(this.lock ? `🔒 ${label}` : label);
     this.queue = steps;
     this.step = null;
   }
@@ -1593,6 +1674,7 @@ export class Brain {
     }
     const act = (tries || []).filter((a) => this.available(a));
     if (!act.length) return { ok: false, message: "Guy can't do anything with that right now." };
+    if (this.lock && this.lock.name !== name) this.unlock(false);     // told to do something else: the lock is over
     this.skip();                                   // stands up, switches the stereo off, etc. first
     if (PLANT_NAMES.includes(name)) this.forcePlant = name;   // the plant he was asked about, not just any plant
     this.pendingActivity = pick(act);
@@ -1605,6 +1687,7 @@ export class Brain {
     const shelf = this.obj('shelf');
     const book = shelf && shelf.books.find((b) => b.def.id === id && b.mesh.visible);
     if (!book) return { ok: false, message: "That book isn't on the shelf any more." };
+    this.unlock(false);                            // asked for something specific: the lock is over
     this.skip();
     this.forceBook = book;
     this.pendingActivity = 'read';
@@ -1692,7 +1775,8 @@ export class Brain {
     if (s.fx && s.fx.chairSit && this.obj(s.fx.chair || 'armchair')) this.obj(s.fx.chair || 'armchair').obstacle.active = false;
     const hobby = this.hobbyAt(s);
     if (hobby && this.obj(hobby)) this.obj(hobby).obstacle.active = false;
-    s.t += dt;
+    s.t += dt * (s.type === 'play' && s.pose === 'idle' ? this.speed : 1);     // pauses between interactions follow the speed control; interactions never do
+    const k = this.speed;                                                      // so does walking (and pushing furniture)
     this.moving = false;
     let finished = false;
 
@@ -1725,9 +1809,9 @@ export class Brain {
         const finalDist = Math.hypot(s.x - root.position.x, s.z - root.position.z);
         if (finalDist > 0.08) {
           const want = Math.atan2(dx, dz);
-          this.turnTo(want, dt, 6);
+          this.turnTo(want, dt * k, 6);
           const facing = Math.abs(angDiff(want, root.rotation.y));
-          const speed = clamp(finalDist * 2, 0.4, 1.25) * (facing < 0.8 ? 1 : 0.15) * (s.push ? s.push.spd / 1.1 : 1);
+          const speed = clamp(finalDist * 2, 0.4, 1.25) * (facing < 0.8 ? 1 : 0.15) * (s.push ? s.push.spd / 1.1 : 1) * k;
           this.moveBy(Math.sin(root.rotation.y) * speed * dt, Math.cos(root.rotation.y) * speed * dt);
           if (s.push) { s.push.obj.set(root.position.x + s.push.relx, root.position.z + s.push.relz); sfxDrag(clamp(speed / 1.1, 0.25, 1), s.push.obj.weight); }   // furniture scraping along the floor
           else if (Math.floor(this.walkPhase / Math.PI) !== Math.floor((this.walkPhase + speed * dt * 5.2) / Math.PI)) sfx('step');
@@ -1742,8 +1826,8 @@ export class Brain {
           if (s.rem === undefined || rem < s.rem - 0.2) { s.rem = rem; s.remT = 0; }
           else if ((s.remT += dt) > 5) { this.queue.length = 0; finished = true; this.ui('could not get there'); }
         } else if (s.yaw !== null && Math.abs(angDiff(s.yaw, root.rotation.y)) > 0.05) {
-          this.turnTo(s.yaw, dt, 5);
-          this.walkPhase += dt * 3;
+          this.turnTo(s.yaw, dt * k, 5);
+          this.walkPhase += dt * 3 * k;
           this.moving = true; // shuffle feet while turning on the spot
         } else finished = true;
         if (finished && s.push) s.push.obj.set(s.x + s.push.relx, s.z + s.push.relz);

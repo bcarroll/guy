@@ -14,9 +14,12 @@
   #btns button { background: rgba(0,0,0,.55); color: #eee; border: 0; border-radius: 8px; min-height: 44px;
                  padding: 9px 14px; font: inherit; font-size: 14px; cursor: pointer; touch-action: manipulation; }
   #btns button:hover { background: rgba(0,0,0,.75); }
+  #btns select { background: rgba(0,0,0,.55); color: #eee; border: 0; border-radius: 8px; min-height: 44px; padding: 9px 10px; font: inherit; font-size: 14px; cursor: pointer; touch-action: manipulation; }
+  #btns select:hover { background: rgba(0,0,0,.75); }
+  #btns button[hidden] { display: none; }
   #btns button.on { background: #2a7fb0; color: #fff; }
   @media (pointer: coarse) { #hud small { display: none; } }
-  @media (max-width: 700px) { #hud { top: 12px; bottom: auto; left: 12px; } #btns { left: 12px; right: 12px; bottom: 12px; justify-content: center; } }
+  @media (max-width: 700px) { #hud { top: 12px; bottom: auto; left: 12px; } #btns { left: 12px; right: 12px; bottom: 12px; justify-content: center; flex-wrap: wrap; } }
   #skills { position: fixed; right: 16px; bottom: 72px; width: min(330px, calc(100vw - 32px)); max-height: 70vh; overflow: auto; background: rgba(24,26,32,.96);
             color: #eee; border-radius: 12px; padding: 12px 14px; box-shadow: 0 8px 28px rgba(0,0,0,.55); font-size: 13px; z-index: 4; }
   #skills[hidden] { display: none; }
@@ -123,6 +126,10 @@
 <div id="hud">Guy is <b id="activity">waking up…</b><br><small>drag empty space: orbit · drag furniture or the ball: move it · long-press: rotate / remove · tap the wall machine: add things · K: skills · scroll: zoom · F: follow · Space: new activity</small></div>
 <div id="btns">
   <button id="player-btn" title="Stereo playback controls" hidden>🎵 Stereo</button>
+  <button id="lock-btn" title="Let Guy stop" hidden></button>
+  <select id="speed-sel" title="How fast Guy walks and how quickly he moves on between things" aria-label="Speed">
+    <option value="1">🐢 1× Normal</option><option value="2">🐇 2× Quick</option><option value="3">🏃 3× Fast</option><option value="4">🚀 4× Zoom</option>
+  </select>
   <button id="follow-btn" title="Follow Guy (F)">🎥 Follow</button>
   <button id="skip-btn" title="Next activity (Space)">⏭ Next</button>
   <button id="fs-btn" title="Fullscreen">⛶ Full</button>
@@ -155,6 +162,7 @@
   <div class="title"></div>
   <div class="note"></div>
   <button data-act="interact">▶ Interact</button>
+  <button data-act="lock">🔒 Lock in</button>
   <button data-act="rotl">⟲ Rotate left</button>
   <button data-act="rotr">⟳ Rotate right</button>
   <button data-act="remove">🗑 Remove</button>

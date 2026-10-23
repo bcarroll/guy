@@ -15,6 +15,8 @@
 - The saved door is placed again at the start of a visit, before the Catalogue's extras. Core wall pieces the user removed come back on a new visit (existing behaviour), so anything in the door's way is taken out again.
 - Sweeps added: `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves` (in `runAll`). `sweepMachine` now counts only listed objects.
 
+**Round two (section 17):** rooms are now as big as Guy's room, and the speed dropdown, Lock in and guitar riffs are built. Going through doors, Guy building chairs and a second bookshelf, and the shelf overflow fix are planned in section 17.
+
 **Also built:** saving every object's position, turn and removed state (`src/layout.js`, `guy.layout.v1`, `sweepLayout`) and an automatic refresh when a newer build is deployed (`src/update.js`, `sweepUpdate`). This changes the plan's section 9A: built copies, when they exist, must be part of the layout snapshot (one entry per copy), and the saved layout restores before the Catalogue's extras are counted. The easel painting, the lamp and Guy's own position are not saved yet.
 
 ---
@@ -588,4 +590,50 @@ These apply to every part of the Workshop and the inventory.
 
 ---
 
-These answers are recorded in the plan, so the next step is building the plan into code when you're ready. Nothing in the app has been changed.
+---
+
+## 17. Round Two: Going Through Doors, Being Creative, Overflowing Books, Speed and Lock In
+
+New requests, with what is built, what is planned, and what each planned part waits for.
+
+### 17.1 Built
+
+| Request | Status |
+|---|---|
+| Every room the same depth. The Workshop was shallower than Guy's room | **Built.** A room is as big as Guy's room (10 wide x 8 deep) whichever wall its door is on, unless its catalogue entry gives a `size`. Checked by `sweepDoors` for all three walls. |
+| Speed control dropdown (speeds up Guy's movements between interactions) | **Built.** 1x to 4x beside Follow. It scales walking, turning, pushing and the idle pauses. The interactions themselves keep their pace. Remembered between visits. `sweepSpeed`. |
+| A long-press option to lock Guy into an interaction until told to stop | **Built.** "Lock in" on the long-press menu (and "Unlock"), a "Locked on ..." chip, and Next also lets go. He cycles through everything he can do with that object. `sweepLock`. |
+| Locked on the guitar: play everything he knows, then make up riffs and remember the good ones | **Built.** The `riff` activity: single-note riffs over a bass note, judged on range, steps, a repeating phrase, density and coming home; the best 8 are kept between visits (`guy.riffs.v1`) and replayed. `sweepRiffs`. |
+
+### 17.2 Long-press a door to open it and go in (planned: needs phase 5)
+
+- **Pick target:** doors join `pick()` in `main.js`, so a long press on one opens a menu: "🚪 Go in" (from Guy's room) or "🚪 Come back" (from the Workshop).
+- **Opening:** the door leaf swings open in about a second and closes about three seconds after Guy has passed, if nobody is near. The doorway needs a real opening in the wall (today the wall is one plane, so the door is painted on it).
+- **Walking:** `Go in` is a queued walk to the threshold, the door opening, then a walk to the middle of the room. It needs the pathing grid and the "can he stand here" limits (`brain.js`, `main.js`) to cover every added room, with the door cells open only while the door is open.
+- **Waits for:** phase 5 (pathing across the door). Do it with the Workshop shell, before any object is moved into the Workshop.
+
+### 17.3 Guy being creative (planned: needs phases 5 to 12)
+
+- **No chair, but wood to work with:** when no chair can be sat on and the wood line is there (Workshop added, workbench, saw, mallet, sander, wood in stock) a new activity `buildchair` has him go to the Workshop, build a chair (saw, mallet, sander, as in section 9.5), carry it to the door and into his room, put it on a free spot clear of the usual standing places, and sit on it. The carry needs a "carrying furniture" pose (both hands under the seat) and the chair must change rooms.
+- **Too many chairs:** more than 3 wooden chairs in the room, and he carries one at a time to the Wood Factory and turns it into scrap wood (added to the wood stock). **Decision proposed:** he only recycles chairs he built himself, never the ones you added, so nothing of yours is taken without you removing it (section 16: nothing is ever lost).
+- **Both are optional choices** in his normal activity mix, with low weights and the usual "not the same thing twice" rule, and each can be a Lock in target for the Workshop.
+- **Waits for:** rooms with their own objects (object lookups must find the object in the room he is in), the Workshop objects (section 9), the inventory (9A), the build recipes, and pushing or carrying furniture across a door.
+
+### 17.4 Books overflow, and Guy builds another bookshelf (planned: needs 17.3)
+
+- **Found while planning:** the shelf has no capacity. `addBook` in `room.js` keeps taking the next slot (rows 3 and 2, 0.2 m apart along the shelf). With all 19 unlocked books on the shelf, the last three (`stars`, `darksky`, `scopecare`) already stick out past the end of the shelf (z up to 1.1 m; the shelf ends at 0.9 m). This is a bug today, independent of the new request.
+- **Capacity:** the shelf holds 17 books on its two reachable rows. Past that a book goes into a **stack on the floor beside the shelf** (up to a few books high), still counted as "on the shelf" for the Catalogue.
+- **Guy's response:** with wood in stock he builds a second bookshelf in the Workshop, pushes it through the door to stand next to the first (the new shelf is a normal shelf object, heavy once placed, so Guy only moves it while it is new: a build state), then picks up the stacked books one at a time and puts them on its empty shelves. The new shelf is removable (the first one never is).
+- **Without wood or a Workshop:** the stack stays, and Guy still reads books from it (he picks from the top of the stack).
+- **Waits for:** the stack mechanic (a new object, with a fix for the capacity bug), 17.3's carrying and door work, and the wooden shelves build (section 9.5).
+
+### 17.5 Order of work
+
+1. Pathing across the door and the opening door (17.2), with a Workshop that Guy can walk into.
+2. The shelf capacity fix and the floor stack (17.4, first half). This one stands alone and fixes a bug.
+3. The Workshop objects, materials and inventory (sections 9 and 9A), then the builds.
+4. Carrying furniture, then `buildchair`, recycling, and Guy building the second bookshelf.
+
+### 17.6 Testing
+
+Each built item has its sweep in section 13A. The planned items add: a door long-press menu check, a walk through the door in both directions, `buildchair` starting only when no chair exists, recycling only his own chairs and only above 3, and the book stack and the second shelf (a shelf with 20+ books has nothing outside its frame; the stack empties onto the new shelf; no book is ever lost).

@@ -10,6 +10,7 @@ import { OBJECT_CATALOG } from './machine.js';
 import { BOOK_CATALOG, SKILL_INFO } from './skills.js';
 import { ROOM_CATALOG } from './rooms.js';
 import { initLayout } from './layout.js';
+import { invent, judge, GOOD, STEPS as RIFF_STEPS, keepRiff, loadRiffs, nextRiff, riffAt, forgetMemoryRiffs } from './riffs.js';
 import { ALBUM_CATALOG } from './albums.js';
 import { TRACKS, trackSeconds } from './audio.js';
 import { POSES } from './brain.js';
@@ -54,6 +55,7 @@ export const MANIFEST = {
     dribble: { skills: ['ball'], touches: [] },
     toss: { skills: ['ball'], touches: [] },
     guitar: { objects: ['guitar'], skills: ['guitar'], touches: ['guitar'] },
+    riff: { objects: ['guitar'], skills: ['guitar'], touches: ['guitar'] },
     jamguitar: { objects: ['guitar'], skills: ['guitar'], music: true, touches: ['guitar'] },
     dancemoves: { objects: ['table'], skills: ['dance.moves'], touches: ['table', 'shelf', 'lamp'] },
     ballroom: { objects: ['table'], skills: ['dance.ballroom'], touches: ['table', 'shelf', 'lamp'] },
@@ -1126,6 +1128,9 @@ T.sweepDoors = () => {
     const probs = doorProblems('workshop');
     const gone = res.ok ? res.displaced.every((n) => !!w.removed[n]) : true;
     out.push(result(`doors: on the ${wall} wall only, the door is clear and what it moved is in the Catalogue`, res.ok ? !probs.length && gone && w.doors.workshop.wall === wall : friendly(res.messages), { res: { ok: res.ok, u: res.u, displaced: res.displaced }, probs }));
+    // every added room is as big as Guy's room: the same width (x) and the same depth (z), whichever wall the door is on
+    const sb = res.ok ? w.doors.workshop.shell.bounds : null;
+    out.push(result(`doors: ${wall} wall: the room behind it has the same width and depth as Guy's room`, !res.ok || (near(sb.maxX - sb.minX, 10) && near(sb.maxZ - sb.minZ, 8)), { bounds: sb }));
     // what was moved can be put back, and none of it ends up in the doorway
     putBackSince(before);
     out.push(result(`doors: ${wall} wall: put back, nothing returns into the doorway`, !res.ok || !doorProblems('workshop').length, { probs: doorProblems('workshop') }));
@@ -1304,6 +1309,163 @@ T.sweepLayout = () => {
   return out;
 };
 
+// ---- 13. Guitar riffs: made up, judged, and the good ones remembered (src/riffs.js) -----------------------------------------------
+T.sweepRiffs = () => {
+  const out = [], base = errors.length, key = 'guy.riffs.test';
+  const clear = () => { try { localStorage.removeItem(key); } catch { /* no storage */ } };
+  const goodRiff = () => { for (let i = 0; i < 500; i++) { const r = invent(false); if (judge(r) >= GOOD) return r; } return null; };
+  try {
+    clear();
+    let formed = true;
+    for (let i = 0; i < 300; i++) { const r = invent(); if (r.steps.length !== RIFF_STEPS || !r.steps.every((m) => Number.isFinite(m) && m >= 0 && m < 128) || r.steps.filter(Boolean).length < 2) formed = false; }
+    out.push(result('riffs: every invented riff is 16 steps of notes and rests, in range', formed));
+    const tidy = { root: 45, mode: 'minor', steps: [57, 0, 60, 62, 64, 62, 60, 0, 57, 0, 60, 62, 64, 62, 60, 57] };
+    const noise = { root: 45, mode: 'minor', steps: [40, 90, 0, 41, 88, 39, 95, 0, 0, 60, 100, 35, 0, 0, 88, 41] };
+    out.push(result('riffs: a tidy riff that repeats and comes home is good; random jumping about is not', judge(tidy) >= GOOD && judge(noise) < 0.5 && judge({ ...tidy, steps: new Array(16).fill(0) }) === 0, { tidy: judge(tidy), noise: judge(noise) }));
+    let tidyGood = 0, messyGood = 0;
+    for (let i = 0; i < 400; i++) { if (judge(invent(false)) >= GOOD) tidyGood++; if (judge(invent(true)) >= GOOD) messyGood++; }
+    out.push(result('riffs: most tidy ideas are worth keeping and fewer messy ones are', tidyGood > 200 && messyGood < tidyGood * 0.8 && messyGood > 0, { tidyGood, messyGood }));
+    // keeping: only good ones, never twice, at most 8, best first
+    out.push(result('riffs: a bad riff is not kept', keepRiff(noise, key) === null && loadRiffs(key).length === 0));
+    const a = goodRiff();
+    out.push(result('riffs: a good riff is kept, and a second copy of it is not', !!a && !!keepRiff(a, key) && keepRiff(a, key) === null && loadRiffs(key).length === 1));
+    for (let i = 0; i < 14; i++) { const r = goodRiff(); if (r) keepRiff(r, key); }
+    const kept = loadRiffs(key);
+    out.push(result('riffs: he keeps his best 8, best first', kept.length === 8 && kept.every((e, i) => i === 0 || kept[i - 1].score >= e.score) && kept.every((e) => e.score >= GOOD), { n: kept.length }));
+    try { for (const junk of ['not json', '{"x":1}', '[{"riff":{},"score":1}]', '[null]', '[{"riff":{"root":45,"mode":"x","steps":[]},"score":1}]']) { localStorage.setItem(key, junk); if (loadRiffs(key).length) throw new Error('junk read: ' + junk); } out.push(result('riffs: an unreadable save is ignored', true)); }
+    catch (e) { out.push(result('riffs: an unreadable save is ignored', false, { e: String(e) })); }
+    // choosing what to play
+    clear();
+    let favouritesWhenEmpty = 0; for (let i = 0; i < 100; i++) if (nextRiff(key).favourite) favouritesWhenEmpty++;
+    for (let i = 0; i < 4; i++) { const r = goodRiff(); if (r) keepRiff(r, key); }
+    let favourites = 0; for (let i = 0; i < 200; i++) if (nextRiff(key).favourite) favourites++;
+    out.push(result('riffs: with nothing kept he always invents; once he has favourites he sometimes replays one', favouritesWhenEmpty === 0 && favourites > 30 && favourites < 140, { favourites }));
+    // the notes of a session: each riff twice through, bass notes on the bars
+    const r1 = tidy, r2 = { ...tidy, root: 50, steps: tidy.steps.map((m) => (m ? m + 5 : 0)) };
+    let ok = true;
+    for (let n = 0; n < 32; n++) { const e = riffAt([r1, r2], n); if (e.note !== r1.steps[n % 16] || (e.bass !== 0) !== (n % 8 === 0) && n % 16 !== 8 && n % 16 !== 0) ok = false; }
+    for (let n = 32; n < 64; n++) if (riffAt([r1, r2], n).note !== r2.steps[n % 16]) ok = false;
+    out.push(result('riffs: a session plays each riff twice through and then the next', ok && riffAt([r1, r2], 64).note === r1.steps[0]));
+  } finally { clear(); }
+  // the activity itself: he makes up riffs, plays them with the fretting hand following, and remembers the good ones (in memory on this page)
+  forgetMemoryRiffs();
+  T.removeAll(); T.settle(); T.home(); T.prep('riff');
+  const b = B(), oldOn = b.onRiff;
+  let toasts = 0;
+  b.onRiff = (m) => { toasts++; void m; };
+  const run = T.run('riff', { prep: false });
+  out.push(result('riffs: the riff activity runs to the end with no errors', run.completed && !run.errors.length && run.idleAfter !== false, { run: { completed: run.completed, seconds: run.seconds, errors: run.errors } }));
+  for (let i = 0; i < 6; i++) T.run('riff', { prep: false });
+  b.onRiff = oldOn;
+  const kept2 = loadRiffs();
+  out.push(result('riffs: after a few sessions he has kept good riffs he made up, and said so (in memory here: ?fresh never writes the real save)', kept2.length > 0 && kept2.length <= 8 && toasts > 0 && kept2.every((e) => e.score >= GOOD) && !localStorage.getItem('guy.riffs.v1'), { kept: kept2.length, toasts }));
+  forgetMemoryRiffs();
+  out.push(result('riffs: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
+// ---- 14. Lock in: keep using one object until told to stop (long-press > Lock in) -------------------------------------------------
+T.sweepLock = () => {
+  const out = [], base = errors.length, b = B(), w = W();
+  const chores = ['putback', 'dropball', 'putguitar', 'lighton'];
+  // object -> an activity that prepares what it needs (objects, skills, music)
+  const cases = [['guitar', 'riff'], ['piano', 'sitpiano'], ['drums', 'drumsolo'], ['easel', 'mixpaint'], ['telescope', 'stargaze'], ['lamp', 'mood'], ['plant', 'plant'], ['armchair', 'read'], ['ball', 'dribble'], ['table', 'dance'], ['shelf', 'read']];
+  for (const [id, prep] of cases) {
+    T.removeAll(); T.forget(); skillsOf().fading.clear(); T.settle(); T.home();
+    T.prep(prep);
+    if (id === 'armchair' || id === 'ball') T.addObject(id);
+    T.settle(); T.home();
+    const chosen = [], allowed = new Set(chores);
+    const orig = b.choose.bind(b);
+    b.choose = (f) => { for (const a of b.lockActs(id)) allowed.add(a); orig(f); chosen.push(b.last); };
+    let r, t = 0;
+    try {
+      r = b.lockOn(id);
+      const unlockedEarly = [];
+      while (t < 150) { step(0.25); t += 0.25; if (!b.lock) { unlockedEarly.push(t); break; } }
+      const still = !!b.lock && b.lock.name === id;
+      const outside = chosen.filter((n) => !allowed.has(n));
+      out.push(result(`lock: ${id}: he keeps using it for 150 s, cycling through what he can do there`, r.ok && still && chosen.length >= 2 && !outside.length, { ok: r.ok, still, chosen, outside, message: r.message }));
+      const when = b.unlock(true);
+      step(8);
+      out.push(result(`lock: ${id}: telling him to stop lets him go and he wraps up`, when && !b.lock && !errors.length - base));
+    } finally { b.choose = orig; if (b.lock) b.unlock(false); }
+  }
+  // other ways out and what is refused
+  T.removeAll(); T.forget(); T.settle(); T.home(); T.prep('riff'); T.prep('sitpiano'); T.prep('dribble');
+  out.push(result('lock: with a skill missing it is refused with the same message as Interact, and no lock is set', (() => { T.forget(); const r = b.lockOn('guitar'); return !r.ok && !b.lock && /learned the guitar/.test(r.message); })()));
+  T.learn(['guitar', 'piano', 'ball']); T.addObject('ball');
+  b.lockOn('guitar'); step(2);
+  b.interact('ball');
+  out.push(result('lock: asking him to use something else ends the lock', !b.lock));
+  b.lockOn('piano'); step(2);
+  b.skip(); step(1);
+  out.push(result('lock: cutting the activity short does not end the lock, he goes back to it', !!b.lock && b.lock.name === 'piano'));
+  const skipBtn = document.getElementById('skip-btn');
+  skipBtn.click();
+  out.push(result('lock: the Next button ends the lock', !b.lock));
+  b.lockOn('piano'); step(2);
+  w.removeObject('piano'); b.objectRemoved('piano');
+  out.push(result('lock: removing the object ends the lock', !b.lock));
+  T.addObject('piano'); T.addObject('bench');
+  // the long-press menu and the chip
+  const menu = document.getElementById('menu'), chip = document.getElementById('lock-btn');
+  window.__guyOpenMenu('guitar');
+  const lockBtn = menu.querySelector('[data-act=lock]');
+  out.push(result('lock: the long-press menu offers "Lock in" for something he can use', !lockBtn.hidden && /Lock in/.test(lockBtn.textContent)));
+  lockBtn.click();
+  out.push(result('lock: tapping Lock in locks him on it and shows the Locked chip', !!b.lock && b.lock.name === 'guitar' && !chip.hidden && /Locked on guitar/.test(chip.textContent) && /🔒/.test(document.getElementById('activity').textContent + (b.lock ? '🔒' : '')), { chip: chip.textContent }));
+  window.__guyOpenMenu('guitar');
+  out.push(result('lock: the menu then offers "Unlock" for that object', /Unlock/.test(menu.querySelector('[data-act=lock]').textContent) && !menu.querySelector('[data-act=lock]').hidden));
+  menu.querySelector('[data-act=lock]').click();
+  out.push(result('lock: Unlock lets him go and hides the chip', !b.lock && chip.hidden));
+  b.lockOn('guitar'); step(1);
+  chip.click();
+  out.push(result('lock: tapping the chip lets him go', !b.lock && chip.hidden));
+  T.addObject('coffeetable');
+  window.__guyOpenMenu('coffeetable');
+  out.push(result('lock: nothing to lock on for something he cannot use (the coffee table has no Lock in)', menu.querySelector('[data-act=lock]').hidden));
+  menu.hidden = true; T.settle();
+  out.push(result('lock: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
+// ---- 15. Speed: walking and the pauses between interactions follow the dropdown; the interactions never do ---------------------------
+T.sweepSpeed = () => {
+  const out = [], b = B(), g = G(), base = errors.length, sel = document.getElementById('speed-sel');
+  const old = b.speed;
+  T.removeAll(); T.settle(); T.home();
+  const walkTime = (k) => {
+    b.speed = k; T.home(); b.skip(); b.queue = [b.walk(-3, -2.5, 0)]; b.step = null; b.pendingActivity = null;
+    const t0 = b.time, ph0 = b.walkPhase;               // measured on his own clock: step(0.05) is not exactly 0.05 s of simulation
+    step(0.05);
+    while (b.time - t0 < 40 && b.step && b.step.type === 'walk' && b.step.x === -3) step(0.05);
+    return { t: b.time - t0, dist: Math.hypot(g.pos.x + 3, g.pos.z + 2.5), phase: b.walkPhase - ph0 };
+  };
+  const t1 = walkTime(1), t3 = walkTime(3);
+  out.push(result('speed: at 3x he walks the same route in less than half the time, and his legs go faster', t1.t > 3 && t3.t < t1.t * 0.5 && t3.dist < 0.3 && t3.phase / t3.t > (t1.phase / t1.t) * 1.8, { t1: +t1.t.toFixed(2), t3: +t3.t.toFixed(2), p1: +(t1.phase / t1.t).toFixed(1), p3: +(t3.phase / t3.t).toFixed(1) }));
+  const pause = (k, pose, secs) => { b.speed = k; b.skip(); b.queue = [b.play(pose, secs)]; b.step = null; b.pendingActivity = null; const t0 = b.time; step(0.05); while (b.time - t0 < secs + 2 && b.step && b.step.pose === pose) step(0.05); return b.time - t0; };
+  const p1 = pause(1, 'idle', 4), p4 = pause(4, 'idle', 4);
+  out.push(result('speed: a pause between interactions is shorter at 4x', p1 > 3.5 && p4 < 1.4, { p1: +p1.toFixed(2), p4: +p4.toFixed(2) }));
+  const w1 = pause(1, 'wave', 3), w4 = pause(4, 'wave', 3);
+  out.push(result('speed: an interaction (waving) takes just as long at 4x', w1 > 2.8 && w4 > 2.8, { w1: +w1.toFixed(2), w4: +w4.toFixed(2) }));
+  // at 4x he wanders for two minutes without error and without ever standing inside furniture
+  b.speed = 4; T.settle(); b.queue = []; b.step = null; b.pendingActivity = 'wander';
+  let inside = 0, t = 0;
+  while (t < 120) { step(0.2); t += 0.2; for (const o of W().obstacles) if (o.active !== false && g.pos.x > o.x0 + 0.1 && g.pos.x < o.x1 - 0.1 && g.pos.z > o.z0 + 0.1 && g.pos.z < o.z1 - 0.1) inside++; }
+  out.push(result('speed: two minutes of wandering at 4x never puts him inside furniture', inside === 0, { inside }));
+  // the dropdown
+  const values = [...sel.options].map((o) => Number(o.value));
+  out.push(result('speed: the dropdown offers 1x to 4x and is at least 44 px high', JSON.stringify(values) === '[1,2,3,4]' && sel.getBoundingClientRect().height >= 44, { values, h: sel.getBoundingClientRect().height }));
+  sel.value = '3'; sel.dispatchEvent(new Event('change'));
+  out.push(result('speed: choosing 3x in the dropdown sets his speed', b.speed === 3));
+  sel.value = '1'; sel.dispatchEvent(new Event('change'));
+  out.push(result('speed: and 1x puts it back', b.speed === 1));
+  b.speed = old; T.settle();
+  out.push(result('speed: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 // ---- 12. Automatic refresh when a newer build is deployed (src/update.js) ----------------------------------------------------------
 T.sweepUpdate = () => {
   const out = [], base = errors.length, U = window.__guyUpdate;
@@ -1392,6 +1554,9 @@ T.runAll = () => {
   report.layout = summarise(T.sweepLayout());
   report.update = summarise(T.sweepUpdate());
   report.start = summarise(T.sweepStart());
+  report.riffs = summarise(T.sweepRiffs());
+  report.lock = summarise(T.sweepLock());
+  report.speed = summarise(T.sweepSpeed());
   report.errorsLogged = errors.length;
   return report;
 };
