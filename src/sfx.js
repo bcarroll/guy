@@ -12,7 +12,7 @@ export const setMuted = (m) => { muted = !!m; if (muted) dragOff(); };
 export const isMuted = () => muted;
 
 const last = {};
-const MIN_GAP = { bounce: 40, knock: 60, thud: 60, page: 250, step: 150, tick: 70, brush: 80, wipe: 450, leaf: 220, click: 40, sit: 400, kick: 60, saw: 200, tap: 80, sand: 250, machine: 500, lid: 150, sizzle: 400, plate: 150, ding: 200 };
+const MIN_GAP = { bounce: 40, knock: 60, thud: 60, page: 250, step: 150, tick: 70, brush: 120, wipe: 450, leaf: 220, click: 40, sit: 400, kick: 60, saw: 200, tap: 80, sand: 250, machine: 500, lid: 150, sizzle: 400, plate: 150, ding: 200 };
 
 let noise = null;
 const noiseBuf = (ctx) => {
@@ -87,8 +87,9 @@ const SOUNDS = {
     tone(ctx, out, { f0: 150, f1: 105, dur: 0.28, type: 'sawtooth', gain: 0.03 * w, delay: 0.05 });                     // the creak
   },
   leaf(ctx, out) { burst(ctx, out, { dur: 0.16, type: 'highpass', f: 3500, gain: 0.1 }); burst(ctx, out, { dur: 0.12, type: 'highpass', f: 4200, gain: 0.07, delay: 0.1 }); },
-  brush(ctx, out, v = 0.5) { burst(ctx, out, { dur: 0.08, f: 3800, q: 2, gain: 0.14 + 0.14 * clamp(v, 0, 1) }); },
-  dab(ctx, out) { tone(ctx, out, { f0: 320, f1: 140, dur: 0.06, gain: 0.18 }); burst(ctx, out, { dur: 0.05, type: 'lowpass', f: 1200, gain: 0.1 }); },
+  // a soft swish with a slow start: it is fired again and again while a stroke is drawn, so a short sharp burst sounded like hammering
+  brush(ctx, out, v = 0.5) { burst(ctx, out, { dur: 0.2, f: 2400 + Math.random() * 500, f2: 3400, q: 0.5, gain: 0.11 + 0.1 * clamp(v, 0, 1), attack: 0.07 }); },
+  dab(ctx, out) { burst(ctx, out, { dur: 0.12, type: 'lowpass', f: 1400, q: 0.8, gain: 0.3, attack: 0.03 }); },       // a soft wet pat (it used to be a low thump, like a knock)
   wipe(ctx, out) { burst(ctx, out, { dur: 0.5, f: 1600, f2: 2800, q: 0.5, gain: 0.15, attack: 0.12 }); burst(ctx, out, { dur: 0.42, type: 'highpass', f: 4500, gain: 0.05, attack: 0.15 }); },     // a soft cloth swish: slow start, no knock
   step(ctx, out) { burst(ctx, out, { dur: 0.05, type: 'lowpass', f: 700, gain: 0.1 }); tone(ctx, out, { f0: 100, f1: 65, dur: 0.05, gain: 0.11 }); },
   place(ctx, out, w = 0.4) { SOUNDS.thud(ctx, out, w); },

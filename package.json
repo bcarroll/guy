@@ -10,6 +10,7 @@
     "test:old": "node test-run.js"
   },
   "dependencies": {
+    "mespeak": "^2.0.2",
     "three": "^0.186.1"
   },
   "devDependencies": {

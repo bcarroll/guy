@@ -149,6 +149,7 @@ export class Gal {
   constructor(world, opts) {
     this.w = world;
     this.opts = opts;
+    this.audience = null;               // set while GAL has been handed a request by Guy and answers the user herself (voice.js)
     this.guyBrain = opts.guyBrain;
     this.present = false;
     this.brain = null; this.g = null;
@@ -325,8 +326,13 @@ export class Gal {
     this.brain.orders.push({ kind: 'find' });
     this.say(`GUY asks GAL: ${plan.books.length ? 'read ' + plan.books.join(', ') + ' and ' : ''}find me when you are ready to jam (${plan.guyInst} + ${plan.galInst})`);
     this.brain.skip(true);
+    this.talk('guy', `Hey GAL, want to jam? I'll take the ${plan.guyInst}.`);
+    this.talk('gal', plan.books.length ? `Sure! Let me read up on the ${plan.galInst} first.` : `Sounds good! I'll find you.`);
     return true;
   }
+
+  // Spoken lines between the two of them (and to the user): the speaker is voice.js; silent in the tests unless one is attached
+  talk(who, text, kind = 'peer') { if (this.opts.speak) this.opts.speak(who, text, kind); }
 
   // every frame: when she says she is ready Guy stops what he is doing and they play together
   updateDuo(dt) {
@@ -345,6 +351,7 @@ export class Gal {
       if (g.music && !d.galStarted && l.available(d.galAct) && !l.step?.fx?.dance) {
         d.galStarted = true; l.skip(true); l.pendingActivity = d.galAct;
         this.say(`GAL and GUY jam: ${d.guyInst} + ${d.galInst}`);
+        this.talk('gal', `Joining in on the ${d.galInst}!`);
       }
       if (l.last === d.galAct) d.galSeen = true;
       if (d.galSeen && l.last !== d.galAct && d.t > 20) this.duo = null;          // she has played her part and moved on

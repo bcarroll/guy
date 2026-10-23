@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { initScreenLock } from './screenlock.js';
+import { initVoice as initTTS } from './tts.js';
+import { createVoice } from './voice.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { buildRoom, ROOM } from './room.js';
 import { Guy } from './guy.js';
@@ -108,11 +110,14 @@ const brain = new Brain(guy, world, (t) => (label.textContent = t), skills);
 // the Restaurant's customers (they only come once the room is added, stocked, and Guy has read "Restaurant Basics")
 world.restaurant = new Restaurant(world, { skillOk: () => skills.has('restaurant') || !!(world.gal && world.gal.skills && world.gal.skills.has('restaurant')), guyAt: () => guy.root.position });
 // GAL, the second robot: built by Guy at the Build a Bot machine (gal.js). Her model loads at the start; she is saved unless ?fresh
+// Speech (tts.js: offline robot voices + subtitles; voice.js: commands). Guy and GAL speak only in an interaction or to each other.
+const tts = initTTS({ subs: document.getElementById('subs'), persist: !params.has('fresh') });
 const galLine = document.getElementById('galline'), galLabel = document.getElementById('activity2');
 world.gal = new Gal(world, {
   scene, guyBrain: brain, persist: !params.has('fresh'), skillsInit: params.get('skills') === 'all' || params.get('skills') === 'none' ? params.get('skills') : null,
   ui: (t) => { galLine.hidden = false; galLabel.textContent = t; },
   toast: (m) => { showToast(m); if (machineUI.isOpen()) machineUI.refresh(); }, onBuilt: (m) => showToast(m),
+  speak: (who, text, kind) => tts.say(who, text, kind),
 });
 world.gal.preload();
 // Guy's paintings: hung on the walls of any room, the rest kept in the Catalog (they are saved unless ?fresh)
@@ -190,8 +195,25 @@ const machineUI = initMachine({
 // out), then the door of any added room (anything standing in its way comes out), then start saving changes as they happen.
 const layout = initLayout({ world, guy, remove: (id) => removeById(id), persist: !params.has('fresh') });
 world.layout = layout;
+// (this must come BEFORE the saved rooms are restored: a premium room such as the Restaurant is refused while premium is locked, so it was
+// dropped on every reload and then forgotten at the next save)
+// development: one button turns every premium thing on (there is no way to pay yet); remembered unless ?fresh
+{
+  const btn = document.getElementById('devunlock'), key = 'guy.dev.unlock', keep = !params.has('fresh');
+  const show = () => { btn.classList.toggle('on', dev.all); btn.textContent = dev.all ? '🔒 lock premium' : '🔓 unlock premium'; };
+  try { if (keep && localStorage.getItem(key) === '1') dev.all = true; } catch { /* no storage */ }
+  show();
+  (window.__boot ||= []).push('devunlock');
+  btn.addEventListener('click', () => {
+    dev.all = !dev.all;
+    try { if (keep) localStorage.setItem(key, dev.all ? '1' : '0'); } catch { /* no storage */ }
+    show(); machineUI.refresh();
+    showToast(dev.all ? 'Premium rooms, records and items are unlocked' : 'Premium is locked again');
+  });
+}
 machineUI.restoreExtras();
 layout.restore();
+(window.__boot ||= []).push('rooms.restore');
 rooms.restore();
 machineUI.restoreExtras();         // the rooms are back, so what belongs to them (the Workshop's furniture) can be added now ...
 layout.restore();                  // ... and put where it was left
@@ -201,19 +223,6 @@ layout.start();
 initUpdateCheck();
 // The build this page is running, in the top-left corner: the short commit id (the first seven characters of the id). Checking
 // this against a new commit shows whether a deployed update reached the phone.
-// development: one button turns every premium thing on (there is no way to pay yet); remembered unless ?fresh
-{
-  const btn = document.getElementById('devunlock'), key = 'guy.dev.unlock', keep = !params.has('fresh');
-  const show = () => { btn.classList.toggle('on', dev.all); btn.textContent = dev.all ? '🔒 lock premium' : '🔓 unlock premium'; };
-  try { if (keep && localStorage.getItem(key) === '1') dev.all = true; } catch { /* no storage */ }
-  show();
-  btn.addEventListener('click', () => {
-    dev.all = !dev.all;
-    try { if (keep) localStorage.setItem(key, dev.all ? '1' : '0'); } catch { /* no storage */ }
-    show(); machineUI.refresh();
-    showToast(dev.all ? 'Premium rooms, records and items are unlocked' : 'Premium is locked again');
-  });
-}
 document.getElementById('build').textContent = `build ${typeof __BUILD_ID__ === 'string' ? __BUILD_ID__.slice(0, 7) : 'dev'}`;
 if (params.get('records') === 'all' && world.objects.shelf) ALBUM_CATALOG.forEach((a) => { if (!world.objects.shelf.albums.some((r) => r.def.id === a.id)) world.objects.shelf.addAlbum(a); }); // testing aid
 renderSkills();
@@ -663,6 +672,16 @@ const screenLock = initScreenLock({
 });
 screenLock.onChange(() => { controls.enabled = screenLock.cameraOk(); });
 window.__screenLock = screenLock;
+
+// Typed commands (the same path the microphone will use): the 💬 button opens a box; Enter sends it to Guy.
+const voice = createVoice({ world, brain, screen: screenLock, say: (who, text, kind) => tts.say(who, text, kind), toast: showToast });
+const cmdBox = document.getElementById('cmdbox'), cmdIn = document.getElementById('cmd-in');
+document.getElementById('talk-btn').addEventListener('click', () => { cmdBox.hidden = !cmdBox.hidden; if (!cmdBox.hidden) { cmdIn.focus(); tts.warm().catch(() => {}); } });
+cmdBox.addEventListener('submit', (e) => { e.preventDefault(); const t = cmdIn.value.trim(); if (!t) return; cmdIn.value = ''; voice.run(t); });
+cmdBox.querySelector('#cmd-chatter').addEventListener('change', (e) => tts.set('chatter', e.target.value));
+cmdBox.querySelector('#cmd-chatter').value = tts.settings.chatter;
+window.__voice = { run: (t) => voice.run(t), parse: voice.parse, tts, audienceOn: voice.audienceOn };
+
 
 // Capture phase so we run before OrbitControls and can keep it from orbiting while we handle an object.
 canvas.addEventListener('pointerdown', (e) => {
