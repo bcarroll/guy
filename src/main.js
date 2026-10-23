@@ -178,6 +178,9 @@ machineUI.restoreExtras();         // the rooms are back, so what belongs to the
 layout.restore();                  // ... and put where it was left
 layout.start();
 initUpdateCheck();
+// The build this page is running, in the top-left corner: the short commit id (the first seven characters of the id). Checking
+// this against a new commit shows whether a deployed update reached the phone.
+document.getElementById('build').textContent = `build ${typeof __BUILD_ID__ === 'string' ? __BUILD_ID__.slice(0, 7) : 'dev'}`;
 if (params.get('records') === 'all' && world.objects.shelf) ALBUM_CATALOG.forEach((a) => { if (!world.objects.shelf.albums.some((r) => r.def.id === a.id)) world.objects.shelf.addAlbum(a); }); // testing aid
 renderSkills();
 let machinePress = null;

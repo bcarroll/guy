@@ -7,6 +7,7 @@
 <style>
   html, body { margin: 0; height: 100%; background: #111; overflow: hidden; font-family: system-ui, sans-serif; }
   canvas { display: block; }
+  #build { position: fixed; top: 2px; left: 6px; z-index: 4; font: 10px/1 ui-monospace, Menlo, Consolas, monospace; color: #fff; opacity: .55; pointer-events: none; letter-spacing: .3px; }
   #hud { position: fixed; left: 16px; bottom: 16px; color: #eee; font-size: 14px; line-height: 1.5;
          background: rgba(0,0,0,.45); padding: 10px 14px; border-radius: 8px; pointer-events: none; }
   #hud b { color: #7fd1ff; }
@@ -127,6 +128,7 @@
 </style>
 </head>
 <body>
+<div id="build" title="The version of the game running here (the commit it was built from)">build …</div>
 <div id="hud">Guy is <b id="activity">waking up…</b><br><small>drag empty space: orbit · drag furniture or the ball: move it · long-press: rotate / remove · tap the wall machine: add things · K: skills · scroll: zoom · F: follow · Space: new activity</small></div>
 <div id="btns">
   <button id="player-btn" title="Stereo playback controls" hidden>🎵 Stereo</button>

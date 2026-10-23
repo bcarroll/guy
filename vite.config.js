@@ -1,6 +1,10 @@
 // Each build gets an id (Cloudflare's commit hash when building there, else the time). It is baked into the bundle as __BUILD_ID__
 // and written to version.json, so a tab that has been open for a while can tell that a newer build is live (src/update.js).
-const buildId = (process.env.CF_PAGES_COMMIT_SHA || process.env.WORKERS_CI_COMMIT_SHA || Date.now().toString(36)).slice(0, 12);
+import { execSync } from 'node:child_process';
+
+// The commit the build came from (Cloudflare sets it; locally, the checked-out commit). The time is the last resort.
+const gitSha = () => { try { return execSync('git rev-parse HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { return ''; } };
+const buildId = (process.env.CF_PAGES_COMMIT_SHA || process.env.WORKERS_CI_COMMIT_SHA || gitSha() || Date.now().toString(36)).slice(0, 12);
 
 const versionFile = {
   name: 'guy-version-file',
