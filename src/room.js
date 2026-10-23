@@ -1124,6 +1124,7 @@ export function buildRoom(scene) {
 
   const NEW_OBJECTS = {            // object id -> [builder, preferred spot (or a function of the world that works it out)]
     botprinter: [bots.botprinter, { x: -3.5, z: 2.5 }],
+    workstation: [bots.workstation, { x: -3.6, z: -0.6 }],
     stove: [rest.stove, restSpot('stove')],
     kitchencounter: [rest.kitchencounter, restSpot('kitchencounter')],
     register: [rest.register, restSpot('register')],

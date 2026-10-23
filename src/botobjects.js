@@ -63,5 +63,34 @@ export function makeBotBuilders({ makeObject, box, mat }) {
     o.buttonPoint = () => o.at(-0.5, 0.52, 0.8);                                      // Guy's finger on the panel
     return addAt(o);
   };
-  return { botprinter };
+  // The Learning Workstation: a desk with a big screen. Guy taps the screen and a panel lists the books on the shelf; pressing Learn on one
+  // teaches him (or GAL) what is in it at once. Its front (the screen) is local +z.
+  const workstation = (x = 0, z = 0) => {
+    const steel = mat(0x6d7783, { metalness: 0.6, roughness: 0.35 }), dark = mat(0x262c34, { metalness: 0.3, roughness: 0.5 }), top = mat(0x394553);
+    const o = makeObject('workstation', x, z, 1.3, 0.7, 1.45, 'heavy', (g) => {
+      box(1.3, 0.06, 0.7, top, 0, 0.75, 0, g);                                       // the desk top
+      for (const [px, pz] of [[-0.6, -0.3], [0.6, -0.3], [-0.6, 0.3], [0.6, 0.3]]) box(0.06, 0.72, 0.06, steel, px, 0.36, pz, g);
+      box(1.2, 0.05, 0.5, dark, 0, 0.3, 0, g);                                       // the shelf under the desk
+      box(0.5, 0.03, 0.18, mat(0x1b2128), 0, 0.795, 0.22, g);                        // the keyboard
+      box(0.14, 0.2, 0.1, steel, 0, 0.88, -0.2, g);                                  // the monitor's stand
+      box(0.98, 0.58, 0.05, dark, 0, 1.17, -0.2, g);                                 // the monitor
+      box(0.34, 0.1, 0.3, steel, -0.45, 0.83, 0.05, g);                              // the book scanner
+    });
+    o.screenMat = new THREE.MeshBasicMaterial({ color: 0x1a6fb0 });
+    o.screen = new THREE.Mesh(new THREE.PlaneGeometry(0.88, 0.48), o.screenMat); o.screen.position.set(0, 1.17, -0.17); o.group.add(o.screen);
+    o.lines = [];                                                                       // rows of "text" on the screen
+    for (let i = 0; i < 5; i++) { const l = new THREE.Mesh(new THREE.PlaneGeometry(0.5 + (i % 2) * 0.2, 0.035), new THREE.MeshBasicMaterial({ color: 0xbfe6ff })); l.position.set(-0.12 + (i % 2) * 0.06, 1.3 - i * 0.07, -0.168); o.group.add(l); o.lines.push(l); }
+    o.active = 0; o.t = 0;
+    o.setActive = (secs = 6) => { o.active = secs; };
+    onUpdate(o, (dt) => {
+      o.t += dt;
+      o.active = Math.max(0, o.active - dt);
+      const on = o.active > 0;
+      o.screenMat.color.set(on ? (Math.floor(o.t * 5) % 2 ? 0x2f9bff : 0x2688e0) : 0x1a6fb0);
+      o.lines.forEach((l, i) => { l.visible = on || i < 2; l.scale.x = on ? 0.6 + 0.4 * Math.abs(Math.sin(o.t * 3 + i)) : 1; });
+    });
+    o.screenPoint = () => o.at(0.1, 1.0, -0.05);                                       // Guy's finger on the screen
+    return addAt(o);
+  };
+  return { botprinter, workstation };
 }

@@ -573,6 +573,14 @@ export class Brain {
       ...this.restActivities(),
       ...(this.galActivities ? this.galActivities() : {}),       // working with GAL (gal.js)
       ...this.paintActivities(),
+      // the Learning Workstation: walk up, tap the screen, and its panel opens for whoever is here (the page shows it: onWorkstation)
+      learn: () => {
+        const m = () => this.obj('workstation');
+        if (!m()) return ['nothing to use', this.play('idle', 0.5)];
+        return ['using the workstation', this.stand('workstation', 0.9, () => m().screenPoint()),
+          this.play('reach', 1.6, { needs: ['workstation'], target: () => m().screenPoint(), at: [0.8, () => { m().setActive(30); sfx('click'); if (this.onWorkstation) this.onWorkstation(this); }] }),
+          this.play('idle', 1.4, { needs: ['workstation'] })];
+      },
       wander: () => {
         const p = this.freeSpot();
         return ['wandering', this.walk(p.x, p.z), this.play('idle', rand(2, 4))];
@@ -1614,6 +1622,7 @@ export class Brain {
     return this.availableIn(act);
   }
   availableIn(act) {
+    if (act === 'learn') return !!this.obj('workstation') && this.inMain();         // the Learning Workstation (only when somebody asks: it has no weight)
     if (this.galBlocks && this.galBlocks(act)) return false;                // (GAL does not do some things; Guy needs GAL for others)
     if (this.busyElsewhere(this.exclusiveFor(act))) return false;           // the other robot is using it
     const need = {
@@ -1906,7 +1915,7 @@ export class Brain {
       telescope: ['peek', 'stargaze', 'darkstargaze', 'scopecare'],
       workbench: ['build'], toolbox: ['tidytools'], woodfactory: ['makewood'], saw: ['sawwood'], mallet: ['tap'], sander: ['sand'],
       metalfactory: ['makemetal'], metalcutter: ['cutmetal'], welder: ['weld'], anvil: ['hammer'],
-      botprinter: ['buildbot'],
+      botprinter: ['buildbot'], workstation: ['learn'],
     }[name] || (this.obj(name) && this.obj(name).kind === 'footstool' ? ['dusttop'] : this.obj(name) && this.obj(name).guitar ? (k('guitar') ? (this.music ? ['jamguitar'] : ['guitar']) : []) : undefined);
     if (this.obj(name) && this.obj(name).guitar) this.wantGuitar = name;
     if (name === 'botprinter') {

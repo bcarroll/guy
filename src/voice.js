@@ -13,7 +13,7 @@ const OBJECTS = [
   [/ (piano|keys|keyboard) /, 'piano'], [/ (guitar|strum) /, 'guitar'], [/ (drums?|drum kit|sticks) /, 'drums'],
   [/ (lamp|lights?) /, 'lamp'], [/ (stereo|music|tunes|radio|record player) /, 'table'], [/ (ball|dribble|toss) /, 'ball'],
   [/ (paint|painting|easel|draw|sketch|scribble) /, 'easel'], [/ (telescope|stars?|stargaze|sky) /, 'telescope'],
-  [/ (plants?|tree|flowers?|water) /, 'plant'], [/ (chair|armchair|couch) /, 'sit'],
+  [/ (plants?|tree|flowers?|water) /, 'plant'], [/ (chair|armchair|couch) /, 'sit'], [/ (workstation|work station|terminal|computer) /, 'workstation'],
 ];
 const ACTS = [[/ (dance|boogie|groove) /, 'dance'], [/ (sit|rest|relax) /, 'sit'], [/ (stretch) /, 'stretch'], [/ (wave|hello|hi|hey) /, 'wave'], [/ (wander|walk around|stroll) /, 'wander']];
 
