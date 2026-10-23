@@ -10,10 +10,12 @@ export const PARTS_PER_PLANK = 2;
 export const STOCK_CAP = 40;
 export const STORAGE_CAP = 99;
 
+// `cap`: how many of a thing Guy will have made at most (standing in a room or in storage). He builds up to it and then stops
+// making that one, so the Workshop does not fill with things nobody needs; take one away (the user can delete it) and he may make another.
 export const RECIPES = {
-  footstool: { name: 'Wooden Foot Stool', icon: '🪜', skill: 'workshop', parts: 4, taps: 8, sand: false, object: 'footstool' },
-  woodshelves: { name: 'Wooden Shelves', icon: '🗄️', skill: 'workshop.materials', parts: 6, taps: 10, sand: true, object: 'woodshelves' },
-  chair: { name: 'Wooden Chair', icon: '🪑', skill: 'workshop.furniture', parts: 8, taps: 12, sand: true, object: 'builtchair' },
+  footstool: { name: 'Wooden Foot Stool', icon: '🪜', skill: 'workshop', parts: 4, taps: 8, sand: false, object: 'footstool', cap: 1 },
+  woodshelves: { name: 'Wooden Shelves', icon: '🗄️', skill: 'workshop.materials', parts: 6, taps: 10, sand: true, object: 'woodshelves', cap: 2 },
+  chair: { name: 'Wooden Chair', icon: '🪑', skill: 'workshop.furniture', parts: 8, taps: 12, sand: true, object: 'builtchair', cap: 2 },
 };
 
 // planks still to fetch from the factory and saw to have `parts` parts for a recipe, given the stock

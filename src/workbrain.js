@@ -146,6 +146,8 @@ export function installWorkshop(Brain, POSES, H) {
       const options = Object.entries(RECIPES).filter(([, r]) => {
         if (!this.skills.has(r.skill)) return false;
         if ((st.items[r.object] || 0) >= STORAGE_CAP) return false;
+        const made = (st.items[r.object] || 0) + Object.values(this.w.objects).filter((o) => o.kind === r.object).length;
+        if (made >= r.cap) return false;                    // he has made enough of these
         if (!this.obj('workbench') || !this.obj('saw') || !this.obj('mallet') || (r.sand && !this.obj('sander'))) return false;
         const need = planksNeeded(r, st.parts);
         if (st.wood < need && !this.obj('woodfactory')) return false;

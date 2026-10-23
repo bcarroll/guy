@@ -272,3 +272,4 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 | Guy learns something, Catalogue adds | `chime`, `pop` |
 
 Checked by `T.sweepSounds` (event -> counted request). Whether it *sounds* right can only be judged by listening. Press **M** to mute the effects.
+- Guy used to keep building foot stools and shelves forever, and none were used. Each recipe now has a `cap` in `src/workshop.js` (stool 1, shelves 2, chair 2, counting what stands in a room plus what is in storage); `pickRecipe` skips a recipe at its cap, so `build` becomes unavailable once he has made them all. Tests that force `b.pickRecipe` bypass the cap.
