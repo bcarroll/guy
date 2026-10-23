@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { BOOK_DEFS } from './skills.js';
 import { sfx } from './sfx.js';
+import { makeWorkshopBuilders } from './workobjects.js';
 
 export const ROOM = { w: 10, d: 8, h: 3.2 }; // x in [-5,5], z in [-4,4]
 
@@ -429,8 +430,18 @@ export function buildRoom(scene) {
     if (wall === 'front') return { x0: u - hw, x1: u + hw, z0: ROOM.d / 2 - DOOR.zone, z1: ROOM.d / 2 };
     return { x0: u - hw, x1: u + hw, z0: -ROOM.d / 2, z1: -ROOM.d / 2 + DOOR.zone };   // back
   };
+  const doorRectIn = (wall, u) => {                                     // the same strip on the other side of the wall, inside the added room
+    const hw = DOOR.w / 2 + DOOR.margin;
+    if (wall === 'right') return { x0: ROOM.w / 2, x1: ROOM.w / 2 + DOOR.zone, z0: u - hw, z1: u + hw };
+    if (wall === 'front') return { x0: u - hw, x1: u + hw, z0: ROOM.d / 2, z1: ROOM.d / 2 + DOOR.zone };
+    return { x0: u - hw, x1: u + hw, z0: -ROOM.d / 2 - DOOR.zone, z1: -ROOM.d / 2 };
+  };
   const rectsOverlap = (a, b) => a.x1 > b.x0 && a.x0 < b.x1 && a.z1 > b.z0 && a.z0 < b.z1;
-  const doorBlocks = (x0, x1, z0, z1) => Object.values(doors).some((d) => rectsOverlap(d.rect, { x0, x1, z0, z1 }));
+  const doorBlocks = (x0, x1, z0, z1) => Object.values(doors).some((d) => rectsOverlap(d.rect, { x0, x1, z0, z1 }) || rectsOverlap(d.rectIn, { x0, x1, z0, z1 }));
+  // The floors things can stand on: Guy's room and every added room.
+  const MAIN_BOUNDS = { id: 'main', minX: -ROOM.w / 2, maxX: ROOM.w / 2, minZ: -ROOM.d / 2, maxZ: ROOM.d / 2 };
+  const roomBoundsList = () => [MAIN_BOUNDS, ...Object.values(doors).map((d) => ({ id: d.id, ...d.shell.bounds }))];
+  const boundsAt = (x, z) => roomBoundsList().find((b) => x >= b.minX - 0.01 && x <= b.maxX + 0.01 && z >= b.minZ - 0.01 && z <= b.maxZ + 0.01) || MAIN_BOUNDS;
 
   const makeDecor = (name, label, o, build) => {
     const group = new THREE.Group();
@@ -963,7 +974,53 @@ export function buildRoom(scene) {
     face.position.set(0.12, 0.615, 0.021); g.add(face);
   });
 
-  const NEW_OBJECTS = {            // object id -> [builder, preferred spot]
+  // ---- Workshop furniture (src/workobjects.js). It is placed in the added room's own frame: `n` metres in from the door wall and
+  // `lat` along the wall from the middle of the room, facing the door or across the room. See shopSpot below.
+  const work = makeWorkshopBuilders({ makeObject, box, mat });
+  const SHOP_LAYOUT = {
+    workbench: (N, L) => ({ n: N - 0.6, lat: 0, face: 'door' }),
+    toolbox: (N, L) => ({ n: N - 0.45, lat: 1.7, face: 'door' }),
+    woodfactory: (N, L) => ({ n: N * 0.35, lat: L / 2 - 0.7, face: 'minusLat' }),
+    sander: (N, L) => ({ n: N * 0.72, lat: L / 2 - 0.6, face: 'minusLat' }),
+    saw: (N, L) => ({ n: N * 0.35, lat: -(L / 2 - 0.65), face: 'plusLat' }),
+    mallet: (N, L) => ({ n: N * 0.72, lat: -(L / 2 - 0.7), face: 'plusLat' }),
+  };
+  const shopSpot = (id) => (w) => {
+    if (!w.doors.workshop) return null;
+    const { n: N, l: L } = w.shellSize('workshop'), ax = w.shellAxes('workshop');
+    const s = SHOP_LAYOUT[id](N, L), p = w.shellPoint('workshop', s.n, s.lat);
+    const face = s.face === 'door' ? ax.toDoor : s.face === 'minusLat' ? ax.lat.clone().negate() : ax.lat;
+    return { x: p.x, z: p.z, rot: w.rotFacing(face.x, face.z) };
+  };
+
+  // ---- Things Guy builds (see src/workshop.js). They are counted in storage (`world.stock.items`) and added to the room from the
+  // Catalogue one at a time, so there can be many of one kind: each is its own object named `<kind>_<n>` with `kind` set.
+  const buildFootStool = (name, x = 0, z = 0) => makeObject(name, x, z, 0.44, 0.36, 0.34, 'light', (g) => {
+    const light = mat(0xe3c08a), wood = mat(0xc89b62);
+    box(0.42, 0.04, 0.34, light, 0, 0.3, 0, g);
+    for (const sx of [-0.17, 0.17]) for (const sz of [-0.12, 0.12]) box(0.045, 0.28, 0.045, wood, sx, 0.14, sz, g);
+    box(0.34, 0.025, 0.03, wood, 0, 0.12, 0.12, g); box(0.34, 0.025, 0.03, wood, 0, 0.12, -0.12, g);
+  });
+  const buildWoodShelves = (name, x = 0, z = 0) => makeObject(name, x, z, 0.9, 0.36, 1.35, 'medium', (g) => {
+    const light = mat(0xe3c08a), wood = mat(0xc89b62);
+    for (const sx of [-0.43, 0.43]) box(0.04, 1.35, 0.34, wood, sx, 0.675, 0, g);
+    box(0.9, 1.35, 0.02, mat(0xb98a55), 0, 0.675, -0.17, g);
+    for (const y of [0.04, 0.4, 0.76, 1.12, 1.34]) box(0.86, 0.03, 0.34, light, 0, y, 0, g);
+    for (const [x2, y, c] of [[-0.25, 0.44, 0xd9534f], [-0.2, 0.44, 0x4a90d9], [0.2, 0.8, 0x6bbf59], [0.3, 0.8, 0xe9c46a]]) box(0.06, 0.2, 0.16, mat(c), x2, y + 0.1, 0.0, g);
+  });
+  const INSTANCE_KINDS = {
+    footstool: { build: buildFootStool, pref: { x: -3.4, z: -1.2 } },
+    woodshelves: { build: buildWoodShelves, pref: { x: -4.2, z: 1.2 } },
+    builtchair: { build: (name, x, z) => buildWoodenChair(name, x, z), pref: { x: -2.4, z: 2.6 } },
+  };
+
+  const NEW_OBJECTS = {            // object id -> [builder, preferred spot (or a function of the world that works it out)]
+    workbench: [work.workbench, shopSpot('workbench')],
+    toolbox: [work.toolbox, shopSpot('toolbox')],
+    woodfactory: [work.woodfactory, shopSpot('woodfactory')],
+    saw: [work.saw, shopSpot('saw')],
+    mallet: [work.mallet, shopSpot('mallet')],
+    sander: [work.sander, shopSpot('sander')],
     armchair2: [(x = 0, z = 0) => buildArmchair('armchair2', x, z, 0x8a3b4a), { x: 1.7, z: 3.0 }],
     chair: [(x = 0, z = 0) => buildWoodenChair('chair', x, z), { x: -2.4, z: 3.0 }],
     chair2: [(x = 0, z = 0) => buildWoodenChair('chair2', x, z), { x: -3.2, z: 3.2 }],
@@ -982,8 +1039,8 @@ export function buildRoom(scene) {
   // Footprint (w x d, centred at x,z) inside the room and clear of every other object?
   const fits = (obj, x, z, w = obj.w, d = obj.d) => {
     const x0 = x - w / 2, x1 = x + w / 2, z0 = z - d / 2, z1 = z + d / 2;
-    if (x0 < -ROOM.w / 2 || x1 > ROOM.w / 2 || z0 < -ROOM.d / 2 || z1 > ROOM.d / 2) return false;
-    if (doorBlocks(x0, x1, z0, z1)) return false;                       // the strip in front of a door stays clear
+    if (!roomBoundsList().some((b) => x0 >= b.minX && x1 <= b.maxX && z0 >= b.minZ && z1 <= b.maxZ)) return false;      // wholly inside one room
+    if (doorBlocks(x0, x1, z0, z1)) return false;                       // the strips either side of a door stay clear
     // furniture taller than the lower edge of a window or picture must not be pushed into it
     for (const dc of Object.values(decor)) {
       if (!dc.wall || !WALL[dc.wall].near(x0, x1, z0, z1)) continue;
@@ -1159,7 +1216,7 @@ export function buildRoom(scene) {
       room.add(group);
       room.add(shell.group);
       room.add(cut);
-      doors[def.id] = { id: def.id, name: def.name, wall, u, group, leaf: group.userData.leaf, shell, cut, rect: doorRect(wall, u), open: 0, openTo: 0 };
+      doors[def.id] = { id: def.id, name: def.name, wall, u, group, leaf: group.userData.leaf, shell, cut, rect: doorRect(wall, u), rectIn: doorRectIn(wall, u), open: 0, openTo: 0 };
       return doors[def.id];
     },
     removeDoor(id) {
@@ -1202,6 +1259,41 @@ export function buildRoom(scene) {
     },
     // Is (x, z) inside Guy's own room (not an added room, not in a doorway)?
     inMain: (x, z) => Math.abs(x) <= 4.9 && Math.abs(z) <= 3.9,
+    // ---- objects in added rooms ----
+    boundsAt, MAIN_BOUNDS,
+    // Which room is (x, z) in: 'main', the id of an added room, or 'door' for the doorway between.
+    roomIdAt(x, z) {
+      if (Math.abs(x) <= 4.9 && Math.abs(z) <= 3.9) return 'main';
+      for (const d of Object.values(doors)) { const b = d.shell.bounds; if (x >= b.minX + 0.05 && x <= b.maxX - 0.05 && z >= b.minZ + 0.05 && z <= b.maxZ - 0.05) return d.id; }
+      return 'door';
+    },
+    // A point in an added room in its own frame: `n` metres in from the door wall, `lat` along the wall from the middle of the room
+    // (positive the way the wall's u grows). And the quarter turns that make an object's local +z point back towards the door.
+    shellPoint(id, n, lat) {
+      const d = doors[id], p = WALL[d.wall].at(lat, 0), nv = inwardOf(d.wall);
+      return { x: p.x - nv.x * n, z: p.z - nv.z * n };
+    },
+    shellRot(id) {
+      const nv = inwardOf(doors[id].wall);
+      return ((Math.round(Math.atan2(nv.x, nv.z) / (Math.PI / 2)) % 4) + 4) % 4;
+    },
+    // The walkable grid of an added room for Guy's pathfinding (cells of 0.2 m, half a metre in from the walls).
+    // How big an added room is: `n` away from the door wall, `l` along it. And its two directions in the world (unit vectors): towards
+    // the door (out of the room) and the way `lat` grows along the wall.
+    shellSize(id) {
+      const d = doors[id], b = d.shell.bounds, deep = d.wall === 'right' ? b.maxX - b.minX : b.maxZ - b.minZ;
+      return { n: deep, l: d.wall === 'right' ? b.maxZ - b.minZ : b.maxX - b.minX };
+    },
+    shellAxes(id) {
+      const d = doors[id], a = WALL[d.wall].at(1, 0), o = WALL[d.wall].at(0, 0);
+      return { toDoor: inwardOf(d.wall), lat: new THREE.Vector3(a.x - o.x, 0, a.z - o.z).normalize() };
+    },
+    // Quarter turns that make an object's local +z point along (dx, dz).
+    rotFacing(dx, dz) { return ((Math.round(Math.atan2(dx, dz) / (Math.PI / 2)) % 4) + 4) % 4; },
+    frameOf(id) {
+      const b = doors[id].shell.bounds;
+      return { X0: b.minX + 0.5, Z0: b.minZ + 0.5, NX: Math.floor((b.maxX - b.minX - 1.0) / 0.2) + 1, NZ: Math.floor((b.maxZ - b.minZ - 1.0) / 0.2) + 1 };
+    },
     // The floor area of the main room plus every added room, for framing the camera.
     extent() {
       const e = { minX: -ROOM.w / 2, maxX: ROOM.w / 2, minZ: -ROOM.d / 2, maxZ: ROOM.d / 2 };
@@ -1229,7 +1321,8 @@ export function buildRoom(scene) {
       const own = { easel: [0, 0.8], drums: [0.55, 1.15] }[obj.name];
       if (!own) return true;
       const l = obj.local(own[0], own[1]), sx = x + l.x, sz = z + l.z;
-      return !(Math.abs(sx) > 4.2 || sz < -3.2 || sz > 3.4 || obstacles.some((o) => o !== obj.obstacle && sx > o.x0 - 0.6 && sx < o.x1 + 0.6 && sz > o.z0 - 0.6 && sz < o.z1 + 0.6));
+      const b = boundsAt(x, z);                       // the room the object is in
+      return !(sx < b.minX + 0.8 || sx > b.maxX - 0.8 || sz < b.minZ + 0.8 || sz > b.maxZ - 0.6 || obstacles.some((o) => o !== obj.obstacle && sx > o.x0 - 0.6 && sx < o.x1 + 0.6 && sz > o.z0 - 0.6 && sz < o.z1 + 0.6));
     },
     // Would `obj` at (x, z) sit on top of a place where Guy has to stand to use something else?
     onSomeonesStand(obj, x, z) {
@@ -1242,8 +1335,9 @@ export function buildRoom(scene) {
       // places where Guy has to stand to use something: a new object must not sit on top of them
       const standsBlocked = (o, x, z) => world.onSomeonesStand(o, x, z);
       const cands = [];
-      for (let x = -4.6; x <= 4.6; x += 0.25) for (let z = -3.6; z <= 3.6; z += 0.25) cands.push([x, z]);
       const p = pref || { x: 0, z: 0 };
+      const rb = boundsAt(p.x, p.z);                       // search the room the preferred spot is in (Guy's room, or an added room)
+      for (let x = rb.minX + 0.4; x <= rb.maxX - 0.4 + 1e-6; x += 0.25) for (let z = rb.minZ + 0.4; z <= rb.maxZ - 0.4 + 1e-6; z += 0.25) cands.push([x, z]);
       cands.sort((a, b) => Math.hypot(a[0] - p.x, a[1] - p.z) - Math.hypot(b[0] - p.x, b[1] - p.z));
       for (const margin of [0.9, 0.5, 0.1]) {
         for (const [x, z] of cands) {
@@ -1252,9 +1346,9 @@ export function buildRoom(scene) {
           if (standsBlocked(obj, x, z)) continue;
           if (!world.ownStandClear(obj, x, z)) continue;                       // the spot he stands on to use it must be clear too
           // the middle of the room is where he dances: keep new things out of it (the last-resort pass may not)
-          if (margin > 0.1 && obj.name !== 'guitar' && Math.abs(x) < obj.w / 2 + 1.5 && Math.abs(z - 0.4) < obj.d / 2 + 1.5) continue;
+          if (margin > 0.1 && rb.id === 'main' && obj.name !== 'guitar' && Math.abs(x) < obj.w / 2 + 1.5 && Math.abs(z - 0.4) < obj.d / 2 + 1.5) continue;
           // leave room to walk round the back of it (the fallback pass may squeeze it in)
-          if (margin > 0.1 && obj.name !== 'guitar' && Math.min(x - obj.w / 2 + 4.6, 4.6 - x - obj.w / 2, z - obj.d / 2 + 3.6, 3.6 - z - obj.d / 2) < 0.55) continue;
+          if (margin > 0.1 && obj.name !== 'guitar' && Math.min(x - obj.w / 2 - (rb.minX + 0.4), rb.maxX - 0.4 - x - obj.w / 2, z - obj.d / 2 - (rb.minZ + 0.4), rb.maxZ - 0.4 - z - obj.d / 2) < 0.55) continue;
           return { x, z };
         }
       }
@@ -1298,6 +1392,47 @@ export function buildRoom(scene) {
       }
       return false;
     },
+    // What the Workshop has in stock: planks, cut parts, and finished things waiting in storage (counts per kind). Saved with the layout.
+    stock: { wood: 0, parts: 0, items: {} },
+    syncStock() {                                    // keep the piles on the workbench in step with the counts
+      const b = objects.workbench;
+      if (b) { b.setWood(world.stock.wood); b.setParts(world.stock.parts); }
+    },
+    addStock(kind, n) {
+      world.stock[kind] = Math.max(0, Math.min(40, (world.stock[kind] || 0) + n));
+      world.syncStock();
+      return world.stock[kind];
+    },
+    // Take a built thing out of storage and put it in Guy's room (`free`: it is being restored from a save, so storage is not touched).
+    // Returns its name, or null if there is none in storage or no room for it.
+    addInstance(kind, avoid, forcedName = null, free = false) {
+      const k = INSTANCE_KINDS[kind];
+      if (!k) return null;
+      if (!free && !((world.stock.items[kind] || 0) > 0)) return null;
+      let name = forcedName;
+      if (!name) { let i = 1; while (objects[`${kind}_${i}`]) i++; name = `${kind}_${i}`; }
+      if (objects[name]) return name;
+      const o = k.build(name, 0, 0);
+      o.kind = kind;
+      const spot = world.findSpot(o, k.pref, avoid);
+      if (!spot) { world.removeObject(name); delete world.removed[name]; return null; }
+      o.home = { x: spot.x, z: spot.z };
+      o.set(spot.x, spot.z);
+      if (!free) world.stock.items[kind] = (world.stock.items[kind] || 0) - 1;
+      if (!world.stock.items[kind]) delete world.stock.items[kind];
+      return name;
+    },
+    // Put a built thing away: it leaves the room and goes back into storage.
+    storeInstance(name) {
+      const o = objects[name];
+      if (!o || !o.kind) return false;
+      const kind = o.kind;
+      world.removeObject(name);
+      delete world.removed[name];
+      world.stock.items[kind] = Math.min(99, (world.stock.items[kind] || 0) + 1);
+      return true;
+    },
+    instanceKinds: () => Object.keys(INSTANCE_KINDS),
     // Objects that do not exist yet but can be added from the Catalogue.
     addNew(id, avoid) {
       if (DECOR_NEW[id]) {
@@ -1311,11 +1446,16 @@ export function buildRoom(scene) {
       }
       const entry = NEW_OBJECTS[id];
       if (!entry || objects[id]) return false;
+      // a preferred spot may be worked out when the object is added (an added room's furniture goes where its room is)
+      const pref = typeof entry[1] === 'function' ? entry[1](world) : entry[1];
+      if (!pref) return false;
       const o = entry[0]();
-      const spot = world.findSpot(o, entry[1], avoid);
+      if (pref.rot !== undefined) { o.rot = pref.rot; o.group.rotation.y = o.yaw; }
+      const spot = world.findSpot(o, pref, avoid);
       if (!spot) { world.removeObject(id); delete world.removed[id]; return false; }
       o.home = { x: spot.x, z: spot.z };
       o.set(spot.x, spot.z);
+      if (id === 'workbench') world.syncStock();
       return true;
     },
   };

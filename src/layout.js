@@ -24,8 +24,10 @@ export function initLayout({ world, guy, remove, persist, key = KEY }) {
     for (const [name, d] of Object.entries(world.decor)) decor[name] = { u: r2(d.u), v: r2(d.v), rot: d.rot };
     return {
       v: VERSION, objects, decor,
+      instances: Object.values(world.objects).filter((o) => o.kind).map((o) => ({ name: o.name, kind: o.kind })),
       out: Object.keys(world.removed),               // taken out of the room (by the user, or to make way for a door)
       ball: world.ballGone ? null : { x: r2(world.ball.position.x), z: r2(world.ball.position.z) },
+      stock: { wood: world.stock.wood, parts: world.stock.parts, items: { ...world.stock.items } },      // what the Workshop has made
     };
   }
 
@@ -34,6 +36,9 @@ export function initLayout({ world, guy, remove, persist, key = KEY }) {
     const did = { applied: false, removed: [], replaced: [], guyMoved: false };
     if (!data || typeof data !== 'object' || data.v !== VERSION) return did;
     did.applied = true;
+    for (const it of Array.isArray(data.instances) ? data.instances : []) {                  // things Guy built that were in the room
+      if (it && typeof it.name === 'string' && typeof it.kind === 'string' && !world.objects[it.name]) world.addInstance(it.kind, null, it.name, true);
+    }
     for (const name of Array.isArray(data.out) ? data.out : []) {
       if (typeof name === 'string' && (world.objects[name] || world.decor[name])) { remove(name); did.removed.push(name); }
     }
@@ -68,6 +73,14 @@ export function initLayout({ world, guy, remove, persist, key = KEY }) {
       && Math.abs(b.x) < 4.5 && Math.abs(b.z) < 3.5) {
       world.ball.position.set(b.x, 0.18, b.z);
       world.ball.userData.vel.set(0, 0, 0);
+    }
+    const st = data.stock;
+    if (st && typeof st === 'object') {
+      const n = (v) => (num(v) ? Math.max(0, Math.min(40, Math.round(v))) : 0);
+      world.stock.wood = n(st.wood); world.stock.parts = n(st.parts);
+      world.stock.items = {};
+      for (const [k, v] of Object.entries(st.items && typeof st.items === 'object' ? st.items : {})) if (num(v) && v > 0) world.stock.items[k] = Math.min(99, Math.round(v));
+      world.syncStock();
     }
     did.guyMoved = unstickGuy();
     return did;

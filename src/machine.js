@@ -14,13 +14,14 @@ import { ALBUM_CATALOG } from './albums.js';
 export const OBJECT_CATEGORIES = [
   { id: 'music', name: 'Music', icon: '🎵' },
   { id: 'hobbies', name: 'Hobbies', icon: '🎨' },
+  { id: 'workshop', name: 'Workshop', icon: '🛠️' },
   { id: 'furniture', name: 'Furniture', icon: '🛋️' },
   { id: 'decor', name: 'Decor & lighting', icon: '🖼️' },
   { id: 'games', name: 'Games', icon: '⚽' },
 ];
 
 // The order of the sub-headings inside a category that uses them (Decor & lighting has a lot of things in it).
-export const DECOR_SUBS = ['Plants', 'Wall art', 'Windows', 'Rugs', 'Lighting', 'Small furniture'];
+export const DECOR_SUBS = ['Plants', 'Wall art', 'Windows', 'Rugs', 'Lighting', 'Small furniture', 'Workbench & storage', 'Woodwork', 'Built by Guy'];
 
 export const OBJECT_CATALOG = [
   { id: 'piano', cat: 'music', name: 'Upright Piano', icon: '🎹', desc: 'Scales, tunes and jam sessions. Heavy: only you can move it.', core: true },
@@ -49,7 +50,17 @@ export const OBJECT_CATALOG = [
   { id: 'coffeetable', cat: 'decor', sub: 'Small furniture', name: 'Coffee Table', icon: '☕', desc: 'A low walnut table with two books and a cup.', free: true },
   { id: 'nightstand', cat: 'decor', sub: 'Small furniture', name: 'Nightstand', icon: '🗄️', desc: 'A little cabinet with a drawer and a clock on top.', free: true },
   { id: 'guitar', cat: 'music', name: 'Acoustic Guitar', icon: '🎸', desc: 'On its stand. Comes with the book "Guitar for Beginners".', free: true, book: 'guitar' },
-  { id: 'workbench', cat: 'furniture', name: 'Workbench', icon: '🛠️', desc: 'Build furniture when the tools and materials are available.', locked: true },
+  // The Workshop (a room added from the Rooms tab): these are listed only while that room is added. See src/workobjects.js.
+  { id: 'workbench', cat: 'workshop', sub: 'Workbench & storage', name: 'Workbench', icon: '🛠️', desc: 'A sturdy wooden work table with a pegboard, where things get built. Heavy: only you can move it. Comes with the book "Workshop Basics".', free: true, room: 'workshop', book: 'workshop' },
+  { id: 'toolbox', cat: 'workshop', sub: 'Workbench & storage', name: 'Toolbox', icon: '🧰', desc: 'A red toolbox for the tools. Guy takes a tool out before he uses it and puts it back after.', free: true, room: 'workshop' },
+  { id: 'woodfactory', cat: 'workshop', sub: 'Woodwork', name: 'Wood Factory', icon: '🏭', desc: 'A small machine that makes planks for building. Heavy: only you can move it. Comes with the book "Wood & Metal Basics".', free: true, room: 'workshop', book: 'woodmetal' },
+  { id: 'saw', cat: 'workshop', sub: 'Woodwork', name: 'Saw & Sawhorse', icon: '🪚', desc: 'Guy saws planks into parts here.', free: true, room: 'workshop' },
+  { id: 'mallet', cat: 'workshop', sub: 'Woodwork', name: 'Rubber Mallet & Block', icon: '🔨', desc: 'Guy taps the parts together here, gently.', free: true, room: 'workshop' },
+  { id: 'sander', cat: 'workshop', sub: 'Woodwork', name: 'Sander', icon: '🧽', desc: 'Smooths the wood so it is ready to use.', free: true, room: 'workshop' },
+  // Things Guy builds there (once he has read the right book). They wait in storage; add them to the room from here, one at a time.
+  { id: 'footstool', cat: 'workshop', sub: 'Built by Guy', name: 'Wooden Foot Stool', icon: '🪜', desc: 'A little wooden foot stool, built by Guy.', built: true, room: 'workshop' },
+  { id: 'woodshelves', cat: 'workshop', sub: 'Built by Guy', name: 'Wooden Shelves', icon: '🗄️', desc: 'A set of wooden shelves, built by Guy.', built: true, room: 'workshop' },
+  { id: 'builtchair', cat: 'workshop', sub: 'Built by Guy', name: 'Wooden Chair (built by Guy)', icon: '🪑', desc: 'A wooden chair that Guy made himself. He can sit on it.', built: true, room: 'workshop' },
   { id: 'drums', cat: 'music', name: 'Drum Kit', icon: '🥁', desc: 'Kick, snare, hi-hat and cymbals on a stool. Comes with the book "Drumming for Robots".', free: true, book: 'drumming' },
   { id: 'easel', cat: 'hobbies', name: 'Painting Easel', icon: '🎨', desc: 'A canvas that really gets painted. Comes with the book "Painting for Robots".', free: true, book: 'painting' },
   { id: 'telescope', cat: 'hobbies', name: 'Telescope', icon: '🔭', desc: 'On a tripod by the window. Comes with the book "Stargazing for Robots".', free: true, book: 'stars' },
@@ -65,7 +76,10 @@ export function initMachine({ world, guy, persist, notify, remove, rooms }) {
   let cat = 'all';                   // the category filter on the Objects tab
 
   const inRoom = (id) => (id === 'ball' ? !world.ballGone : !!(world.objects[id] || world.decor[id]));
+  const builtCount = (id) => Object.values(world.objects).filter((o) => o.kind === id).length;      // built things in the room
+  const stored = (id) => (world.stock && world.stock.items && world.stock.items[id]) || 0;            // built things waiting in storage
   const objectStatus = (d) => {
+    if (d.built) return 'built';
     if (d.locked) return 'locked';
     if (d.ball) return world.ballGone ? 'removed' : 'inroom';
     if (inRoom(d.id)) return 'inroom';
@@ -136,6 +150,13 @@ export function initMachine({ world, guy, persist, notify, remove, rooms }) {
     render();
   }
 
+  function addBuilt(d) {
+    const name = world.addInstance(d.id, avoid());
+    notify(name ? `Added a ${d.name} from storage` : stored(d.id) ? `No room for a ${d.name} right now` : `There is no ${d.name} in storage yet`);
+    save();
+    render();
+  }
+
   function removeObject(d) {
     if (!inRoom(d.id)) return;
     remove(d.id);
@@ -186,7 +207,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms }) {
     if (tab === 'objects') {
       // One section per category, each with how many of its items are in the room. Within a section: what is in the room first
       // (with a Remove button), then things you took out (Put back), then things you can add, then locked ones.
-      const rank = { inroom: 0, removed: 1, available: 2, locked: 3 };
+      const rank = { inroom: 0, removed: 1, available: 2, built: 2, locked: 3 };
       const sections = [];
       for (const c of OBJECT_CATEGORIES) {
         const subOf = (d) => (d.sub ? DECOR_SUBS.indexOf(d.sub) : -1);
@@ -202,6 +223,12 @@ export function initMachine({ world, guy, persist, notify, remove, rooms }) {
         const objectCard = (d) => {
           const st = objectStatus(d);
           const base = { icon: d.icon, name: d.name, desc: d.desc, status: st };
+          if (st === 'built') {                           // made by Guy: how many are in the room, how many are waiting in storage
+            const note = `In the room: ${builtCount(d.id)} · In storage: ${stored(d.id)}`;
+            if (!stored(d.id)) return card({ ...base, status: 'locked', label: 'None in storage', note });
+            const i = handlers.push(() => addBuilt(d)) - 1;
+            return card({ ...base, status: 'available', label: 'Add', action: i, note });
+          }
           if (st === 'inroom') {
             const fixed = d.id === 'shelf';       // the bookshelf is where Guy learns: it can never leave
             if (fixed) return card({ ...base, label: '✓ Fixed in place' });

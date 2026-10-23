@@ -12,7 +12,7 @@ export const setMuted = (m) => { muted = !!m; if (muted) dragOff(); };
 export const isMuted = () => muted;
 
 const last = {};
-const MIN_GAP = { bounce: 40, knock: 60, thud: 60, page: 250, step: 150, tick: 70, brush: 80, wipe: 160, leaf: 220, click: 40, sit: 400, kick: 60 };
+const MIN_GAP = { bounce: 40, knock: 60, thud: 60, page: 250, step: 150, tick: 70, brush: 80, wipe: 160, leaf: 220, click: 40, sit: 400, kick: 60, saw: 200, tap: 80, sand: 250, machine: 500, lid: 150 };
 
 let noise = null;
 const noiseBuf = (ctx) => {
@@ -92,6 +92,12 @@ const SOUNDS = {
   wipe(ctx, out) { burst(ctx, out, { dur: 0.26, f: 1800, f2: 3200, q: 0.9, gain: 0.07 }); },
   step(ctx, out) { burst(ctx, out, { dur: 0.05, type: 'lowpass', f: 700, gain: 0.07 }); tone(ctx, out, { f0: 100, f1: 65, dur: 0.05, gain: 0.08 }); },
   place(ctx, out, w = 0.4) { SOUNDS.thud(ctx, out, w); },
+  // the Workshop
+  saw(ctx, out) { burst(ctx, out, { dur: 0.22, f: 900, f2: 2600, q: 2.5, gain: 0.1 }); burst(ctx, out, { dur: 0.2, f: 2400, f2: 800, q: 2.5, gain: 0.08, delay: 0.24 }); },
+  tap(ctx, out) { tone(ctx, out, { f0: 210, f1: 120, dur: 0.07, type: 'triangle', gain: 0.35 }); burst(ctx, out, { dur: 0.03, type: 'lowpass', f: 900, gain: 0.12 }); },
+  sand(ctx, out) { burst(ctx, out, { dur: 0.3, f: 3000, f2: 4500, q: 0.6, gain: 0.07 }); },
+  machine(ctx, out) { tone(ctx, out, { f0: 70, f1: 130, dur: 0.6, type: 'sawtooth', gain: 0.1 }); burst(ctx, out, { dur: 0.5, type: 'lowpass', f: 400, gain: 0.15 }); },
+  lid(ctx, out) { tone(ctx, out, { f0: 260, f1: 140, dur: 0.1, type: 'square', gain: 0.1 }); burst(ctx, out, { dur: 0.08, f: 2200, q: 2, gain: 0.1 }); },
   // the game itself
   chime(ctx, out) { [880, 1175, 1568].forEach((f, i) => tone(ctx, out, { f0: f, f1: f * 0.99, dur: 0.55, gain: 0.12, delay: i * 0.1, attack: 0.01 })); },
   pop(ctx, out) { tone(ctx, out, { f0: 380, f1: 900, dur: 0.09, gain: 0.18 }); },

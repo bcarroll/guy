@@ -124,6 +124,7 @@ function showToast(msg) {
 }
 brain.onLearn = (def) => { showToast(`Guy learned ${def.blurb}!`); sfx('chime'); };
 brain.onRiff = (msg) => { showToast(msg); sfx('chime'); };
+brain.onBuilt = (msg) => { showToast(msg); machineUI.refresh(); };           // something finished in the Workshop: it is in storage now
 riffConfig.persist = !params.has('fresh');           // ?fresh keeps the riffs he makes up in memory only
 
 // ---- speed: how fast Guy walks and how short his pauses are between interactions (the dropdown beside Follow) ----
@@ -173,6 +174,8 @@ world.layout = layout;
 machineUI.restoreExtras();
 layout.restore();
 rooms.restore();
+machineUI.restoreExtras();         // the rooms are back, so what belongs to them (the Workshop's furniture) can be added now ...
+layout.restore();                  // ... and put where it was left
 layout.start();
 initUpdateCheck();
 if (params.get('records') === 'all' && world.objects.shelf) ALBUM_CATALOG.forEach((a) => { if (!world.objects.shelf.albums.some((r) => r.def.id === a.id)) world.objects.shelf.addAlbum(a); }); // testing aid
@@ -340,6 +343,7 @@ function planeAt(e, plane) {
 // Take something out of the room (the context menu and the Catalogue both come through here).
 function removeById(id) {
   if (id === 'ball') { world.removeBall(); brain.ballRemoved && brain.ballRemoved(); }
+  else if (world.objects[id] && world.objects[id].kind) { world.storeInstance(id); brain.objectRemoved(id); machineUI.save(); machineUI.refresh(); }     // something Guy built goes back into storage
   else { world.removeObject(id); brain.objectRemoved(id); }
 }
 
@@ -480,6 +484,12 @@ function interactLabel(name) {
     case 'armchair': return '🪑 Sit Down';
     case 'easel': return '🎨 Paint';
     case 'telescope': return '🔭 Look through Telescope';
+    case 'workbench': return '🛠️ Build Something';
+    case 'toolbox': return '🧰 Tidy the Tools';
+    case 'woodfactory': return '🏭 Make Planks';
+    case 'saw': return '🪚 Saw a Plank';
+    case 'mallet': return '🔨 Tap Things Together';
+    case 'sander': return '🧽 Sand Some Wood';
     case 'plant': case 'flowerplant': case 'tree': return '🌱 Tend Plant';
     default: return brain.obj(name) && brain.obj(name).sit ? '🪑 Sit Down' : '▶ Use';
   }

@@ -34,7 +34,13 @@ machine check of this list; this file adds the expectations a human or Claude ne
 | picture | framed sunset on the back wall (`world.decor`) | n/a | none | none | | drag along the back wall; kept off other wall pieces and off furniture taller than its lower edge |
 | window | window on the left wall (`world.decor`) | n/a | none | none | | drag along the left wall; cannot cover the Catalogue |
 | window2 | **Second Window** on the back wall (added free from the Catalogue, saved between visits) | n/a | none | none | | same wall rules |
-| workbench | **locked / premium**: listed, no builder yet | | | | | tests only check it stays locked |
+| workbench | **Workbench** (Workshop; `room: 'workshop'`): 1.7 x 0.78, pegboard, drawers, vise; a pile of planks (left), cut parts (middle) and the last thing he finished (right) on top | heavy | `workshop` | `build` | stands 0.78 m in front; hands at the pile / parts / product points | comes with the book "Workshop Basics"; the piles follow `world.stock` |
+| toolbox | **Toolbox** on a little frame, red, hinged lid (Workshop) | medium | `workshop` | `tidytools` | 0.6 m in front; finger lifts the lid, reaches in, closes it | also the first and last step of every `build` |
+| woodfactory | **Wood Factory** (Workshop): hopper of logs, big red button, a tray; shakes and its light goes green while it runs | heavy | `workshop.materials` | `makewood` | 0.78 m in front; finger on the button, then takes the 4 planks off the tray | comes with "Wood & Metal Basics" |
+| saw | **Saw & Sawhorse** (Workshop) | medium | `workshop.materials` | `sawwood` (needs a plank in stock) | 0.72 m in front; plank on the horse, hand saw in the right hand, left hand on the plank | the plank splits in two halves |
+| mallet | **Rubber Mallet & Block** (Workshop): a waist-high block, the mallet lies on it | light | `workshop` | `tap` | 0.55 m in front; mallet in the right hand, left hand steadying | parts jump a little at every tap |
+| sander | **Sander** (Workshop): waist-high belt sander, rollers turn while it runs | medium | `workshop.materials` | `sand` (needs a plank) | 0.52 m in front; both hands slide the piece along the belt | |
+| footstool, woodshelves, builtchair | **Built by Guy** (Workshop): not added from the Catalogue like the rest; they wait in storage (`world.stock.items`) and "Add" takes one out as a real object named `<kind>_<n>` with `kind` set | light / medium / light | none | none | | a built chair is a chair he can sit on; Remove (long-press) puts it back in storage |
 
 Decor is tested by `T.sweepDecor` (Remove through the Catalogue button, "Put back", wall limits), not by interaction.
 
@@ -68,7 +74,9 @@ left wall and cannot be removed, moved or rotated.
 | scopecare | Looking After Your Telescope | `telescope.care` | telescope object | `scopecare` | no (Catalogue) |
 | decorating | Home Decorating for Robots | `decorate` | none | `dust` (wipes along the bottom edge of a frame, wall light or sill) | no (Catalogue) |
 | speedread | Speed Reading for Robots | `speedreading` | none | `read` (stands at the shelf, takes the book, opens and closes it, puts it back; 2.5x faster; learns from every book in 3 s instead of 8) | no (Catalogue) |
-| woodwork | premium | | workbench | | locked |
+| workshop | Workshop Basics (Workshop) | `workshop` | workbench | `build` | the foot stool; comes with the workbench |
+| woodmetal | Wood & Metal Basics (Workshop) | `workshop.materials` | woodfactory | `makewood` | the wooden shelves; comes with the Wood Factory |
+| furniture | Furniture for Robots (Workshop) | `workshop.furniture` | workbench | `build` | the wooden chair (advanced) |
 
 Guy learns a skill only after keeping the book open for 8 s (3.2 s at full Speed Reading); interrupted reads teach nothing.
 
@@ -113,7 +121,7 @@ playback panel or the top-shelf record list; Guy then joins in without touching 
 
 wander, stretch, wave, stereoon, stereooff (menu only), piano, sitpiano, plink, jam, jampiano, jamsit, dance, lamp, mood, plant, read (alias `books`),
 rearrange, ball, dribble, toss, guitar, riff (makes up riffs on the guitar, see below), jamguitar, bang, drums, drumsolo, jamdrums, scribble, paint, mixpaint, portrait, peek,
-stargaze, darkstargaze, scopecare, dancemoves, ballroom, dust (needs `decorate` and a wall piece with clear floor in front); internal: putback, putguitar, dropball, lighton, visit and leave (through the door of an added room and back: tested by `T.sweepVisit`).
+stargaze, darkstargaze, scopecare, dancemoves, ballroom, dust (needs `decorate` and a wall piece with clear floor in front); makewood, sawwood, tap, sand, tidytools, build (the Workshop, see below); internal: putback, putguitar, dropball, lighton, visit and leave (through the door of an added room and back: tested by `T.sweepVisit`).
 Needs and allowed arm contacts are in `MANIFEST.activities`.
 
 ## Visual checkpoints (`T.moment(...)`, then screenshot)
@@ -181,6 +189,16 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 - The `riff` activity: he takes the guitar, plays one or two riffs (each twice through: single notes over a bass note on each bar, the fretting hand following the pitch, the right hand picking), and puts it back. New riffs that score well are kept (the best 8, no duplicates) in `guy.riffs.v1` and replayed later ("playing one of his favourite riffs", about 4 in 10 sessions once he has any); a toast says "Guy made up a riff he likes! He'll remember it." `?fresh` keeps them in memory only. Needs the guitar object and the `guitar` skill. Weight 1.0 in his normal choices; it is one of the things a **Lock in** on the guitar cycles through (with `guitar` and `jamguitar`).
 - Tested by `T.sweepRiffs` (pure logic with a test storage key) and, as an activity, by `sweepActivities`, `sweepInterrupts` and the pose sweep.
 
+## The Workshop (`src/workobjects.js`, `workbrain.js`, `workshop.js`; stock and instances in `room.js`)
+
+- **Where things go:** an added room's furniture is placed in the room's own frame (`SHOP_LAYOUT` in `room.js`: `n` metres in from the door wall, `lat` along it): the workbench and toolbox against the far wall facing the door, the Wood Factory and sander along one side wall, the saw and mallet block along the other. `world.shellPoint/shellAxes/rotFacing/shellSize/frameOf` do the sums, so it works on the right, front and back walls. `fits`, `findSpot` and `ownStandClear` use the room the spot is in (`boundsAt`); a strip inside the room in front of the door is kept clear like the one outside (`rectIn`). Pathing in an added room uses a grid of its own (`makeGrid(..., frame)`, `blocked.fr`); between rooms the walk is straight through the doorway.
+- **A job is a trip:** `shopTrip` = in through the door (unless he is already inside), the steps, out again (unless he is locked on something in the Workshop). If he is ever cut short inside, his next choice is `leave`.
+- **What he does:** `makewood` (press the factory button, wait, take the 4 planks, put them on the bench pile); `sawwood` (a plank from the pile to the sawhorse, saw it in two, the 2 parts to the bench); `tap` (practice taps with the mallet); `sand` (a plank from the pile, sanded, back); `tidytools` (open the toolbox, reach in, close it); `build` (picks a recipe he has read the book for: toolbox, planks from the factory if the stock is short, saw, take the parts to the mallet block and tap them together, to the sander if the recipe sands, the finished thing on the bench and +1 in storage, toolbox again). Recipes (`RECIPES` in `workshop.js`): foot stool (`workshop`, 4 parts, 8 taps), wooden shelves (`workshop.materials`, 6 parts, 10 taps, sanded), chair (`workshop.furniture`, 8 parts, 12 taps, sanded). A plank saws into 2 parts; the factory makes 4 planks a run.
+- **Nothing appears by itself:** what he carries is shown in his hand (`brain.carry`: plank, planks, parts, piece); the stock changes as he puts things down; if he is cut short `workCleanup` puts it all back (carry, plank on the sawhorse, parts on the block, planks on the tray).
+- **Storage:** `world.stock = { wood, parts, items }` (wood and parts shown as piles on the workbench; items = finished things waiting). Saved with the layout (`stock`, `instances`). Added from the Catalogue's "Built by Guy" cards ("In the room: n · In storage: m", Add); removing one (long-press) puts it back in storage; nothing built is ever deleted.
+- **Hands:** the poses `workSaw`, `workTap`, `workSand` use two-handed IK (`computeWork` in `workbrain.js`): wrists, finger directions and palms, the saw and mallet follow the right hand, the piece being sanded sits between both. The work surfaces are waist high and he bends over them (the pose sweep's hand-error limit applies). Sounds: `saw`, `tap`, `sand`, `machine`, `lid`.
+- **Tested by** `T.sweepWorkshop` (placement on all three walls, kind refusals, five whole builds from nothing on different walls, cut-short at every stage, Lock in on the workbench, storage and the Catalogue, saved layout round trip), plus `sweepActivities`, `sweepPoses`, `sweepInterrupts`, `sweepRemovals`, `sweepBooks`, `sweepObjects`, `sweepSounds`. `T.addObject` adds the Workshop first, `T.prep` sets `stock`, and `runAll` takes the room away after each sweep.
+
 ## Doors (long-press a door)
 
 - A door is now a real doorway: the wall is rebuilt in three pieces round it, the leaf hangs from a hinge and swings away from the room (about 100 degrees in 0.8 s). Long-press the door > "🚪 Go into the <room>" (or "🚪 Come back" while he is inside): the menu has just that one button. Dragging a door does nothing.
@@ -194,6 +212,12 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 - **Speed** (the dropdown beside Follow, `#speed-sel`, 1x / 2x / 3x / 4x, remembered in `guy.speed.v1`, always 1x under `?fresh`): scales his walking (and turning and pushing furniture) and the idle pauses between interactions (`brain.speed`). The interactions themselves (playing, reading, painting, waving ...) run at normal speed. Tested by `T.sweepLock` and `T.sweepSpeed`.
 
 ## Regression watch (bugs found and fixed; make sure they stay fixed)
+
+- Furniture put away from an added room kept its `home` in that room; when the room was gone "Put back" dropped it into Guy's room. `rooms.reset` now clears what was put away from the room too (`sweepWorkshop`).
+- `wave` walked to the fixed spot (0, 2.2) even when a piece of furniture stood there (the telescope in some layouts: 31 arm-inside samples). It now waves from the nearest open spot (`openSpotNear`).
+- `sweepLayout` turned the armchair and left it turned: `openChairs` then found its sitting spot outside the room and later sweeps (`lock`) were refused. It now puts every rotation back.
+- Reading / walking-past-furniture flakes (see below) showed up in 1 of 5 full runs after the Workshop work (read with the easel, mood with the telescope, a book held while removed), the same family as before; none in the other 4.
+- `workCleanup` runs when a job is cut short, so a stock reset right after must happen after `T.settle()` (`shopSetup` does it that way).
 
 - "Sit Down" on a chair sent Guy to the bookshelf: Interact on a chair picked at random from read / sit / sitguitar, and read won half the time. A chair now means sit (6 of 6 in a check; `sweepLock` still cycles read, sit, sitguitar on purpose).
 

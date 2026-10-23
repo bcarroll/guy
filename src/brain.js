@@ -5,6 +5,8 @@ import { ALBUM_CATALOG } from './albums.js';
 import { ROOM } from './room.js';
 import { randomSong, makeJam, plinkSong } from './songs.js';
 import { installHobbies } from './hobbybrain.js';
+import { installWorkshop } from './workbrain.js';
+import { RECIPES, PLANKS_PER_RUN, STOCK_CAP } from './workshop.js';
 import { sfx, drag as sfxDrag } from './sfx.js';
 import { nextRiff, keepRiff, riffAt, STEPS as RIFF_STEPS } from './riffs.js';
 
@@ -535,6 +537,7 @@ export class Brain {
     this.poseT = 0;
     this.poseDur = 1;
     this.initHobbies();
+    this.initWork();
   }
 
   // ---- step builders ----
@@ -549,6 +552,7 @@ export class Brain {
     const atStereo = () => this.walkAt('table', 0, 0.55, Math.PI);
     return {
       ...this.hobbyActivities(),
+      ...this.workActivities(),
       wander: () => {
         const p = this.freeSpot();
         return ['wandering', this.walk(p.x, p.z), this.play('idle', rand(2, 4))];
@@ -634,7 +638,7 @@ export class Brain {
       books: () => this.readSteps(),
       putback: () => ['putting the book back', this.putBackStep()],
       stretch: () => ['stretching', this.play('stretch', 5)],
-      wave: () => ['waving at you', this.walk(0, 2.2, 0), this.play('wave', 3.5)],
+      wave: () => { const p = this.openSpotNear(0, 2.2); return ['waving at you', this.walk(p.x, p.z, 0), this.play('wave', 3.5)]; },      // in front of the camera, but not inside the furniture there
       rearrange: () => this.rearrangeSteps(),
       // any of the plants in the room (the user can ask for a particular one: forcePlant)
       plant: () => ['tending the plants', {
@@ -1374,6 +1378,20 @@ export class Brain {
     return { x: 0, z: 1.5 };
   }
 
+  // The nearest spot to (x, z) with room round it (no furniture within `margin` metres).
+  openSpotNear(x, z, margin = 0.7) {
+    const free = (px, pz) => Math.abs(px) < 4.2 && pz > -3.2 && pz < 3.4
+      && !this.w.obstacles.some((o) => o.active !== false && px > o.x0 - margin && px < o.x1 + margin && pz > o.z0 - margin && pz < o.z1 + margin);
+    if (free(x, z)) return { x, z };
+    for (let r = 0.3; r < 4; r += 0.3) {
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2, px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
+        if (free(px, pz)) return { x: px, z: pz };
+      }
+    }
+    return { x, z };
+  }
+
   kickBall(dir, skilled = true) {
     const v = this.w.ball.userData.vel;
     v.copy(dir).multiplyScalar(skilled ? rand(4, 6.5) : rand(0.9, 1.6));
@@ -1494,6 +1512,7 @@ export class Brain {
       piano: ['piano'], sitpiano: ['piano'], dribble: ['ball'], toss: ['ball'], mood: ['lighting'], guitar: ['guitar'], sitguitar: ['guitar'], riff: ['guitar'],
       drums: ['drums'], drumsolo: ['drums.solo'], jamdrums: ['drums.band'], paint: ['easel'], mixpaint: ['easel.colour'], portrait: ['easel.portrait'],
       stargaze: ['telescope'], darkstargaze: ['telescope.dark'], scopecare: ['telescope.care'], dust: ['decorate'],
+      makewood: ['workshop.materials'], sawwood: ['workshop.materials'], sand: ['workshop.materials'], tap: ['workshop'], tidytools: ['workshop'],
     }[act] || [];
   }
 
@@ -1505,6 +1524,7 @@ export class Brain {
       bang: ['drums'], drums: ['drums'], drumsolo: ['drums'], jamdrums: ['drums'],
       scribble: ['easel'], paint: ['easel'], mixpaint: ['easel'], portrait: ['easel'],
       peek: ['telescope'], stargaze: ['telescope'], darkstargaze: ['telescope'], scopecare: ['telescope'], lighton: ['lamp'],
+      makewood: ['woodfactory', 'workbench'], sawwood: ['saw', 'workbench'], tap: ['mallet'], sand: ['sander', 'workbench'], tidytools: ['toolbox'], build: ['workbench'],
     }[act] || [];
     const skill = this.skillNeeds(act);
     // with the music already on he doesn't need to know how to work the stereo to join in
@@ -1534,6 +1554,15 @@ export class Brain {
     }
     if (act === 'putback' || act === 'dropball' || act === 'putguitar' || act === 'leave') return false;
     if (act === 'visit') return Object.keys(this.w.doors).length > 0 && this.inMain();
+    // the Workshop: it has to be added, and the stock has to allow it
+    if (['makewood', 'sawwood', 'tap', 'sand', 'tidytools', 'build'].includes(act)) {
+      const st = this.w.stock;
+      if (!this.w.doors.workshop) return false;
+      if (act === 'makewood' && (st.wood + PLANKS_PER_RUN > STOCK_CAP || st.wood >= 12)) return false;
+      if (act === 'sawwood' && (st.wood < 1 || st.parts + 2 > 8)) return false;
+      if (act === 'sand' && st.wood < 1) return false;
+      if (act === 'build') return !!this.pickRecipe() && need.every((n) => this.obj(n));
+    }
     if (act === 'read' && !this.obj('shelf').books.some((b) => b.mesh.visible)) return false;
     if (act === 'rearrange' && !Object.values(this.w.objects).some((o) => o.weight !== 'heavy' && o.name !== 'bench')) return false;
     return need.every((n) => this.obj(n));
@@ -1582,6 +1611,7 @@ export class Brain {
       shelf: ['read'], lamp: ['mood', 'lamp'], plant: ['plant'], flowerplant: ['plant'], tree: ['plant'],
       ball: ['dribble', 'toss', 'ball'], guitar: ['guitar', 'riff', 'jamguitar'], drums: ['bang', 'drums', 'drumsolo', 'jamdrums'],
       easel: ['scribble', 'paint', 'mixpaint', 'portrait'], telescope: ['peek', 'stargaze', 'darkstargaze', 'scopecare'],
+      workbench: ['build', 'makewood', 'sawwood'], toolbox: ['tidytools'], woodfactory: ['makewood'], saw: ['sawwood', 'makewood'], mallet: ['tap', 'build'], sander: ['sand', 'build'],
     }[name] || (this.obj(name) && this.obj(name).sit ? ['read', 'sit', 'sitguitar'] : []);
     return list.filter((a) => this.available(a));
   }
@@ -1626,6 +1656,7 @@ export class Brain {
     const weights = {
       wander: 3, sit: 0.7, sitguitar: 1.1, slouch: 0.5, dancemoves: 1.5, ballroom: 1.5, piano: 1, sitpiano: 1.2, plink: 1.4, dance: 1.8, jam: 0.9, jampiano: 0.5, jamsit: 0.9, lamp: 1.2, mood: 1.1,
       read: 1.8 + unread * 1.8, stretch: 1.3, wave: 0.7, ball: 2, dribble: 1.1, toss: 1.1, rearrange: 0.7, guitar: 1.6, riff: 1.0, plant: 0.6, jamguitar: 1.5, visit: 0.4,
+      build: 2.0, makewood: 0.5, sawwood: 0.6, tap: 0.5, sand: 0.4, tidytools: 0.4,
       bang: 1.3, drums: 1.6, drumsolo: 1.2, jamdrums: 1.5, scribble: 1.3, paint: 1.6, mixpaint: 1.3, portrait: 1.4,
       peek: 1.3, stargaze: 1.6, darkstargaze: 1.3, scopecare: 0.6, dust: 0.9,
     };
@@ -1645,8 +1676,9 @@ export class Brain {
     };
     // the last two activities count, so he doesn't drift back to the same theme straight away
     const lastTags = [this.last, this.prev].flatMap((n) => tags[n] || []);
+    this.workCleanup();                                      // cut short in the Workshop: what he carries goes back in the stock
     let name = force;
-    if (!name && !this.inMain()) name = 'leave';             // he is in an added room: back through the door before anything else
+    if (!name && !this.inMain() && !this.lockedInside()) name = 'leave';             // he is in an added room: back through the door before anything else
     if (!name && this.gtr.held && this.obj('guitar') && !this.guitarLocked()) name = 'putguitar'; // still holding the guitar: back on its stand (not while locked in on it)
     if (!name && this.lampOffByMe && this.obj('lamp') && !this.obj('lamp').on) name = 'lighton'; // he switched it off for the stars and never put it back
     if (!name && this.ballHeld) name = 'dropball'; // still holding the ball: put it down first
@@ -1696,6 +1728,7 @@ export class Brain {
       if (f.scope) names.add('telescope');
       if (f.guitar) names.add('guitar');
       if (f.chairSit) names.add(f.chair || 'armchair');
+      if (f.work) names.add(f.work.obj);
       if (s.pose === 'grab' || s.pose === 'putBook') names.add('shelf');
     }
     return names;
@@ -1737,7 +1770,10 @@ export class Brain {
       drums: this.music && k('drums.band') ? ['jamdrums'] : ['bang', 'drums', 'drumsolo'],
       easel: ['scribble', 'paint', 'mixpaint', 'portrait'],
       telescope: ['peek', 'stargaze', 'darkstargaze', 'scopecare'],
+      workbench: ['build'], toolbox: ['tidytools'], woodfactory: ['makewood'], saw: ['sawwood'], mallet: ['tap'], sander: ['sand'],
     }[name];
+    const wmsg = this.workRefusal(name);
+    if (wmsg) return { ok: false, message: wmsg };
     if (name === 'table' && !k('stereo') && !this.music) return { ok: false, message: "Guy doesn't know how to use the stereo yet. Maybe there's a manual on the shelf." };
     if (name === 'guitar' && !k('guitar')) return { ok: false, message: "Guy hasn't learned the guitar yet. Add \"Guitar for Beginners\" to the shelf and he'll read it." };
     if ((name === 'drums' || name === 'easel') && !this.standOk(name)) {
@@ -1867,9 +1903,12 @@ export class Brain {
           if (Math.hypot(obj.x - root.position.x - relx, obj.z - root.position.z - relz) > 0.4) { this.queue.length = 0; s.path = []; finished = true; }
         }
         if (!finished) {
-          this.grid = makeGrid(this.w.obstacles, INFLATE);
+          // the grid of the room he is walking in: his own, or an added room when he and his goal are both in it
+          const ra = this.w.roomIdAt(root.position.x, root.position.z), rb = this.w.roomIdAt(s.x, s.z);
+          const fr = ra === rb && ra !== 'main' && ra !== 'door' ? this.w.frameOf(ra) : MAIN_FRAME;
+          this.grid = makeGrid(this.w.obstacles, INFLATE, 0, null, fr);
           if (s.fx && s.fx.guitar) {                               // carrying the guitar sticks his hands out: give furniture more room when the way is clear
-            const wide = makeGrid(this.w.obstacles, INFLATE + 0.14);
+            const wide = makeGrid(this.w.obstacles, INFLATE + 0.14, 0, null, fr);
             if (!cellBlocked(wide, s.x, s.z) && !cellBlocked(wide, root.position.x, root.position.z)) this.grid = wide;
           }
           s.path = s.direct ? [{ x: s.x, z: s.z }] : findPath(this.grid, root.position.x, root.position.z, s.x, s.z);
@@ -2335,10 +2374,15 @@ function makeHeldBook() {
 }
 
 // ---- Grid A* around furniture ----
+// A grid covers one room: Guy's own (the default) or an added room (world.frameOf). The grid remembers its frame (blocked.fr), so
+// cellBlocked, lineClear and findPath work on either.
 const CELL = 0.2, X0 = -4.6, Z0 = -3.6, NX = 47, NZ = 37, INFLATE = 0.28;
+const MAIN_FRAME = { X0, Z0, NX, NZ };
 
-function makeGrid(obstacles, inflate = INFLATE, wall = 0, skip = null) {
+function makeGrid(obstacles, inflate = INFLATE, wall = 0, skip = null, fr = MAIN_FRAME) {
+  const { X0, Z0, NX, NZ } = fr;
   const blocked = new Uint8Array(NX * NZ);
+  blocked.fr = fr;
   for (let i = 0; i < NX; i++) {
     for (let j = 0; j < NZ; j++) {
       const x = X0 + i * CELL, z = Z0 + j * CELL;
@@ -2349,8 +2393,11 @@ function makeGrid(obstacles, inflate = INFLATE, wall = 0, skip = null) {
   return blocked;
 }
 
-const cellOf = (x, z) => [clamp(Math.round((x - X0) / CELL), 0, NX - 1), clamp(Math.round((z - Z0) / CELL), 0, NZ - 1)];
-const cellBlocked = (blocked, x, z) => { const [i, j] = cellOf(x, z); return !!blocked[i + j * NX]; };
+const cellBlocked = (blocked, x, z) => {
+  const fr = blocked.fr || MAIN_FRAME;
+  const i = clamp(Math.round((x - fr.X0) / CELL), 0, fr.NX - 1), j = clamp(Math.round((z - fr.Z0) / CELL), 0, fr.NZ - 1);
+  return !!blocked[i + j * fr.NX];
+};
 function lineClear(blocked, a, b) {
   const n = Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 0.1);
   for (let k = 0; k <= n; k++) if (cellBlocked(blocked, lerp(a.x, b.x, k / n), lerp(a.z, b.z, k / n))) return false;
@@ -2359,6 +2406,7 @@ function lineClear(blocked, a, b) {
 
 // strict: return null instead of a straight line when the goal is unreachable
 function findPath(blocked, sx, sz, gx, gz, strict = false) {
+  const { X0, Z0, NX, NZ } = blocked.fr || MAIN_FRAME;
   const cell = (x, z) => [clamp(Math.round((x - X0) / CELL), 0, NX - 1), clamp(Math.round((z - Z0) / CELL), 0, NZ - 1)];
   const nearestFree = ([ci, cj]) => {
     if (!blocked[ci + cj * NX]) return [ci, cj];
@@ -2424,5 +2472,6 @@ function angDiff(a, b) {
 }
 
 installHobbies(Brain, POSES, { sitLegs, env, smooth, clamp, lerp, rand, pick, makeGrid, cellBlocked, INFLATE });
+installWorkshop(Brain, POSES, { smooth, clamp, lerp, rand, pick });
 
 export { ROOM };

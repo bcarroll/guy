@@ -85,6 +85,10 @@ export function initRooms({ world, remove, persist, refit }) {
 
   // Test aids: take a room away again, or lock / unlock it, without going through the Catalogue.
   function reset(id) {
+    const d = world.doors[id], b = d && d.shell.bounds;
+    const inRoom = (x, z) => !!b && x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ;
+    for (const [name, o] of Object.entries(world.objects)) if (inRoom(o.x, o.z)) { remove(name); delete world.removed[name]; }     // its furniture goes with it
+    for (const [name, o] of Object.entries(world.removed)) if (!o.decor && o.home && inRoom(o.home.x, o.home.z)) delete world.removed[name];   // and what was put away from it
     world.removeDoor(id);
     delete state[id];
     changed();

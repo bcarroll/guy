@@ -14,7 +14,13 @@ export const BOOK_CATALOG = [
     blurb: 'classical pieces, blues and waltzes', requires: { object: 'piano' }, desc: 'Für Elise, twelve-bar blues, a moonlit waltz and free improvisation. Best read after the piano basics.' },
   { id: 'guitar', title: 'Guitar for Beginners', teaches: 'guitar', color: 0x2d8b5a, thick: 0.05, height: 0.3,
     blurb: 'how to play the guitar', requires: { object: 'guitar' }, desc: 'Open chords and strumming patterns.' },
-  { id: 'woodwork', title: 'Woodworking for Robots', locked: true, requires: { object: 'workbench' }, desc: 'Build furniture from planks and nails (needs a workbench, tools and materials).' },
+  // ---- the Workshop (listed only once the Workshop room has been added) ----
+  { id: 'workshop', title: 'Workshop Basics', teaches: 'workshop', color: 0xb5651d, thick: 0.055, height: 0.31, room: 'workshop',
+    blurb: 'how to work at the workbench and build a wooden foot stool', requires: { object: 'workbench' }, desc: 'Working at the workbench, taking tools from the toolbox, and a first project: a wooden foot stool.' },
+  { id: 'woodmetal', title: 'Wood & Metal Basics', teaches: 'workshop.materials', color: 0x2a9d8f, thick: 0.06, height: 0.32, room: 'workshop',
+    blurb: 'how to make planks, saw and sand wood, and build wooden shelves', requires: { object: 'woodfactory' }, desc: 'Run the Wood Factory, saw planks into parts and sand them smooth. Wooden shelves are the project.' },
+  { id: 'furniture', title: 'Furniture for Robots', teaches: 'workshop.furniture', color: 0x6d4c41, thick: 0.07, height: 0.34, room: 'workshop',
+    blurb: 'how to build wooden chairs', requires: { object: 'workbench' }, desc: 'Bigger projects, starting with a wooden chair. Best read after the basics.' },
   // ---- reading itself ----
   { id: 'speedread', title: 'Speed Reading for Robots', teaches: 'speedreading', color: 0x00a3b4, thick: 0.045, height: 0.3,
     blurb: 'how to read much faster', desc: 'Skim, flip, absorb. He reads at the bookshelf without sitting down, and learns from every book in a fraction of the time. Forgotten slowly.' },
@@ -51,6 +57,18 @@ export const BOOK_CATALOG = [
 export const BOOK_DEFS = BOOK_CATALOG.filter((b) => b.start);
 
 export const SKILL_INFO = {
+  workshop: {
+    name: 'Workshop basics', book: 'Workshop Basics',
+    unlocks: ['Work at the workbench and use the toolbox', 'Tap parts together with the rubber mallet', 'Build a wooden foot stool'],
+  },
+  'workshop.materials': {
+    name: 'Wood & Metal Basics', book: 'Wood & Metal Basics',
+    unlocks: ['Make planks in the Wood Factory', 'Saw planks into parts', 'Sand wood smooth', 'Build wooden shelves'],
+  },
+  'workshop.furniture': {
+    name: 'Furniture for Robots', book: 'Furniture for Robots',
+    unlocks: ['Build a wooden chair (and more furniture later)'],
+  },
   stereo: {
     name: 'Using the stereo', book: 'Stereo User Manual',
     unlocks: ['Switch the stereo on and off', 'Dance to the music', 'Play along with the music (with piano skills)'],

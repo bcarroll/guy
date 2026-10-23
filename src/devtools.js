@@ -10,6 +10,7 @@ import { OBJECT_CATALOG } from './machine.js';
 import { BOOK_CATALOG, SKILL_INFO } from './skills.js';
 import { ROOM_CATALOG } from './rooms.js';
 import { initLayout } from './layout.js';
+import { RECIPES as RECIPES_DEF } from './workshop.js';
 import { invent, judge, GOOD, STEPS as RIFF_STEPS, keepRiff, loadRiffs, nextRiff, riffAt, forgetMemoryRiffs } from './riffs.js';
 import { ALBUM_CATALOG } from './albums.js';
 import { TRACKS, trackSeconds } from './audio.js';
@@ -24,13 +25,17 @@ export const MANIFEST = {
   objects: {
     piano: { skills: ['piano'] }, bench: { skills: ['piano'] }, table: { skills: ['stereo'] }, shelf: { skills: [], fixed: true },
     lamp: { skills: ['lighting'] }, armchair: { skills: [] }, armchair2: { skills: [] }, chair: { skills: [] }, chair2: { skills: [] }, plant: { skills: [] }, ball: { skills: ['ball'] }, guitar: { skills: ['guitar'] },
-    workbench: { locked: true }, drums: { skills: ['drums'] }, easel: { skills: ['easel'] }, telescope: { skills: ['telescope'] },
+    drums: { skills: ['drums'] }, easel: { skills: ['easel'] }, telescope: { skills: ['telescope'] },
     // decor (world.decor): no interaction; tested by sweepDecor (remove / put back through the Catalogue, wall limits)
     rug: { decor: true }, picture: { decor: true, wall: 'back' }, window: { decor: true, wall: 'left' }, window2: { decor: true, wall: 'back', startsOut: true },
     art_mountains: { decor: true, wall: 'left', startsOut: true }, art_abstract: { decor: true, wall: 'back', startsOut: true }, art_moon: { decor: true, wall: 'left', startsOut: true },
     sconce: { decor: true, wall: 'back', startsOut: true }, rug2: { decor: true, startsOut: true }, rug3: { decor: true, startsOut: true },
     // decor furniture and plants (real objects): the plants are tended, the tables are only furniture
     flowerplant: { skills: [] }, tree: { skills: [] }, coffeetable: { skills: [] }, nightstand: { skills: [] },
+    // the Workshop (a room added from the Rooms tab: T.addObject adds it first) and what Guy builds there (counted in storage, added one at a time)
+    workbench: { room: 'workshop', skills: ['workshop'] }, toolbox: { room: 'workshop', skills: ['workshop'] }, mallet: { room: 'workshop', skills: ['workshop'] },
+    woodfactory: { room: 'workshop', skills: ['workshop.materials'] }, saw: { room: 'workshop', skills: ['workshop.materials'] }, sander: { room: 'workshop', skills: ['workshop.materials'] },
+    footstool: { room: 'workshop', built: true }, woodshelves: { room: 'workshop', built: true }, builtchair: { room: 'workshop', built: true },
   },
   // rooms the user can add from the Catalogue's Rooms tab (tested by sweepRooms / sweepDoors / sweepGating / sweepSaves)
   rooms: { workshop: {} },
@@ -49,18 +54,25 @@ export const MANIFEST = {
     mood: { objects: ['lamp'], skills: ['lighting'], touches: ['lamp'] },
     plant: { objects: ['plant'], touches: ['plant', 'flowerplant', 'tree'] },
     dust: { objects: ['picture'], skills: ['decorate'], touches: [] },
-    read: { objects: ['shelf'], touches: ['shelf', 'armchair', 'armchair2', 'chair', 'chair2'] },
-    rearrange: { objects: ['lamp', 'plant', 'armchair'], touches: ['lamp', 'plant', 'armchair', 'table', 'bench', 'flowerplant', 'coffeetable', 'nightstand', 'guitar', 'easel', 'telescope'] },
+    read: { objects: ['shelf'], touches: ['shelf', 'armchair', 'armchair2', 'chair', 'chair2', 'builtchair'] },
+    rearrange: { objects: ['lamp', 'plant', 'armchair'], touches: ['lamp', 'plant', 'armchair', 'table', 'bench', 'flowerplant', 'coffeetable', 'nightstand', 'guitar', 'easel', 'telescope', 'footstool', 'woodshelves', 'builtchair'] },
     ball: { touches: [] },
     dribble: { skills: ['ball'], touches: [] },
     toss: { skills: ['ball'], touches: [] },
     guitar: { objects: ['guitar'], skills: ['guitar'], touches: ['guitar'] },
     riff: { objects: ['guitar'], skills: ['guitar'], touches: ['guitar'] },
+    // the Workshop: `room` is added first, `stock` is what the Workshop has when it starts, `max` how long (simulated seconds) it may take
+    makewood: { objects: ['woodfactory', 'workbench'], skills: ['workshop.materials'], room: 'workshop', stock: { wood: 0, parts: 0 }, touches: ['woodfactory', 'workbench'] },
+    sawwood: { objects: ['saw', 'workbench'], skills: ['workshop.materials'], room: 'workshop', stock: { wood: 2, parts: 0 }, touches: ['saw', 'workbench'] },
+    tap: { objects: ['mallet'], skills: ['workshop'], room: 'workshop', stock: { wood: 0, parts: 0 }, touches: ['mallet'] },
+    sand: { objects: ['sander', 'workbench'], skills: ['workshop.materials'], room: 'workshop', stock: { wood: 2, parts: 0 }, touches: ['sander', 'workbench'] },
+    tidytools: { objects: ['toolbox'], skills: ['workshop'], room: 'workshop', stock: { wood: 0, parts: 0 }, touches: ['toolbox'] },
+    build: { objects: ['workbench', 'saw', 'mallet', 'toolbox'], skills: ['workshop'], room: 'workshop', stock: { wood: 0, parts: 4 }, max: 260, touches: ['workbench', 'saw', 'mallet', 'toolbox', 'sander', 'woodfactory'] },
     jamguitar: { objects: ['guitar'], skills: ['guitar'], music: true, touches: ['guitar'] },
     dancemoves: { objects: ['table'], skills: ['dance.moves'], touches: ['table', 'shelf', 'lamp'] },
     ballroom: { objects: ['table'], skills: ['dance.ballroom'], touches: ['table', 'shelf', 'lamp'] },
-    sit: { objects: ['armchair'], touches: ['armchair', 'armchair2', 'chair', 'chair2'] },
-    sitguitar: { objects: ['guitar', 'armchair'], skills: ['guitar'], touches: ['guitar', 'armchair', 'armchair2', 'chair', 'chair2'] },
+    sit: { objects: ['armchair'], touches: ['armchair', 'armchair2', 'chair', 'chair2', 'builtchair'] },
+    sitguitar: { objects: ['guitar', 'armchair'], skills: ['guitar'], touches: ['guitar', 'armchair', 'armchair2', 'chair', 'chair2', 'builtchair'] },
     slouch: { objects: ['drums'], touches: ['drums'] },
     stereoon: { objects: ['table'], skills: ['stereo'], touches: ['table', 'shelf'] },
     stereooff: { objects: ['table'], skills: ['stereo'], music: true, touches: ['table', 'shelf'] },
@@ -87,6 +99,7 @@ export const MANIFEST = {
     painting: { then: 'paint' }, colour: { then: 'mixpaint' }, portrait: { then: 'portrait' },
     stars: { then: 'stargaze' }, darksky: { then: 'darkstargaze' }, scopecare: { then: 'scopecare' },
     decorating: { then: 'dust' },
+    workshop: { then: 'build' }, woodmetal: { then: 'makewood' }, furniture: { then: 'build' },
   },
   // records and tracks that must exist
   albums: {
@@ -227,17 +240,21 @@ function machineClick(tab, title) {
 }
 T.removeAll = () => {
   for (const name of Object.keys(W().objects)) {
-    if (W().objects[name].removable === false) continue;
-    W().removeObject(name); B().objectRemoved(name);
+    const o = W().objects[name];
+    if (o.removable === false) continue;
+    if (o.kind) W().storeInstance(name); else W().removeObject(name);      // something Guy built goes back into storage
+    B().objectRemoved(name);
   }
   for (const name of Object.keys(W().decor)) { W().removeObject(name); B().objectRemoved(name); }
   if (!W().ballGone) { W().removeBall(); B().ballRemoved(); }
 };
-const isPresent = (id) => (id === 'ball' ? !W().ballGone : !!(W().objects[id] || W().decor[id]));
+const isPresent = (id) => (id === 'ball' ? !W().ballGone : !!(W().objects[id] || W().decor[id] || Object.values(W().objects).some((o) => o.kind === id)));
 T.addObject = (id) => { // through the Catalogue, like a user would
   const def = OBJECT_CATALOG.find((d) => d.id === id);
   if (isPresent(id)) return true;
   if (def.locked) return false;
+  if (def.room && !W().rooms.isAdded(def.room)) W().rooms.add(def.room);          // the Catalogue lists a room's things only once the room is added
+  if (def.built && !((W().stock.items[id] || 0) > 0)) W().stock.items[id] = 1;      // something Guy built: make sure there is one in storage to add
   return machineClick('objects', def.name) && isPresent(id);
 };
 T.addBook = (id) => {
@@ -260,8 +277,10 @@ T.forget = () => skillsOf().known.clear();
 T.prep = (name) => {
   const m = MANIFEST.activities[name] || {};
   const done = [];
+  if (m.room && !R().isAdded(m.room)) R().add(m.room);                           // the room the activity happens in
   for (const id of m.objects || []) if (T.addObject(id)) done.push(id);
   T.learn(m.skills || []);
+  if (m.stock) { Object.assign(W().stock, { wood: 0, parts: 0 }, m.stock); W().syncStock(); }
   // dribbling and tossing need the ball clear of furniture (he kicks it free first in real play): put it in open floor
   if (['dribble', 'toss'].includes(name) && W().ball) { W().ball.position.x = 0.8; W().ball.position.z = 2.4; W().ball.userData.vel.set(0, 0, 0); }
   if (m.music && !B().music) B().stereoControl('play');
@@ -290,6 +309,8 @@ function sampleOverlaps(acc, touches) {
   };
   for (const o of W().obstacles) {
     if (allowed.has(o.name)) continue;
+    const built = W().objects[o.name];
+    if (built && built.kind && allowed.has(built.kind)) continue;                 // a thing Guy built is allowed where its kind is (a built chair where chairs are)
     // thin things (lamp pole, guitar stand) fill little of their bounding box: only count the middle column
     const sparse = SPARSE.includes(o.name), cx = (o.x0 + o.x1) / 2, cz = (o.z0 + o.z1) / 2;
     for (const p of pts) {
@@ -312,7 +333,7 @@ T.hands = () => {
 // ---- running an activity and judging it ---------------------------------------------------------------------------
 // Runs `name` to completion. pass = finished, no exceptions, Guy's arms never inside objects they should not touch,
 // nothing left in his hands, feet on the floor throughout.
-T.run = (name, { max = 150, prep = true } = {}) => {
+T.run = (name, { max = (MANIFEST.activities[name] || {}).max || 150, prep = true } = {}) => {
   const b = B();
   if (prep) T.prep(name);
   T.settle(); T.home();
@@ -383,6 +404,12 @@ T.sweepObjects = () => {
       const added = T.addObject(def.id);
       const d = W().decor[def.id];
       out.push(result(def.id, added && !!d && d.group.parent === W().room && W().decorFits(d, d.u, d.v), { added, decor: true }));
+      continue;
+    }
+    if (m.built) {                               // something Guy builds: one is added from storage, as a real object of its own
+      const added = T.addObject(def.id);
+      const o = Object.values(W().objects).find((x) => x.kind === def.id);
+      out.push(result(def.id, added && !!o && W().fits(o, o.x, o.z) && o.name.startsWith(def.id + '_') && (W().stock.items[def.id] || 0) === 0, { added, built: true, name: o && o.name }));
       continue;
     }
     const added = T.addObject(def.id);
@@ -1053,6 +1080,11 @@ T.sweepSounds = () => {
   act('the brush and the paint', 'brush', 'paint');
   act('the telescope focus ticks', 'tick', 'stargaze');
   act('wiping the telescope', 'wipe', 'scopecare');
+  act('the Wood Factory runs', 'machine', 'makewood');
+  act('sawing a plank', 'saw', 'sawwood');
+  act('tapping with the rubber mallet', 'tap', 'tap');
+  act('sanding', 'sand', 'sand');
+  act('the toolbox lid', 'lid', 'tidytools', 2);
   act('he sits down in a chair', 'sit', 'sit');
   sound('learning something chimes', 'chime', () => { /* main.js asks for it when brain.onLearn fires */ if (brain.onLearn) brain.onLearn({ blurb: 'a test' }); });
   return out;
@@ -1065,7 +1097,14 @@ const friendly = (msgs) => msgs.length > 0 && msgs.every((m) => m.length < 80 &&
 const openTab = (tab) => { const m = machine(); m.hidden = false; m.querySelector(`[data-tab=${tab}]`).click(); return m; };
 const rectsOv = (a, b) => a.x1 > b.x0 && a.x0 < b.x1 && a.z1 > b.z0 && a.z0 < b.z1;
 // Take every added room away again (a test-only reset: the game never removes a room).
-T.resetRooms = () => { for (const r of ROOM_CATALOG) R().reset(r.id); };
+T.resetRooms = () => {
+  const b = B();
+  for (const r of ROOM_CATALOG) R().reset(r.id);                                  // its furniture goes with it
+  for (const [name, o] of Object.entries(W().objects)) if (o.kind) { W().storeInstance(name); b.objectRemoved(name); }       // and what Guy built that stands in his room
+  const st = W().stock; st.wood = 0; st.parts = 0; st.items = {};                // and what the Workshop made
+  b.carry = null;
+  if (!b.inMain()) T.home();                                                     // nobody is left standing in a room that is gone
+};
 // Put back what a door took out of the room (only what was not already out before the sweep began).
 const putBackSince = (before) => { for (const name of Object.keys(W().removed)) if (!before.has(name)) W().restoreObject(name, { x: G().pos.x, z: G().pos.z }); };
 // What is wrong with a room's door? [] means nothing: on an allowed wall, nothing in the doorway, no wall piece over it.
@@ -1184,7 +1223,8 @@ T.sweepGating = () => {
     out.push(result('gating: a room\'s object and book are not listed while the room is not added', !listedObj() && !listedBook()));
     R().add('workshop');
     out.push(result('gating: they are listed once the room is added', listedObj() && listedBook()));
-    out.push(result('gating: the Objects count grows with the room', total() === t0 + 1, { before: t0, after: total() }));
+    const roomItems = OBJECT_CATALOG.filter((d) => d.room === 'workshop' && d !== fakeObj).length;       // the Workshop's real furniture is listed too
+    out.push(result('gating: the Objects count grows with the room', total() === t0 + 1 + roomItems, { before: t0, after: total(), roomItems }));
     R().setUnlocked('workshop', false);
     out.push(result('gating: a locked room\'s items are hidden entirely, not shown as locked', !listedObj() && !listedBook()));
     R().setUnlocked('workshop', true);
@@ -1233,6 +1273,7 @@ const near = (a, b) => Math.abs(a - b) < 0.011;
 T.sweepLayout = () => {
   const out = [], base = errors.length, w = W(), L = () => w.layout;
   const clone = (o) => JSON.parse(JSON.stringify(o));
+  const rot0 = Object.fromEntries([...Object.entries(w.objects), ...Object.entries(w.removed)].filter(([, o]) => !o.decor).map(([n, o]) => [n, o.rot]));     // (this sweep turns things: put them back as they were at the end)
   T.resetRooms(); T.removeAll(); T.settle(); T.home();
   for (const id of ['armchair', 'plant', 'lamp', 'bench', 'telescope', 'piano', 'table', 'rug', 'picture', 'ball']) T.addObject(id);
   const moveTo = (name, pref) => { const o = w.objects[name], s = w.findSpot(o, pref, null); if (s) o.set(s.x, s.z); return !!s; };
@@ -1306,6 +1347,7 @@ T.sweepLayout = () => {
   const gp = G().pos;
   out.push(result('layout: Guy never starts inside furniture', moved && !w.obstacles.some((o) => gp.x > o.x0 - 0.4 && gp.x < o.x1 + 0.4 && gp.z > o.z0 - 0.4 && gp.z < o.z1 + 0.4)));
   T.home(); T.resetRooms(); machine().hidden = true;
+  for (const [n, o] of [...Object.entries(w.objects), ...Object.entries(w.removed)]) if (!o.decor && n in rot0 && o.rot !== rot0[n]) { o.rot = rot0[n]; o.group.rotation.y = o.yaw; if (w.objects[n]) o.set(o.x, o.z); }
   out.push(result('layout: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
 };
@@ -1419,6 +1461,145 @@ T.sweepVisit = () => {
   }
   T.resetRooms(); T.home(); T.removeAll(); T.settle(); machine().hidden = true; document.getElementById('menu').hidden = true;
   out.push(result('visit: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
+// ---- 18. The Workshop: the furniture and tools, and what Guy builds with them (src/workobjects.js, workbrain.js, workshop.js) ----
+const SHOP = ['workbench', 'toolbox', 'woodfactory', 'saw', 'mallet', 'sander'];
+const ALL_SHOP_SKILLS = ['workshop', 'workshop.materials', 'workshop.furniture'];
+const shopSetup = (wall = 'right', skills = ALL_SHOP_SKILLS) => {
+  T.settle();                                                                      // (a cut-short job puts its stock back while he settles: do that first)
+  T.resetRooms(); T.removeAll(); T.forget(); skillsOf().fading.clear(); T.settle(); T.home();
+  const st0 = W().stock; st0.wood = 0; st0.parts = 0; st0.items = {};
+  const res = R().add('workshop', { walls: [wall] });
+  for (const id of SHOP) T.addObject(id);
+  T.learn(skills);
+  return res;
+};
+const runUntil = (cond, max = 120, dt = 0.25) => { let t = 0; while (t < max && !cond()) { step(dt); t += dt; } return t; };
+const sfxNow = () => ({ ...sfxCounts });
+const heard = (a, b, k) => (b[k] || 0) - (a[k] || 0);
+T.sweepWorkshop = () => {
+  const out = [], base = errors.length, w = W(), b = B(), g = G();
+  // 1. nothing of the Workshop is listed until the room is added
+  T.resetRooms(); T.removeAll();
+  openObjects('all');
+  out.push(result('workshop: before the room is added none of its furniture or books is listed', !SHOP.some((id) => machineCard(OBJECT_CATALOG.find((d) => d.id === id).name)) && !machineCard('Workshop Basics')));
+  const ax = (id) => { const o = w.objects[id]; return o ? { x: o.x, z: o.z } : null; };
+  for (const wall of ['right', 'front', 'back']) {
+    const res = shopSetup(wall);
+    out.push(result(`workshop: ${wall} wall: the room and all six pieces of furniture are added through the Catalogue`, res.ok && SHOP.every((id) => !!w.objects[id]), { res: res.ok }));
+    const objs = SHOP.map((id) => w.objects[id]).filter(Boolean);
+    const inside = objs.every((o) => w.roomIdAt(o.x, o.z) === 'workshop' && w.fits(o, o.x, o.z));
+    let overlap = null;
+    for (let i = 0; i < objs.length; i++) for (let j = i + 1; j < objs.length; j++) if (rectsOv(objs[i].obstacle, objs[j].obstacle)) overlap = [objs[i].name, objs[j].name];
+    out.push(result(`workshop: ${wall} wall: everything stands inside the room, clear of the door and of each other`, inside && !overlap, { inside, overlap }));
+    // where he stands to use each one is free floor in the room
+    const axes = w.shellAxes('workshop');
+    const stands = [['workbench', 0.78], ['toolbox', 0.6], ['woodfactory', 0.78], ['saw', 0.72], ['mallet', 0.55], ['sander', 0.52]].map(([n, f]) => { const o = w.objects[n], l = o.local(0, f); return { n, x: o.x + l.x, z: o.z + l.z }; });
+    const badStand = stands.filter((p) => w.roomIdAt(p.x, p.z) !== 'workshop' || w.obstacles.some((o) => p.x > o.x0 - 0.25 && p.x < o.x1 + 0.25 && p.z > o.z0 - 0.25 && p.z < o.z1 + 0.25 && o !== w.objects[p.n].obstacle));
+    out.push(result(`workshop: ${wall} wall: the place he stands to use each one is free floor`, !badStand.length, { badStand: badStand.map((p) => p.n) }));
+    const wbq = w.objects.workbench.local(0, 1);
+    out.push(result(`workshop: ${wall} wall: the workbench faces the door`, wbq.x * axes.toDoor.x + wbq.z * axes.toDoor.z > 0.9));
+  }
+  // 2. what he says when he cannot (kind messages)
+  shopSetup('right', []);
+  b.queue = []; b.step = null;
+  const noBook = b.interact('saw');
+  const kind = (m) => !BANNED.test(m);                       // kind wording (these messages are longer than a toast)
+  out.push(result('workshop: without the book he is refused kindly and told which book', !noBook.ok && /Wood & Metal Basics/.test(noBook.message) && kind(noBook.message), { noBook }));
+  T.learn(['workshop.materials']);
+  const noWood = b.interact('saw');
+  out.push(result('workshop: with the book but no planks he says to make some at the Wood Factory', !noWood.ok && /Wood Factory/.test(noWood.message) && kind(noWood.message), { noWood }));
+  const noBench = b.interact('workbench');
+  out.push(result('workshop: the workbench names the book he still needs (Workshop Basics)', !noBench.ok && /Workshop Basics/.test(noBench.message) && kind(noBench.message), { noBench }));
+  // 3. a whole build from nothing: planks from the factory, sawn, tapped, sanded, finished and counted in storage
+  const builds = [['footstool', 'right'], ['footstool', 'front'], ['footstool', 'back'], ['woodshelves', 'right'], ['chair', 'right']];
+  for (const [recipe, wall] of builds) {
+    shopSetup(wall);
+    const R0 = RECIPES_DEF[recipe];
+    b.pickRecipe = () => recipe;
+    const door = w.doors.workshop, s0 = sfxNow();
+    const planks = Math.ceil(R0.parts / 2), runs = Math.ceil(planks / 4);
+    const r = b.interact('workbench');
+    let t = 0, wentIn = false, bad = 0, doorOpened = false, armed = false;
+    while (t < 520) {
+      step(0.25); t += 0.25;
+      if (!armed && b.last === 'build') { armed = true; b.pendingActivity = 'wander'; }      // the next thing he does is just wander, so the end is easy to see
+      if (b.inWorkshop()) wentIn = true;
+      if (door.open > 0.5) doorOpened = true;
+      if (!w.walkable(g.pos.x, g.pos.z) && !w.inMain(g.pos.x, g.pos.z)) bad++;
+      if (armed && wentIn && b.inMain() && b.last !== 'build' && door.open === 0) break;
+    }
+    delete b.pickRecipe;
+    const st = w.stock, s1 = sfxNow(), saw = w.objects.saw, ml = w.objects.mallet, fac = w.objects.woodfactory, tb = w.objects.toolbox, wb = w.objects.workbench;
+    const item = st.items[R0.object] || 0;
+    const left = runs * 4 - planks;
+    out.push(result(`workshop: build ${recipe} from nothing (${wall} wall): it goes in, makes planks, saws, taps${R0.sand ? ', sands' : ''}, finishes and comes out`, r.ok && wentIn && doorOpened && item === 1 && b.inMain() && door.open === 0, { r, wentIn, doorOpened, item, inMain: b.inMain(), open: door.open, t }));
+    out.push(result(`workshop: build ${recipe} (${wall}): the stock adds up (${planks} planks sawn, ${left} left over, no parts left, nothing carried or left on a machine)`, st.wood === left && st.parts === 0 && b.carry === null && !saw.plankA.visible && !ml.assembly.children.length && !fac.tray.children.length && tb.open === 0 && wb.product.children.length > 0, { stock: JSON.parse(JSON.stringify(st)), left, carry: b.carry }));
+    const needSounds = ['saw', 'tap', 'machine', 'lid', 'chime', ...(R0.sand ? ['sand'] : [])];
+    out.push(result(`workshop: build ${recipe} (${wall}): every step makes its sound`, needSounds.every((k) => heard(s0, s1, k) > 0), { silent: needSounds.filter((k) => !(heard(s0, s1, k) > 0)) }));
+    out.push(result(`workshop: build ${recipe} (${wall}): he never stands where he should not, and there are no errors`, bad === 0 && errors.length === base, { bad, errors: errors.slice(base) }));
+  }
+  // 4. cut short: nothing is lost or left behind
+  const cut = (label, cond, expect) => {
+    shopSetup('right');
+    w.stock.wood = 3; w.syncStock();
+    b.queue = []; b.step = null; b.choose('sawwood');
+    const t = runUntil(cond, 90);
+    const had = { carry: b.carry, wood: w.stock.wood, parts: w.stock.parts };
+    b.skip(); T.settle();
+    const st = w.stock, saw = w.objects.saw;
+    out.push(result(`workshop: cut short ${label}: the stock is put back and nothing is left on the sawhorse or in his hands`, t < 90 && st.wood === expect.wood && st.parts === expect.parts && b.carry === null && !saw.plankA.visible && b.inMain(), { had, stock: { wood: st.wood, parts: st.parts }, expect, t }));
+  };
+  cut('while carrying the plank to the sawhorse', () => b.carry === 'plank', { wood: 3, parts: 0 });
+  cut('while sawing', () => b.pose === 'workSaw', { wood: 3, parts: 0 });
+  cut('while carrying the parts away', () => b.carry === 'parts', { wood: 2, parts: 2 });
+  {
+    shopSetup('right');
+    w.stock.wood = 0; w.stock.parts = 4; w.syncStock();
+    b.pickRecipe = () => 'footstool';
+    b.queue = []; b.step = null; b.choose('build');
+    const t = runUntil(() => b.pose === 'workTap' && b.step && b.step.t > 2, 120);
+    const during = w.stock.parts;
+    b.skip(); T.settle();
+    delete b.pickRecipe;
+    out.push(result('workshop: cut short while tapping the parts together: they go back in the stock', t < 120 && during === 0 && w.stock.parts === 4 && !w.objects.mallet.assembly.children.length && b.carry === null && b.inMain(), { during, after: w.stock.parts, t }));
+  }
+  // 5. locked on the workbench he stays in the Workshop between jobs and comes out when told to stop
+  shopSetup('right');
+  w.stock.wood = 2; w.syncStock();
+  const lk = b.lockOn('workbench');
+  const chosen = []; const origChoose = b.choose.bind(b);
+  b.choose = (f) => { origChoose(f); chosen.push(b.last); };
+  let stayed = true, lt = 0;
+  try { while (lt < 240) { step(0.25); lt += 0.25; if (lt > 40 && !b.inWorkshop() && !b.step) stayed = false; } } finally { b.choose = origChoose; }
+  const stillIn = b.inWorkshop() && !!b.lock;
+  b.unlock(true);
+  const t5 = runUntil(() => b.inMain() && w.doors.workshop.open === 0, 120);
+  out.push(result('workshop: locked on the workbench he keeps working in the Workshop without going out between jobs, and comes out when told to stop', lk.ok && stayed && stillIn && chosen.length >= 2 && chosen.every((n) => ['build', 'makewood', 'sawwood', 'putback', 'dropball'].includes(n)) && t5 < 120 && b.inMain(), { lk: lk.ok, stayed, stillIn, chosen, t5 }));
+  // 6. what he makes is counted in storage and added to the room from the Catalogue, one at a time, as real objects
+  T.resetRooms(); T.removeAll(); R().add('workshop'); w.stock.items = { footstool: 2, builtchair: 1 };
+  openObjects('all');
+  const card = machineCard('Wooden Foot Stool');
+  out.push(result('workshop: the Catalogue shows what is in storage and offers Add', !!card && /In storage: 2/.test(card.textContent) && !!card.querySelector('.act') && !!machineCard('Wooden Shelves') && /None in storage/.test(machineCard('Wooden Shelves').textContent)));
+  card.querySelector('.act').click(); machine().hidden = true;
+  const fsNames = Object.values(w.objects).filter((o) => o.kind === 'footstool').map((o) => o.name);
+  out.push(result('workshop: Add takes one out of storage and makes a real object of its own', fsNames.length === 1 && fsNames[0] === 'footstool_1' && w.stock.items.footstool === 1 && w.fits(w.objects.footstool_1, w.objects.footstool_1.x, w.objects.footstool_1.z)));
+  T.addObject('builtchair'); const ch = b.chairs().some((c) => c.name === 'builtchair_1');
+  out.push(result('workshop: a chair Guy built is a chair he can sit on', ch));
+  const snap = JSON.parse(JSON.stringify(w.layout.snapshot()));
+  out.push(result('workshop: the saved layout records what is in the room that he built and what is in storage', snap.instances.length === 2 && snap.stock.items.footstool === 1));
+  const px = w.objects.footstool_1.x, pz = w.objects.footstool_1.z;
+  T.removeAll();
+  out.push(result('workshop: taking a built thing out of the room puts it back in storage (nothing is lost)', !Object.values(w.objects).some((o) => o.kind) && w.stock.items.footstool === 2 && w.stock.items.builtchair === 1, { items: { ...w.stock.items } }));
+  w.layout.apply(snap);
+  out.push(result('workshop: a restored layout brings the built things back where they were, with the storage counts as saved', !!w.objects.footstool_1 && near(w.objects.footstool_1.x, px) && near(w.objects.footstool_1.z, pz) && !!w.objects.builtchair_1 && w.stock.items.footstool === 1 && !w.stock.items.builtchair, { items: { ...w.stock.items } }));
+  // 7. the room takes its furniture and stock with it
+  T.resetRooms();
+  out.push(result('workshop: taking the room away takes its furniture and stock with it, and nobody is left inside', !SHOP.some((id) => w.objects[id]) && b.inMain() && w.stock.wood === 0 && Object.keys(w.stock.items).length === 0));
+  T.removeAll(); T.settle(); machine().hidden = true;
+  out.push(result('workshop: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
 };
 
@@ -1656,35 +1837,38 @@ T.sweepStart = () => {
 
 T.runAll = () => {
   const report = { coverage: T.coverage() };
-  report.objects = summarise(T.sweepObjects());
-  report.activities = summarise(T.sweepActivities());
-  report.poses = summarise(T.sweepPoses());
-  report.tracks = summarise(T.sweepTracks());
-  report.books = summarise(T.sweepBooks());
-  report.records = summarise(T.sweepRecords());
-  report.playlist = summarise(T.sweepPlaylist());
-  report.combos = summarise(T.combos());
-  report.interrupts = summarise(T.sweepInterrupts());
-  report.removals = summarise(T.sweepRemovals());
-  report.moves = summarise(T.sweepMoves());
-  report.bookRules = summarise(T.sweepBookRules());
-  report.sounds = summarise(T.sweepSounds());
-  report.holding = summarise(T.sweepHolding());
-  report.walls = summarise(T.sweepWalls());
-  report.decor = summarise(T.sweepDecor());
-  report.machine = summarise(T.sweepMachine());
-  report.rooms = summarise(T.sweepRooms());
-  report.doors = summarise(T.sweepDoors());
-  report.gating = summarise(T.sweepGating());
-  report.saves = summarise(T.sweepSaves());
-  report.layout = summarise(T.sweepLayout());
-  report.update = summarise(T.sweepUpdate());
-  report.start = summarise(T.sweepStart());
-  report.riffs = summarise(T.sweepRiffs());
-  report.lock = summarise(T.sweepLock());
-  report.speed = summarise(T.sweepSpeed());
-  report.shelf = summarise(T.sweepShelf());
-  report.visit = summarise(T.sweepVisit());
+  // each sweep starts with no added room: the Workshop (and what it made) is taken away again after any sweep that added it
+  const S = (fn) => { const r = summarise(fn()); T.resetRooms(); return r; };
+  report.objects = S(T.sweepObjects);
+  report.activities = S(T.sweepActivities);
+  report.poses = S(T.sweepPoses);
+  report.tracks = S(T.sweepTracks);
+  report.books = S(T.sweepBooks);
+  report.records = S(T.sweepRecords);
+  report.playlist = S(T.sweepPlaylist);
+  report.combos = S(T.combos);
+  report.interrupts = S(T.sweepInterrupts);
+  report.removals = S(T.sweepRemovals);
+  report.moves = S(T.sweepMoves);
+  report.bookRules = S(T.sweepBookRules);
+  report.sounds = S(T.sweepSounds);
+  report.holding = S(T.sweepHolding);
+  report.walls = S(T.sweepWalls);
+  report.decor = S(T.sweepDecor);
+  report.machine = S(T.sweepMachine);
+  report.rooms = S(T.sweepRooms);
+  report.doors = S(T.sweepDoors);
+  report.gating = S(T.sweepGating);
+  report.saves = S(T.sweepSaves);
+  report.layout = S(T.sweepLayout);
+  report.update = S(T.sweepUpdate);
+  report.start = S(T.sweepStart);
+  report.riffs = S(T.sweepRiffs);
+  report.lock = S(T.sweepLock);
+  report.speed = S(T.sweepSpeed);
+  report.shelf = S(T.sweepShelf);
+  report.workshop = S(T.sweepWorkshop);
+  report.visit = S(T.sweepVisit);
   report.errorsLogged = errors.length;
   return report;
 };
