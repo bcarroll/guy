@@ -1831,14 +1831,14 @@ const SIDES_TESTS = [
 ];
 T.sweepSides = (only = null, onlyRot = null, onlyWall = null) => {
   const out = [], base = errors.length, w = W(), b = B(), g = G();
-  const wallSpots = (o, bnd) => {                              // the object's centre when it touches each wall, in the middle of that wall
+  const wallSpots = (o, bnd, gap = 0.03) => {                  // the object's centre when it is `gap` metres from each wall, in the middle of that wall
     const hw = o.w / 2, hd = o.d / 2, mx = (bnd.minX + bnd.maxX) / 2, mz = (bnd.minZ + bnd.maxZ) / 2;
-    return [['minX', bnd.minX + hw + 0.03, mz], ['maxX', bnd.maxX - hw - 0.03, mz], ['minZ', mx, bnd.minZ + hd + 0.03], ['maxZ', mx, bnd.maxZ - hd - 0.03]];
+    return [['minX', bnd.minX + hw + gap, mz], ['maxX', bnd.maxX - hw - gap, mz], ['minZ', mx, bnd.minZ + hd + gap], ['maxZ', mx, bnd.maxZ - hd - gap]];
   };
   for (const [id, act, room, stock, customer, proof] of SIDES_TESTS) {
     if (only && id !== only) continue;
     let tried = 0, passed = 0; const bad = [];
-    for (let rot = 0; rot < 4; rot++) {
+    for (const gap of [0.03, 0.45, 0.7]) for (let rot = 0; rot < 4; rot++) {                // touching the wall, and a gap too narrow to stand in, and a little wider
       for (let wi = 0; wi < 4; wi++) {
         if ((onlyRot !== null && rot !== onlyRot) || (onlyWall !== null && wi !== onlyWall)) continue;
         // start from a clean room each time
@@ -1848,9 +1848,9 @@ T.sweepSides = (only = null, onlyRot = null, onlyWall = null) => {
         for (const need of m.objects) T.addObject(need);
         T.learn(m.skills || []);
         const o = w.objects[id], bnd = w.doors[room].shell.bounds;
-        const [wallName, x, z] = wallSpots(o, bnd)[wi];
+        const [wallName, x, z] = wallSpots(o, bnd, gap)[wi];
         while (o.rot !== rot) o.rotate(1);
-        const [, x2, z2] = wallSpots(o, bnd)[wi];                  // (the footprint changes with the turn)
+        const [, x2, z2] = wallSpots(o, bnd, gap)[wi];                  // (the footprint changes with the turn)
         o.set(x2, z2); void x; void z;
         const clash = w.obstacles.some((p) => p !== o.obstacle && p.x0 < o.obstacle.x1 && p.x1 > o.obstacle.x0 && p.z0 < o.obstacle.z1 && p.z1 > o.obstacle.z0);
         if (clash || !w.fits(o, o.x, o.z)) { o.rotate(0); continue; }          // that spot is taken by another piece: not a test of this one
@@ -1858,7 +1858,7 @@ T.sweepSides = (only = null, onlyRot = null, onlyWall = null) => {
         if (customer) { w.restaurant.clear(); w.restaurant.paused = true; w.restaurant.headless = true; w.restaurant.stage(customer); }
         tried++;
         b.queue = []; b.step = null; b.choose(act);
-        let t = 0, off = 0, done = false; const e0 = errors.length;
+        let t = 0, off = 0, done = false, pressed = 0; const e0 = errors.length, hist = [];
         const labels = [];
         const seen = { poses: new Set(), lid: false, cooked: false, served: false, wood: 0, coins: 0 };
         while (t < 260) {
@@ -1869,15 +1869,19 @@ T.sweepSides = (only = null, onlyRot = null, onlyWall = null) => {
           if (customer && w.restaurant.list[0] && ['cooked', 'eating'].includes(w.restaurant.list[0].state)) seen.cooked = true;
           seen.served = w.restaurant.nServed > 0; seen.coins = w.stock.coins; seen.wood = Math.max(seen.wood, w.stock.wood);
           if (!w.walkable(g.pos.x, g.pos.z) && !w.inMain(g.pos.x, g.pos.z)) off++;
+          hist.push([g.pos.x, g.pos.z]);
+          if (hist.length > 4) { const a = hist[hist.length - 5]; if (b.moving && Math.hypot(a[0] - g.pos.x, a[1] - g.pos.z) < 0.12) pressed += 0.25; }       // walking but getting nowhere: pushing against a wall
           if (b.last !== act && t > 1) { done = true; break; }
         }
         if (customer) w.restaurant.clear();
-        const ok = done && off === 0 && errors.length === e0 && b.carry === null && proof(seen);
-        if (ok) passed++; else bad.push({ rot, wall: wallName, done, off, t, errs: errors.slice(e0, e0 + 1), poses: [...seen.poses].join('/'), labels: labels.slice(0, 6), obj: [+o.x.toFixed(2), +o.z.toFixed(2), o.rot], wood: seen.wood });
+        const ok = done && off === 0 && pressed < 2 && errors.length === e0 && b.carry === null && proof(seen);
+        const ls = b.lastStand, nowhere = !ok && ls && ls.name === id && Object.keys(ls.why).length >= 4;
+        if (nowhere) { tried--; T.settle(); continue; }                                 // every side is walled in or taken by other furniture: nothing to test
+        if (ok) passed++; else bad.push({ rot, wall: wallName, gap, pressed, done, off, t, errs: errors.slice(e0, e0 + 1), poses: [...seen.poses].join('/'), labels: labels.slice(0, 6), obj: [+o.x.toFixed(2), +o.z.toFixed(2), o.rot], wood: seen.wood });
         T.settle();
       }
     }
-    out.push(result(`sides: ${id}: ${act} works against every wall, turned every way (${tried} placements)`, tried > 0 && passed === tried, { tried, passed, bad: bad.slice(0, 3) }));
+    out.push(result(`sides: ${id}: ${act} works against every wall at three distances, turned every way (${tried} placements)`, tried > 0 && passed === tried, { tried, passed, bad: bad.slice(0, 3) }));
   }
   T.resetRooms(); T.removeAll(); T.settle();
   out.push(result('sides: no errors', errors.length === base, { errors: errors.slice(base) }));

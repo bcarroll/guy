@@ -260,6 +260,9 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 
 ## Regression watch (bugs found and fixed; make sure they stay fixed)
 
+- Reported: with the Wood Factory against a wall Guy could not use the side next to the wall and kept walking into it. A stand spot only 0.35 m from a wall was accepted but an added room is walkable only 0.5 m in (`walkable`), so the walk ended pressed against the wall and the "close enough" tolerance carried on. Stand spots now keep 0.6 m from an added room's walls (0.15 m in his own). If no side is free at all he says "can't get to the X from anywhere" and does something else (the old fallback built a NaN spot that hung the page). `angDiff` no longer loops on a bad angle. `sweepSides` now also puts every station 0.45 m and 0.7 m from each wall (too narrow to stand in, and wider) and fails if he is pressed against something for 2 s; placements walled in on all four sides are skipped.
+- A long synchronous sweep that hangs kills the browser tab ("data:" page). Find the placement by running `sweepSides(id, rot, wall)` one call at a time and leaving breadcrumbs in localStorage.
+
 - GAL had black balls floating off her joints that moved with her body parts: the X Bot's Joints mesh lists its 64 bones in a different order from the body's 65, and the loader shared the body's skeleton by index. `Guy.load` now rebuilds the Joints skeleton by bone name with its own inverse bind matrices. Look at both robots' joints (visual check) whenever a model changes.
 
 - The Build a Bot machine's menu button (Use) said "Guy can't do anything with that yet": `interact` had no entry for it. Now `botprinter: ['buildbot']` with kind messages (`sweepGal` presses the real menu button).

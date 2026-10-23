@@ -58,8 +58,9 @@ export function installApproach(Brain) {
       const me = this.g.root.position;
       const inside = (x, z) => {
         if (w.roomIdAt(x, z) !== room) return false;
-        const b = room !== 'main' && room !== 'door' ? w.doors[room].shell.bounds : { minX: -4.5, maxX: 4.5, minZ: -3.5, maxZ: 3.7 };
-        return x > b.minX + 0.35 && x < b.maxX - 0.35 && z > b.minZ + 0.35 && z < b.maxZ - 0.35;
+        // where he can really stand: an added room is walkable half a metre in from its walls (room.js `walkable`), his own a little less
+        const added = room !== 'main' && room !== 'door', b = added ? w.doors[room].shell.bounds : { minX: -4.5, maxX: 4.5, minZ: -3.5, maxZ: 3.6 }, m = added ? 0.6 : 0.15;
+        return x > b.minX + m && x < b.maxX - m && z > b.minZ + m && z < b.maxZ - m;
       };
       const options = [], why = {};                                                    // (why: for each side, what ruled it out; read by the QA harness)
       this.lastStand = { name, why };
@@ -80,7 +81,11 @@ export function installApproach(Brain) {
       }
       // front first; among the sides he can use, one within reach of the target wins
       const best = options.find((c) => c.near) || options.sort((a, b) => a.d - b.d)[0];
-      if (!best) { const s = spot(0), l = o.local(s.x, s.z); (this.useSide ||= {})[name] = 0; return [this.walk(o.x + l.x, o.z + l.z, Math.PI + o.yaw)]; }
+      if (!best) {                                                  // no side is free: he says so and does something else (he never walks into a wall)
+        this.queue.length = 0;
+        this.ui(`can't get to the ${name} from anywhere`);
+        return [];
+      }
       (this.useSide ||= {})[name] = best.k;
       return [{ ...this.walk(best.x, best.z, best.yaw), tol: 0.3 }];
     },
