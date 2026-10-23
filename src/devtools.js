@@ -1360,6 +1360,8 @@ T.sweepStart = () => {
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
   const ctx1 = window.__guyAudio ? window.__guyAudio().ctx : undefined;
   out.push(result('start: pretend (untrusted) events do not start the audio', ctx1 === ctx0));
+  const icon = document.getElementById('sound-off'), running = !!(ctx1 && ctx1.state === 'running');
+  out.push(result('start: the red speaker shows exactly while the audio is not running', !!icon && icon.hidden === running, { running, hidden: icon && icon.hidden }));
   out.push(result('start: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
 };

@@ -170,14 +170,19 @@ addEventListener('keydown', (e) => {
 // There is no "click to start" screen. Browsers keep the sound off until the page has been touched once, so the first real tap, drag
 // or key press anywhere starts the audio quietly; until then Guy carries on in silence. Fullscreen on phones is the Full button.
 // (?nostart is still accepted so old test URLs work; it no longer does anything.)
+// A red speaker in the top corner says the sound is still off. It goes away as soon as the audio is running (tapping it counts too).
+const soundIcon = document.getElementById('sound-off');
+const syncSoundIcon = () => { const c = audio().ctx; soundIcon.hidden = !!(c && c.state === 'running'); };
 const UNLOCK_EVENTS = ['pointerup', 'touchend', 'click', 'keydown'];
 function unlockAudio(e) {
   if (!e.isTrusted) return;                       // only a real touch counts (the QA harness's pretend events must not start the audio)
   initAudio();
   const ctx = audio().ctx;
+  ctx.onstatechange = syncSoundIcon;
   const done = () => UNLOCK_EVENTS.forEach((t) => removeEventListener(t, unlockAudio, true));
   if (ctx.state === 'running') done();
-  else ctx.resume().then(() => { if (ctx.state === 'running') done(); }).catch(() => {});
+  else ctx.resume().then(() => { if (ctx.state === 'running') done(); syncSoundIcon(); }).catch(() => {});
+  syncSoundIcon();
 }
 UNLOCK_EVENTS.forEach((t) => addEventListener(t, unlockAudio, true));
 window.__guyAudio = audio;                         // for the QA harness

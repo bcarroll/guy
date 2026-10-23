@@ -112,6 +112,11 @@
   #menu button[hidden] { display: none; }
   #menu button:hover { background: rgba(255,255,255,.12); }
   #menu button[data-act="remove"] { color: #ff8a8a; }
+  #sound-off { position: fixed; top: 12px; right: 12px; z-index: 5; width: 48px; height: 48px; border: 0; border-radius: 50%; padding: 0;
+               background: #d63031; color: #fff; font-size: 24px; line-height: 48px; cursor: pointer; touch-action: manipulation;
+               box-shadow: 0 2px 10px rgba(0,0,0,.5); animation: sound-pulse 1.8s ease-in-out infinite; }
+  #sound-off[hidden] { display: none; }
+  @keyframes sound-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
 </style>
 </head>
 <body>
@@ -154,6 +159,7 @@
   <button data-act="rotr">⟳ Rotate right</button>
   <button data-act="remove">🗑 Remove</button>
 </div>
+<button id="sound-off" title="Sound is off: tap anywhere to turn it on" aria-label="Sound is off. Tap to turn it on.">🔇</button>
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>
