@@ -694,4 +694,6 @@ Guy leaves each painting on the easel when he finishes it, as now. If the user l
 - **Saved.** Each hung painting, and each stored one, is saved (wall, position along it, and the picture) so they survive a reload. This needs the easel painting itself to be saved first (it is not yet, see "Build status").
 - **Testing.** A sweep that paints and hangs until a wall has 3, checks Guy spreads them over other walls and rooms before replacing, checks that with every wall full the oldest is replaced and the old one appears in the Catalogue, checks windows and doors are not covered, and checks removal and reload.
 
-Open question: does the Catalogue show Guy's stored paintings as thumbnails of the actual pictures?
+**Thumbnails (decided).** The Catalogue shows each stored painting as a thumbnail of the actual picture, not a generic icon.
+
+**Order of work (decided).** Built after the Restaurant has landed, so it does not collide with that work in `brain.js`, `room.js` and `machine.js`.
