@@ -643,3 +643,32 @@ New requests, with what is built, what is planned, and what each planned part wa
 ### 17.6 Testing
 
 Each built item has its sweep in section 13A. The planned items add: a door long-press menu check, a walk through the door in both directions, `buildchair` starting only when no chair exists, recycling only his own chairs and only above 3, and the book stack and the second shelf (a shelf with 20+ books has nothing outside its frame; the stack empties onto the new shelf; no book is ever lost).
+
+---
+
+## 18. Future Idea: The Build a Bot Machine and X Bot (not planned in detail)
+
+Recorded from the owner's description. Nothing is built.
+
+**The machine.** A 3D printer, a super premium object (it is unlocked through the same premium mechanism as later rooms, not for free). It can be used once: it prints a female robot, X Bot, by morphing itself into her, using itself as the material. After that it is gone (or is the same object as X Bot; to be decided).
+
+**X Bot.** A second robot character, a female version of Guy, built from the Mixamo  model (). Rules from the description:
+- X Bot is controlled only by Guy. The user does not command her directly.
+- Guy tells her what to do. Example: Guy wants to play guitar, so he tells X Bot to play drums.
+- So X Bot needs her own activity queue (a second brain on the same world), taking orders from Guy's choices. Her orders can be any activity she can do, and she does what she is told.
+
+**Y Bot.** Engages with Guy unprompted, for example:
+- she turns on the stereo and asks Guy to dance;
+- she sits down at the piano and motions for Guy to come and play along (sitting on the bench, or standing beside the piano).
+- **Check:** the README says Guy himself is the Mixamo Y Bot. So either Y Bot is Guy (and these are things Guy does on his own, asking the user for an interaction), or Y Bot is a separate character. To be confirmed.
+
+**Open questions for the owner**
+1. Is the machine consumed when it prints X Bot, or does it stay as something else?
+2. What does the premium unlock cost, and is it a one-off unlock or paid per machine?
+3. How does the user give Guy an order for X Bot, or does Guy decide everything himself?
+4. Can X Bot learn skills of her own, or only use the ones Guy has (her skills = Guy's skills)?
+5. Does X Bot persist between visits (the saved layout)?
+6. Y Bot's prompts: are they in speech bubbles, gestures only, or both?
+7. Is Y Bot Guy, or a separate character? (see the check above)
+
+**Testing.** To be written when planned: a second character needs its own sweep (its own activities, no interference with Guy's paths), the order-taking path, and the unprompted prompts.
