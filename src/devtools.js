@@ -155,7 +155,7 @@ export const MANIFEST = {
     { id: 'scope-aim', activity: 'stargaze', pose: 'scopeAim', t: 2.2, view: 'top', expect: 'one hand on top of the barrel while the tube swings round' },
     { id: 'scope-wrong', activity: 'peek', pose: 'scopeWrong', t: 2.8, view: 'side', expect: 'eye at the big lens end, hand on the barrel, other hand on his knee' },
     { id: 'scope-care', activity: 'scopecare', pose: 'scopeCare', t: 13, view: 'front', expect: 'squatting beside the tripod with a hand on one leg' },
-    { id: 'stool-dust', activity: 'dusttop', pose: 'reach', t: 4, view: 'front', expect: 'standing ON the foot stool (feet on top of it, not in the floor), right hand wiping along the top of the window frame, the stool not passing through him' },
+    { id: 'stool-dust', activity: 'dusttop', pose: 'reach', t: 4, view: 'front', dist: 3.6, expect: 'standing ON the foot stool (feet on top of it, not in the floor), right hand wiping along the top of the window frame, the stool not passing through him' },
     { id: 'metal-cut', activity: 'cutmetal', pose: 'workCut', t: 4, view: 'front', expect: 'standing at the metal cutter, right hand gripping the lever and pulling it down, left hand holding the bar; the blade comes down with the lever' },
     { id: 'metal-weld', activity: 'weld', pose: 'workWeld', t: 4, view: 'front', expect: 'torch pointing down at the seam with a bright glow and a few sparks, left hand steadying the parts' },
     { id: 'metal-hammer', activity: 'hammer', pose: 'workTap', t: 4, view: 'front', expect: 'hammer raised over the anvil, left hand on the piece' },
@@ -1018,7 +1018,7 @@ T.moment = (activity, pose, t = 0, view = 'front', opts = {}) => {
   let guard = 0;
   const ok = () => b.step && b.pose === pose && b.step.t >= t && (!opts.turning || (b.read && b.read.turning && b.read.turnT > 0.8)) && (!opts.push || b.step.push) && (!opts.album || (b.held && b.held.kind === 'album'));
   while (!ok() && guard++ < 40000) step(1 / 30);
-  T.freeze(); T.look(view);
+  T.freeze(); T.look(view, opts.dist);                                       // (opts.dist: how far back the camera stands, for a picture of someone up on a stool)
   return { reached: guard < 40000, state: T.state(), hands: T.hands() };
 };
 T.visualChecklist = () => MANIFEST.visual;
