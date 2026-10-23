@@ -187,7 +187,7 @@ export function buildRoom(scene) {
   };
 
   // The shelf holds 16 books on the two rows within Guy's reach (slots 0-15). A book past that is laid flat on the floor in a stack
-  // beside the shelf, spine towards the room, one on top of the other (it still counts as "on the shelf" for the Catalogue).
+  // beside the shelf, spine towards the room, one on top of the other (it still counts as "on the shelf" for the Catalog).
   const SHELF_CAPACITY = 16;
   const STACK_X = -0.06;                            // the stack's place beside the shelf, in the shelf's own frame (z along the shelf)
   let stackZ = null;                                // chosen when the first book overflows: the end of the shelf with room
@@ -277,7 +277,7 @@ export function buildRoom(scene) {
     shelfBooks.push(rec);
     return rec;
   };
-  // Take a book off the shelf for good (it goes back to the catalogue); the other books stay where they are.
+  // Take a book off the shelf for good (it goes back to the catalog); the other books stay where they are.
   objects.shelf.removeBook = (rec) => {
     const k = shelfBooks.indexOf(rec);
     if (k < 0) return false;
@@ -438,7 +438,7 @@ export function buildRoom(scene) {
 
   // ---- Decor: the rug, the windows and the picture ----
   // Not obstacles (Guy walks over the rug and never touches the wall pieces), but first-class objects all the same: the user can
-  // remove them, put them back from the Catalogue, and slide the wall pieces along their wall.
+  // remove them, put them back from the Catalog, and slide the wall pieces along their wall.
   // A wall piece sits at (u, v): u along the wall (z on the left wall, x on the back wall), v = height of its centre.
   // The rug sits at (u, v) = (x, z). Its group's local +z points into the room for wall pieces.
   const decor = {};
@@ -464,7 +464,7 @@ export function buildRoom(scene) {
     near: (x0, x1, z0, z1) => Math.min(...[[x0, z0], [x0, z1], [x1, z0], [x1, z1]].map(([x, z]) => (x - p0.x) * n.x + (z - p0.z) * n.z)) < 0.1,
     span: (x0, x1, z0, z1) => { const s = [[x0, z0], [x0, z1], [x1, z0], [x1, z1]].map(([x, z]) => (x - p0.x) * t.x + (z - p0.z) * t.z); return [Math.min(...s), Math.max(...s)]; },
   });
-  const MACHINE_RECT = { u0: -2.7, u1: -1.9, v0: 1.0, v1: 2.3 };   // the Catalogue on the left wall
+  const MACHINE_RECT = { u0: -2.7, u1: -1.9, v0: 1.0, v1: 2.3 };   // the Catalog on the left wall
   const overlap1 = (a0, a1, b0, b1) => a1 > b0 && a0 < b1;
 
   // ---- Doors: a doorway on a wall of the main room leads to a room the user added (src/rooms.js) ----
@@ -524,7 +524,7 @@ export function buildRoom(scene) {
     return d;
   };
 
-  // Room on its wall (or, for the rug, on the floor) for `d` at (u, v)? Clear of the other pieces, the Catalogue and furniture
+  // Room on its wall (or, for the rug, on the floor) for `d` at (u, v)? Clear of the other pieces, the Catalog and furniture
   // standing against the wall that is taller than the piece's lower edge.
   const decorFits = (d, u, v) => {
     if (!d.wall) return Math.abs(u) <= ROOM.w / 2 - d.ex && Math.abs(v) <= ROOM.d / 2 - d.ez;     // a rug stays inside the room (rugs may overlap: each lies a little above the last)
@@ -701,7 +701,7 @@ export function buildRoom(scene) {
   makeDecor('rug', 'rug', { hx: 1.8, hz: 1.8, u: 0, v: 0.4 }, buildRug);
   makeDecor('window', 'window', { wall: 'left', hw: 0.95, hh: 0.7, u: 0.2, v: 1.8 }, buildWindow);
   makeDecor('picture', 'picture', { wall: 'back', hw: 0.5, hh: 0.35, u: 0.2, v: 1.9 }, buildPicture);
-  const DECOR_NEW = {              // decor that starts out of the room and can be added from the Catalogue
+  const DECOR_NEW = {              // decor that starts out of the room and can be added from the Catalog
     window2: () => makeDecor('window2', 'second window', { wall: 'back', hw: 0.95, hh: 0.7, u: 2.6, v: 1.9 }, buildWindow),
     art_mountains: () => makeDecor('art_mountains', 'mountain picture', { wall: 'left', hw: 0.5, hh: 0.345, u: 2.7, v: 1.9 }, buildMountainArt),
     art_abstract: () => makeDecor('art_abstract', 'abstract picture', { wall: 'back', hw: 0.345, hh: 0.345, u: -3.6, v: 2.1 }, buildAbstractArt),
@@ -718,7 +718,7 @@ export function buildRoom(scene) {
   ball.userData = { vel: new THREE.Vector3(), r: 0.18 };
   scene.add(ball);
 
-  // ---- Catalogue: fixed to the left wall. Tapping it opens the catalogue of objects and books. ----
+  // ---- Catalog: fixed to the left wall. Tapping it opens the catalog of objects and books. ----
   const machine = new THREE.Group();
   {
     const bodyMat = mat(0x232a36, { roughness: 0.45, metalness: 0.5 });
@@ -733,7 +733,7 @@ export function buildRoom(scene) {
     g2.fillStyle = grad; g2.fillRect(0, 0, 256, 192);
     g2.strokeStyle = '#46d6ff'; g2.lineWidth = 4; g2.strokeRect(6, 6, 244, 180);
     g2.fillStyle = '#9fe9ff'; g2.font = 'bold 34px sans-serif'; g2.textAlign = 'center';
-    g2.fillText('CATALOGUE', 128, 82);
+    g2.fillText('CATALOG', 128, 82);
     g2.font = '18px sans-serif'; g2.fillStyle = '#6fbfd6'; g2.fillText('tap to browse', 128, 150);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -974,7 +974,7 @@ export function buildRoom(scene) {
     return obj;
   };
 
-  // ---- Decor furniture and plants (added from the Catalogue under Decor) ----
+  // ---- Decor furniture and plants (added from the Catalog under Decor) ----
   // Flowering plant: a cream pot, green leaves and a crown of pink, yellow and white blooms
   const buildFlowerPlant = (x = 0, z = 0) => makeObject('flowerplant', x, z, 0.5, 0.5, 0.95, 'light', (g) => {
     const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.15, 0.32, 16), mat(0xe2d3b3));
@@ -1063,7 +1063,7 @@ export function buildRoom(scene) {
   };
 
   // ---- Things Guy builds (see src/workshop.js). They are counted in storage (`world.stock.items`) and added to the room from the
-  // Catalogue one at a time, so there can be many of one kind: each is its own object named `<kind>_<n>` with `kind` set.
+  // Catalog one at a time, so there can be many of one kind: each is its own object named `<kind>_<n>` with `kind` set.
   const buildFootStool = (name, x = 0, z = 0) => makeObject(name, x, z, 0.44, 0.36, 0.34, 'light', (g) => {
     const light = mat(0xe3c08a), wood = mat(0xc89b62);
     box(0.42, 0.04, 0.34, light, 0, 0.3, 0, g);
@@ -1187,7 +1187,7 @@ export function buildRoom(scene) {
   const doorSpotFree = (wall, u) => !Object.values(doors).some((d) => rectsOverlap(d.rect, doorRect(wall, u)));
 
   // Where should the next door go? Fewest pieces to move first, then the wall order given, then nearest the middle of the wall.
-  // The left wall holds the Catalogue and is never used.
+  // The left wall holds the Catalog and is never used.
   const planDoor = (walls = ['right', 'front', 'back']) => {
     let best = null;
     walls.forEach((wall, wi) => {
@@ -1234,6 +1234,18 @@ export function buildRoom(scene) {
       knob.position.set(0.86, 1.05, z);
       hinge.add(knob);
     }
+    // a padlock on each face, shown while the door is locked (setDoorLocked); it swings with the leaf
+    const padlock = new THREE.Group();
+    const brass = mat(0xe8c050, { metalness: 0.7, roughness: 0.3 }), steel = mat(0xb8bec6, { metalness: 0.8, roughness: 0.25 });
+    for (const z of [0.105, -0.005]) {
+      box(0.1, 0.085, 0.04, brass, 0.86, 0.9, z, padlock);
+      const shackle = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.008, 6, 14, Math.PI), steel);
+      shackle.position.set(0.86, 0.9425, z);
+      padlock.add(shackle);
+    }
+    padlock.visible = false;
+    hinge.add(padlock);
+    g.userData.padlock = padlock;
     const c = document.createElement('canvas');
     c.width = 256; c.height = 64;
     const cx = c.getContext('2d');
@@ -1254,7 +1266,7 @@ export function buildRoom(scene) {
 
   // The room behind a door: a floor and three walls (the main room's own wall closes the fourth side) that open to the sky like
   // the main room. It sits just outside the door wall, kept within that wall's length. `bounds` is its footprint on the floor.
-  // Every added room is as big as Guy's room (same floor area, same depth) unless its catalogue entry gives a `size` (depth away
+  // Every added room is as big as Guy's room (same floor area, same depth) unless its catalog entry gives a `size` (depth away
   // from the door x width along the wall): a room that is cramped cannot hold what is built in it.
   const buildShell = (def, wall, u) => {
     const W = WALL[wall];
@@ -1370,7 +1382,7 @@ export function buildRoom(scene) {
       room.add(group);
       room.add(shell.group);
       room.add(cut);
-      doors[def.id] = { id: def.id, name: def.name, wall, u, group, leaf: group.userData.leaf, shell, cut, rect: doorRect(wall, u), rectIn: doorRectIn(wall, u), open: 0, openTo: 0 };
+      doors[def.id] = { id: def.id, name: def.name, wall, u, group, leaf: group.userData.leaf, shell, cut, rect: doorRect(wall, u), rectIn: doorRectIn(wall, u), open: 0, openTo: 0, locked: false };
       Object.assign(WALL, roomWalls(def.id, shell));           // its walls can hold wall pieces (Guy's paintings)
       if (def.elevator) {                                       // a room with an elevator (the Restaurant): a cabin against the far wall
         const b = shell.bounds, sgn = WALL[wall].rotY === Math.PI ? -1 : 1;
@@ -1393,7 +1405,7 @@ export function buildRoom(scene) {
       if (!d) return false;
       for (const g of [d.group, d.shell.group, d.cut]) { room.remove(g); disposeTree(g); }
       if (d.elevator) obstacles.splice(obstacles.indexOf(d.elevator.obstacle), 1);
-      for (const key of Object.keys(WALL).filter((k) => k.startsWith(`${id}:`))) {         // what hung on its walls is put away (Guy's paintings go to the Catalogue)
+      for (const key of Object.keys(WALL).filter((k) => k.startsWith(`${id}:`))) {         // what hung on its walls is put away (Guy's paintings go to the Catalog)
         for (const [name, dc] of Object.entries(decor)) if (dc.wall === key) { room.remove(dc.group); delete decor[name]; world.removed[name] = dc; }
         delete WALL[key];
       }
@@ -1416,8 +1428,19 @@ export function buildRoom(scene) {
     doorPoint(id, d) { const dr = doors[id], n = inwardOf(dr.wall), p = WALL[dr.wall].at(dr.u, 0); return { x: p.x + n.x * d, z: p.z + n.z * d }; },
     doorYaw(id, intoRoom) { const n = inwardOf(doors[id].wall), s = intoRoom ? 1 : -1; return Math.atan2(s * n.x, s * n.z); },
     doorKnob(id) { return doors[id].group.localToWorld(new THREE.Vector3(0.36, 1.05, 0.1)); },       // for the hand to reach while the door is shut
-    setDoorOpen(id, open) { if (doors[id]) doors[id].openTo = open ? 1 : 0; },
+    setDoorOpen(id, open) { if (!doors[id] || (open && doors[id].locked)) return; doors[id].openTo = open ? 1 : 0; },       // (a locked door cannot be opened, by anyone)
     isDoorOpen: (id) => !!doors[id] && doors[id].open > 0.85,
+    // A locked door keeps the robots out of the room behind it, and in it if they are in there (unless the room has another door that is open:
+    // see Brain.stuckIn). Nobody can open it until it is unlocked. See rooms.js (it is saved).
+    setDoorLocked(id, locked) { const d = doors[id]; if (!d) return; d.locked = !!locked; d.group.userData.padlock.visible = !!locked; },
+    isDoorLocked: (id) => !!doors[id] && !!doors[id].locked,
+    // Which face of the door a point is on: 'main' (the side in Guy's own room) or 'room' (the side in the room behind it).
+    doorSide(id, point) {
+      const d = doors[id];
+      if (!d) return 'main';
+      d.group.updateWorldMatrix(true, false);
+      return d.group.worldToLocal(point.clone()).z >= 0.075 ? 'main' : 'room';
+    },
     // Swing the doors towards open or shut (called every frame by the brain).
     updateDoors(dt) {
       for (const d of Object.values(doors)) {
@@ -1647,7 +1670,7 @@ export function buildRoom(scene) {
       const p = world.shellPoint('workshop', n * 0.5, 0);
       return world.addInstance(kind, null, null, true, { x: p.x, z: p.z });
     },
-    // Objects that do not exist yet but can be added from the Catalogue.
+    // Objects that do not exist yet but can be added from the Catalog.
     addNew(id, avoid) {
       if (DECOR_NEW[id]) {
         if (decor[id]) return false;

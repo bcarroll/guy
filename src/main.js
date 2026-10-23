@@ -114,7 +114,7 @@ world.gal = new Gal(world, {
   toast: (m) => { showToast(m); if (machineUI.isOpen()) machineUI.refresh(); }, onBuilt: (m) => showToast(m),
 });
 world.gal.preload();
-// Guy's paintings: hung on the walls of any room, the rest kept in the Catalogue (they are saved unless ?fresh)
+// Guy's paintings: hung on the walls of any room, the rest kept in the Catalog (they are saved unless ?fresh)
 world.paintings = new Paintings(world, { persist: !params.has('fresh') });
 
 // ---- skills panel + "learned something" toast ----
@@ -165,8 +165,8 @@ brain.onLock = (L) => {
 };
 lockBtn.addEventListener('click', () => { brain.unlock(true); showToast('Guy is free to do what he likes.'); });
 
-// ---- the Catalogue on the wall: tap it for the catalogue of objects and books ----
-// Rooms the user adds from the Catalogue: a door on a wall, and a room behind it. Frame the camera round all of them.
+// ---- the Catalog on the wall: tap it for the catalog of objects and books ----
+// Rooms the user adds from the Catalog: a door on a wall, and a room behind it. Frame the camera round all of them.
 const rooms = initRooms({
   world, persist: !params.has('fresh'), remove: (id) => removeById(id),
   refit: () => {
@@ -178,14 +178,14 @@ const rooms = initRooms({
   },
 });
 world.rooms = rooms;
-rooms.onChange(() => world.paintings.sync());        // a room taken away: the paintings on its walls go to the Catalogue
+rooms.onChange(() => world.paintings.sync());        // a room taken away: the paintings on its walls go to the Catalog
 const machineUI = initMachine({
   world, guy, persist: !params.has('fresh'), rooms, paintings: world.paintings,
   knows: (id) => skills.has(id) || !!(world.gal && world.gal.skills && world.gal.skills.has(id)),       // Guy or GAL
   notify: (msg) => { showToast(msg); renderSkills(); sfx('pop'); },
   remove: (id) => removeById(id),
 });
-// Where everything was last time: the catalogue's additions first, then every piece back in its place (and what the user took
+// Where everything was last time: the catalog's additions first, then every piece back in its place (and what the user took
 // out), then the door of any added room (anything standing in its way comes out), then start saving changes as they happen.
 const layout = initLayout({ world, guy, remove: (id) => removeById(id), persist: !params.has('fresh') });
 world.layout = layout;
@@ -376,7 +376,7 @@ function planeAt(e, plane) {
   return raycaster.ray.intersectPlane(plane, hitPoint) ? hitPoint : null;
 }
 
-// Take something out of the room (the context menu and the Catalogue both come through here).
+// Take something out of the room (the context menu and the Catalog both come through here).
 function removeById(id) {
   if (id === 'ball') { world.removeBall(); brain.ballRemoved && brain.ballRemoved(); }
   else if (world.objects[id] && world.objects[id].kind) { world.storeInstance(id); brain.objectRemoved(id); machineUI.save(); machineUI.refresh(); }     // something Guy built goes back into storage
@@ -464,7 +464,7 @@ function openBookMenu(shelfObj, x, y) {
     const st = skills.strength(b.def.teaches);
     const fading = read && st < 1;
     const note = fading ? `Forgetting… ${Math.round(st * 100)}% of ${b.def.blurb} left` : read ? 'Read — Guy knows ' + b.def.blurb : 'Not read yet — tap to have Guy read it';
-    return `<div class="brow ${read ? 'done' : ''}" ${read ? '' : `data-book="${b.def.id}"`}><span class="ico">${fading ? '🌫️' : read ? '✅' : '📕'}</span><span class="grow"><b>${b.def.title}</b><small>${note}</small></span><button class="remove" data-remove="${b.def.id}" title="Take the book off the shelf. It goes back to the Catalogue and Guy keeps what he learned">Remove</button><button class="forget" data-forget="${b.def.id}" title="Take the book off the shelf; Guy gradually forgets what it taught">Forget</button></div>`;
+    return `<div class="brow ${read ? 'done' : ''}" ${read ? '' : `data-book="${b.def.id}"`}><span class="ico">${fading ? '🌫️' : read ? '✅' : '📕'}</span><span class="grow"><b>${b.def.title}</b><small>${note}</small></span><button class="remove" data-remove="${b.def.id}" title="Take the book off the shelf. It goes back to the Catalog and Guy keeps what he learned">Remove</button><button class="forget" data-forget="${b.def.id}" title="Take the book off the shelf; Guy gradually forgets what it taught">Forget</button></div>`;
   }).join('');
   placeAlbumMenu(x, y);
 }
@@ -536,13 +536,30 @@ function interactLabel(name) {
   }
 }
 
+// What the door menu's first button does. It goes to the room on the far side of the face that was pressed (`side`: 'main' is the face in Guy's
+// own room, 'room' the face inside the room behind it). If Guy is already there it offers the way the other direction instead, so the button
+// always does something. Either way it is brain.visitRoom: he goes in when he is outside and comes back when he is inside.
+function doorChoice(door, side) {
+  const p = brain.g.root.position, inRoom = world.roomIdAt(p.x, p.z) === door.id;
+  const guyAt = inRoom ? door.id : 'main';
+  let target = side === 'room' ? 'main' : door.id;
+  const already = target === guyAt;
+  if (already) target = target === door.id ? 'main' : door.id;
+  const name = (t) => (t === 'main' ? "Guy's room" : `the ${door.name}`);
+  const label = target === door.id ? `🚪 Go into the ${door.name}` : side === 'main' ? '🚪 Come back' : "🚪 Go into Guy's room";
+  return { side, target, already, label, note: already ? `Guy is already in ${name(guyAt)}` : '' };
+}
+
 function openMenu(hit, x, y) {
   menuTarget = hit;
-  if (hit.door) {                                       // a door: the only thing to do is go through it (or come back)
-    menuTitle.textContent = `${hit.door.name} door`;
-    menuNote.textContent = '';
-    menu.querySelectorAll('[data-act]').forEach((b) => { b.hidden = b.dataset.act !== 'interact'; });
-    menu.querySelector('[data-act="interact"]').textContent = brain.inMain() ? `🚪 Go into the ${hit.door.name}` : '🚪 Come back';
+  if (hit.door) {                                       // a door: go through it (or come back), and lock it to keep the robots out
+    const ch = doorChoice(hit.door, hit.side || (hit.point ? world.doorSide(hit.door.id, hit.point) : 'main')), locked = world.isDoorLocked(hit.door.id);
+    menuTarget = { ...hit, side: ch.side };
+    menuTitle.textContent = `${hit.door.name} door${locked ? ' (locked)' : ''}`;
+    menuNote.textContent = ch.note;
+    menu.querySelectorAll('[data-act]').forEach((b) => { b.hidden = b.dataset.act !== 'interact' && b.dataset.act !== 'lock'; });
+    menu.querySelector('[data-act="interact"]').textContent = ch.label;
+    menu.querySelector('[data-act="lock"]').textContent = locked ? '🔓 Unlock the door' : '🔒 Lock the door';
     menu.hidden = false;
     menu.style.left = Math.min(x, innerWidth - menu.offsetWidth - 8) + 'px';
     menu.style.top = Math.min(y, innerHeight - menu.offsetHeight - 8) + 'px';
@@ -589,8 +606,13 @@ menu.addEventListener('click', (e) => {
   const act = e.target.dataset && e.target.dataset.act;
   if (!act || !menuTarget) return;
   const t = menuTarget;
-  if (t.door) {                                         // long-press a door > Go into the room (or Come back)
+  if (t.door) {                                         // long-press a door > Go into the room (or Come back), or Lock / Unlock it
     if (act === 'interact') showToast(brain.visitRoom(t.door.id).message);
+    if (act === 'lock') {
+      const now = !world.isDoorLocked(t.door.id);
+      rooms.setDoorLocked(t.door.id, now);
+      showToast(now ? `The ${t.door.name} door is locked: Guy and GAL will stay out.` : `The ${t.door.name} door is unlocked.`);
+    }
     closeMenu();
     return;
   }
@@ -628,7 +650,7 @@ menu.addEventListener('click', (e) => {
 });
 addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
 window.__guyOpenBooks = () => openBookMenu(world.objects.shelf, 200, 100);          // the long-press book list, for the QA harness
-window.__guyOpenDoorMenu = (id) => openMenu({ door: world.doors[id] }, 120, 120);     // for the QA harness
+window.__guyOpenDoorMenu = (id, side = 'main') => openMenu({ door: world.doors[id], side }, 120, 120);     // for the QA harness (side: the face pressed)
 window.__guyOpenMenu = (name) => openMenu(name === 'ball' ? { ball: true } : { obj: brain.obj(name) }, 120, 120);     // for the QA harness
 addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') { setSoundMuted(!soundMuted); showToast(soundMuted ? 'Sound muted (M or the speaker to turn it back on)' : 'Sound on'); } });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());

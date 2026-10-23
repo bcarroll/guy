@@ -4,11 +4,11 @@
 // - At most 3 of his paintings on any one wall. He spreads them out: the wall with the fewest paintings first, his own room before
 //   the others, and the gap between neighbours as wide as it can be.
 // - If every wall is full he takes down his oldest painting and hangs the new one in its place. The old one is not thrown away:
-//   it goes into the Catalogue (Objects > Guy's paintings) as a thumbnail, and the user can hang it again from there.
+//   it goes into the Catalog (Objects > Guy's paintings) as a thumbnail, and the user can hang it again from there.
 // - Everything is saved (`guy.paintings.v1`): the pictures (small JPEGs), where each one hangs, and what is on the easel.
 //
 // A hung painting is an ordinary wall piece (world.decor), so the user can drag it along its wall or put it away like any picture;
-// `sync()` notices a painting that has been put away (or whose room has gone) and files it in the Catalogue.
+// `sync()` notices a painting that has been put away (or whose room has gone) and files it in the Catalog.
 const KEY = 'guy.paintings.v1';
 export const PER_WALL = 3;       // paintings of his on one wall
 export const MAX_ALL = 60;       // hung and stored together: a limit on what is kept in the browser
@@ -19,7 +19,7 @@ export class Paintings {
   constructor(world, { persist = true } = {}) {
     this.w = world;
     this.persist = persist;
-    this.items = [];             // { id, img (a data URL), room ('main' | a room id | null = in the Catalogue), wall, u, v, t }
+    this.items = [];             // { id, img (a data URL), room ('main' | a room id | null = in the Catalog), wall, u, v, t }
     this.seq = 0;
     this.decor = {};             // id -> the wall piece of a hung painting
     this.carried = null;         // the canvas Guy carries between the easel and the wall
@@ -76,7 +76,7 @@ export class Paintings {
     if (prop) prop.userData.show(c);
     return true;
   }
-  // He was cut short (or the wall is gone): the painting goes back on the easel; with no easel it goes into the Catalogue. Never lost.
+  // He was cut short (or the wall is gone): the painting goes back on the easel; with no easel it goes into the Catalog. Never lost.
   putBack() {
     const c = this.carried;
     if (!c) return;
@@ -99,7 +99,7 @@ export class Paintings {
   bestSpot(wl) {
     const w = this.w, P = w.PAINTING, F = wl.frame, mid = (F.lo + F.hi) / 2;
     const others = Object.values(w.decor).filter((o) => o.wall === wl.key);
-    if (wl.key === 'left') others.push({ u: (w.MACHINE_RECT.u0 + w.MACHINE_RECT.u1) / 2, hw: (w.MACHINE_RECT.u1 - w.MACHINE_RECT.u0) / 2 });     // keep clear of the Catalogue too
+    if (wl.key === 'left') others.push({ u: (w.MACHINE_RECT.u0 + w.MACHINE_RECT.u1) / 2, hw: (w.MACHINE_RECT.u1 - w.MACHINE_RECT.u0) / 2 });     // keep clear of the Catalog too
     const probe = { wall: wl.key, hw: P.hw, hh: P.hh };
     for (const v of [1.6, 1.45, 1.75, 1.3, 1.9]) {
       let best = null;
@@ -120,7 +120,9 @@ export class Paintings {
   plan({ noReplace = false } = {}) {
     const w = this.w;
     const cands = [];
+    const shut = (room) => !!(w.doors[room] && w.doors[room].locked);                 // a locked room: the robots cannot go in to hang anything
     for (const { key, room } of w.hangWalls()) {
+      if (shut(room)) continue;
       const frame = w.wallFrame(key);
       if (!frame || this.hungOn(key) >= PER_WALL) continue;
       const spot = this.bestSpot({ key, room, frame });
@@ -133,7 +135,7 @@ export class Paintings {
     }
     if (noReplace) return null;
     for (const r of this.hung().sort((a, b) => a.t - b.t)) {            // every wall is full (or bare only where he cannot reach): the oldest goes
-      const F = w.wallFrame(r.wall), stand = F && this.standFor(F, r.u, r.room);
+      const F = w.wallFrame(r.wall), stand = !shut(r.room) && F && this.standFor(F, r.u, r.room);
       if (stand) return { room: r.room, wall: r.wall, u: r.u, v: r.v, stand, replace: r.id };
     }
     return null;
@@ -142,7 +144,7 @@ export class Paintings {
   refusal() {
     if (!this.easel()) return 'There is no easel to take a painting from.';
     if (!this.easelHas()) return 'There is no painting on the easel yet. Guy paints when he has the book for it.';
-    if (this.items.length >= MAX_ALL) return 'Guy already has plenty of paintings. Take a few out of the Catalogue first.';
+    if (this.items.length >= MAX_ALL) return 'Guy already has plenty of paintings. Take a few out of the Catalog first.';
     if (!this.plan()) return 'There is no bare bit of wall for Guy to hang it on right now.';
     return null;
   }
@@ -176,7 +178,7 @@ export class Paintings {
     if (plan.replace) { const r = this.get(plan.replace); return !!(r && r.room); }
     return this.hungOn(plan.wall) < PER_WALL && this.w.decorFits({ wall: plan.wall, hw: this.w.PAINTING.hw, hh: this.w.PAINTING.hh }, plan.u, plan.v);
   }
-  // What he carries goes into the Catalogue, to be hung from there. Returns the record.
+  // What he carries goes into the Catalog, to be hung from there. Returns the record.
   stash() {
     const c = this.carried;
     if (!c) return null;
@@ -185,7 +187,7 @@ export class Paintings {
     this.changed();
     return rec;
   }
-  // Take one down into the Catalogue.
+  // Take one down into the Catalog.
   takeDown(id) {
     const rec = this.get(id);
     if (!rec || !rec.room) return false;
@@ -197,7 +199,7 @@ export class Paintings {
     this.changed();
     return true;
   }
-  // From the Catalogue: hang a stored painting straight away on a free wall (it never replaces another one). Returns a message.
+  // From the Catalog: hang a stored painting straight away on a free wall (it never replaces another one). Returns a message.
   hangStored(id) {
     const rec = this.get(id);
     if (!rec || rec.room) return 'That painting is already on a wall.';
@@ -219,7 +221,7 @@ export class Paintings {
         continue;
       }
       if (d) this.w.removeObject(name);
-      delete this.w.removed[name];                               // put away by the user, or its room was taken away: it is in the Catalogue now
+      delete this.w.removed[name];                               // put away by the user, or its room was taken away: it is in the Catalog now
       delete this.decor[rec.id];
       rec.room = null; rec.wall = null;
       any = true;
@@ -235,7 +237,7 @@ export class Paintings {
     if (!this.persist) return false;
     try { localStorage.setItem(KEY, JSON.stringify(this.snapshot())); return true; } catch { return false; }
   }
-  // Put the saved paintings back (after the rooms are, so the walls exist). A painting whose wall is gone or no longer fits goes to the Catalogue.
+  // Put the saved paintings back (after the rooms are, so the walls exist). A painting whose wall is gone or no longer fits goes to the Catalog.
   restore() {
     if (!this.persist) return;
     let data = null;

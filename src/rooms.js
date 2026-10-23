@@ -1,7 +1,7 @@
-// Extra rooms the user can add from the Catalogue's Rooms tab. Adding one puts a door on a wall of Guy's room (clearing the
+// Extra rooms the user can add from the Catalog's Rooms tab. Adding one puts a door on a wall of Guy's room (clearing the
 // wall of whatever is in the way) and builds the room behind it.
 //
-// A room is "added" once the user adds it, and "unlocked" when it is free or paid for. Things that belong to a room (catalogue
+// A room is "added" once the user adds it, and "unlocked" when it is free or paid for. Things that belong to a room (catalog
 // entries with `room: '<id>'`) are listed only while the room is added and unlocked: see `isLive`.
 import { OBJECT_CATALOG } from './machine.js';
 import { dev } from './devunlock.js';
@@ -33,20 +33,21 @@ export function initRooms({ world, remove, persist, refit }) {
   };
 
   const snapshot = () => ({ rooms: Object.fromEntries(Object.entries(state).filter(([id, s]) => s.added && world.doors[id])
-    .map(([id, s]) => [id, { added: true, wall: s.wall, u: s.u, ...(s.unlocked !== undefined ? { unlocked: s.unlocked } : {}) }])) });
+    .map(([id, s]) => [id, { added: true, wall: s.wall, u: s.u, ...(s.unlocked !== undefined ? { unlocked: s.unlocked } : {}), ...(s.doorLocked ? { doorLocked: true } : {}) }])) });
   const save = () => {
     if (!persist) return;
     try { localStorage.setItem(KEY, JSON.stringify(snapshot())); } catch { /* no storage */ }
   };
   const changed = () => { save(); refit(); listeners.forEach((f) => f()); };
 
-  // Take the pieces in a door's way out of the room (they go to the Catalogue, like any removal) and build the door.
+  // Take the pieces in a door's way out of the room (they go to the Catalog, like any removal) and build the door.
   function place(r, wall, u) {
     const b = world.doorBlockers(wall, u);
     if (b.fixed) return null;
     for (const name of b.hit) remove(name);
     world.addDoor(r, wall, u);
     state[r.id] = { ...(state[r.id] || {}), id: r.id, added: true, wall, u };
+    world.setDoorLocked(r.id, !!state[r.id].doorLocked);             // (a saved room comes back locked if it was)
     return b.hit;
   }
 
@@ -62,17 +63,18 @@ export function initRooms({ world, remove, persist, refit }) {
     changed();
     const messages = [`${r.name} added! There is a new door.`];
     if (hit.length === 1) messages.push(`Moved the ${label(hit[0])} to make space for the door.`);
-    else if (hit.length > 1) messages.push(`Moved ${hit.length} things to make space. Find them in the Catalogue.`);
+    else if (hit.length > 1) messages.push(`Moved ${hit.length} things to make space. Find them in the Catalog.`);
     return { ok: true, wall: spot.wall, u: spot.u, displaced: hit, messages };
   }
 
-  // Bring back the rooms saved earlier (before the Catalogue's extras, so the door strip is already clear for them).
+  // Bring back the rooms saved earlier (before the Catalog's extras, so the door strip is already clear for them).
   function restoreFrom(data) {
     const out = [];
     for (const [id, s] of Object.entries((data && data.rooms) || {})) {
       const r = def(id);
       if (!r || !s.added) continue;
       if (s.unlocked !== undefined) state[id] = { ...(state[id] || {}), id, unlocked: s.unlocked };
+      if (s.doorLocked) state[id] = { ...(state[id] || {}), id, doorLocked: true };
       const res = add(id, { at: { wall: s.wall, u: s.u } });
       out.push({ id, ok: res.ok || !!res.already, displaced: res.displaced || [] });
       if (!res.ok && !res.already) {                       // the saved spot is taken by something fixed: find a new one
@@ -89,7 +91,7 @@ export function initRooms({ world, remove, persist, refit }) {
     return restoreFrom(data);
   }
 
-  // Test aids: take a room away again, or lock / unlock it, without going through the Catalogue.
+  // Test aids: take a room away again, or lock / unlock it, without going through the Catalog.
   function reset(id) {
     const d = world.doors[id], b = d && d.shell.bounds;
     const inRoom = (x, z) => !!b && x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ;
@@ -99,15 +101,23 @@ export function initRooms({ world, remove, persist, refit }) {
     delete state[id];
     changed();
   }
+  // Lock or unlock a room's door (long-press the door): while it is locked the robots stay out of the room. Saved with the rooms.
+  function setDoorLocked(id, value) {
+    if (!added(id)) return false;
+    state[id] = { ...(state[id] || {}), id, doorLocked: !!value };
+    world.setDoorLocked(id, !!value);
+    changed();
+    return true;
+  }
   function setUnlocked(id, value) {
     state[id] = { ...(state[id] || {}), id, unlocked: value };
     changed();
   }
 
   return {
-    catalog: ROOM_CATALOG, def, add, restore, restoreFrom, snapshot, reset, setUnlocked,
-    isAdded: added, isUnlocked: unlocked,
-    // a catalogue entry is listed when it has no room, or its room is added and unlocked
+    catalog: ROOM_CATALOG, def, add, restore, restoreFrom, snapshot, reset, setUnlocked, setDoorLocked,
+    isAdded: added, isUnlocked: unlocked, isDoorLocked: (id) => added(id) && !!(state[id] && state[id].doorLocked),
+    // a catalog entry is listed when it has no room, or its room is added and unlocked
     isLive: (roomId) => !roomId || (added(roomId) && unlocked(roomId)),
     onChange: (f) => listeners.push(f),
   };

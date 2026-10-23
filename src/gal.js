@@ -60,6 +60,7 @@ export class GalBrain extends Brain {
   // the next thing Guy asked her to do, as an activity name
   nextOrder() {
     while (this.orders.length) {
+      if (this.stuckIn()) return null;                                       // shut in a locked room: she cannot go anywhere for him
       const o = this.orders[0];
       if (o.kind === 'read') {
         if (this.busyElsewhere(['shelf'])) return null;                    // Guy is at the bookshelf: she waits her turn (and does something else meanwhile)
@@ -68,6 +69,8 @@ export class GalBrain extends Brain {
         if (!on.mesh.visible) return null;                                                      // Guy has it in his hands just now: she waits for it
         return 'galread';
       }
+      const gp = this.leader.g.root.position, gr = this.w.roomIdAt(gp.x, gp.z);
+      if (gr !== 'main' && gr !== 'door' && this.doorLockedFor(gr)) return null;              // Guy is behind a locked door: she waits out here
       return 'findguy';
     }
     return null;

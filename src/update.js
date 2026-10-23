@@ -3,7 +3,7 @@ import { WHATS_NEW } from './whatsnew.js';
 // Notices when a newer build has been deployed and refreshes the page by itself, so a phone left on the game always ends up
 // running the newest code. Every build writes version.json (see vite.config.js) and bakes the same id into the bundle; the open
 // page compares the two. A refresh loses nothing: the layout is saved just before it (layout.js, `window.__guySave`), and skills,
-// the catalogue's additions and rooms are saved as they change.
+// the catalog's additions and rooms are saved as they change.
 //   - the tab comes back into view (the usual case on a phone): it refreshes at once, before anything is shown
 //   - found while the tab is open and being watched: a friendly bar says it is refreshing in a few seconds, with "Later" to put it
 //     off for half an hour
