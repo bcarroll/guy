@@ -1867,6 +1867,7 @@ export class Brain {
     this.using = new Set(this.exclusiveFor(name));                  // so the other robot leaves those alone
     const [label, ...steps] = acts[name]();
     this.ui(this.lock ? `🔒 ${label}` : label);
+    if (this.onStart) this.onStart(name);                          // (chatty mode: a short remark, voice.js)
     this.queue = steps;
     this.step = null;
   }

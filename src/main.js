@@ -118,7 +118,7 @@ world.gal = new Gal(world, {
   scene, guyBrain: brain, persist: !params.has('fresh'), skillsInit: params.get('skills') === 'all' || params.get('skills') === 'none' ? params.get('skills') : null,
   ui: (t) => { galLine.hidden = false; galLabel.textContent = t; },
   toast: (m) => { showToast(m); if (machineUI.isOpen()) machineUI.refresh(); }, onBuilt: (m) => showToast(m),
-  speak: (who, text, kind) => tts.say(who, text, kind), onWorkstation: (b) => workstation.open(b),
+  speak: (who, text, kind) => tts.say(who, text, kind), onWorkstation: (b) => workstation.open(b), onStart: (n) => voice.bark('gal', n),
 });
 world.gal.preload();
 // Guy's paintings: hung on the walls of any room, the rest kept in the Catalog (they are saved unless ?fresh)
@@ -682,13 +682,14 @@ brain.onLearnMany = (defs) => { showToast(`Guy learned ${defs.length} skills!`);
 window.__workstation = workstation;
 
 // Typed commands (the same path the microphone will use): the 💬 button opens a box; Enter sends it to Guy.
-const voice = createVoice({ world, brain, screen: screenLock, say: (who, text, kind) => tts.say(who, text, kind), toast: showToast });
+const voice = createVoice({ world, brain, screen: screenLock, say: (who, text, kind) => tts.say(who, text, kind), speaking: () => tts.speaking, toast: showToast });
+brain.onStart = (n) => voice.bark('guy', n);
 const cmdBox = document.getElementById('cmdbox'), cmdIn = document.getElementById('cmd-in');
 document.getElementById('talk-btn').addEventListener('click', () => { cmdBox.hidden = !cmdBox.hidden; if (!cmdBox.hidden) { cmdIn.focus(); tts.warm().catch(() => {}); } });
 cmdBox.addEventListener('submit', (e) => { e.preventDefault(); const t = cmdIn.value.trim(); if (!t) return; cmdIn.value = ''; voice.run(t); });
 cmdBox.querySelector('#cmd-chatter').addEventListener('change', (e) => tts.set('chatter', e.target.value));
 cmdBox.querySelector('#cmd-chatter').value = tts.settings.chatter;
-window.__voice = { run: (t) => voice.run(t), parse: voice.parse, tts, audienceOn: voice.audienceOn };
+window.__voice = { bark: voice.bark, run: (t) => voice.run(t), parse: voice.parse, tts, audienceOn: voice.audienceOn };
 
 
 // Capture phase so we run before OrbitControls and can keep it from orbiting while we handle an object.

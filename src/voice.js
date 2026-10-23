@@ -3,6 +3,7 @@
 // The parser is rules only (no network): normalise the sentence, match it against a small table, run it through the same entry
 // points the menus use (interact, requestRead, visitRoom, lockOn), and speak the answer. English only.
 // run(text) returns { ok, intent, lines: [{ who, text }] }; every line is also sent to the speaker (tts.js).
+import { barkFor, barkReady, barkSpoke } from './barks.js';
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 export const OK = ['Sure thing.', 'On it.', 'Okay!', 'You got it.'];
 export const GAL_OK = ['On it.', 'Right away.', 'Okay, I will.'];
@@ -66,7 +67,7 @@ export function parse(text, ctx = {}) {
 const BUSY = ['build', 'makewood', 'sawwood', 'tap', 'sand', 'tidytools', 'makemetal', 'cutmetal', 'hammer', 'weld', 'takeorder', 'cook', 'serve', 'takepay', 'rwait', 'paint', 'portrait', 'mixpaint', 'putcanvas', 'hangpaint', 'buildbot', 'orderbuild', 'bandplay', 'bandjam'];
 export const guyBusy = (b) => !!(b.lock || b.stuckIn() || !b.inMain() || (b.restStays && b.restStays()) || (b.step || b.queue.length) && BUSY.includes(b.last));
 
-export function createVoice({ world, brain, say = () => {}, screen = null, toast = () => {} }) {
+export function createVoice({ world, brain, say = () => {}, speaking = null, screen = null, toast = () => {} }) {
   const gal = () => world.gal;
   const galOk = () => { const g = gal(); return !!(g && g.exists && g.exists() && !g.emerge && g.brain); };
   const roomList = () => Object.entries(world.doors || {}).map(([id, d]) => ({ id, name: d.name }));
@@ -163,5 +164,15 @@ export function createVoice({ world, brain, say = () => {}, screen = null, toast
     }
     speak('guy', fix(r.message, 'guy')); return res(false);
   }
-  return { run, parse: (t) => parse(t, { rooms: roomList() }), audienceOn, lines };
+  // a short remark as a robot starts something (chatty mode only; at most one every 25 s per robot, and never over a line being spoken)
+  function bark(who, act) {
+    if (!say || (typeof speaking === 'function' && speaking())) return false;
+    const text = barkFor(act); if (!text) return false;
+    const now = performance.now();
+    if (!barkReady(who, now)) return false;
+    const said = say(who, text, 'bark') !== false;
+    if (said) barkSpoke(who, now);
+    return said;
+  }
+  return { run, bark, parse: (t) => parse(t, { rooms: roomList() }), audienceOn, lines };
 }
