@@ -5,7 +5,7 @@
 // What is saved is a snapshot of the world: it is written a few seconds after anything changes and whenever the tab is hidden or
 // closed. Restoring sets every piece straight to its saved spot (the saved layout was valid as a whole), then checks each piece
 // and moves any that no longer fits (a corrupt save, or a door that now stands where it was) to the nearest free place.
-// Everything else Guy remembers is saved elsewhere: skills (skills.js), the catalogue's additions (machine.js), rooms (rooms.js).
+// Everything else Guy remembers is saved elsewhere: skills (skills.js), the catalog's additions (machine.js), rooms (rooms.js).
 const KEY = 'guy.layout.v1';
 const VERSION = 1;
 

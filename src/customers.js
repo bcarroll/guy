@@ -64,9 +64,9 @@ export class Restaurant {
   // customers keep arriving while it is full (the owner's rule: then Guy or GAL builds another table); counted from the last table added
   needsSeats() { return this.turnedAway >= 3 && this.tables().length < 4 && this.isOpen(); }
   roomOn() { return !!this.w.doors[ID]; }
-  // Can customers come? The room is there with its kitchen, a till and a table, and Guy knows how to run it.
+  // Can customers come? The room is there (and its door is not locked: a locked restaurant is closed) with its kitchen, a till and a table, and Guy knows how to run it.
   isOpen() {
-    return this.roomOn() && !!this.obj('stove') && !!this.obj('kitchencounter') && !!this.obj('register') && this.tables().length > 0 && this.skillOk();
+    return this.roomOn() && !this.w.doors[ID].locked && !!this.obj('stove') && !!this.obj('kitchencounter') && !!this.obj('register') && this.tables().length > 0 && this.skillOk();
   }
   grid() { return makeGrid(this.w.obstacles, 0.2, 0, null, this.w.frameOf(ID)); }
   seatFree() {

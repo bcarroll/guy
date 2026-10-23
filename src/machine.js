@@ -1,4 +1,4 @@
-// The Catalogue's catalogue: what can go in the room, and which books can go on the shelf.
+// The Catalog's catalog: what can go in the room, and which books can go on the shelf.
 //
 // Objects come in four states:
 //   inroom    already here
@@ -273,16 +273,16 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
         });
         groups[`${c.icon} ${c.name} · ${here} of ${items.length} in the room`] = cards;
       }
-      if (pics.length && (cat === 'all' || cat === 'paintings')) {            // what Guy has painted: hung on a wall, or waiting in the Catalogue (a thumbnail of each picture)
+      if (pics.length && (cat === 'all' || cat === 'paintings')) {            // what Guy has painted: hung on a wall, or waiting in the Catalog (a thumbnail of each picture)
         const sorted = pics.slice().sort((a, b) => a.t - b.t);
-        groups[`🖼️ Guy's paintings · ${paintings.hung().length} hung, ${paintings.stored().length} in the Catalogue`] = sorted.map((r) => {
+        groups[`🖼️ Guy's paintings · ${paintings.hung().length} hung, ${paintings.stored().length} in the Catalog`] = sorted.map((r) => {
           const base = { icon: r.img ? `<img class="thumb" alt="" src="${esc(r.img)}">` : '🖼️', name: `Painting ${sorted.indexOf(r) + 1}`, status: r.room ? 'inroom' : 'available' };
           if (r.room) {
-            const i = handlers.push(() => { paintings.takeDown(r.id); notify('Took the painting down. It is in the Catalogue.'); render(); }) - 1;
+            const i = handlers.push(() => { paintings.takeDown(r.id); notify('Took the painting down. It is in the Catalog.'); render(); }) - 1;
             return card({ ...base, desc: `Hanging in ${paintings.roomName(r.room)}.`, label: 'Take down', action: i, danger: true });
           }
           const i = handlers.push(() => { notify(paintings.hangStored(r.id)); render(); }) - 1;
-          return card({ ...base, desc: 'Waiting in the Catalogue.', label: 'Hang it', action: i, note: 'Hangs on a free wall.' });
+          return card({ ...base, desc: 'Waiting in the Catalog.', label: 'Hang it', action: i, note: 'Hangs on a free wall.' });
         });
       }
       delete groups['In the room']; delete groups['Add to the room']; delete groups['Premium · coming soon'];
@@ -303,7 +303,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
         const base = { icon: r.icon, name: r.name, desc: r.desc, status: 'room' };
         if (!rooms.isUnlocked(r.id)) { if (r.premium) roomGroups['Premium · coming soon'].push(card({ ...base, status: 'locked', label: '🔒 Premium' })); continue; }
         if (rooms.isAdded(r.id)) roomGroups['In your home'].push(card({ ...base, status: 'inroom', label: '✓ In your home' }));
-        else { const i = handlers.push(() => addRoom(r)) - 1; roomGroups['Add a room'].push(card({ ...base, label: 'Add to my home', action: i, note: 'Puts a door on a wall. Anything in the way goes back to the Catalogue.' })); }
+        else { const i = handlers.push(() => addRoom(r)) - 1; roomGroups['Add a room'].push(card({ ...base, label: 'Add to my home', action: i, note: 'Puts a door on a wall. Anything in the way goes back to the Catalog.' })); }
       }
     } else {
       for (const b of BOOK_CATALOG.filter(live)) {

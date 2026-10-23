@@ -41,7 +41,7 @@ sitting from the front and the side, customers, each room, compared with the app
   and rotate objects at any moment. Steps that depend on an object declare it (`fx.needs`, anchors) so removing it cancels them.
 - Objects move only when Guy pushes them or the user drags them. Nothing resets, not even across reloads: `src/layout.js` saves every
   piece's position, turn and removed state (`guy.layout.v1`) and puts it back on load; `src/update.js` refreshes the page by itself
-  when a newer build is deployed. If you add state the user can change, save it (layout, rooms or the catalogue's extras) and add
+  when a newer build is deployed. If you add state the user can change, save it (layout, rooms or the catalog's extras) and add
   it to `T.sweepLayout`.
 - Arm and hand poses use IK (`Guy.reach` in `src/guy.js`), including exact hand orientation (`opts.hand`).
 - `?nostart&fresh&skills=all&records=all` is a handy test URL; `window.sim(seconds)` fast-forwards without rendering.

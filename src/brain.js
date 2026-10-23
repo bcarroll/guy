@@ -709,8 +709,9 @@ export class Brain {
       // the stereo is on: strum along in time and in the key of whatever is playing
       // through the door of an added room, a look round, and back (long-press the door, or he does it now and then)
       visit: () => {
-        const w = this.w, id = this.visitId && w.doors[this.visitId] ? this.visitId : Object.keys(w.doors)[0], door = w.doors[id];
+        const w = this.w, id = this.visitId && w.doors[this.visitId] ? this.visitId : Object.keys(w.doors).find((d) => !this.doorLockedFor(d)), door = w.doors[id];
         this.visitId = null;
+        if (!door || this.doorLockedFor(id)) return ['the door is locked', this.play('idle', 0.5)];
         const out = this.doorStand(id), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false), b = door.shell.bounds;
         const direct = (p, yaw = null) => ({ ...this.walk(p.x, p.z, yaw), direct: true });
         const steps = [this.walk(out.x, out.z, face),
@@ -718,12 +719,21 @@ export class Brain {
           this.play('idle', 0.7),                                               // the door swings open
           direct(inn)];
         for (let i = 0; i < 3; i++) steps.push(direct({ x: rand(b.minX + 1.2, b.maxX - 1.2), z: rand(b.minZ + 1.2, b.maxZ - 1.2) }), this.play('idle', rand(1.5, 3)));
-        steps.push(direct(inn), direct(out), this.walk(out.x, out.z, face),
+        steps.push({ type: 'plan', fn: () => { if (!this.stuckIn()) return []; this.queue.length = 0; this.ui(`shut in the ${door.name} (the door is locked)`); return []; } },      // (locked behind him)
+          direct(inn), direct(out), this.walk(out.x, out.z, face),
           this.play('reach', 1.6, { at: [0.8, () => this.closeDoor(id)], target: () => w.doorKnob(id) }));
         return [`having a look in the ${door.name}`, ...steps];
       },
       // he is in an added room: straight back out through the door and shut it behind him
+      // shut in an added room (its door is locked, and so is any other way out): wander about in there until somebody unlocks it
+      stuck: () => {
+        const w = this.w, id = this.stuckIn(), d = id && w.doors[id];
+        if (!d) return ['collecting himself', this.play('idle', 0.5)];
+        const b = d.shell.bounds, direct = (q) => ({ ...this.walk(q.x, q.z), direct: true });
+        return [`shut in the ${d.name} (the door is locked)`, direct({ x: rand(b.minX + 1.2, b.maxX - 1.2), z: rand(b.minZ + 1.2, b.maxZ - 1.2) }), this.play('idle', rand(2, 4))];
+      },
       leave: () => {
+        if (this.stuckIn()) return ['shut in (the door is locked)', this.play('idle', 0.5)];
         const w = this.w, p = this.g.pos, id = Object.keys(w.doors).sort((a, c) => {
           const f = (d) => { const bb = w.doors[d].shell.bounds; return Math.hypot((bb.minX + bb.maxX) / 2 - p.x, (bb.minZ + bb.maxZ) / 2 - p.z); };
           return f(a) - f(c);
@@ -1312,10 +1322,10 @@ export class Brain {
     };
   }
 
-  // "Remove" on a book in the shelf list: it goes back to the catalogue and nothing else changes (Guy keeps what he learned).
+  // "Remove" on a book in the shelf list: it goes back to the catalog and nothing else changes (Guy keeps what he learned).
   removeBook(id) { return this.forgetBook(id, true); }
 
-  // "Forget" on a book in the shelf list: it goes back to the catalogue and what it taught starts to fade.
+  // "Forget" on a book in the shelf list: it goes back to the catalog and what it taught starts to fade.
   forgetBook(id, keepSkill = false) {
     const shelf = this.obj('shelf');
     const rec = shelf && shelf.books.find((b) => b.def.id === id);
@@ -1324,9 +1334,9 @@ export class Brain {
     if (this.forceBook === rec) this.forceBook = null;
     const def = rec.def;
     shelf.removeBook(rec);
-    if (keepSkill) return { ok: true, message: `"${def.title}" is back in the Catalogue. Guy keeps everything he learned from it.` };
+    if (keepSkill) return { ok: true, message: `"${def.title}" is back in the Catalog. Guy keeps everything he learned from it.` };
     const fading = this.skills.forget(def.teaches);
-    return { ok: true, message: fading ? `"${def.title}" is back in the Catalogue. Guy will gradually forget ${def.blurb}.` : `"${def.title}" is back in the Catalogue.` };
+    return { ok: true, message: fading ? `"${def.title}" is back in the Catalog. Guy will gradually forget ${def.blurb}.` : `"${def.title}" is back in the Catalog.` };
   }
 
   // Closing a book he has read for long enough teaches him what is in it.
@@ -1598,6 +1608,12 @@ export class Brain {
   }
 
   available(act) {
+    // shut in a room by a locked door: only what can be done in that room
+    const shut = this.stuckIn();
+    if (shut) return shut === 'workshop' ? WORK_ACTS.includes(act) && this.availableIn(act) : shut === 'restaurant' ? (REST_JOBS.includes(act) || act === 'rwait') && this.availableIn(act) : false;
+    return this.availableIn(act);
+  }
+  availableIn(act) {
     if (this.galBlocks && this.galBlocks(act)) return false;                // (GAL does not do some things; Guy needs GAL for others)
     if (this.busyElsewhere(this.exclusiveFor(act))) return false;           // the other robot is using it
     const need = {
@@ -1637,11 +1653,11 @@ export class Brain {
       if (this.w.obstacles.some((o) => o.active !== false && b.x > o.x0 - 0.5 && b.x < o.x1 + 0.5 && b.z > o.z0 - 0.5 && b.z < o.z1 + 0.5)) return false;
     }
     if (act === 'putback' || act === 'dropball' || act === 'putguitar' || act === 'leave' || act === 'hangpaint' || act === 'putcanvas') return false;
-    if (act === 'visit') return Object.keys(this.w.doors).length > 0 && this.inMain();
+    if (act === 'visit') return this.inMain() && Object.keys(this.w.doors).some((id) => !this.doorLockedFor(id));
     // the Workshop: it has to be added, and the stock has to allow it
     if (['makewood', 'sawwood', 'tap', 'sand', 'tidytools', 'build', 'makemetal', 'cutmetal', 'hammer', 'weld'].includes(act)) {
       const st = this.w.stock;
-      if (!this.w.doors.workshop) return false;
+      if (!this.w.doors.workshop || this.doorLockedFor('workshop')) return false;
       if (act === 'makemetal' && (st.metal + METAL_PER_RUN > METAL_CAP || st.metal >= 8)) return false;
       if (act === 'cutmetal' && (st.metal < 1 || st.mparts + 2 > 8)) return false;
       if (act === 'makewood' && (st.wood + PLANKS_PER_RUN > STOCK_CAP || st.wood >= 12)) return false;
@@ -1697,10 +1713,12 @@ export class Brain {
   visitRoom(id) {
     const d = this.w.doors[id];
     if (!d) return { ok: false, message: "There isn't a door like that." };
+    const inside = !this.inMain();
+    if (inside && this.stuckIn()) return { ok: false, message: this.shutInMessage(this.stuckIn()) };
+    if (!inside && this.doorLockedFor(id)) return { ok: false, message: `The ${d.name} door is locked. Unlock it first (long-press the door).` };
     this.unlock(false);
     this.skip();
     this.visitId = id;
-    const inside = !this.inMain();
     this.pendingActivity = inside ? 'leave' : 'visit';
     return { ok: true, message: inside ? 'Guy is coming back.' : `Guy is going into the ${d.name}.` };
   }
@@ -1787,7 +1805,7 @@ export class Brain {
     this.restCleanup();                                      // cut short in the Restaurant: the dish goes back, the order waits again
     this.workCleanup();                                      // cut short in the Workshop: what he carries goes back in the stock
     let name = force;
-    if (!name && !this.inMain() && !this.lockedInside() && !this.restStays()) name = 'leave';             // he is in an added room: back through the door before anything else
+    if (!name && !this.inMain() && !this.lockedInside() && !this.restStays() && !this.stuckIn()) name = 'leave';             // he is in an added room: back through the door before anything else
     if (!name && this.carry === 'canvas') name = 'putcanvas';                  // cut short with a painting in his hands: back to the easel with it
     if (!name && this.gtr.held && this.obj('guitar') && !this.guitarLocked()) name = 'putguitar'; // still holding the guitar: back on its stand (not while locked in on it)
     if (!name && this.lampOffByMe && this.obj('lamp') && !this.obj('lamp').on) name = 'lighton'; // he switched it off for the stars and never put it back
@@ -1817,7 +1835,7 @@ export class Brain {
         .map(([k, v]) => [k, (tags[k] || []).some((t) => lastTags.includes(t)) ? v * 0.1 : v]);
       let r = Math.random() * entries.reduce((s, [, v]) => s + v, 0);
       for (const [k, v] of entries) { if ((r -= v) <= 0) { name = k; break; } }
-      name ||= 'wander';
+      name ||= this.stuckIn() ? 'stuck' : 'wander';
     }
     if (name === 'rearrange') this.lastRearrange = this.time;
     this.prev = this.last;
@@ -1869,6 +1887,9 @@ export class Brain {
   // The user asked Guy to use something right now. Returns { ok, message }.
   interact(name) {
     const k = (id) => this.skills.has(id);
+    const there = this.obj(name), rm = there && this.w.roomIdAt(there.x, there.z);
+    if (rm && rm !== 'main' && rm !== 'door' && this.doorLockedFor(rm)) return { ok: false, message: `The ${this.w.doors[rm].name} door is locked. Unlock it first (long-press the door).` };
+    if (this.stuckIn() && rm !== this.stuckIn()) return { ok: false, message: this.shutInMessage(this.stuckIn()) };        // shut in: only what is in the room with him
     let tries = {
       // with the stereo already playing, an instrument means playing along with it
       piano: k('piano') ? (this.music ? ['jamsit', 'jampiano', 'jam'] : ['sitpiano', 'piano']) : ['plink'],
@@ -1920,6 +1941,7 @@ export class Brain {
     const shelf = this.obj('shelf');
     const book = shelf && shelf.books.find((b) => b.def.id === id && b.mesh.visible);
     if (!book) return { ok: false, message: "That book isn't on the shelf any more." };
+    if (this.stuckIn()) return { ok: false, message: this.shutInMessage(this.stuckIn()) };
     this.unlock(false);                            // asked for something specific: the lock is over
     this.skip();
     this.forceBook = book;
@@ -1978,11 +2000,16 @@ export class Brain {
   update(dt) {
     this.time += dt;
     if (!this.isGal) {                    // (once a frame, by the first character: GAL's brain skips these)
+      for (const d of Object.values(this.w.doors)) {            // a door that was locked while open shuts as soon as nobody is in the doorway
+        if (!d.locked || !d.openTo) continue;
+        const inDoorway = (br) => !!(br && br.g && this.w.roomIdAt(br.g.root.position.x, br.g.root.position.z) === 'door');
+        if (!inDoorway(this) && !inDoorway(this.other)) d.openTo = 0;
+      }
       this.w.updateDoors(dt);             // doors swing open and shut
       if (this.w.restaurant) this.w.restaurant.update(dt);      // customers arrive, order, eat and pay (customers.js)
       if (this.w.gal) this.w.gal.update(dt);                    // GAL, the second robot (gal.js)
     }
-    if (this.w.paintings) this.w.paintings.update(dt);        // Guy's paintings: saved when they change, and put away ones filed in the Catalogue
+    if (this.w.paintings) this.w.paintings.update(dt);        // Guy's paintings: saved when they change, and put away ones filed in the Catalog
     this.skills.tick(dt);                 // skills whose book was forgotten fade away
     this.autoAdvance();
     const g = this.g;

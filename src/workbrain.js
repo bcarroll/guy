@@ -63,16 +63,38 @@ export function installWorkshop(Brain, POSES, H) {
     lockHere() { const o = this.lock && this.obj(this.lock.name); return !!o && this.w.roomIdAt(o.x, o.z) === ID; },
 
     // ------------------------------------------------------------------ going in and out through the door
+    // The door of room `id` is locked and he is not already in there (or in the doorway): he cannot go in. (He can always come out.)
+    doorLockedFor(id) {
+      const d = this.w.doors[id];
+      if (!d || !d.locked) return false;
+      const here = this.w.roomIdAt(this.g.root.position.x, this.g.root.position.z);
+      return here !== id && here !== 'door';
+    },
+    // The doors out of room `id` (an added room has the one door; with more, any that is unlocked lets him out).
+    exitsOf(id) { const d = this.w.doors[id]; return d ? [d] : []; },
+    // The added room he is shut in: he is in it and every door out of it is locked (a locked door works both ways). He can only do what can
+    // be done in there, until somebody unlocks a door. null when he is not shut in.
+    stuckIn() {
+      const here = this.w.roomIdAt(this.g.root.position.x, this.g.root.position.z);
+      if (here === 'main' || here === 'door') return null;
+      const exits = this.exitsOf(here);
+      return exits.length && exits.every((d) => d.locked) ? here : null;
+    },
+    shutInMessage(room) { return `${this.isGal ? 'GAL' : 'Guy'} is shut in the ${this.w.doors[room].name}: the door is locked. Unlock it (long-press the door) to let ${this.isGal ? 'her' : 'him'} out.`; },
     doorIn(id) {
       const w = this.w, out = this.doorStand(id), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false);
-      return [this.walk(out.x, out.z, face),
+      // (the locked doors are kept out of every choice, but one can be locked while he is on his way: he gives up there, never walks into it)
+      return [{ type: 'plan', fn: () => { if (!this.doorLockedFor(id)) return []; this.queue.length = 0; this.ui(`the ${w.doors[id].name} door is locked`); return []; } },
+        this.walk(out.x, out.z, face),
         this.play('reach', 1.6, { at: [0.8, () => { w.setDoorOpen(id, true); sfx('click'); }], target: () => w.doorKnob(id) }),
         this.play('idle', 0.7),
         { ...this.walk(inn.x, inn.z), direct: true }];
     },
     doorOut(id) {
       const w = this.w, out = this.doorStand(id), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false);
-      return [this.play('idle', 0.05, { at: [0, () => w.setDoorOpen(id, true)] }),            // (the other robot may have shut it behind her while he was inside)
+      // (locked while he is on his way out: he stays in, and what he was doing there is dropped)
+      return [{ type: 'plan', fn: () => { if (!this.stuckIn()) return []; this.queue.length = 0; this.ui(`shut in the ${w.doors[id].name} (the door is locked)`); return []; } },
+        this.play('idle', 0.05, { at: [0, () => w.setDoorOpen(id, true)] }),            // (the other robot may have shut it behind her while he was inside)
         this.walk(inn.x, inn.z), { ...this.walk(out.x, out.z), direct: true }, this.walk(out.x, out.z, face),
         this.play('reach', 1.6, { at: [0.8, () => this.closeDoor(id)], target: () => w.doorKnob(id) })];
     },
@@ -252,6 +274,8 @@ export function installWorkshop(Brain, POSES, H) {
       if (!p || !r.serves) return null;
       const room = p.room, b = room === 'main' || room === 'door' ? { minX: -4.5, maxX: 4.5, minZ: -3.5, maxZ: 3.6 } : w.doors[room] && w.doors[room].shell.bounds;
       if (!b) return null;
+      if (room !== 'main' && room !== 'door' && this.doorLockedFor(room)) return null;                      // a locked room: it is put together where it stands, not carried in
+      if (this.stuckIn() && room !== this.stuckIn()) return null;                                           // shut in the Workshop: it is put together here, not carried out
       const cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2, d = Math.hypot(cx - p.x, cz - p.z) || 1;
       const stand = { x: Math.min(b.maxX - 0.7, Math.max(b.minX + 0.7, p.x + (cx - p.x) / d * 0.95)), z: Math.min(b.maxZ - 0.7, Math.max(b.minZ + 0.7, p.z + (cz - p.z) / d * 0.95)) };
       return { room, pref: p, stand };

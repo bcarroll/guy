@@ -58,7 +58,7 @@ export function installRestaurant(Brain, POSES, H) {
     // Can he do this restaurant job right now?
     restAvailable(act) {
       const r = this.w.restaurant;
-      if (!r || !this.w.doors[ID]) return false;
+      if (!r || !this.w.doors[ID] || this.doorLockedFor(ID)) return false;
       if (act === 'rwait') return (r.isOpen() || r.busy()) && REST_OBJECTS.some((n) => this.obj(n));
       return !!r.find(act);
     },
@@ -68,6 +68,7 @@ export function installRestaurant(Brain, POSES, H) {
       if (!REST_OBJECTS.includes(name) && !(this.obj(name) && this.obj(name).seats)) return null;
       if (!this.skills.has('restaurant')) return `Guy doesn't know how to run a restaurant yet. Add the book "Restaurant Basics" to the shelf and he'll read it.`;
       const r = this.w.restaurant;
+      if (this.doorLockedFor(ID)) return 'The restaurant door is locked. Unlock it (long-press the door) and Guy can go in.';
       if (!r || !r.isOpen()) return 'The restaurant needs a stove, a kitchen counter, a cash register and a table before it can open.';
       return null;
     },

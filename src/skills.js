@@ -3,7 +3,7 @@
 // To add a skill later (e.g. when the user adds an object with its own manual): add a BOOK_DEFS entry and a SKILL_INFO entry,
 // put the book on the shelf with world.objects.shelf.addBook(def), and gate the activity in Brain.available().
 
-// Every book that exists. `start` ones are on the shelf from the beginning; the rest are added from the Catalogue.
+// Every book that exists. `start` ones are on the shelf from the beginning; the rest are added from the Catalog.
 // requires.object: the object that has to be in the room first; locked: a future premium item.
 export const BOOK_CATALOG = [
   { id: 'stereo', title: 'Stereo User Manual', teaches: 'stereo', color: 0x2d6a9f, thick: 0.055, height: 0.31, blurb: 'how to use the stereo', start: true, desc: 'How to use the stereo.' },
@@ -50,7 +50,7 @@ export const BOOK_CATALOG = [
     blurb: 'how to paint portraits and landscapes', requires: { object: 'easel' }, desc: 'Faces, hills, suns and still lifes, then step back and admire.' },
   // ---- decorating (no object needed: the room always has something to dust) ----
   { id: 'decorating', title: 'Home Decorating for Robots', teaches: 'decorate', color: 0xc8744a, thick: 0.06, height: 0.32,
-    blurb: 'how to look after the room: dusting the picture frames and the windows', desc: 'Dust the frames, wipe the window sills and keep the room looking its best. Pictures, plants, rugs and more are in the Catalogue under Decor.' },
+    blurb: 'how to look after the room: dusting the picture frames and the windows', desc: 'Dust the frames, wipe the window sills and keep the room looking its best. Pictures, plants, rugs and more are in the Catalog under Decor.' },
   // ---- telescope ----
   { id: 'stars', title: 'Stargazing for Robots', teaches: 'telescope', color: 0x1b2a6b, thick: 0.055, height: 0.31,
     blurb: 'how to use a telescope', requires: { object: 'telescope' }, desc: 'Aim it, focus it, and look through the right end.' },
@@ -76,7 +76,7 @@ export const SKILL_INFO = {
   },
   'workshop.furniture': {
     name: 'Furniture for Robots', book: 'Furniture for Robots',
-    unlocks: ['Build wooden chairs, a bookshelf and a dining table when the house needs them', 'Wooden chairs then appear in the Catalogue'],
+    unlocks: ['Build wooden chairs, a bookshelf and a dining table when the house needs them', 'Wooden chairs then appear in the Catalog'],
   },
   'workshop.metal': {
     name: 'Metal Fabrication', book: 'Metal Fabrication for Robots',

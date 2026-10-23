@@ -1,6 +1,6 @@
 // Record albums for the stereo. They live on the top shelf of the bookshelf (books never use that shelf).
 //
-// free: can be added from the Catalogue now. premium: listed there but locked (a future pay-based unlock).
+// free: can be added from the Catalog now. premium: listed there but locked (a future pay-based unlock).
 // track: the first track (key into TRACKS in audio.js); tracks: every track on the record, in play order. Only tracks that exist can play;
 // premium albums get theirs when they are unlocked.
 

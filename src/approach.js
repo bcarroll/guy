@@ -7,6 +7,8 @@ import { makeGrid, findPath, cellBlocked, MAIN_FRAME } from './brain.js';
 
 // how far the hands can reach from where he stands, measured along the floor to the thing he works at
 const REACH = 1.0;
+// how far apart the two robots keep their feet when they use the same station (each is a 0.5 m box: closer than this and they overlap)
+const APART = 0.6;
 
 export function installApproach(Brain) {
   Object.assign(Brain.prototype, {
@@ -22,6 +24,17 @@ export function installApproach(Brain) {
         }
       }
       return w.doorPoint(id, 0.8);
+    },
+
+    // Where the other robot is standing, or is on its way to stand, at a station: a place he must not pick too. (Both can plan a walk to
+    // the same station in the same moment, before either has arrived and become an obstacle for the other.) The claim ends with its walk.
+    otherSpots() {
+      const o = this.other, out = [];
+      if (!o || !o.g) return out;
+      const p = o.g.root.position, c = o.standClaim;
+      out.push({ x: p.x, z: p.z });
+      if (c && (o.step === c.step || (o.queue && o.queue.includes(c.step)))) out.push({ x: c.x, z: c.z });
+      return out;
     },
 
     // the side he last stood at for `name`: 0 front, 1 right (+x), 2 back, 3 left (-x)
@@ -62,6 +75,7 @@ export function installApproach(Brain) {
         const added = room !== 'main' && room !== 'door', b = added ? w.doors[room].shell.bounds : { minX: -4.5, maxX: 4.5, minZ: -3.5, maxZ: 3.6 }, m = added ? 0.6 : 0.15;
         return x > b.minX + m && x < b.maxX - m && z > b.minZ + m && z < b.maxZ - m;
       };
+      const taken = this.otherSpots();
       const options = [], why = {};                                                    // (why: for each side, what ruled it out; read by the QA harness)
       this.lastStand = { name, why };
       for (const k of sides) {
@@ -72,6 +86,7 @@ export function installApproach(Brain) {
           const s = spot(k, along), l = o.local(s.x, s.z), x = o.x + l.x, z = o.z + l.z;
           if (!inside(x, z)) { why[k] ||= 'outside'; continue; }
           if (cellBlocked(grid, x, z)) { why[k] ||= 'blocked'; continue; }
+          if (taken.some((q) => Math.hypot(x - q.x, z - q.z) < APART)) { why[k] ||= 'taken'; continue; }      // the other robot is (or is about to be) there
           if (w.roomIdAt(me.x, me.z) === room && !findPath(grid, me.x, me.z, x, z, true)) { why[k] ||= 'no path'; continue; }
           const d = t ? Math.hypot(s.x - t.x, s.z - t.z) : 0;
           if (!best || d < best.d) best = { k, x, z, yaw: s.yaw + o.yaw, near: d <= REACH, d };
@@ -83,11 +98,13 @@ export function installApproach(Brain) {
       const best = options.find((c) => c.near) || options.sort((a, b) => a.d - b.d)[0];
       if (!best) {                                                  // no side is free: he says so and does something else (he never walks into a wall)
         this.queue.length = 0;
-        this.ui(`can't get to the ${name} from anywhere`);
+        this.ui(Object.values(why).includes('taken') ? `waiting for a turn at the ${name}` : `can't get to the ${name} from anywhere`);
         return [];
       }
       (this.useSide ||= {})[name] = best.k;
-      return [{ ...this.walk(best.x, best.z, best.yaw), tol: 0.3 }];
+      const walk = { ...this.walk(best.x, best.z, best.yaw), tol: 0.3 };
+      this.standClaim = { step: walk, x: best.x, z: best.z, name };                // the other robot keeps clear of this spot until he gets there
+      return [walk];
     },
   });
 }

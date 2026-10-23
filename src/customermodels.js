@@ -2,7 +2,7 @@
 // loaded the first time someone with that model arrives. More characters come from add-on packs: add a line here and put the file
 // in public/models/customers/ (keep it small: a phone has to download it; 3-8 MB is fine, tens of MB is not).
 //   id      short name, used in saves and tests
-//   name    shown in speech and the Catalogue
+//   name    shown in speech and the Catalog
 //   pack    the pack it belongs to ('basic' is free; the others are premium add-ons, ignored until the pack is owned)
 //   file    path under public/models/customers/
 //   height  how tall they are, in metres
