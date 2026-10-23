@@ -71,7 +71,7 @@ const SOUNDS = {
   bookopen(ctx, out) { burst(ctx, out, { dur: 0.16, type: 'lowpass', f: 1000, f2: 400, gain: 0.2 }); tone(ctx, out, { f0: 95, f1: 70, dur: 0.12, gain: 0.2 }); },
   bookclose(ctx, out) { tone(ctx, out, { f0: 100, f1: 55, dur: 0.12, gain: 0.35 }); burst(ctx, out, { dur: 0.06, f: 1200, gain: 0.12 }); },
   bookgrab(ctx, out) { burst(ctx, out, { dur: 0.14, f: 1800, f2: 900, gain: 0.13 }); tone(ctx, out, { f0: 200, f1: 120, dur: 0.07, type: 'triangle', gain: 0.18, delay: 0.1 }); },
-  sleeve(ctx, out) { burst(ctx, out, { dur: 0.18, f: 2600, f2: 1400, gain: 0.12 }); },
+  sleeve(ctx, out) { burst(ctx, out, { dur: 0.18, f: 2600, f2: 1400, gain: 0.18 }); },
   // instruments handled
   guitar(ctx, out) {          // picking the guitar up or putting it down: a knock on the wood and a soft open-string strum
     tone(ctx, out, { f0: 190, f1: 110, dur: 0.12, type: 'triangle', gain: 0.35 });
@@ -80,35 +80,37 @@ const SOUNDS = {
   },
   // switches and small things
   click(ctx, out) { tone(ctx, out, { f0: 1900, f1: 1100, dur: 0.025, type: 'square', gain: 0.1 }); burst(ctx, out, { dur: 0.015, type: 'highpass', f: 4000, gain: 0.1 }); },
-  tick(ctx, out) { tone(ctx, out, { f0: 2400, f1: 2200, dur: 0.012, type: 'square', gain: 0.07 }); },
+  tick(ctx, out) { tone(ctx, out, { f0: 2400, f1: 2200, dur: 0.012, type: 'square', gain: 0.1 }); },
   sit(ctx, out, w = 0.5) {
     burst(ctx, out, { dur: 0.12, type: 'lowpass', f: 500, gain: 0.25 * w });
     tone(ctx, out, { f0: 95, f1: 55, dur: 0.14, gain: 0.35 * w });
     tone(ctx, out, { f0: 150, f1: 105, dur: 0.28, type: 'sawtooth', gain: 0.03 * w, delay: 0.05 });                     // the creak
   },
   leaf(ctx, out) { burst(ctx, out, { dur: 0.16, type: 'highpass', f: 3500, gain: 0.1 }); burst(ctx, out, { dur: 0.12, type: 'highpass', f: 4200, gain: 0.07, delay: 0.1 }); },
-  brush(ctx, out, v = 0.5) { burst(ctx, out, { dur: 0.08, f: 3800, q: 2, gain: 0.05 + 0.05 * clamp(v, 0, 1) }); },
+  brush(ctx, out, v = 0.5) { burst(ctx, out, { dur: 0.08, f: 3800, q: 2, gain: 0.14 + 0.14 * clamp(v, 0, 1) }); },
   dab(ctx, out) { tone(ctx, out, { f0: 320, f1: 140, dur: 0.06, gain: 0.18 }); burst(ctx, out, { dur: 0.05, type: 'lowpass', f: 1200, gain: 0.1 }); },
   wipe(ctx, out) { burst(ctx, out, { dur: 0.5, f: 1600, f2: 2800, q: 0.5, gain: 0.15, attack: 0.12 }); burst(ctx, out, { dur: 0.42, type: 'highpass', f: 4500, gain: 0.05, attack: 0.15 }); },     // a soft cloth swish: slow start, no knock
-  step(ctx, out) { burst(ctx, out, { dur: 0.05, type: 'lowpass', f: 700, gain: 0.07 }); tone(ctx, out, { f0: 100, f1: 65, dur: 0.05, gain: 0.08 }); },
+  step(ctx, out) { burst(ctx, out, { dur: 0.05, type: 'lowpass', f: 700, gain: 0.1 }); tone(ctx, out, { f0: 100, f1: 65, dur: 0.05, gain: 0.11 }); },
   place(ctx, out, w = 0.4) { SOUNDS.thud(ctx, out, w); },
   // the Workshop
-  saw(ctx, out) { burst(ctx, out, { dur: 0.22, f: 900, f2: 2600, q: 2.5, gain: 0.1 }); burst(ctx, out, { dur: 0.2, f: 2400, f2: 800, q: 2.5, gain: 0.08, delay: 0.24 }); },
+  saw(ctx, out) { burst(ctx, out, { dur: 0.22, f: 900, f2: 2600, q: 2.5, gain: 0.35 }); burst(ctx, out, { dur: 0.2, f: 2400, f2: 800, q: 2.5, gain: 0.3, delay: 0.24 }); },
   tap(ctx, out) { tone(ctx, out, { f0: 210, f1: 120, dur: 0.07, type: 'triangle', gain: 0.35 }); burst(ctx, out, { dur: 0.03, type: 'lowpass', f: 900, gain: 0.12 }); },
-  sand(ctx, out) { burst(ctx, out, { dur: 0.3, f: 3000, f2: 4500, q: 0.6, gain: 0.07 }); },
-  machine(ctx, out) { tone(ctx, out, { f0: 70, f1: 130, dur: 0.6, type: 'sawtooth', gain: 0.1 }); burst(ctx, out, { dur: 0.5, type: 'lowpass', f: 400, gain: 0.15 }); },
+  sand(ctx, out) { burst(ctx, out, { dur: 0.3, f: 3000, f2: 4500, q: 0.6, gain: 0.18 }); },
+  machine(ctx, out) { tone(ctx, out, { f0: 70, f1: 130, dur: 0.6, type: 'sawtooth', gain: 0.15 }); burst(ctx, out, { dur: 0.5, type: 'lowpass', f: 400, gain: 0.25 }); },
   lid(ctx, out) { tone(ctx, out, { f0: 260, f1: 140, dur: 0.1, type: 'square', gain: 0.1 }); burst(ctx, out, { dur: 0.08, f: 2200, q: 2, gain: 0.1 }); },
   // the Restaurant
   ding(ctx, out) { tone(ctx, out, { f0: 1480, f1: 1470, dur: 0.5, gain: 0.16, attack: 0.005 }); tone(ctx, out, { f0: 2220, f1: 2200, dur: 0.35, gain: 0.07, attack: 0.005 }); },
-  cash(ctx, out) { burst(ctx, out, { dur: 0.08, f: 3800, q: 3, gain: 0.12 }); [1760, 2349].forEach((f, i) => tone(ctx, out, { f0: f, f1: f, dur: 0.12, gain: 0.08, delay: 0.07 + i * 0.07, attack: 0.003 })); },
-  sizzle(ctx, out) { burst(ctx, out, { dur: 0.7, f: 5200, f2: 4200, q: 0.6, gain: 0.07 }); },
+  cash(ctx, out) { burst(ctx, out, { dur: 0.08, f: 3800, q: 3, gain: 0.16 }); [1760, 2349].forEach((f, i) => tone(ctx, out, { f0: f, f1: f, dur: 0.12, gain: 0.11, delay: 0.07 + i * 0.07, attack: 0.003 })); },
+  sizzle(ctx, out) { burst(ctx, out, { dur: 0.7, f: 5200, f2: 4200, q: 0.6, gain: 0.12 }); },
   plate(ctx, out) { tone(ctx, out, { f0: 1900, f1: 1500, dur: 0.07, type: 'triangle', gain: 0.12 }); burst(ctx, out, { dur: 0.04, f: 3000, q: 2, gain: 0.08 }); },
   lift(ctx, out) { tone(ctx, out, { f0: 660, f1: 660, dur: 0.25, gain: 0.1, attack: 0.01 }); tone(ctx, out, { f0: 880, f1: 880, dur: 0.4, gain: 0.1, delay: 0.25, attack: 0.01 }); },
   // the game itself
   chime(ctx, out) { [880, 1175, 1568].forEach((f, i) => tone(ctx, out, { f0: f, f1: f * 0.99, dur: 0.55, gain: 0.12, delay: i * 0.1, attack: 0.01 })); },
   pop(ctx, out) { tone(ctx, out, { f0: 380, f1: 900, dur: 0.09, gain: 0.18 }); },
-  whoosh(ctx, out) { burst(ctx, out, { dur: 0.25, f: 600, f2: 2400, q: 0.7, gain: 0.12 }); },
+  whoosh(ctx, out) { burst(ctx, out, { dur: 0.25, f: 600, f2: 2400, q: 0.7, gain: 0.34 }); },
 };
+
+export { SOUNDS };                                     // QA only (src/qa-audio.js renders each one to numbers)
 
 export function sfx(name, a, b) {
   counts[name] = (counts[name] || 0) + 1;

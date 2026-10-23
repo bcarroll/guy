@@ -18,6 +18,22 @@ Then, in the browser (`?nostart&fresh&skills=none`): `const T=(await import('/sr
 report `complete: true`, and `T.runAll()` should come back clean. After fixing a bug, add a line to "Regression watch" in
 `assets.md`.
 
+## Release-quality QA: look and listen, not just count (important)
+
+`npm test` runs everything in a real headless browser: coverage, every sweep, **rigs** (every character's skeleton loaded and posed and
+measured: `src/qa-characters.js`), **customers** (each customer model in each restaurant state), **audio** (every sound rendered offline
+and measured: `src/qa-audio.js`) and **pictures** (`src/qa-shots.js`: each visual checkpoint, every character standing / walking /
+sitting from the front and the side, customers, each room, compared with the approved pictures in `qa/baselines`). Details in
+`.claude/skills/test-guy-game/SKILL.md` section 0. Rules:
+
+- A feature is not done until its **look and sound** are covered: a new character or model needs a rig entry (it is picked up from
+  `customermodels.js` automatically) and pictures; a new pose or visual behaviour needs a `MANIFEST.visual` checkpoint; a new sound needs
+  an entry in `SPEC` in `src/qa-audio.js` (a sound without one fails). Numbers alone passed while every customer had arms stuck in the air.
+- **Look at the pictures before approving them** (`qa/index.html`, then `npm test -- --approve=new`). An approved wrong picture is worse than none.
+- Never rerun a failing test until it passes. A failure that comes and goes is a bug that comes and goes: use `npm test -- --repeat=3`
+  to see it as FLAKY and find the cause.
+- When a bug is found by hand, add the test that would have caught it, and make sure it fails without the fix.
+
 ## Conventions worth knowing
 
 - Everything Guy does is a queue of steps (`walk`, `walkAt`, `play`, `plan`) built by `activities()` in `src/brain.js`.

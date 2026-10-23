@@ -13,6 +13,9 @@ export function initAudio() {
 // for sfx.js: the audio context and the output every sound goes through (null until the user has started the game)
 export const audio = () => ({ ctx, master });
 
+// QA only (src/qa-audio.js): point every sound at another context (an offline one, rendered to numbers) and back again
+export function useAudio(c, m) { const old = { ctx, master }; ctx = c; master = m; return () => { ctx = old.ctx; master = old.master; }; }
+
 const midiToHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
 
 export function playNote(midi, dur = 0.8, gain = 0.25) {

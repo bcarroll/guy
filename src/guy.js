@@ -98,12 +98,15 @@ export class Guy {
       });
     }
 
-    const wq = new THREE.Quaternion();
+    // Each bone's rest orientation is kept relative to the figure (root): a customer is already turned (and standing somewhere in a
+    // room that may itself be turned) when its model finishes loading, and a world-space rest would rotate every pose wrongly.
+    this.root.updateWorldMatrix(true, true);
+    const wq = new THREE.Quaternion(), rootInv = this.root.getWorldQuaternion(new THREE.Quaternion()).invert();
     for (const n of BONES) {
       const b = this.bones[n];
       if (!b) continue;
       this.rest[n] = b.quaternion.clone();
-      b.parent.getWorldQuaternion(wq);
+      b.parent.getWorldQuaternion(wq).premultiply(rootInv);
       this.restParent[n] = wq.clone();
       this.restParentInv[n] = wq.clone().invert();
       this.cur[n] = new THREE.Quaternion();

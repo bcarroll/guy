@@ -18,6 +18,9 @@ import { invent, judge, GOOD, STEPS as RIFF_STEPS, keepRiff, loadRiffs, nextRiff
 import { ALBUM_CATALOG } from './albums.js';
 import { TRACKS, trackSeconds } from './audio.js';
 import { POSES } from './brain.js';
+import { install as installCharacters } from './qa-characters.js';
+import { install as installAudio } from './qa-audio.js';
+import { install as installShots } from './qa-shots.js';
 import { counts as sfxCounts } from './sfx.js';
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -63,7 +66,7 @@ export const MANIFEST = {
     mood: { objects: ['lamp'], skills: ['lighting'], touches: ['lamp'] },
     plant: { objects: ['plant'], touches: ['plant', 'flowerplant', 'tree'] },
     dust: { objects: ['picture'], skills: ['decorate'], touches: [] },
-    read: { objects: ['shelf'], touches: ['shelf', 'armchair', 'armchair2', 'chair', 'chair2', 'builtchair'] },
+    read: { objects: ['shelf', 'armchair'], touches: ['shelf', 'armchair', 'armchair2', 'chair', 'chair2', 'builtchair'] },
     rearrange: { objects: ['lamp', 'plant', 'armchair'], touches: ['lamp', 'plant', 'armchair', 'table', 'bench', 'flowerplant', 'coffeetable', 'nightstand', 'guitar', 'easel', 'telescope', 'footstool', 'woodshelves', 'builtchair'] },
     ball: { touches: [] },
     dribble: { skills: ['ball'], touches: [] },
@@ -161,7 +164,7 @@ export const MANIFEST = {
     { id: 'sit-rest', activity: 'sit', pose: 'sitRest', t: 5, view: 'side', expect: 'sitting on the seat (not hovering), thighs level, hands resting on the knees, head turning slowly' },
     { id: 'sit-guitar', activity: 'sitguitar', pose: 'sitGuitar', t: 6, view: 'front', expect: 'seated, the guitar held on the lap and chest, left hand on the neck, right hand strumming; the chair does not pass through the guitar' },
     { id: 'slouch', activity: 'slouch', pose: 'slouch', t: 6, view: 'side', expect: 'on the drum stool, round-shouldered, knees apart, hands hanging between the knees' },
-    { id: 'paint-takedown', activity: 'hangpaint', pose: 'reach', t: 1.5, view: 'front', expect: 'at the easel, one hand on the canvas as he lifts it off (the easel goes blank at that moment), then he carries it held up in front of him' },
+    { id: 'paint-takedown', activity: 'hangpaint', pose: 'reach', t: 1.5, view: 'side', expect: 'at the easel, one hand on the canvas as he lifts it off (the easel goes blank at that moment), then he carries it held up in front of him' },
     { id: 'cook-stir', activity: 'cook', pose: 'workTap', t: 4, view: 'front', expect: 'standing at the stove, lid off the pot, a wooden spoon in the right hand circling in the pot, left hand resting on the hob, steam rising' },
     { id: 'record-carry', activity: 'dance', pose: 'walk', t: 0, view: 'front', album: true, expect: 'sleeve hangs from his hand by its top edge (only when a record is used)' },
   ],
@@ -980,6 +983,16 @@ T.look = (view = 'front', dist = 2.1) => {
   else if (view === 'back') pos = new THREE.Vector3(p.x, 1.6, p.z).addScaledVector(fw, -dist);
   else if (view === 'top') { pos = new THREE.Vector3(p.x, 3.4, p.z + 0.6); }
   else if (view.startsWith('hand:')) { const h = g.boneWorld(view.slice(5) + 'Hand'); target = h.clone(); pos = h.clone().addScaledVector(fw, 0.9).addScaledVector(lf, view.endsWith('Right') ? -0.35 : 0.35).add(new THREE.Vector3(0, 0.15, 0)); }
+  // never film from outside a wall (the picture would be black, or the wall in the way): swing round to the nearest angle that is inside a room
+  const inside = (p) => { const b = W().boundsAt(p.x, p.z); return p.x > b.minX + 0.3 && p.x < b.maxX - 0.3 && p.z > b.minZ + 0.3 && p.z < b.maxZ - 0.3; };
+  if (view !== 'top' && !inside(pos)) {
+    const off = pos.clone().sub(target); off.y = 0;
+    for (let k = 1; k <= 11; k++) for (const sgn of [1, -1]) {
+      const ang = sgn * k * Math.PI / 6, q = new THREE.Vector3(off.x * Math.cos(ang) - off.z * Math.sin(ang), 0, off.x * Math.sin(ang) + off.z * Math.cos(ang));
+      const cand = new THREE.Vector3(target.x + q.x, pos.y, target.z + q.z);
+      if (inside(cand)) { pos = cand; k = 99; break; }
+    }
+  }
   window.camera.position.copy(pos); window.controls.target.copy(target); window.controls.update();
   return { view };
 };
@@ -987,10 +1000,11 @@ T.look = (view = 'front', dist = 2.1) => {
 T.moment = (activity, pose, t = 0, view = 'front', opts = {}) => {
   T.unfreeze(); T.prep(activity); T.settle();
   const b = B();
+  if (opts.album && !(W().objects.shelf.albums || []).length) T.addAlbum(ALBUM_CATALOG.find((x) => !x.premium).id);       // a record on the shelf to carry
   if (opts.album) b.forceAlbum = (W().objects.shelf.albums[0] || { def: {} }).def.id;
   b.queue = []; b.step = null; b.choose(activity);
   let guard = 0;
-  const ok = () => b.step && b.pose === pose && b.step.t >= t && (!opts.turning || (b.read && b.read.turning && b.read.turnT > 0.8)) && (!opts.push || b.step.push);
+  const ok = () => b.step && b.pose === pose && b.step.t >= t && (!opts.turning || (b.read && b.read.turning && b.read.turnT > 0.8)) && (!opts.push || b.step.push) && (!opts.album || (b.held && b.held.kind === 'album'));
   while (!ok() && guard++ < 40000) step(1 / 30);
   T.freeze(); T.look(view);
   return { reached: guard < 40000, state: T.state(), hands: T.hands() };
@@ -2615,6 +2629,15 @@ T.runAll = () => {
   report.gal = S(T.sweepGal);
   report.paintings = S(T.sweepPaintings);
   report.errorsLogged = errors.length;
+  return report;
+};
+// the sweeps that need real time (models load, pictures are taken): `await T.runAsync()`
+installCharacters(T, { result, summarise });
+installAudio(T, { result, summarise });
+installShots(T, { result, summarise });
+T.runAsync = async (which = ['sweepRigs', 'sweepCustomers', 'sweepAudio', 'sweepGuitarSongs']) => {
+  const report = {};
+  for (const k of which) { report[k.replace(/^sweep/, '').toLowerCase()] = summarise(await T[k]()); T.resetRooms(); }
   return report;
 };
 window.guyTest = T;

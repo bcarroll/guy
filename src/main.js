@@ -276,7 +276,7 @@ UNLOCK_EVENTS.forEach((t) => addEventListener(t, unlockAudio, true));
 window.__guyAudio = audio;                         // for the QA harness
 
 guy.load(import.meta.env.BASE_URL + 'models/ybot.fbx').then(() => {
-  window.guy = guy; window.camera = camera; window.controls = controls; window.scene = scene; window.brain = brain; window.THREE = THREE;
+  window.guy = guy; window.camera = camera; window.controls = controls; window.scene = scene; window.brain = brain; window.THREE = THREE; window.renderer = renderer;
   const force = params.get('act');
   if (force) brain.choose(force);
 }).catch((e) => { label.textContent = 'failed to load model: ' + e.message; console.error(e); });
@@ -749,6 +749,7 @@ window.sim = (sec, dt = 1 / 30) => {
 const clock = new THREE.Clock();
 const camGoal = new THREE.Vector3();
 renderer.setAnimationLoop(() => {
+  if (window.__qaPaused) return;                    // QA pictures: nothing moves or draws by itself while one is being set up (qa-shots.js)
   const dt = Math.min(clock.getDelta(), 0.05);
   if (guy.loaded) {
     brain.safeUpdate(dt);

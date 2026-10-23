@@ -4,3 +4,7 @@ dist
 .DS_Store
 # source Mixamo download; the game loads public/models/ybot.fbx
 Y Bot.fbx
+
+# QA output (the approved pictures in qa/baselines are kept)
+qa/out/
+qa/index.html

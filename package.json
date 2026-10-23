@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "node test-run.js"
+    "test": "node qa/run.mjs",
+    "test:old": "node test-run.js"
   },
   "dependencies": {
     "three": "^0.186.1"

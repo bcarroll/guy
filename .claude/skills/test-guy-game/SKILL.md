@@ -12,6 +12,29 @@ game objects, so what it tests is what the player sees.
 **Read `assets.md` (same folder) before testing**: it lists every asset, what Guy should do with it, and the visual
 checklist. **After adding anything to the game, update this skill (see "Keeping this skill current").**
 
+## 0. The one-command run: `npm test` (do this first, and before saying anything is done)
+
+`npm test` starts the dev server if needed, opens the game in a headless browser and checks all of it. Parts (`--only=` picks some):
+
+| part | what it checks | where |
+|---|---|---|
+| coverage | the MANIFEST knows every object, activity, book, record, track, room | `T.coverage()` |
+| sweeps | every sweep in section 2 (`T.runAll()`); `--repeat=3` runs them three times and reports a sweep that fails only sometimes as **FLAKY** | `src/devtools.js` |
+| rigs | Guy, GAL and every customer model loaded for real, in different turns, posed and measured: all 52 bones mapped, the right height, not flat, a T-pose rest, arms at the sides standing and walking, hips low and knees forward sitting, and **the same pose whichever way the figure or its room was turned when the model loaded** (the bug that gave every customer arms in the air) | `T.sweepRigs`, `src/qa-characters.js` |
+| customers | the real restaurant: each customer model waiting (a hand up), ordering, waiting for food, eating, paying and walking out of the elevator | `T.sweepCustomers` |
+| audio | every sound effect, the piano, guitar and drums rendered offline and measured: audible (not too quiet), not clipping, the right length, starts at once, the right brightness, nothing stuck at the end, balanced; a sound with no `SPEC` entry fails | `T.sweepAudio`, `src/qa-audio.js` |
+| shots | pictures of every visual checkpoint, every character (standing, walking, sitting; front and side), customers in each state, and each room, compared with `qa/baselines` (a changed picture fails; a new one waits for approval) | `src/qa-shots.js`, `qa/run.mjs` |
+
+Pictures: `qa/index.html` shows now / approved / difference side by side. **Look at them yourself** (new ones especially): they are the
+only check that sees a wrong-looking character, a floating prop or a picture on the wrong side of a wall. Approve with
+`npm test -- --approve=new` (new ones) or `--approve` (all). Baselines are made on one machine's GPU; the tolerance (0.4% of the picture)
+allows for small differences; approve again on a new machine. In the Browser pane (`T.shot(id)` returns a picture; the pane may be hidden,
+so never wait for animation frames) the same pieces can be run by hand: `await T.runAsync()`, `await T.shot('char-aj-sit-front')`.
+
+Adding things: a customer model in `customermodels.js` is picked up by rigs, customers and pictures by itself; a character with a different
+loader (like GAL) goes in `RIGS()` in `qa-characters.js`; a new sound needs a `SPEC` line in `qa-audio.js` (its length, brightness, and
+`amount`); a new visual checkpoint goes in `MANIFEST.visual`; a new room view in `roomShots` in `qa-shots.js`.
+
 ## 1. Start the game
 
 Use the built-in browser (`mcp__Claude_Browser__*`). If a dev server is not already on port 5173, start it with

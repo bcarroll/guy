@@ -5,6 +5,8 @@ wandering, playing the piano, dancing to the boombox, kicking a ball, toggling t
 
     npm install
     npm run dev      # http://localhost:5173
+    npm test         # all the QA in a headless browser: sweeps, every character's skeleton, the restaurant's customers, every sound, and pictures
+                     # compared with qa/baselines (look at qa/index.html; see .claude/skills/test-guy-game/SKILL.md section 0)
 
 Controls: drag = orbit, scroll = zoom, F = follow cam, Space = skip to next activity.
 Debug URLs: `?act=piano|dance|ball|lamp|books|stretch|wave`, `?follow`. There is no start screen: the sound starts on your first tap, drag or key press (`?nostart` is still accepted and does nothing). In the console `sim(seconds)` fast-forwards.
