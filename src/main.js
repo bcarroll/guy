@@ -678,6 +678,7 @@ window.__screenLock = screenLock;
 // The Learning Workstation's panel opens for whichever robot tapped the screen
 const workstation = initWorkstation({ world, toast: showToast });
 brain.onWorkstation = (b) => workstation.open(b);
+brain.onLearnMany = (defs) => { showToast(`Guy learned ${defs.length} skills!`); sfx('chime'); if (machineUI.isOpen()) machineUI.refresh(); };
 window.__workstation = workstation;
 
 // Typed commands (the same path the microphone will use): the 💬 button opens a box; Enter sends it to Guy.

@@ -15,6 +15,7 @@ const REST_ACTS = ['takepay', 'serve', 'takeorder', 'cook', 'rwait'];
 const WORK_ACTS = ['makewood', 'sawwood', 'tap', 'sand', 'tidytools', 'build', 'makemetal', 'cutmetal', 'hammer', 'weld'];
 import { RECIPES, PLANKS_PER_RUN, STOCK_CAP, METAL_PER_RUN, METAL_CAP } from './workshop.js';
 import { sfx, drag as sfxDrag } from './sfx.js';
+import { findBooks, learnBooks } from './learn.js';
 import { nextRiff, keepRiff, riffAt, STEPS as RIFF_STEPS } from './riffs.js';
 import { makeStrum, strumPattern } from './strum.js';
 
@@ -578,7 +579,7 @@ export class Brain {
         const m = () => this.obj('workstation');
         if (!m()) return ['nothing to use', this.play('idle', 0.5)];
         return ['using the workstation', this.stand('workstation', 0.9, () => m().screenPoint()),
-          this.play('reach', 1.6, { needs: ['workstation'], target: () => m().screenPoint(), at: [0.8, () => { m().setActive(30); sfx('click'); if (this.onWorkstation) this.onWorkstation(this); }] }),
+          this.play('reach', 1.6, { needs: ['workstation'], target: () => m().screenPoint(), at: [0.8, () => { m().setActive(30); sfx('click'); if (this.learnPlan) { const q = this.learnPlan.query; this.learnPlan = null; learnBooks(this, findBooks(this.w, q)); sfx('chime'); } else if (this.onWorkstation) this.onWorkstation(this); }] }),
           this.play('idle', 1.4, { needs: ['workstation'] })];
       },
       wander: () => {
@@ -1347,6 +1348,19 @@ export class Brain {
     return { ok: true, message: fading ? `"${def.title}" is back in the Catalog. Guy will gradually forget ${def.blurb}.` : `"${def.title}" is back in the Catalog.` };
   }
 
+  // An order to use the Learning Workstation: learn the books a query points at (or all of them) at once, without the panel. Returns { ok, message }.
+  learnOrder(query) {
+    if (!this.obj('workstation')) return { ok: false, message: 'There is no workstation in the room.' };
+    if (this.stuckIn()) return { ok: false, message: this.shutInMessage(this.stuckIn()) };
+    const recs = findBooks(this.w, query), who = this.isGal ? 'GAL' : 'Guy';
+    if (!recs.length) return { ok: false, message: query && query !== 'all' ? `There is no book about ${query} on the shelf.` : 'There are no books on the shelf.' };
+    if (recs.every((r) => this.skills.has(r.def.teaches))) return { ok: false, message: query && query !== 'all' ? `${who} already knows that.` : `${who} already knows everything on the shelf.` };
+    this.unlock(false); this.skip(true);
+    this.learnPlan = { query: query == null ? 'all' : query };
+    this.pendingActivity = 'learn';
+    return { ok: true, message: `${who} will use the workstation.` };
+  }
+
   // Closing a book he has read for long enough teaches him what is in it.
   finishReading(book, step) {
     if ((step.readOpen || 0) < ((step.fx && step.fx.need) ?? 8)) return;   // reading faster needs less time with the pages open
@@ -1937,6 +1951,7 @@ export class Brain {
     if (REST_OBJECTS.includes(name) || (this.obj(name) && this.obj(name).seats)) tries = this.restTries(name);
     const act = (tries || []).filter((a) => this.available(a));
     if (!act.length) return { ok: false, message: "Guy can't do anything with that right now." };
+    if (name === 'workstation') this.learnPlan = null;                  // (the panel, not an order)
     if (this.lock && this.lock.name !== name) this.unlock(false);     // told to do something else: the lock is over
     this.skip();                                   // stands up, switches the stereo off, etc. first
     if (PLANT_NAMES.includes(name)) this.forcePlant = name;   // the plant he was asked about, not just any plant
