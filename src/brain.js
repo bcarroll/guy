@@ -1402,7 +1402,7 @@ export class Brain {
     const atStereo = () => this.walkAt('table', 0, 0.55, Math.PI);
     return {
       rec, track, title: rec ? rec.def.title : null,
-      pre: rec ? [this.walkAt('shelf', -0.5, rec.z, Math.PI / 2), this.play('grab', 2.6, { book: rec, at: [0.95, () => this.takeBook(rec)] })] : [],
+      pre: rec ? [this.walkAt(this.hostName(rec), -0.5, rec.z, Math.PI / 2), this.play('grab', 2.6, { book: rec, at: [0.95, () => this.takeBook(rec)] })] : [],
       on: [atStereo(), this.play('reach', 1.8, { at: [0.9, () => { if (rec) this.albumOnTable = true; this.musicOn(track); }], target: () => this.stereoButton() })],
       off: [atStereo(), this.play('reach', 1.8, { at: [0.9, () => { this.musicOff(); this.albumOnTable = false; }], target: () => this.stereoButton() })],
       post: rec ? [this.putBackStep()] : [],

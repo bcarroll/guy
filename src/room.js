@@ -249,6 +249,7 @@ export function buildRoom(scene) {
     const over = shelfBooks.filter((r) => r.slot >= SHELF_CAPACITY).sort((a, b) => a.slot - b.slot), hosts = bookHosts();
     over.forEach((rec, n) => { const hi = Math.floor(n / 16); if (hi < hosts.length) hostBook(rec, hosts[hi], n % 16); else toStack(rec); });
     if (stackZ !== null || over.some((r) => r.stack)) layoutStack();
+    layoutAlbums();                                  // the records too: more than a shelf's worth go on the built shelves
   };
 
   // Put a book on the shelf in the next free slot (rows 3 and 2 are within Guy's reach), or on the stack if the shelf is full.
@@ -322,15 +323,26 @@ export function buildRoom(scene) {
   // Up to five sleeves stand side by side. More than that overlap like records in a rack: each one sits a little closer
   // to the room than the one before it, so the left strip of every sleeve shows. rec.z is the middle of the exposed
   // strip, which is where Guy's hand goes (the last sleeve is fully exposed).
-  const layoutAlbums = () => {
-    const n = shelfAlbums.length, crowded = n > 5;
+  // The top shelf holds 8 sleeves; the next 8 go on the top shelf of a built bookshelf (rec.host), and so on; past the last shelf they
+  // crowd on in the main one.
+  const ALBUM_CAP = 8;
+  const layoutAlbumSet = (list, group, name) => {
+    const n = list.length, crowded = n > 5;
     const step = crowded ? 1.44 / (n - 1) : 0.34, z0 = crowded ? -0.72 : -0.68;
-    shelfAlbums.forEach((r, i) => {
+    list.forEach((r, i) => {
+      group.add(r.mesh);
+      r.host = name;
       const x = -0.07 - (crowded ? i * 0.009 : 0), zc = z0 + i * step;
       r.mesh.position.set(x, r.y, zc);
       r.z = crowded && i < n - 1 ? zc - 0.155 + step / 2 : zc;
       r.reachX = x - 0.03;
     });
+  };
+  const layoutAlbums = () => {
+    const hosts = bookHosts(), per = ALBUM_CAP;
+    const main = shelfAlbums.slice(0, per).concat(shelfAlbums.slice(per + hosts.length * per));
+    layoutAlbumSet(main, shelfGroup, null);
+    hosts.forEach((h, i) => layoutAlbumSet(shelfAlbums.slice(per + i * per, per + (i + 1) * per), h.group, h.name));
   };
   const addAlbum = (def) => {
     const side = mat(0x15151a);

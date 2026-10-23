@@ -86,7 +86,7 @@ export const MANIFEST = {
     cutmetal: { objects: ['metalcutter', 'workbench'], skills: ['workshop.metal'], room: 'workshop', stock: { metal: 2 }, touches: ['metalcutter', 'workbench'] },
     hammer: { objects: ['anvil'], skills: ['workshop.metal'], room: 'workshop', stock: {}, touches: ['anvil'] },
     weld: { objects: ['welder'], skills: ['workshop.metal'], room: 'workshop', stock: {}, touches: ['welder'] },
-    build: { objects: ['workbench', 'saw', 'mallet', 'toolbox'], skills: ['workshop', 'decorate'], room: 'workshop', recipe: 'footstool', stock: { wood: 0, parts: 4 }, max: 260, touches: ['workbench', 'saw', 'mallet', 'toolbox', 'sander', 'woodfactory'] },
+    build: { objects: ['workbench', 'saw', 'mallet', 'toolbox'], skills: ['workshop', 'decorate'], room: 'workshop', recipe: 'footstool', stock: { wood: 0, parts: 4 }, max: 260, touches: ['workbench', 'saw', 'mallet', 'toolbox', 'sander', 'woodfactory', 'tree', 'footstool', 'chair', 'chair2', 'armchair', 'armchair2', 'builtchair', 'metalchair'] },
     // the Restaurant: `customer` is the state of a customer set up before it starts (customers.js stage()); the rest as for the Workshop
     takeorder: { objects: ['stove', 'kitchencounter', 'register', 'diningtable'], skills: ['restaurant'], room: 'restaurant', customer: 'waiting', touches: ['diningtable'] },
     cook: { objects: ['stove', 'kitchencounter', 'register', 'diningtable'], skills: ['restaurant'], room: 'restaurant', customer: 'ordered', max: 200, touches: ['stove', 'kitchencounter'] },
@@ -2020,7 +2020,11 @@ T.sweepMetal = () => {
 };
 
 // ---- 18c. Building only what the house needs, and where it goes (src/needs.js, workbrain.js; Catalogue gating in machine.js) ----
-const clearBooks = () => { const sh = W().objects.shelf; if (sh) for (const rec of [...sh.books]) if (!rec.def.start) sh.removeBook(rec); };        // the books a test put on the shelf
+const clearBooks = () => {
+  const sh = W().objects.shelf; if (!sh) return;
+  for (const rec of [...sh.books]) if (!rec.def.start) sh.removeBook(rec);
+  for (const r of sh.albums.splice(0)) r.mesh.parent && r.mesh.parent.remove(r.mesh);                  // (and the records a test added)
+};        // the books a test put on the shelf
 const needSetup = (wall = 'right', skills = [], { metal = false, chair = true } = {}) => {
   T.settle(); T.resetRooms(); T.removeAll(); T.forget(); skillsOf().fading.clear(); clearBooks(); T.settle(); T.home();
   R().add('workshop', { walls: [wall] });
@@ -2046,6 +2050,7 @@ T.sweepNeeds = () => {
   const seat = () => wants(b).some((x) => x.serves === 'seat');
   // 1. the Catalogue lists the wooden chairs only once Guy or GAL has read the book that teaches building them
   T.resetRooms(); T.removeAll(); T.forget(); skillsOf().fading.clear(); machine().hidden = true;
+  delete w.removed.chair; delete w.removed.chair2;                       // (earlier sweeps took them out: a chair that was put away is listed, one never added is not)
   openObjects('all');
   const before = !machineCard('Wooden Chair') && !machineCard('Second Wooden Chair');
   T.learn(['workshop.furniture']); openObjects('all');
@@ -2091,6 +2096,12 @@ T.sweepNeeds = () => {
   b.forceBook = rec; b.pendingActivity = null; b.choose('read');
   const got = runUntil(() => b.skills.has(rec.def.teaches), 120);
   out.push(result('needs: he reads a book from the built bookshelf like from the first one', got < 120 && b.skills.has(rec.def.teaches), { book: rec.def.id, got }));
+  // records too: past the top shelf's twelve they stand on the built shelf, and Guy fetches one from there for the stereo
+  T.addObject('table'); for (const a of ALBUM_CATALOG) T.addAlbum(a.id);
+  const albumsAfter = () => { for (const r of [...sh.albums]) { sh.albums.splice(sh.albums.indexOf(r), 1); r.mesh.parent && r.mesh.parent.remove(r.mesh); } };
+  const hostedRec = sh.albums.filter((r) => r.host === shelf2.name).length;
+  out.push(result('needs: records past the eight on the top shelf of the first bookshelf stand on the built one', sh.albums.length > 8 && hostedRec === sh.albums.length - 8, { albums: sh.albums.length, hostedRec }));
+  albumsAfter();
   // taking the built bookshelf away puts its books back on the floor stack
   b.skip(); T.settle(); const nm = shelf2.name; w.storeInstance(nm); b.objectRemoved(nm); T.settle();
   out.push(result('needs: taking the built bookshelf away puts its books back on the floor (none are lost)', sh.books.filter((r) => r.stack).length === stacked0 && sh.books.every((r) => !r.host || w.objects[r.host]) && !!w.stock.items.bookshelf2));

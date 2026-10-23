@@ -33,7 +33,8 @@ export function wants(b) {
   if (high && anyone('decorate') && supply(w, 'reach') === 0) out.push({ serves: 'reach', n: 1, why: 'the tops of the windows are out of reach' });
   // books on the floor
   const sh = w.objects.shelf;
-  if (sh && sh.stackTop && sh.stackTop() && supply(w, 'books') === 0) out.push({ serves: 'books', n: 1, why: 'books are stacked on the floor' });
+  const crowdedRecords = sh && sh.albums && sh.albums.length > 8;           // more sleeves than the top shelf holds
+  if (sh && ((sh.stackTop && sh.stackTop()) || crowdedRecords) && supply(w, 'books') === 0) out.push({ serves: 'books', n: 1, why: 'books are stacked on the floor, or the records no longer fit' });
   // customers who could not sit down
   const rest = w.restaurant;
   if (rest && rest.needsSeats && rest.needsSeats() && supply(w, 'diners') < 2) out.push({ serves: 'diners', n: 1, why: 'the restaurant is full' });
