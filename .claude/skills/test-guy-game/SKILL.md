@@ -41,7 +41,7 @@ manifest first** (section 6).
 
 ## 2. Automated sweeps (about 6 seconds in total; the sim is fast)
 
-`T.runAll()` runs everything below and returns pass counts and the failures (about 25 s, 310+ checks at the time of writing).
+`T.runAll()` runs everything below and returns pass counts and the failures (about 40 s, 350 checks at the time of writing).
 The browser tool times out at 45 s: loop `runAll()` at most 2 times per call (to catch flakiness), or call the sweeps
 individually. Current baseline: everything passing, `T.errors` empty (run it 3-4 times: layouts of added objects are random and have exposed intermittent bugs).
 
@@ -56,6 +56,7 @@ individually. Current baseline: everything passing, `T.errors` empty (run it 3-4
 | `T.combos()` | Multi-object cases: stereo + piano, stereo + guitar (in time), stereo + dance, stopping music mid-song, lamp party during a dance, user music surviving a skip. | each passes |
 | `T.sweepInterrupts()` | Interrupts every activity part-way (`skip()`); he must tidy up and end idle. | idle, no exceptions |
 | `T.sweepMoves()` | While Guy uses the piano (standing and seated), drums, easel, telescope, guitar or armchair, drags the object 0.6 m. He must let go (stand up / step away) instead of having his arms pulled along. | pose changes or the step is wound down within ~1 s, no exceptions, idle afterwards |
+| `T.sweepBookRules()` | **Remove vs Forget** on a shelf book (Remove: back to the Catalogue, skill kept; Forget: back to the Catalogue, skill fades over 150 s, Speed Reading over 300 s, reading again restores it; refused while he holds the book) and **Speed Reading** (stays at the shelf, much faster, still learns; without it he sits; the effect fades gradually). | all pass |
 | `T.sweepRemovals()` | Removes each object an activity depends on, part-way through, then restores it. | no exceptions, he recovers |
 | `T.sweepPlaylist()` | The stereo's playlist: every record has 3+ playable songs with unique titles, the player lists them all, select / next / previous change the song, a song hands over to the next one on its record after its minute (and wraps), and Guy does not repeat a song or a record back to back. | all pass |
 | `T.sweepWalls()` | The drum kit and the easel pushed against the back and left walls in every rotation: where the stool or easel spot is reachable he uses it within 15 s; where it is not he declines (the Interact button says why) and a forced attempt is dropped in under 20 s. | all pass |
@@ -111,7 +112,7 @@ Use synthetic pointer events on the canvas, as the tests in this repo did (wrap 
   (In the room / Add / Premium), Add buttons work, premium shows 🔒; long-press does nothing (cannot be removed)
 - long-press every object: the first button is named for what the object does (Play Piano, Play Guitar, Play Drums, Play with Ball, Turn Stereo On/Off, Paint, Tend Plant, Set the Mood / Turn Lamp On/Off ...; `interactLabel` in `main.js`), then Rotate, Remove (Remove hidden for the bookshelf; rotate hidden for
   the ball). The stereo's playback controls are the **🎵 Stereo** button left of Follow, visible only while a stereo is in the room; the stereo's menu button turns it on or off (Guy walks over and presses the button)
-- long-press a **book** on the lower shelves: popup lists the books with read / not read (✅ / 📕), updating as Guy reads; clicking an unread book makes Guy read exactly that one next (`brain.requestRead(id)`), read books are not clickable
+- long-press a **book** on the lower shelves: popup lists the books with read / not read (✅ / 📕), updating as Guy reads; clicking an unread book makes Guy read exactly that one next (`brain.requestRead(id)`), read books are not clickable; each book has **Remove** (back to the Catalogue, Guy keeps what he learned) and **Forget** (back to the Catalogue, the skill fades gradually) buttons
 - long-press the **top shelf** when it holds records: record list; long-press lower shelves: normal menu
 - playback panel: play / stop / previous / next, track list updates, Guy joins in
 - drag furniture (heavy things too), drop onto Guy or walls is refused

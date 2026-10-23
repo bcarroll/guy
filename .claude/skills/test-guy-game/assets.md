@@ -13,6 +13,7 @@ machine check of this list; this file adds the expectations a human or Claude ne
 | shelf | bookshelf, books on rows 3 and 2, records on the top row | heavy, **not removable** | none | `read` | 0.62 m in front (0.5 for the top row) | long-press top row opens the record list |
 | lamp | floor lamp | light | `lighting` for moods/party | `lamp` (toggle) or `mood` | any free side, finger on the stem switch | party mode during a dance when he has `lighting`+`stereo` |
 | armchair | armchair, faces local -z | medium | none | `read` | sits back onto it; legs hang clear of the front | seat top 0.5 m |
+| armchair, armchair2, chair, chair2 | chairs (each has `obj.sit = {seat, gap}`; Guy may sit on any open one) | medium / light | none | `read` (any open chair), `sit` (rests), `sitguitar` (takes the guitar off its stand, carries it over, plays sitting); menu button "Sit Down" | steps back onto the seat from `gap` | the drum stool is a seat too: `slouch` |
 | plant | potted plant | light | none | `plant` | any free side, finger on a leaf | |
 | ball | red ball (not an obstacle) | n/a | `ball` | `dribble` / `toss` / `ball` (kick); unskilled: only pokes it | kinematic while he holds it | removable via the menu |
 | guitar | acoustic guitar on a stand (added from the Catalogue; brings its own book) | light | `guitar` | `guitar`; stereo playing: `jamguitar` | takes it off the stand, strap over the left shoulder; right hand strums, left hand frets | |
@@ -66,9 +67,10 @@ left wall and cannot be removed, moved or rotated.
 | darksky | Dark Sky Rules | `telescope.dark` | telescope object | `darkstargaze` | no (Catalogue) |
 | scopecare | Looking After Your Telescope | `telescope.care` | telescope object | `scopecare` | no (Catalogue) |
 | decorating | Home Decorating for Robots | `decorate` | none | `dust` (wipes along the bottom edge of a frame, wall light or sill) | no (Catalogue) |
+| speedread | Speed Reading for Robots | `speedreading` | none | `read` (stands at the shelf, takes the book, opens and closes it, puts it back; 2.5x faster; learns from every book in 3 s instead of 8) | no (Catalogue) |
 | woodwork | premium | | workbench | | locked |
 
-Guy learns a skill only after keeping the book open for 8 s; interrupted reads teach nothing.
+Guy learns a skill only after keeping the book open for 8 s (3.2 s at full Speed Reading); interrupted reads teach nothing.
 
 ## Records and tracks (`src/albums.js`, `TRACKS` in `src/audio.js`)
 
@@ -143,6 +145,9 @@ Needs and allowed arm contacts are in `MANIFEST.activities`.
 | dance-twirl | `T.moment('dancemoves','twirl',2.5,'front')` | arms out, spinning on the spot (`fx.spin`) clear of furniture |
 | dance-waltz | `T.moment('ballroom','waltz',5,'front')` | arms in a dance hold, slow turn |
 | dance-swing | `T.moment('ballroom','swing',4,'front')` | arms swinging wide, alternate knee kicks |
+| sit-rest | `T.moment('sit','sitRest',5,'side')` | sitting on the seat (not hovering), hands on the knees |
+| sit-guitar | `T.moment('sitguitar','sitGuitar',6,'front')` | seated, guitar on the lap and chest, left hand on the neck, right strumming |
+| slouch | `T.moment('slouch','slouch',6,'side')` | on the drum stool, round-shouldered, knees apart, hands hanging |
 | record-carry | `T.moment('dance','walk',0,'front',{album:true})` | sleeve hangs from the hand by its top edge |
 
 Other things to eyeball once per release: the top shelf with all 12 records (`?records=all`: every title readable, no
@@ -181,3 +186,6 @@ book list popup (long-press a lower shelf at a book: title, read / not read).
 - Songs: a record plays each song for at most 20 s (`trackSeconds`, checked in `sweepPlaylist`); longer forms are cut at 20 s.
 - `piano` activity with no bench in the room threw inside `benchAway` and fell through to a random activity; it now just skips moving the bench.
 - `sweepWalls` could fail depending on where earlier sweeps left the drums (the easel's stand spot was inside them): each case now parks the other object clear first.
+- Forgetting a book leaves a gap on the shelf (books keep their slots; nothing slides along), and `takeBook` ignores a book that was forgotten on the way to the shelf.
+- `sweepBookRules` must set `forceBook` after `T.settle()` (settling can start a random read that uses the request up).
+- `OVERLAP_FAIL` is now 6 samples: 4-5 sample overlaps were walking past a box at the edge of the 0.28 m safety margin (easel, chairs); every real clip so far was 8+.
