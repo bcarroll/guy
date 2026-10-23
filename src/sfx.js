@@ -12,7 +12,7 @@ export const setMuted = (m) => { muted = !!m; if (muted) dragOff(); };
 export const isMuted = () => muted;
 
 const last = {};
-const MIN_GAP = { bounce: 40, knock: 60, thud: 60, page: 250, step: 150, tick: 70, brush: 80, wipe: 160, leaf: 220, click: 40, sit: 400, kick: 60, saw: 200, tap: 80, sand: 250, machine: 500, lid: 150, sizzle: 400, plate: 150, ding: 200 };
+const MIN_GAP = { bounce: 40, knock: 60, thud: 60, page: 250, step: 150, tick: 70, brush: 80, wipe: 450, leaf: 220, click: 40, sit: 400, kick: 60, saw: 200, tap: 80, sand: 250, machine: 500, lid: 150, sizzle: 400, plate: 150, ding: 200 };
 
 let noise = null;
 const noiseBuf = (ctx) => {
@@ -89,7 +89,7 @@ const SOUNDS = {
   leaf(ctx, out) { burst(ctx, out, { dur: 0.16, type: 'highpass', f: 3500, gain: 0.1 }); burst(ctx, out, { dur: 0.12, type: 'highpass', f: 4200, gain: 0.07, delay: 0.1 }); },
   brush(ctx, out, v = 0.5) { burst(ctx, out, { dur: 0.08, f: 3800, q: 2, gain: 0.05 + 0.05 * clamp(v, 0, 1) }); },
   dab(ctx, out) { tone(ctx, out, { f0: 320, f1: 140, dur: 0.06, gain: 0.18 }); burst(ctx, out, { dur: 0.05, type: 'lowpass', f: 1200, gain: 0.1 }); },
-  wipe(ctx, out) { burst(ctx, out, { dur: 0.26, f: 1800, f2: 3200, q: 0.9, gain: 0.07 }); },
+  wipe(ctx, out) { burst(ctx, out, { dur: 0.5, f: 1600, f2: 2800, q: 0.5, gain: 0.15, attack: 0.12 }); burst(ctx, out, { dur: 0.42, type: 'highpass', f: 4500, gain: 0.05, attack: 0.15 }); },     // a soft cloth swish: slow start, no knock
   step(ctx, out) { burst(ctx, out, { dur: 0.05, type: 'lowpass', f: 700, gain: 0.07 }); tone(ctx, out, { f0: 100, f1: 65, dur: 0.05, gain: 0.08 }); },
   place(ctx, out, w = 0.4) { SOUNDS.thud(ctx, out, w); },
   // the Workshop
