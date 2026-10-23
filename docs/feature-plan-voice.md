@@ -1,6 +1,14 @@
 # Feature plan: voice control and voice responses
 
-Status: plan only, nothing built. Two halves: **hear** the user (hands-free commands) and **speak** back (Guy and GAL talk to the user, to each other, and while using objects).
+Status: plan only for voice (decisions below are Brett's, 2026-10-23). The screen lock (see below) is built. Two halves: **hear** the user (hands-free commands) and **speak** back (Guy and GAL talk to the user, to each other, and while using objects).
+
+## Decisions (Brett)
+- **English only.**
+- **The user talks only to Guy.** GAL never takes orders directly. There is no "GAL, ..." addressing and no wake word is needed beyond Guy's name in hands-free mode ("Guy, ...").
+- **Guy delegates to GAL when he is busy** (or when the user asks him to have GAL do it). Guy says so out loud ("GAL will get right on that"), tells GAL through the existing order channel (`gal.orderBuild` / `nextOrder`), and GAL **stops what she is doing** and does it. From then on GAL **answers the user herself** and **may take orders from the user until the request is satisfied**, then returns to taking orders only through Guy.
+- The user can also tell Guy to instruct GAL to use an object ("Guy, tell GAL to play the guitar").
+- Example: user "play the guitar" while Guy is busy -> Guy: "GAL will get right on that." -> GAL drops her task, picks up the guitar, plays. If the user then says "louder" or "play something slower" during that, GAL replies and handles it.
+- **Screen lock** (built): Off / Camera only / On, so a phone can sit in a stand and be driven by voice alone. "Lock the screen" / "unlock the screen" are voice commands (`window.__screenLock.setMode`).
 
 ## Goals
 - Say things like "Guy, play the piano", "GAL, go cook", "read the astronomy book", "go into the workshop", "lock the door" and have the right robot do it.
@@ -15,7 +23,7 @@ Status: plan only, nothing built. Two halves: **hear** the user (hands-free comm
 - A small wake word is optional: commands must start with "Guy" or "GAL" in hands-free mode (avoids reacting to TV/room talk); push-to-talk needs no name.
 
 ## Understanding: intent parser (`src/voice.js`, new)
-1. **Addressee**: "Guy"/"GAL"/"both"/none. None = Guy, or whoever is free; "GAL, ask Guy to..." routes through the existing `orderBuild`/`nextOrder` channel.
+1. **Addressee**: always Guy. Routing: if Guy is free he does it; if he is busy (or the user said "tell GAL...") he hands it to GAL through the existing `orderBuild`/`nextOrder` channel and GAL gets a short-lived **audience** with the user (`gal.listening = { until: request satisfied }`) so follow-ups go to her.
 2. **Rule-based first** (deterministic, testable, free): normalise text, match verbs/nouns against a table generated from `MANIFEST` and `activities()` labels (activity id, object name, book title, album, room, door). Synonyms table ("tunes"/"music" -> stereo/piano, "food" -> cook). Output is an intent: `{ who, kind: 'act'|'object'|'read'|'visit'|'lock'|'stop'|'ask', id }`.
 3. **Inferred actions**: small mood/need table (dark -> lamp, bored -> weighted random fun activity, hungry -> restaurant when open).
 4. **Optional LLM fallback** for sentences the rules cannot place: needs a backend/API key, so it is a later phase and off by default. The rules must work alone.
@@ -47,9 +55,7 @@ Status: plan only, nothing built. Two halves: **hear** the user (hands-free comm
 4. Push-to-talk recognition, then hands-free with wake word.
 5. Inferred actions, then (optional) LLM fallback.
 
-## Open questions for Brett
-- Language: English only to start?
-- Wake word required in hands-free mode ("Guy ..."), or always act on speech?
-- How chatty by default: occasional lines, or only replies?
-- Is a cloud LLM for free-form sentences acceptable (needs a key and a small backend), or stay rules-only?
-- Should GAL answer when addressed even if she is busy building, or queue the request like other orders?
+## Open questions (still open)
+- How chatty by default: occasional lines, or only replies? (Plan: replies + one short bark per activity, with a chatty/quiet/silent setting.)
+- Is a cloud LLM for free-form sentences acceptable (needs a key and a small backend), or stay rules-only? (Plan: rules-only first.)
+- How long should GAL keep her audience with the user after finishing a delegated request (until the activity ends, or a fixed time)?

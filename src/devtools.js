@@ -2911,11 +2911,66 @@ T.runAll = () => {
   report.errorsLogged = errors.length;
   return report;
 };
+// ---- Screen lock: off / camera only / on (needs real time for the hold-to-unlock, so it runs with runAsync) ----
+T.sweepScreenLock = async () => {
+  const out = [], base = errors.length, SL = window.__screenLock, body = document.body;
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const at = (el) => { const r = el.getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); };
+  const canvas = document.querySelector('canvas'), btn = document.getElementById('lockscreen-btn');
+  const key = (k) => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: k, code: k === ' ' ? 'Space' : undefined, cancelable: true, bubbles: true }));
+  const follow = document.getElementById('follow-btn'), skills = document.getElementById('skills');
+  const was = SL.mode;
+  try {
+    SL.setMode('off', { quiet: true });
+    out.push(result('screenlock: off: the HUD buttons take touches, the canvas takes the canvas, the lock button is there', at(follow) === follow && body.dataset.lock === 'off' && !!btn && btn.title.includes('Off')));
+    const f0 = follow.classList.contains('on'); key('f'); const f1 = follow.classList.contains('on'); key('f');
+    out.push(result('screenlock: off: the F key still toggles follow', f0 !== f1));
+    // on
+    document.getElementById('menu').hidden = false; skills.hidden = false;
+    SL.setMode('on', { quiet: true });
+    out.push(result('screenlock: on: menus and panels close when the screen locks', document.getElementById('menu').hidden && skills.hidden));
+    out.push(result('screenlock: on: the HUD buttons, the canvas and the catalog do not take touches, the lock button still does', at(follow) !== follow && at(document.getElementById('skip-btn')) !== document.getElementById('skip-btn') && at(canvas) !== canvas && at(btn) === btn));
+    const g0 = follow.classList.contains('on'); key('f'); key('k'); key(' ');
+    out.push(result('screenlock: on: keys do nothing (follow, skills panel, next)', follow.classList.contains('on') === g0 && skills.hidden));
+    out.push(result('screenlock: on: the camera is frozen', window.__ui.controlsEnabled() === false));
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { clientX: innerWidth / 2, clientY: innerHeight / 2, button: 0, bubbles: true, pointerId: 31 }));
+    out.push(result('screenlock: on: pressing the canvas starts no object press', window.__ui.pending === null));
+    // camera only
+    SL.setMode('camera', { quiet: true });
+    out.push(result('screenlock: camera only: the canvas takes touches (camera), the HUD buttons do not', at(canvas) === canvas && at(follow) !== follow && body.dataset.lock === 'camera'));
+    out.push(result('screenlock: camera only: the camera is live, keys still do nothing', window.__ui.controlsEnabled() === true && (key('f'), follow.classList.contains('on') === g0)));
+    canvas.setPointerCapture = canvas.releasePointerCapture = () => {};     // a synthetic pointer has no capture to give OrbitControls
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { clientX: innerWidth / 2, clientY: innerHeight * 0.8, button: 0, bubbles: true, pointerId: 32 }));
+    out.push(result('screenlock: camera only: pressing the canvas still starts no object press (no drag, no menu)', window.__ui.pending === null && document.getElementById('menu').hidden));
+    canvas.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 32 })); delete canvas.setPointerCapture; delete canvas.releasePointerCapture;
+    // saved
+    let saved = null; try { saved = localStorage.getItem('guy.screenlock.v1'); } catch { /* blocked */ }
+    out.push(result('screenlock: the mode is saved only when not ?fresh', new URLSearchParams(location.search).has('fresh') ? saved === null : saved === 'camera', { saved }));
+    // unlocking: a tap only reminds, a hold unlocks
+    SL.setMode('on', { quiet: true });
+    btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 33 })); await wait(300);
+    btn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 33 })); btn.click(); await wait(1000);
+    out.push(result('screenlock: a short tap on the lock button does not unlock', SL.mode === 'on'));
+    btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 34 })); await wait(1500);
+    out.push(result('screenlock: holding the lock button unlocks', SL.mode === 'off' && body.dataset.lock === 'off' && at(follow) === follow && window.__ui.controlsEnabled() === true));
+    // the menu from off
+    btn.click();
+    const pop = document.getElementById('lockscreen-menu'), opened = !pop.hidden;
+    pop.querySelector('[data-lock="camera"]').click();
+    out.push(result('screenlock: the button opens On / Camera only / Off and choosing one sets it', opened && SL.mode === 'camera' && pop.hidden));
+    out.push(result('screenlock: voice can set every mode', ['on', 'off', 'camera', 'off'].every((m) => SL.setMode(m, { quiet: true }) && SL.mode === m) && SL.setMode('bogus') === false));
+  } finally {
+    SL.setMode(was, { quiet: true }); SL.setMode('off', { quiet: true });
+    document.getElementById('menu').hidden = true;
+  }
+  out.push(result('screenlock: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
 // the sweeps that need real time (models load, pictures are taken): `await T.runAsync()`
 installCharacters(T, { result, summarise });
 installAudio(T, { result, summarise });
 installShots(T, { result, summarise });
-T.runAsync = async (which = ['sweepRigs', 'sweepCustomers', 'sweepAudio', 'sweepGuitarSongs']) => {
+T.runAsync = async (which = ['sweepRigs', 'sweepCustomers', 'sweepAudio', 'sweepGuitarSongs', 'sweepScreenLock']) => {
   const report = {};
   for (const k of which) { report[k.replace(/^sweep/, '').toLowerCase()] = summarise(await T[k]()); T.resetRooms(); }
   return report;

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { initScreenLock } from './screenlock.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { buildRoom, ROOM } from './room.js';
 import { Guy } from './guy.js';
@@ -655,9 +656,17 @@ window.__guyOpenMenu = (name) => openMenu(name === 'ball' ? { ball: true } : { o
 addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') { setSoundMuted(!soundMuted); showToast(soundMuted ? 'Sound muted (M or the speaker to turn it back on)' : 'Sound on'); } });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
+// Screen lock (screenlock.js): off / camera only / on. Locking closes every menu and panel and drops any press in progress.
+const screenLock = initScreenLock({
+  persist: !params.has('fresh'), toast: (m) => showToast(m),
+  onLock: () => { closeMenu(); machineUI.close(); hidePlayer(); panel.hidden = true; if (pending) { clearTimeout(pending.timer); pending = null; } drag = null; },
+});
+screenLock.onChange(() => { controls.enabled = screenLock.cameraOk(); });
+window.__screenLock = screenLock;
+
 // Capture phase so we run before OrbitControls and can keep it from orbiting while we handle an object.
 canvas.addEventListener('pointerdown', (e) => {
-  if (e.button !== 0) return;
+  if (e.button !== 0 || screenLock.locked()) return;            // locked: no object presses, the camera may still orbit
   if (!menu.hidden || !albumMenu.hidden) closeMenu();
   const hit = pick(e);
   if (!hit) return;
@@ -758,7 +767,7 @@ canvas.addEventListener('pointerup', (e) => {
 canvas.addEventListener('pointerup', endPress);
 canvas.addEventListener('pointercancel', endPress);
 
-window.__ui = { pick, floorAt, get pending() { return pending; }, get drag() { return drag; } };
+window.__ui = { controlsEnabled: () => controls.enabled, pick, floorAt, get pending() { return pending; }, get drag() { return drag; } };
 
 // Debug helper: fast-forward the simulation without rendering (window.sim(seconds)).
 window.sim = (sec, dt = 1 / 30) => {
@@ -788,6 +797,7 @@ renderer.setAnimationLoop(() => {
     camGoal.copy(guy.pos).setY(1.1);
     controls.target.lerp(camGoal, 0.05);
   }
+  if (!screenLock.cameraOk()) controls.enabled = false;      // 'on' freezes the camera too
   controls.update();
   renderer.render(scene, camera);
 });

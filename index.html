@@ -128,12 +128,25 @@
   #sound-btn.on { background: rgba(255,255,255,.25); opacity: .35; }
   #sound-btn.on:hover, #sound-btn.on:focus-visible { opacity: 1; }
   @keyframes sound-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+  #lockscreen-btn { position: fixed; top: 12px; right: 68px; z-index: 9; width: 48px; height: 48px; padding: 0; background: rgba(0,0,0,.55); color: #fff; border: 0; border-radius: 50%;
+                    font-size: 22px; line-height: 48px; cursor: pointer; touch-action: manipulation; user-select: none; overflow: hidden; }
+  #lockscreen-btn.locked { background: rgba(160,40,40,.75); }
+  #lockscreen-btn.holding { background: linear-gradient(90deg, rgba(60,160,90,.9) 0 100%) no-repeat, rgba(160,40,40,.75); background-size: 0 100%, 100% 100%; animation: lockhold 1.2s linear forwards; }
+  @keyframes lockhold { to { background-size: 100% 100%, 100% 100%; } }
+  #lockscreen-menu[hidden] { display: none; }
+  #lockscreen-menu { position: fixed; right: 12px; top: 68px; z-index: 9; display: flex; flex-direction: column; gap: 4px; background: rgba(28,30,36,.96); border-radius: 10px; padding: 6px; }
+  #lockscreen-menu button { background: transparent; color: #eee; border: 0; border-radius: 6px; padding: 10px 14px; font: inherit; font-size: 14px; text-align: left; cursor: pointer; min-height: 44px; }
+  #lockscreen-menu button.on { background: rgba(127,209,255,.25); }
+  /* Screen lock: everything but the canvas and the lock control ignores touch; the canvas only takes the camera in "camera" mode. */
+  body[data-lock="camera"] > *:not(canvas):not(.lockok), body[data-lock="on"] > *:not(.lockok) { pointer-events: none !important; }
 </style>
 </head>
 <body>
 <button id="devunlock" title="Development only: add all premium rooms, records and items">🔓 unlock premium</button>
 <div id="build" title="The version of the game running here (the commit it was built from)">build …</div>
 <div id="hud">Guy is <b id="activity">waking up…</b><span id="galline" hidden><br>GAL is <b id="activity2" style="color:#ff7ac0"></b></span><br><small>drag empty space: orbit · drag furniture or the ball: move it · long-press: rotate / remove · tap the wall machine: add things · K: skills · scroll: zoom · F: follow · Space: new activity</small></div>
+<button id="lockscreen-btn" class="lockok" title="Screen lock: Off" aria-label="Screen lock: Off">🔓</button>
+<div id="lockscreen-menu" class="lockok" hidden><button data-lock="on">🔒 On: voice only</button><button data-lock="camera">🎥 Camera only</button><button data-lock="off">🔓 Off</button></div>
 <div id="btns">
   <button id="player-btn" title="Stereo playback controls" hidden>🎵 Stereo</button>
   <button id="lock-btn" title="Let Guy stop" hidden></button>
