@@ -9,6 +9,7 @@ import { sfx, drag as sfxDrag, setMuted, isMuted } from './sfx.js';
 import { initMachine } from './machine.js';
 import { ALBUM_CATALOG } from './albums.js';
 
+import { initUpdateCheck } from './update.js';
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
@@ -141,6 +142,7 @@ followBtn.classList.toggle('on', follow);
 followBtn.addEventListener('click', toggleFollow);
 document.getElementById('skip-btn').addEventListener('click', () => brain.skip());
 addEventListener('keydown', (e) => {
+initUpdateCheck();
   if (e.key === 'f' || e.key === 'F') toggleFollow();
   if (e.code === 'Space') { e.preventDefault(); brain.skip(); }
 });

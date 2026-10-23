@@ -122,6 +122,7 @@ Use synthetic pointer events on the canvas, as the tests in this repo did (wrap 
 
 Report a table per sweep (passed/total, failures with the cause), the visual checklist with a verdict for each shot,
 and anything you fixed. Say plainly what you did **not** verify (audio cannot be heard from here; motion is judged from
+- **update bar** (`src/update.js`; only in a production build, not the dev server): `npm run build`, serve `dist` (`npx vite preview`), open the page, then overwrite `dist/version.json` with a different id and run `await __guyUpdate.check()` in the console. A "✨ A new version of Guy's room is ready!" bar must appear above the bottom buttons (Refresh / Later, 44 px high, no sideways scroll at 375 px wide); **Later** hides it for 30 minutes, **Refresh** reloads. With the same id nothing shows
 frozen frames). If everything passes, say which parts were checked only numerically.
 
 ## 6. Keeping this skill current
