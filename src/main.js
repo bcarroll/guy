@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { buildRoom, ROOM } from './room.js';
 import { Guy } from './guy.js';
 import { Brain } from './brain.js';
-import { initAudio } from './audio.js';
+import { initAudio, audio } from './audio.js';
 import { Skills, SKILL_INFO } from './skills.js';
 import { sfx, drag as sfxDrag, setMuted, isMuted } from './sfx.js';
 import { initMachine } from './machine.js';
@@ -167,12 +167,20 @@ addEventListener('keydown', (e) => {
   if (e.key === 'f' || e.key === 'F') toggleFollow();
   if (e.code === 'Space') { e.preventDefault(); brain.skip(); }
 });
-document.getElementById('start').addEventListener('click', (e) => {
+// There is no "click to start" screen. Browsers keep the sound off until the page has been touched once, so the first real tap, drag
+// or key press anywhere starts the audio quietly; until then Guy carries on in silence. Fullscreen on phones is the Full button.
+// (?nostart is still accepted so old test URLs work; it no longer does anything.)
+const UNLOCK_EVENTS = ['pointerup', 'touchend', 'click', 'keydown'];
+function unlockAudio(e) {
+  if (!e.isTrusted) return;                       // only a real touch counts (the QA harness's pretend events must not start the audio)
   initAudio();
-  if (matchMedia('(pointer: coarse)').matches) enterFs(); // phones: go fullscreen on the first tap
-  e.currentTarget.remove();
-});
-if (params.has('nostart')) document.getElementById('start').remove();
+  const ctx = audio().ctx;
+  const done = () => UNLOCK_EVENTS.forEach((t) => removeEventListener(t, unlockAudio, true));
+  if (ctx.state === 'running') done();
+  else ctx.resume().then(() => { if (ctx.state === 'running') done(); }).catch(() => {});
+}
+UNLOCK_EVENTS.forEach((t) => addEventListener(t, unlockAudio, true));
+window.__guyAudio = audio;                         // for the QA harness
 
 guy.load(import.meta.env.BASE_URL + 'models/ybot.fbx').then(() => {
   window.guy = guy; window.camera = camera; window.controls = controls; window.scene = scene; window.brain = brain; window.THREE = THREE;

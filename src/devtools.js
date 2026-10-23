@@ -1348,6 +1348,22 @@ T.sweepUpdate = () => {
   return out;
 };
 
+// ---- 13. No start screen: the sound starts on the first real touch (main.js, UNLOCK_EVENTS) ----------------------------------------
+// A real tap cannot be made from here (pretend events are not trusted, which is the point), so what is checked is that there is
+// no overlay in the way and that pretend events leave the audio alone. The real-tap check is in SKILL.md section 4.
+T.sweepStart = () => {
+  const out = [], base = errors.length;
+  const ctx0 = window.__guyAudio ? window.__guyAudio().ctx : undefined;
+  out.push(result('start: there is no "click to start" overlay', !document.getElementById('start')));
+  out.push(result('start: the audio hook exists', typeof window.__guyAudio === 'function'));
+  for (const type of ['pointerup', 'touchend', 'click']) window.dispatchEvent(new Event(type));
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+  const ctx1 = window.__guyAudio ? window.__guyAudio().ctx : undefined;
+  out.push(result('start: pretend (untrusted) events do not start the audio', ctx1 === ctx0));
+  out.push(result('start: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 T.runAll = () => {
   const report = { coverage: T.coverage() };
   report.objects = summarise(T.sweepObjects());
@@ -1373,6 +1389,7 @@ T.runAll = () => {
   report.saves = summarise(T.sweepSaves());
   report.layout = summarise(T.sweepLayout());
   report.update = summarise(T.sweepUpdate());
+  report.start = summarise(T.sweepStart());
   report.errorsLogged = errors.length;
   return report;
 };
