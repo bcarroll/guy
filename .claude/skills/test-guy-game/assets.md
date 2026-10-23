@@ -359,3 +359,6 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 
 Checked by `T.sweepSounds` (event -> counted request). Whether it *sounds* right can only be judged by listening. Press **M** to mute the effects.
 - Guy used to keep building foot stools and shelves forever, and none were used. Each recipe now has a `cap` in `src/workshop.js` (stool 1, shelves 2, chair 2, counting what stands in a room plus what is in storage); `pickRecipe` skips a recipe at its cap, so `build` becomes unavailable once he has made them all. Tests that force `b.pickRecipe` bypass the cap.
+
+## Screen lock (`src/screenlock.js`; 🔒 button top right beside the speaker)
+- Modes: **Off** (everything works), **Camera only** (orbit/pan/zoom on the canvas; no object presses, drags, menus, keys or HUD buttons), **On** (nothing but voice: camera frozen too). The button and its menu stay live: tap (when Off) opens On / Camera only / Off; when locked a tap only reminds, a 1.2 s hold unlocks. Locking closes the Catalog, menus, Skills and Stereo panels. Saved in `guy.screenlock.v1` (not with `?fresh`). Voice calls `window.__screenLock.setMode('on'|'camera'|'off')` ("lock the screen", "unlock the screen"). Tested by `T.sweepScreenLock`.
