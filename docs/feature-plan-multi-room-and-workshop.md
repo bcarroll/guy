@@ -379,7 +379,7 @@ Each phase can be tested on its own. No phase needs the Restaurant.
 
 ## 12. Restaurant (first version built)
 
-**Built:** the Restaurant room with an elevator on its far wall, a stove, kitchen counter, cash register and two dining tables; customers (3D models from `public/models/customers/`, listed in `src/customermodels.js`) arrive by the elevator, sit, order, eat, pay and leave; Guy takes orders, cooks, serves and takes payment (`src/restbrain.js`); coins are saved with the layout. Guy runs it for now (GAL does not exist yet) and, as below, that is a default, not a rule. Details and tests: `assets.md` ("The Restaurant"). Not built yet: premium gating (it is free for now), GAL, clearing and washing plates, more customer packs, optimised models for the large packs.
+**Built:** the Restaurant room with an elevator on its far wall, a stove, kitchen counter, cash register and two dining tables; customers (3D models from `public/models/customers/`, listed in `src/customermodels.js`) arrive by the elevator, sit, order, eat, pay and leave; Guy takes orders, cooks, serves and takes payment (`src/restbrain.js`); coins are saved with the layout. Guy runs it for now (GAL does not exist yet) and, as below, that is a default, not a rule. Details and tests: `assets.md` ("The Restaurant"). It is a premium room: shown locked in the Rooms tab until unlocked (no payment flow yet). Not built yet: the payment flow, GAL, clearing and washing plates, more customer packs, optimised models for the large packs.
 
 The original notes:
 

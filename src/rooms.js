@@ -10,9 +10,9 @@ export const ROOM_CATALOG = [
   { id: 'workshop', name: 'Workshop', icon: '🛠️', unlocked: true, doorWalls: ['right', 'front', 'back'],
     desc: 'A place to build things. Adds a door to your room.',
     look: { frame: 0x6b4a2b, door: 0xb5532f, panel: 0xc9683f, floor: 0x8c9096, wall: 0xb4b8bd } },
-  // The Restaurant: a kitchen, a cash register and dining tables, with an elevator the customers arrive in. Premium in the plan
-  // (`unlocked: true` until there is a way to pay), so it is listed like the Workshop.
-  { id: 'restaurant', name: 'Restaurant', icon: '🍽️', unlocked: true, doorWalls: ['front', 'back', 'right'], elevator: true,
+  // The Restaurant: a kitchen, a cash register and dining tables, with an elevator the customers arrive in. A premium room: listed
+  // as locked in the Rooms tab (`premium: true`) until it is unlocked (`setUnlocked`; there is no way to pay yet).
+  { id: 'restaurant', name: 'Restaurant', icon: '🍽️', unlocked: false, premium: true, doorWalls: ['front', 'back', 'right'], elevator: true,
     desc: 'A kitchen and dining room. Customers arrive by elevator and Guy cooks and serves.',
     look: { frame: 0x6b4a2b, door: 0x2f6f8f, panel: 0x3d86a8, floor: 0xb98a55, wall: 0xeadbc0 } },
 ];

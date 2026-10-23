@@ -260,11 +260,13 @@ T.removeAll = () => {
   if (!W().ballGone) { W().removeBall(); B().ballRemoved(); }
 };
 const isPresent = (id) => (id === 'ball' ? !W().ballGone : !!(W().objects[id] || W().decor[id] || Object.values(W().objects).some((o) => o.kind === id)));
+// a premium room is locked until it is paid for: the harness unlocks it directly (a dev bypass, like the premium records)
+const unlockRoom = (id) => { if (!W().rooms.isUnlocked(id)) W().rooms.setUnlocked(id, true); };
 T.addObject = (id) => { // through the Catalogue, like a user would
   const def = OBJECT_CATALOG.find((d) => d.id === id);
   if (isPresent(id)) return true;
   if (def.locked) return false;
-  if (def.room && !W().rooms.isAdded(def.room)) W().rooms.add(def.room);          // the Catalogue lists a room's things only once the room is added
+  if (def.room && !W().rooms.isAdded(def.room)) { unlockRoom(def.room); W().rooms.add(def.room); }          // the Catalogue lists a room's things only once the room is added
   if (def.built && !((W().stock.items[id] || 0) > 0)) W().stock.items[id] = 1;      // something Guy built: make sure there is one in storage to add
   return machineClick('objects', def.name) && isPresent(id);
 };
@@ -288,7 +290,7 @@ T.forget = () => skillsOf().known.clear();
 T.prep = (name) => {
   const m = MANIFEST.activities[name] || {};
   const done = [];
-  if (m.room && !R().isAdded(m.room)) R().add(m.room);                           // the room the activity happens in
+  if (m.room && !R().isAdded(m.room)) { unlockRoom(m.room); R().add(m.room); }                           // the room the activity happens in
   for (const id of m.objects || []) if (T.addObject(id)) done.push(id);
   T.learn(m.skills || []);
   if (m.stock) { Object.assign(W().stock, { wood: 0, parts: 0 }, m.stock); W().syncStock(); }
@@ -1624,6 +1626,7 @@ const dishPrice = (c) => DISHES[c.dish].price;
 const restSetup = (wall = 'front', { skill = true } = {}) => {
   T.settle();
   T.resetRooms(); T.removeAll(); T.forget(); skillsOf().fading.clear(); T.settle(); T.home();
+  unlockRoom('restaurant');
   const res = R().add('restaurant', { walls: [wall] });
   for (const id of REST) T.addObject(id);
   if (skill) T.learn(['restaurant']);
@@ -1635,8 +1638,13 @@ T.sweepRestaurant = () => {
   const out = [], base = errors.length, w = W(), b = B(), r = w.restaurant;
   const wasHeadless = r.headless;
   try {
-    // 1. nothing of the Restaurant is listed until the room is added
+    // 0. it is a premium room: listed locked, with no Add button, and adding it does nothing until it is unlocked
     T.resetRooms(); T.removeAll();
+    openTab('rooms');
+    const rc = machineCard('Restaurant');
+    const refused = R().add('restaurant');
+    out.push(result('restaurant: the Rooms tab lists it as premium and locked (no Add button), and adding it is refused', !!rc && !rc.querySelector('.act') && /Premium/.test(rc.textContent) && !refused.ok && !R().isAdded('restaurant'), { refused: refused.messages }));
+    // 1. nothing of the Restaurant is listed until the room is added
     openObjects('all');
     out.push(result('restaurant: before the room is added none of its furniture or its book is listed', !REST.some((id) => machineCard(OBJECT_CATALOG.find((d) => d.id === id).name)) && !machineCard('Restaurant Basics')));
     for (const wall of ['front', 'back', 'right']) {

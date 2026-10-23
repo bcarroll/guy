@@ -208,7 +208,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms }) {
     const groups = { 'In the room': [], 'Add to the room': [], 'Premium · coming soon': [] };
     const albumGroups = { 'On the shelf': [], 'Add to the shelf': [], 'Not available yet': [], 'Premium · coming soon': [] };
     const bookGroups = { 'On the shelf': [], 'Add to the shelf': [], 'Not available yet': [], 'Premium · coming soon': [] };
-    const roomGroups = { 'In your home': [], 'Add a room': [] };
+    const roomGroups = { 'In your home': [], 'Add a room': [], 'Premium · coming soon': [] };
     const handlers = [];
     chipBar.hidden = tab !== 'objects';
     if (tab === 'objects') {
@@ -268,10 +268,10 @@ export function initMachine({ world, guy, persist, notify, remove, rooms }) {
         else albumGroups['Premium · coming soon'].push(card({ ...base, label: '🔒 Premium' }));
       }
     } else if (tab === 'rooms') {
-      // a room that is not unlocked is not listed at all
+      // a room that is not unlocked is not listed at all, unless it is a premium room: that is shown locked
       for (const r of rooms ? rooms.catalog : []) {
-        if (!rooms.isUnlocked(r.id)) continue;
         const base = { icon: r.icon, name: r.name, desc: r.desc, status: 'room' };
+        if (!rooms.isUnlocked(r.id)) { if (r.premium) roomGroups['Premium · coming soon'].push(card({ ...base, status: 'locked', label: '🔒 Premium' })); continue; }
         if (rooms.isAdded(r.id)) roomGroups['In your home'].push(card({ ...base, status: 'inroom', label: '✓ In your home' }));
         else { const i = handlers.push(() => addRoom(r)) - 1; roomGroups['Add a room'].push(card({ ...base, label: 'Add to my home', action: i, note: 'Puts a door on a wall. Anything in the way goes back to the Catalogue.' })); }
       }
