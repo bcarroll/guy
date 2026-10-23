@@ -376,8 +376,8 @@ export function buildRoom(scene) {
     o.sit = { seat: -0.22, gap: -0.95 };                   // pelvis well back from the front edge so the shins hang clear
     return o;
   };
-  const buildWoodenChair = (name, x, z) => {
-    const wood = mat(0x9a6b3d, { roughness: 0.7 });
+  const buildWoodenChair = (name, x, z, metal = false) => {
+    const wood = metal ? mat(0xb4bcc6, { metalness: 0.75, roughness: 0.3 }) : mat(0x9a6b3d, { roughness: 0.7 });
     const o = makeObject(name, x, z, 0.55, 0.55, 1.0, 'light', (g) => {
       box(0.46, 0.05, 0.46, wood, 0, 0.475, 0, g);          // seat, top at 0.5 m
       box(0.46, 0.5, 0.04, wood, 0, 0.75, 0.21, g);         // backrest at the +z side (the chair faces local -z)
@@ -999,17 +999,23 @@ export function buildRoom(scene) {
   const SHOP_LAYOUT = {
     workbench: (N, L) => ({ n: N - 0.6, lat: 0, face: 'door' }),
     toolbox: (N, L) => ({ n: N - 0.45, lat: 1.7, face: 'door' }),
-    woodfactory: (N, L) => ({ n: N * 0.35, lat: L / 2 - 0.7, face: 'minusLat' }),
-    sander: (N, L) => ({ n: N * 0.72, lat: L / 2 - 0.6, face: 'minusLat' }),
-    saw: (N, L) => ({ n: N * 0.35, lat: -(L / 2 - 0.65), face: 'plusLat' }),
-    mallet: (N, L) => ({ n: N * 0.72, lat: -(L / 2 - 0.7), face: 'plusLat' }),
+    woodfactory: (N, L) => ({ n: N * 0.25, lat: L / 2 - 0.7, face: 'minusLat' }),
+    sander: (N, L) => ({ n: N * 0.575, lat: L / 2 - 0.6, face: 'minusLat' }),
+    saw: (N, L) => ({ n: N * 0.25, lat: -(L / 2 - 0.65), face: 'plusLat' }),
+    mallet: (N, L) => ({ n: N * 0.575, lat: -(L / 2 - 0.7), face: 'plusLat' }),
+    // the metal line: the factory and the cutter on the far wall left of the workbench, the welder and the anvil between the wood stations
+    // (these two are placed exactly: the far wall is full, and findSpot keeps a new thing a metre from the walls and from its neighbours)
+    metalfactory: (N, L) => ({ n: N - 0.98, lat: -(L / 2 - 1.05), face: 'door', exact: true }),
+    metalcutter: (N, L) => ({ n: N - 0.83, lat: -(L / 2 - 1.05) + 1.075, face: 'door', exact: true }),
+    welder: (N, L) => ({ n: N * 0.4, lat: L / 2 - 0.8, face: 'minusLat' }),
+    anvil: (N, L) => ({ n: N * 0.4, lat: -(L / 2 - 0.8), face: 'plusLat' }),
   };
   const shopSpot = (id) => (w) => {
     if (!w.doors.workshop) return null;
     const { n: N, l: L } = w.shellSize('workshop'), ax = w.shellAxes('workshop');
     const s = SHOP_LAYOUT[id](N, L), p = w.shellPoint('workshop', s.n, s.lat);
     const face = s.face === 'door' ? ax.toDoor : s.face === 'minusLat' ? ax.lat.clone().negate() : ax.lat;
-    return { x: p.x, z: p.z, rot: w.rotFacing(face.x, face.z) };
+    return { x: p.x, z: p.z, rot: w.rotFacing(face.x, face.z), exact: !!s.exact };
   };
 
   // ---- Things Guy builds (see src/workshop.js). They are counted in storage (`world.stock.items`) and added to the room from the
@@ -1031,6 +1037,7 @@ export function buildRoom(scene) {
     footstool: { build: buildFootStool, pref: { x: -3.4, z: -1.2 } },
     woodshelves: { build: buildWoodShelves, pref: { x: -4.2, z: 1.2 } },
     builtchair: { build: (name, x, z) => buildWoodenChair(name, x, z), pref: { x: -2.4, z: 2.6 } },
+    metalchair: { build: (name, x, z) => buildWoodenChair(name, x, z, true), pref: { x: -2.9, z: 2.6 } },
   };
 
   // ---- Restaurant furniture (src/restobjects.js), placed the same way in the Restaurant's own frame
@@ -1064,6 +1071,10 @@ export function buildRoom(scene) {
     saw: [work.saw, shopSpot('saw')],
     mallet: [work.mallet, shopSpot('mallet')],
     sander: [work.sander, shopSpot('sander')],
+    metalfactory: [work.metalfactory, shopSpot('metalfactory')],
+    metalcutter: [work.metalcutter, shopSpot('metalcutter')],
+    welder: [work.welder, shopSpot('welder')],
+    anvil: [work.anvil, shopSpot('anvil')],
     armchair2: [(x = 0, z = 0) => buildArmchair('armchair2', x, z, 0x8a3b4a), { x: 1.7, z: 3.0 }],
     chair: [(x = 0, z = 0) => buildWoodenChair('chair', x, z), { x: -2.4, z: 3.0 }],
     chair2: [(x = 0, z = 0) => buildWoodenChair('chair2', x, z), { x: -3.2, z: 3.2 }],
@@ -1503,10 +1514,10 @@ export function buildRoom(scene) {
     },
     // What the Workshop has in stock: planks, cut parts, and finished things waiting in storage (counts per kind). Saved with the layout.
     // `coins` is what the Restaurant has earned (no cap).
-    stock: { wood: 0, parts: 0, items: {}, coins: 0 },
+    stock: { wood: 0, parts: 0, metal: 0, mparts: 0, hw: 0, items: {}, coins: 0 },
     syncStock() {                                    // keep the piles on the workbench and the coins in the till in step with the counts
       const b = objects.workbench;
-      if (b) { b.setWood(world.stock.wood); b.setParts(world.stock.parts); }
+      if (b) { b.setWood(world.stock.wood); b.setParts(world.stock.parts); b.setMetal(world.stock.metal); b.setMParts(world.stock.mparts); b.setHW(world.stock.hw); }
       const r = objects.register;
       if (r) r.setCoins(world.stock.coins);
     },
@@ -1576,7 +1587,9 @@ export function buildRoom(scene) {
       if (!pref) return false;
       const o = entry[0]();
       if (pref.rot !== undefined) { o.rot = pref.rot; o.group.rotation.y = o.yaw; }
-      const spot = world.findSpot(o, pref, avoid);
+      let spot = null;
+      if (pref.exact && fits(o, pref.x, pref.z) && world.ownStandClear(o, pref.x, pref.z) && !world.onSomeonesStand(o, pref.x, pref.z)) spot = { x: pref.x, z: pref.z };       // exactly where the room's plan says
+      if (!spot) spot = world.findSpot(o, pref, avoid);
       if (!spot) { world.removeObject(id); delete world.removed[id]; return false; }
       o.home = { x: spot.x, z: spot.z };
       o.set(spot.x, spot.z);

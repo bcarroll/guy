@@ -9,7 +9,8 @@
 import * as THREE from 'three';
 import { Q } from './guy.js';
 import { sfx } from './sfx.js';
-import { RECIPES, PLANKS_PER_RUN, PARTS_PER_PLANK, STOCK_CAP, STORAGE_CAP, planksNeeded } from './workshop.js';
+import { RECIPES, PLANKS_PER_RUN, PARTS_PER_PLANK, STOCK_CAP, STORAGE_CAP, METAL_PER_RUN, MPARTS_PER_BAR, METAL_CAP, planksNeeded, barsNeeded, skillsOf } from './workshop.js';
+import { wants, supply } from './needs.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const UPV = V(0, 1, 0);
@@ -21,9 +22,12 @@ export function installWorkshop(Brain, POSES, H) {
 
   Object.assign(Brain.prototype, {
     initWork() {
-      this.carry = null;                  // what he is carrying between stations: 'plank' | 'planks' | 'parts' | 'piece' | null
+      this.carry = null;                  // what he is carrying between stations: 'plank' | 'planks' | 'parts' | 'piece' | 'bar' | 'bars' | 'mparts' | 'mpiece' | null
+      this.carryN = 0;                    // how many parts / bars that is (given back to the stock if he is cut short)
       this.pieceParts = 0;                // how many parts are knocked together in the piece he carries
-      this.assembling = 0;                // how many parts are on the mallet block
+      this.assembling = 0;                // how many parts are on the station he is putting them together at
+      this.assembleAt = null;             // ... which one ('mallet' | 'welder' | 'anvil') and which stock they came from ('parts' | 'mparts')
+      this.forceRecipe = null;            // a recipe he was told to build (the user, or Guy telling GAL)
       this.toolInUse = null;              // the object whose tool is in his hand
       this.onBuilt = null;                // called with a message when he finishes something
       const wood = new THREE.MeshStandardMaterial({ color: 0xe3c08a, roughness: 0.8 });
@@ -36,8 +40,18 @@ export function installWorkshop(Brain, POSES, H) {
         piece: bar(0.3, 0.16, 0.2),
         sandPiece: bar(0.46, 0.04, 0.14),
       };
+      const steel = new THREE.MeshStandardMaterial({ color: 0xb4bcc6, metalness: 0.75, roughness: 0.3 });
+      const sbar = (l, t, w) => { const m = new THREE.Mesh(new THREE.BoxGeometry(l, t, w), steel); m.castShadow = true; return m; };
+      Object.assign(this.workProps, {
+        bar: sbar(0.5, 0.035, 0.07),
+        bars: group(...[0, 1, 2, 3].map((i) => { const m = sbar(0.4, 0.035, 0.07); m.position.set(0, (i % 2) * 0.037, (i < 2 ? -0.05 : 0.05)); return m; })),
+        mparts: group(...[0, 1].map((i) => { const m = sbar(0.3, 0.035, 0.05); m.position.set(0, i * 0.037, 0); m.rotation.y = i * 0.2; return m; })),
+        mpiece: sbar(0.3, 0.16, 0.2),
+      });
       Object.values(this.workProps).forEach((p) => { p.visible = false; this.w.room.add(p); });
     },
+
+    setCarry(kind, n = 0) { this.carry = kind; this.carryN = kind ? n : 0; },
 
     // ------------------------------------------------------------------ where he is
     inWorkshop() { return this.w.roomIdAt(this.g.root.position.x, this.g.root.position.z) === ID; },
@@ -74,41 +88,76 @@ export function installWorkshop(Brain, POSES, H) {
         this.play('reach', 1.3, { needs: ['toolbox'], target: () => tb().toolPoint() }),
         this.play('reach', 1.4, { needs: ['toolbox'], at: [0.6, () => { tb().setOpen(false); sfx('lid'); }], target: () => tb().lidPoint() })];
     },
-    // press the factory's button, wait while it runs, then take the planks off its tray
-    factorySteps() {
-      const f = () => this.obj('woodfactory');
-      return [this.stand('woodfactory', 0.78, () => f().buttonPoint()),
-        this.play('reach', 1.6, { needs: ['woodfactory'], at: [0.7, () => { f().press(); f().run(3.4); sfx('click'); sfx('machine'); }], target: () => f().buttonPoint() }),
-        this.play('idle', 3.6, { needs: ['woodfactory'], at: [3.0, () => { f().setTray(PLANKS_PER_RUN); sfx('thud', 0.5); }] }),
-        this.play('reach', 1.8, { needs: ['woodfactory'], at: [0.9, () => { f().setTray(0); this.carry = 'planks'; sfx('bookgrab'); }], target: () => f().trayPoint() })];
+    // press the factory's button, wait while it runs, then take what it made off its tray (planks, or metal bars from the Metal Factory)
+    factorySteps(id = 'woodfactory') {
+      const f = () => this.obj(id), metal = id === 'metalfactory', n = metal ? METAL_PER_RUN : PLANKS_PER_RUN;
+      return [this.stand(id, 0.78, () => f().buttonPoint()),
+        this.play('reach', 1.6, { needs: [id], at: [0.7, () => { f().press(); f().run(3.4); sfx('click'); sfx('machine'); }], target: () => f().buttonPoint() }),
+        this.play('idle', 3.6, { needs: [id], at: [3.0, () => { f().setTray(n); sfx('thud', 0.5); }] }),
+        this.play('reach', 1.8, { needs: [id], at: [0.9, () => { f().setTray(0); this.setCarry(metal ? 'bars' : 'planks', n); sfx('bookgrab'); }], target: () => f().trayPoint() })];
     },
-    // put what he carries on the workbench: planks on the wood pile, parts on the parts pile
+    // where each kind of stock lies on the workbench
+    benchPoint(kind) {
+      const wb = this.obj('workbench');
+      return { wood: () => wb.pilePoint(), metal: () => wb.metalPoint(), parts: () => wb.partsPoint(), mparts: () => wb.mpartsPoint(), hw: () => wb.hwPoint() }[kind]();
+    },
+    // put what he carries on the workbench: planks on the wood pile, bars on the metal pile, parts and metal parts on theirs
     benchPlace(kind, n) {
-      const wb = () => this.obj('workbench');
-      const tgt = () => (kind === 'wood' ? wb().pilePoint() : wb().partsPoint());
+      const tgt = () => this.benchPoint(kind);
       return [this.stand('workbench', 0.78, tgt),
-        this.play('reach', 1.6, { needs: ['workbench'], at: [0.8, () => { this.carry = null; this.w.addStock(kind, n); sfx('place', 0.2); }], target: tgt })];
+        this.play('reach', 1.6, { needs: ['workbench'], at: [0.8, () => { this.setCarry(null); this.w.addStock(kind, n); sfx('place', 0.2); }], target: tgt })];
+    },
+    // take n of a kind of stock off the workbench into his hands
+    benchTake(kind, n, carryKind) {
+      const tgt = () => this.benchPoint(kind);
+      return [this.stand('workbench', 0.78, tgt),
+        this.play('reach', 1.6, { needs: ['workbench'], at: [0.8, () => { this.w.addStock(kind, -n); this.setCarry(carryKind, n); sfx('bookgrab'); }], target: tgt })];
     },
     // take a plank off the workbench pile, put it on the sawhorse, saw it in two, and carry the parts back
     sawSteps() {
       const wb = () => this.obj('workbench'), sw = () => this.obj('saw');
-      return [this.stand('workbench', 0.78, () => wb().pilePoint()),
-        this.play('reach', 1.6, { needs: ['workbench'], at: [0.8, () => { this.w.addStock('wood', -1); this.carry = 'plank'; sfx('bookgrab'); }], target: () => wb().pilePoint() }),
+      return [...this.benchTake('wood', 1, 'plank'),
         this.stand('saw', 0.72, () => sw().at(0, 0.84, 0.05)),
-        this.play('reach', 1.5, { needs: ['saw'], at: [0.8, () => { sw().setPlank('whole'); this.carry = null; sfx('place', 0.2); }], target: () => sw().at(0, 0.84, 0.05) }),
+        this.play('reach', 1.5, { needs: ['saw'], at: [0.8, () => { sw().setPlank('whole'); this.setCarry(null); sfx('place', 0.2); }], target: () => sw().at(0, 0.84, 0.05) }),
         this.play('workSaw', 6.2, { needs: ['saw'], work: { kind: 'saw', obj: 'saw' }, onEnd: () => sw().setPlank('cut') }),
-        this.play('reach', 1.6, { needs: ['saw'], at: [0.8, () => { sw().setPlank(null); this.carry = 'parts'; sfx('bookgrab'); }], target: () => sw().at(0, 0.84, 0.05) }),
+        this.play('reach', 1.6, { needs: ['saw'], at: [0.8, () => { sw().setPlank(null); this.setCarry('parts', PARTS_PER_PLANK); sfx('bookgrab'); }], target: () => sw().at(0, 0.84, 0.05) }),
         ...this.benchPlace('parts', PARTS_PER_PLANK)];
+    },
+    // metal: take a bar to the cutter, pull the lever, and carry the two parts back to the bench
+    cutSteps() {
+      const cu = () => this.obj('metalcutter');
+      return [...this.benchTake('metal', 1, 'bar'),
+        this.stand('metalcutter', 0.72, () => cu().leverGrip()),
+        this.play('reach', 1.5, { needs: ['metalcutter'], at: [0.8, () => { cu().setBar('whole'); this.setCarry(null); sfx('place', 0.2); }], target: () => cu().barPoint() }),
+        this.play('workCut', 6.4, { needs: ['metalcutter'], work: { kind: 'cut', obj: 'metalcutter', pulls: 3 }, onEnd: () => cu().setBar('cut') }),
+        this.play('reach', 1.6, { needs: ['metalcutter'], at: [0.8, () => { cu().setBar(null); this.setCarry('mparts', MPARTS_PER_BAR); sfx('bookgrab'); }], target: () => cu().barPoint() }),
+        ...this.benchPlace('mparts', MPARTS_PER_BAR)];
+    },
+    // metal: take the parts to the welder and join them, then to the anvil to hammer the joins into shape; he ends with the piece in his hands
+    weldSteps(r) {
+      const m = r.metal, wd = () => this.obj('welder'), top = () => wd().at(0, wd().TOP + 0.1, 0.05);
+      return [...this.benchTake('mparts', m.parts, 'mparts'),
+        this.stand('welder', 0.7, top),
+        this.play('reach', 1.5, { needs: ['welder'], at: [0.8, () => { this.setCarry(null); this.assembling = m.parts; this.assembleAt = { obj: 'welder', kind: 'mparts' }; wd().setParts(Math.min(4, m.parts)); sfx('place', 0.2); }], target: top }),
+        this.play('workWeld', 1.8 + m.welds * 2.4, { needs: ['welder'], work: { kind: 'weld', obj: 'welder', welds: m.welds } }),
+        this.play('reach', 1.6, { needs: ['welder'], at: [0.8, () => { wd().setParts(0); this.pieceParts = this.assembling; this.assembling = 0; this.assembleAt = null; this.setCarry('mpiece', this.pieceParts); sfx('bookgrab'); }], target: top })];
+    },
+    hammerSteps(r) {
+      const m = r.metal, an = () => this.obj('anvil'), top = () => an().at(0, an().TOP + 0.1, 0.05);
+      return [this.stand('anvil', 0.55, top),
+        this.play('reach', 1.5, { needs: ['anvil'], at: [0.8, () => { this.assembling = this.pieceParts; this.assembleAt = { obj: 'anvil', kind: 'mparts' }; this.setCarry(null); an().setParts(Math.min(4, this.assembling)); sfx('place', 0.2); }], target: top }),
+        this.play('workTap', 1.2 + m.bangs * 0.85, { needs: ['anvil'], work: { kind: 'tap', obj: 'anvil', taps: m.bangs, sfx: 'knock' } }),
+        this.play('reach', 1.6, { needs: ['anvil'], at: [0.8, () => { an().setParts(0); this.pieceParts = this.assembling; this.assembling = 0; this.assembleAt = null; this.setCarry('mpiece', this.pieceParts); sfx('bookgrab'); }], target: top })];
     },
     // take the parts to the mallet block and tap them together; pick up the finished piece
     assembleSteps(r) {
       const wb = () => this.obj('workbench'), ml = () => this.obj('mallet');
       return [this.stand('workbench', 0.78, () => wb().partsPoint()),
-        this.play('reach', 1.6, { needs: ['workbench'], at: [0.8, () => { this.w.addStock('parts', -r.parts); this.carry = 'parts'; sfx('bookgrab'); }], target: () => wb().partsPoint() }),
+        this.play('reach', 1.6, { needs: ['workbench'], at: [0.8, () => { this.w.addStock('parts', -r.parts); this.setCarry('parts', r.parts); sfx('bookgrab'); }], target: () => wb().partsPoint() }),
         this.stand('mallet', 0.55, () => ml().at(0, ml().TOP + 0.1, 0.05)),
-        this.play('reach', 1.5, { needs: ['mallet'], at: [0.8, () => { this.carry = null; this.assembling = r.parts; ml().setParts(Math.min(4, r.parts)); sfx('place', 0.2); }], target: () => ml().at(0, ml().TOP + 0.1, 0.05) }),
+        this.play('reach', 1.5, { needs: ['mallet'], at: [0.8, () => { this.setCarry(null); this.assembling = r.parts; this.assembleAt = { obj: 'mallet', kind: 'parts' }; ml().setParts(Math.min(4, r.parts)); sfx('place', 0.2); }], target: () => ml().at(0, ml().TOP + 0.1, 0.05) }),
         this.play('workTap', 1.2 + r.taps * 0.85, { needs: ['mallet'], work: { kind: 'tap', obj: 'mallet', taps: r.taps } }),
-        this.play('reach', 1.6, { needs: ['mallet'], at: [0.8, () => { ml().setParts(0); this.pieceParts = this.assembling; this.assembling = 0; this.carry = 'piece'; sfx('bookgrab'); }], target: () => ml().at(0, ml().TOP + 0.1, 0.05) })];
+        this.play('reach', 1.6, { needs: ['mallet'], at: [0.8, () => { ml().setParts(0); this.pieceParts = this.assembling; this.assembling = 0; this.assembleAt = null; this.setCarry('piece', this.pieceParts); sfx('bookgrab'); }], target: () => ml().at(0, ml().TOP + 0.1, 0.05) })];
     },
     // carry the piece to the sander and smooth it
     sandSteps() {
@@ -120,7 +169,9 @@ export function installWorkshop(Brain, POSES, H) {
       const r = RECIPES[id], wb = () => this.obj('workbench');
       return [this.stand('workbench', 0.78, () => wb().productPoint()),
         this.play('reach', 1.6, { needs: ['workbench'], at: [0.8, () => {
-          this.carry = null; this.pieceParts = 0;
+          this.setCarry(null); this.pieceParts = 0;
+          if (r.metal && r.parts) this.w.addStock('hw', -1);                  // the metal hardware that was waiting on the bench is fitted to the body
+          this.endBuild();
           // what he made stands in the Workshop straight away (the user can move it or put it away); storage only if there is no room
           const placed = this.w.placeBuilt(r.object);
           if (!placed) { const items = this.w.stock.items; items[r.object] = Math.min(STORAGE_CAP, (items[r.object] || 0) + 1); }
@@ -132,47 +183,100 @@ export function installWorkshop(Brain, POSES, H) {
     // Why he cannot do what the user asked with a Workshop object (a kind message), or null if he can.
     workRefusal(name) {
       const k = (id) => this.skills.has(id), st = this.w.stock;
-      const need = { workbench: 'workshop', toolbox: 'workshop', mallet: 'workshop', woodfactory: 'workshop.materials', saw: 'workshop.materials', sander: 'workshop.materials' }[name];
+      const need = { workbench: 'workshop', toolbox: 'workshop', mallet: 'workshop', woodfactory: 'workshop.materials', saw: 'workshop.materials', sander: 'workshop.materials',
+        metalfactory: 'workshop.metal', metalcutter: 'workshop.metal', welder: 'workshop.metal', anvil: 'workshop.metal' }[name];
       if (!need) return null;
-      if (!k(need)) return `Guy doesn't know how to use that yet. Add the book "${need === 'workshop' ? 'Workshop Basics' : 'Wood & Metal Basics'}" to the shelf and he'll read it.`;
+      if (!k(need)) return `Guy doesn't know how to use that yet. Add the book "${need === 'workshop' ? 'Workshop Basics' : need === 'workshop.metal' ? 'Metal Fabrication for Robots' : 'Wood & Metal Basics'}" to the shelf and he'll read it.`;
       if (name === 'saw' && st.wood < 1) return 'There are no planks yet. Guy can make some at the Wood Factory.';
       if (name === 'sander' && st.wood < 1) return 'There is nothing to sand yet. Guy can make planks at the Wood Factory.';
-      if (name === 'workbench' && !this.pickRecipe()) return 'Guy needs a saw, a mallet and a book about what to build first.';
+      if (name === 'metalcutter' && st.metal < 1) return 'There are no metal bars yet. Guy can make some at the Metal Factory.';
+      if (name === 'welder' && st.mparts < 2) return 'There are no metal parts to weld yet. Guy can cut some from bars at the Metal Cutter.';
+      if (name === 'workbench' && !this.pickRecipe()) return this.cannotBuild();
       return null;
     },
-    // which recipe he can make right now (and has read the book for), or null
-    pickRecipe() {
-      const w = this.w, st = w.stock;
-      const options = Object.entries(RECIPES).filter(([, r]) => {
-        if (!this.skills.has(r.skill)) return false;
-        if ((st.items[r.object] || 0) >= STORAGE_CAP) return false;
-        const made = (st.items[r.object] || 0) + Object.values(this.w.objects).filter((o) => o.kind === r.object).length;
-        if (made >= r.cap) return false;                    // he has made enough of these
-        if (!this.obj('workbench') || !this.obj('saw') || !this.obj('mallet') || (r.sand && !this.obj('sander'))) return false;
-        const need = planksNeeded(r, st.parts);
-        if (st.wood < need && !this.obj('woodfactory')) return false;
-        return st.wood + Math.ceil(Math.max(0, need - st.wood) / PLANKS_PER_RUN) * PLANKS_PER_RUN <= STOCK_CAP;
-      }).map(([id]) => id);
-      return options.length ? pick(options) : null;
+    // why he does not build anything now (a kind message): nothing is needed, or he lacks a book or a tool
+    cannotBuild() {
+      const w = this.w;
+      if (!w.objects.workbench) return 'Guy needs a workbench first.';
+      if (!wants(this).length) return 'There is nothing the house needs right now, so Guy has nothing to build.';
+      return 'Guy needs a book and the right tools in the Workshop to build what the house needs.';
     },
+    // what has been asked for and is not made yet (the house's wants plus whatever he was told to build)
+    // can he build this recipe right now: the book(s), the tools, and room in the stock for what it takes
+    canBuild(id) {
+      const r = RECIPES[id], w = this.w, st = w.stock, has = (n) => !!this.obj(n);
+      if (!r || !w.instanceKinds().includes(r.object)) return false;
+      if (!skillsOf(r).every((k) => this.skills.has(k))) return false;
+      if ((st.items[r.object] || 0) >= STORAGE_CAP) return false;
+      const made = (st.items[r.object] || 0) + Object.values(w.objects).filter((o) => o.kind === r.object).length;
+      if (made >= r.cap) return false;                                       // enough of these
+      if (!has('workbench')) return false;
+      if (r.parts) {
+        if (!has('saw') || !has('mallet') || (r.sand && !has('sander'))) return false;
+        const need = planksNeeded(r, st.parts);
+        if (st.wood < need && !has('woodfactory')) return false;
+        if (st.wood + Math.ceil(Math.max(0, need - st.wood) / PLANKS_PER_RUN) * PLANKS_PER_RUN > STOCK_CAP) return false;
+      }
+      if (r.metal) {
+        if (!has('metalcutter') || !has('welder') || !has('anvil')) return false;
+        const bars = barsNeeded(r, st.mparts);
+        if (st.metal < bars && !has('metalfactory')) return false;
+        if (st.metal + Math.ceil(Math.max(0, bars - st.metal) / METAL_PER_RUN) * METAL_PER_RUN > METAL_CAP) return false;
+      }
+      return true;
+    },
+    // which recipe he builds now: one he was told to, or the first thing the house needs that he can make (null if nothing)
+    pickRecipe() {
+      if (this.forceRecipe && this.canBuild(this.forceRecipe)) return this.forceRecipe;
+      for (const want of wants(this)) {
+        const options = Object.keys(RECIPES).filter((id) => RECIPES[id].serves === want.serves && this.canBuild(id));
+        if (options.length) return pick(options);
+      }
+      return null;
+    },
+    // what the house needs that GAL could build but he cannot (so he can ask her), as a recipe id
+    recipeForHelper(other) {
+      if (!other) return null;
+      for (const want of wants(this)) {
+        const options = Object.keys(RECIPES).filter((id) => RECIPES[id].serves === want.serves && other.canBuild(id) && !this.canBuild(id));
+        if (options.length) return pick(options);
+      }
+      return null;
+    },
+    beginBuild(id) { (this.w.building ||= []).push({ by: this, recipe: id }); },
+    endBuild() { if (this.w.building) this.w.building = this.w.building.filter((b) => b.by !== this); this.forceRecipe = null; },
     buildSteps(id) {
       const r = RECIPES[id], st = this.w.stock;
-      let wood = st.wood;
-      const need = planksNeeded(r, st.parts);
+      this.beginBuild(id);
       const steps = [...this.toolboxSteps()];
-      while (wood < need) { steps.push(...this.factorySteps(), ...this.benchPlace('wood', PLANKS_PER_RUN)); wood += PLANKS_PER_RUN; }
-      for (let i = 0; i < need; i++) steps.push(...this.sawSteps());
-      steps.push(...this.assembleSteps(r));
-      if (r.sand) steps.push(...this.sandSteps());
+      if (r.metal) {                                                          // the metal first: bars, cut parts, welded and hammered; wood to follow if the recipe has a body
+        let bars = st.metal;
+        const need = barsNeeded(r, st.mparts);
+        while (bars < need) { steps.push(...this.factorySteps('metalfactory'), ...this.benchPlace('metal', METAL_PER_RUN)); bars += METAL_PER_RUN; }
+        for (let i = 0; i < need; i++) steps.push(...this.cutSteps());
+        steps.push(...this.weldSteps(r), ...this.hammerSteps(r));
+        if (r.parts) steps.push(...this.benchPlace('hw', 1));
+      }
+      if (r.parts) {
+        let wood = st.wood;
+        const need = planksNeeded(r, st.parts);
+        while (wood < need) { steps.push(...this.factorySteps(), ...this.benchPlace('wood', PLANKS_PER_RUN)); wood += PLANKS_PER_RUN; }
+        for (let i = 0; i < need; i++) steps.push(...this.sawSteps());
+        steps.push(...this.assembleSteps(r));
+        if (r.sand) steps.push(...this.sandSteps());
+      }
       steps.push(...this.finishSteps(id), ...this.toolboxSteps());
       return steps;
     },
-
     // ------------------------------------------------------------------ the activities
     workActivities() {
       const w = this.w;
       return {
         makewood: () => this.shopTrip('making planks in the Wood Factory', [...this.factorySteps(), ...this.benchPlace('wood', PLANKS_PER_RUN)]),
+        makemetal: () => this.shopTrip('making metal bars in the Metal Factory', [...this.factorySteps('metalfactory'), ...this.benchPlace('metal', METAL_PER_RUN)]),
+        cutmetal: () => this.shopTrip('cutting a metal bar into parts', this.cutSteps()),
+        hammer: () => this.shopTrip('hammering on the anvil', [this.stand('anvil', 0.55, () => this.obj('anvil').at(0, this.obj('anvil').TOP + 0.1, 0.05)), this.play('workTap', 7.5, { needs: ['anvil'], work: { kind: 'tap', obj: 'anvil', taps: 8, sfx: 'knock' } })]),
+        weld: () => this.shopTrip('practising a weld', [this.stand('welder', 0.7, () => this.obj('welder').at(0, this.obj('welder').TOP + 0.1, 0.05)), this.play('workWeld', 8, { needs: ['welder'], work: { kind: 'weld', obj: 'welder', welds: 2 } })]),
         sawwood: () => this.shopTrip('sawing a plank into parts', this.sawSteps()),
         tap: () => this.shopTrip('tapping on the assembly block with the rubber mallet', [this.stand('mallet', 0.55, () => this.obj('mallet').at(0, this.obj('mallet').TOP + 0.1, 0.05)), this.play('workTap', 7.5, { needs: ['mallet'], work: { kind: 'tap', obj: 'mallet', taps: 8 } })]),
         sand: () => this.shopTrip('sanding a plank smooth', [
@@ -194,10 +298,24 @@ export function installWorkshop(Brain, POSES, H) {
       const w = this.w;
       if (this.carry === 'plank') w.addStock('wood', 1);
       else if (this.carry === 'planks') w.addStock('wood', PLANKS_PER_RUN);
-      else if (this.carry === 'parts') w.addStock('parts', PARTS_PER_PLANK);
+      else if (this.carry === 'parts') w.addStock('parts', this.carryN || PARTS_PER_PLANK);
       else if (this.carry === 'piece') w.addStock('parts', this.pieceParts || 0);          // the parts he had knocked together go back as parts
-      if (this.carry !== 'canvas') this.carry = null; this.pieceParts = 0;
-      if (this.assembling) { w.addStock('parts', this.assembling); this.assembling = 0; }   // parts left on the mallet block
+      else if (this.carry === 'bar') w.addStock('metal', 1);
+      else if (this.carry === 'bars') w.addStock('metal', METAL_PER_RUN);
+      else if (this.carry === 'mparts') w.addStock('mparts', this.carryN || MPARTS_PER_BAR);
+      else if (this.carry === 'mpiece') w.addStock('mparts', this.pieceParts || 0);
+      if (this.carry !== 'canvas') this.setCarry(null); this.pieceParts = 0;
+      if (this.assembling) {                                                               // parts left on a station
+        const at = this.assembleAt || { obj: 'mallet', kind: 'parts' };
+        w.addStock(at.kind, this.assembling); this.assembling = 0;
+        const st = this.obj(at.obj); if (st && st.setParts) st.setParts(0);
+        this.assembleAt = null;
+      }
+      this.endBuild();
+      const cu = this.obj('metalcutter');
+      if (cu && cu.barA.visible) { if (cu.barB.visible) w.addStock('mparts', MPARTS_PER_BAR); else w.addStock('metal', 1); cu.setBar(null); }
+      const mf = this.obj('metalfactory');
+      if (mf && mf.tray.children.length) { mf.setTray(0); w.addStock('metal', METAL_PER_RUN); }
 
       const sw = this.obj('saw');
       if (sw && sw.plankA.visible) {
@@ -236,6 +354,24 @@ export function installWorkshop(Brain, POSES, H) {
         out.tool = { o, kind: 'saw', f: fd, grip };
         const n = Math.floor(phase / Math.PI);
         if (T > 0.6 && n !== s.sawN) { s.sawN = n; sfx('saw'); }
+      } else if (f.kind === 'cut') {                               // the metal cutter: one hand pulls the lever down and lets it up, the other holds the bar
+        const period = 1.3, k = (T - 0.8) / period, p = k - Math.floor(k), going = T > 0.8 && T < D - 0.8 && k < f.pulls;
+        const a = going ? (p < 0.45 ? sm(p / 0.45) : 1 - sm((p - 0.45) / 0.55)) : 0;            // 0 raised .. 1 pulled all the way down
+        o.setLever(o.LEVER - a * 0.9);
+        const grip = o.leverGrip(), n = Math.floor(k);
+        const across = V(-1, -0.15, 0).applyQuaternion(gq).normalize(), fwd = V(0, 0, -1).applyQuaternion(gq);
+        out.R = { wrist: grip.clone().addScaledVector(across, -hl * 0.45), f: across, palm: fwd };
+        out.L = { wrist: o.at(-0.2, o.TOP + 0.1, 0.25), f: V(0, -0.3, -1).applyQuaternion(gq).normalize(), palm: down };
+        if (going && p >= 0.45 && n !== s.cutN) { s.cutN = n; sfx('lid'); sfx('thud', 0.6); }
+        out.lean = 0.5;
+      } else if (f.kind === 'weld') {                             // the welder: the torch runs slowly along the seam, a glow and sparks, the other hand steadies the piece
+        const going = T > 0.9 && T < D - 0.9, run = clamp((T - 0.9) / Math.max(0.5, D - 1.8), 0, 1);
+        const head = at(-0.14 + 0.28 * run, o.TOP + 0.08 + (going ? 0 : 0.1), 0.02), fd = dirOf(0, -0.65, -0.76);
+        const center = head.clone().addScaledVector(fd, -0.22);
+        out.R = { wrist: center.clone().addScaledVector(fd, -hl * 0.45), f: fd, palm: leftOf };
+        out.L = { wrist: at(-0.2, o.TOP + 0.08, 0.17), f: xAxis, palm: down };
+        out.tool = { o, kind: 'weld', f: fd, head };
+        if (going) { o.weldAt(head); if (Math.floor(T / 0.5) !== s.weldN) { s.weldN = Math.floor(T / 0.5); sfx('sizzle'); } }
       } else if (f.kind === 'tap') {
         const period = 0.85, k = (T - 0.8) / period, p = k - Math.floor(k), going = T > 0.8 && T < D - 0.8 && (T - 0.8) / period < f.taps;
         const lift = going ? (p < 0.35 ? (1 - sm(p / 0.35)) * 0.2 : sm((p - 0.35) / 0.3) * 0.2) : 0.1;
@@ -246,7 +382,7 @@ export function installWorkshop(Brain, POSES, H) {
         out.tool = { o, kind: 'tap', f: fd, head };
         const n = Math.floor(k);
         const base = o.TOP + 0.02;
-        if (going && p >= 0.35 && n !== s.tapN) { s.tapN = n; sfx('tap'); o.assembly.position.y = base + 0.012; o.assembly.rotation.z = (n % 2 ? 1 : -1) * 0.04; }
+        if (going && p >= 0.35 && n !== s.tapN) { s.tapN = n; sfx(f.sfx || 'tap', 4); o.assembly.position.y = base + 0.012; o.assembly.rotation.z = (n % 2 ? 1 : -1) * 0.04; }
         o.assembly.position.y += (base - o.assembly.position.y) * 0.3;                      // the parts jump a little at every tap and settle
         o.assembly.rotation.z *= 0.85;
       } else {                                                       // sand: both hands slide the piece along the belt
@@ -325,6 +461,8 @@ export function installWorkshop(Brain, POSES, H) {
   Object.assign(POSES, {
     workSaw(g, t, dur, ctx) { workPose(g, ctx.hob, 0.85); },
     workTap(g, t, dur, ctx) { workPose(g, ctx.hob, 0.85); },
+    workCut(g, t, dur, ctx) { workPose(g, ctx.hob, 0.85); },
+    workWeld(g, t, dur, ctx) { workPose(g, ctx.hob, 0.85); },
     workSand(g, t, dur, ctx) { workPose(g, ctx.hob, 0.35); },
   });
 }

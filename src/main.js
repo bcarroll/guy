@@ -111,7 +111,7 @@ const galLine = document.getElementById('galline'), galLabel = document.getEleme
 world.gal = new Gal(world, {
   scene, guyBrain: brain, persist: !params.has('fresh'), skillsInit: params.get('skills') === 'all' || params.get('skills') === 'none' ? params.get('skills') : null,
   ui: (t) => { galLine.hidden = false; galLabel.textContent = t; },
-  toast: (m) => showToast(m), onBuilt: (m) => showToast(m),
+  toast: (m) => { showToast(m); if (machineUI.isOpen()) machineUI.refresh(); }, onBuilt: (m) => showToast(m),
 });
 world.gal.preload();
 // Guy's paintings: hung on the walls of any room, the rest kept in the Catalogue (they are saved unless ?fresh)
@@ -138,7 +138,7 @@ function showToast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove('show'), 6000);
 }
-brain.onLearn = (def) => { showToast(`Guy learned ${def.blurb}!`); sfx('chime'); };
+brain.onLearn = (def) => { showToast(`Guy learned ${def.blurb}!`); sfx('chime'); if (machineUI.isOpen()) machineUI.refresh(); };
 brain.onRiff = (msg) => { showToast(msg); sfx('chime'); };
 brain.onBuilt = (msg) => { showToast(msg); machineUI.refresh(); };           // something finished in the Workshop: it is in storage now
 riffConfig.persist = !params.has('fresh');           // ?fresh keeps the riffs he makes up in memory only
@@ -181,6 +181,7 @@ world.rooms = rooms;
 rooms.onChange(() => world.paintings.sync());        // a room taken away: the paintings on its walls go to the Catalogue
 const machineUI = initMachine({
   world, guy, persist: !params.has('fresh'), rooms, paintings: world.paintings,
+  knows: (id) => skills.has(id) || !!(world.gal && world.gal.skills && world.gal.skills.has(id)),       // Guy or GAL
   notify: (msg) => { showToast(msg); renderSkills(); sfx('pop'); },
   remove: (id) => removeById(id),
 });
@@ -525,6 +526,10 @@ function interactLabel(name) {
     case 'saw': return '🪚 Saw a Plank';
     case 'mallet': return '🔨 Tap Things Together';
     case 'sander': return '🧽 Sand Some Wood';
+    case 'metalfactory': return '🏭 Make Metal Bars';
+    case 'metalcutter': return '✂️ Cut a Metal Bar';
+    case 'welder': return '🔥 Weld Something';
+    case 'anvil': return '🔨 Hammer Metal';
     case 'botprinter': return '🤖 Build GAL';
     case 'plant': case 'flowerplant': case 'tree': return '🌱 Tend Plant';
     default: return brain.obj(name) && brain.obj(name).sit ? '🪑 Sit Down' : '▶ Use';

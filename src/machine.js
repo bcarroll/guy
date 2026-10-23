@@ -24,7 +24,7 @@ export const OBJECT_CATEGORIES = [
 ];
 
 // The order of the sub-headings inside a category that uses them (Decor & lighting has a lot of things in it).
-export const DECOR_SUBS = ['Plants', 'Wall art', 'Windows', 'Rugs', 'Lighting', 'Small furniture', 'Workbench & storage', 'Woodwork', 'Built by Guy', 'Kitchen', 'Dining'];
+export const DECOR_SUBS = ['Plants', 'Wall art', 'Windows', 'Rugs', 'Lighting', 'Small furniture', 'Workbench & storage', 'Woodwork', 'Metalwork', 'Built by Guy', 'Kitchen', 'Dining'];
 
 export const OBJECT_CATALOG = [
   { id: 'piano', cat: 'music', name: 'Upright Piano', icon: '🎹', desc: 'Scales, tunes and jam sessions. Heavy: only you can move it.', core: true },
@@ -34,8 +34,8 @@ export const OBJECT_CATALOG = [
   { id: 'lamp', cat: 'decor', sub: 'Lighting', name: 'Floor Lamp', icon: '💡', desc: 'On and off, plus moods and light shows with the right book.', core: true },
   { id: 'armchair', cat: 'furniture', name: 'Armchair', icon: '🛋️', desc: 'A comfortable place to read.', core: true },
   { id: 'armchair2', cat: 'furniture', name: 'Second Armchair', icon: '🛋️', desc: 'A burgundy armchair. Guy picks whichever chair he likes to read in or play in.', free: true },
-  { id: 'chair', cat: 'furniture', name: 'Wooden Chair', icon: '🪑', desc: 'A plain chair: for reading, resting, or playing the guitar sitting down.', free: true },
-  { id: 'chair2', cat: 'furniture', name: 'Second Wooden Chair', icon: '🪑', desc: 'Another plain chair.', free: true },
+  { id: 'chair', cat: 'furniture', name: 'Wooden Chair', icon: '🪑', desc: 'A plain chair: for reading, resting, or playing the guitar sitting down. Listed once Guy or GAL has read "Furniture for Robots".', free: true, needsSkill: 'workshop.furniture' },
+  { id: 'chair2', cat: 'furniture', name: 'Second Wooden Chair', icon: '🪑', desc: 'Another plain chair. Listed once Guy or GAL has read "Furniture for Robots".', free: true, needsSkill: 'workshop.furniture' },
   { id: 'plant', cat: 'decor', sub: 'Plants', name: 'Potted Plant', icon: '🪴', desc: 'Makes the room feel lived in.', core: true },
   { id: 'ball', cat: 'games', name: 'Red Ball', icon: '⚽', desc: 'Kick it, dribble it, toss it.', core: true, ball: true },
   { id: 'rug', cat: 'decor', sub: 'Rugs', name: 'Round Rug', icon: '🟥', desc: 'A soft rug for the middle of the floor. Hold on it, then drag to move it.', core: true, decor: true },
@@ -60,10 +60,15 @@ export const OBJECT_CATALOG = [
   { id: 'saw', cat: 'workshop', sub: 'Woodwork', name: 'Saw & Sawhorse', icon: '🪚', desc: 'Guy saws planks into parts here.', free: true, room: 'workshop' },
   { id: 'mallet', cat: 'workshop', sub: 'Woodwork', name: 'Rubber Mallet & Block', icon: '🔨', desc: 'Guy taps the parts together here, gently.', free: true, room: 'workshop' },
   { id: 'sander', cat: 'workshop', sub: 'Woodwork', name: 'Sander', icon: '🧽', desc: 'Smooths the wood so it is ready to use.', free: true, room: 'workshop' },
+  { id: 'metalfactory', cat: 'workshop', sub: 'Metalwork', name: 'Metal Factory', icon: '🏭', desc: 'Makes metal bars for building. Heavy: only you can move it. Comes with the book "Metal Fabrication for Robots".', free: true, room: 'workshop', book: 'metalfab' },
+  { id: 'metalcutter', cat: 'workshop', sub: 'Metalwork', name: 'Metal Cutter', icon: '✂️', desc: 'A bench shear with a lever: Guy cuts a bar into parts here.', free: true, room: 'workshop' },
+  { id: 'welder', cat: 'workshop', sub: 'Metalwork', name: 'Welder', icon: '🔥', desc: 'A welding table with a torch. Sparks fly while Guy joins metal parts.', free: true, room: 'workshop' },
+  { id: 'anvil', cat: 'workshop', sub: 'Metalwork', name: 'Metal Hammer & Anvil', icon: '🔨', desc: 'Guy hammers the welded metal into shape here.', free: true, room: 'workshop' },
   // Things Guy builds there (once he has read the right book). They wait in storage; add them to the room from here, one at a time.
   { id: 'footstool', cat: 'workshop', sub: 'Built by Guy', name: 'Wooden Foot Stool', icon: '🪜', desc: 'A little wooden foot stool, built by Guy.', built: true, room: 'workshop' },
   { id: 'woodshelves', cat: 'workshop', sub: 'Built by Guy', name: 'Wooden Shelves', icon: '🗄️', desc: 'A set of wooden shelves, built by Guy.', built: true, room: 'workshop' },
   { id: 'builtchair', cat: 'workshop', sub: 'Built by Guy', name: 'Wooden Chair (built by Guy)', icon: '🪑', desc: 'A wooden chair that Guy made himself. He can sit on it.', built: true, room: 'workshop' },
+  { id: 'metalchair', cat: 'workshop', sub: 'Built by Guy', name: 'Metal Chair (built by Guy)', icon: '🪑', desc: 'A welded metal chair. Guy can sit on it.', built: true, room: 'workshop' },
   // The Restaurant (a room added from the Rooms tab). Customers arrive by its elevator. See src/restobjects.js and src/customers.js.
   { id: 'stove', cat: 'restaurant', sub: 'Kitchen', name: 'Stove', icon: '🍲', desc: 'A big stove with a pot. Guy cooks the orders here. Heavy: only you can move it. Comes with the book "Restaurant Basics".', free: true, room: 'restaurant', book: 'restaurant' },
   { id: 'kitchencounter', cat: 'restaurant', sub: 'Kitchen', name: 'Kitchen Counter', icon: '🧊', desc: 'A counter with a fridge, where the cooked plates wait to be served. Heavy: only you can move it.', free: true, room: 'restaurant' },
@@ -79,7 +84,7 @@ export const OBJECT_CATALOG = [
 
 const KEY = 'guy.room.v1';
 
-export function initMachine({ world, guy, persist, notify, remove, rooms, paintings }) {
+export function initMachine({ world, guy, persist, notify, remove, rooms, paintings, knows = () => true }) {
   const root = document.getElementById('machine');
   const body = root.querySelector('.body');
   const chipBar = root.querySelector('.chips');
@@ -100,7 +105,8 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
   };
   const hasObject = inRoom;
   // things that belong to a room the user has not added (or that is not unlocked) are not listed at all
-  const live = (d) => !d.room || (!!rooms && rooms.isLive(d.room));
+  // (and a thing that needs a skill is not listed until Guy or GAL has it, unless it is already in the room or was taken out of it)
+  const live = (d) => (!d.room || (!!rooms && rooms.isLive(d.room))) && (!d.needsSkill || dev.all || knows(d.needsSkill) || inRoom(d.id) || !!world.removed[d.id]);
   const shelf = () => world.objects.shelf;
   const albumStatus = (a) => {
     if (a.premium && !dev.all) return 'locked';

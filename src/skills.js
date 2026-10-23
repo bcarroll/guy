@@ -21,6 +21,8 @@ export const BOOK_CATALOG = [
     blurb: 'how to make planks, saw and sand wood, and build wooden shelves', requires: { object: 'woodfactory' }, desc: 'Run the Wood Factory, saw planks into parts and sand them smooth. Wooden shelves are the project.' },
   { id: 'furniture', title: 'Furniture for Robots', teaches: 'workshop.furniture', color: 0x6d4c41, thick: 0.07, height: 0.34, room: 'workshop',
     blurb: 'how to build wooden chairs', requires: { object: 'workbench' }, desc: 'Bigger projects, starting with a wooden chair. Best read after the basics.' },
+  { id: 'metalfab', title: 'Metal Fabrication for Robots', teaches: 'workshop.metal', color: 0x546e7a, thick: 0.07, height: 0.34, room: 'workshop',
+    blurb: 'how to cut, weld and hammer metal, and build metal chairs and tables', requires: { object: 'metalfactory' }, desc: 'Run the Metal Factory, cut bars to length, weld the parts and hammer them true. Metal chairs and tables are the projects, and an electric guitar when the wood line is there too.' },
   // ---- the Restaurant (listed only once the Restaurant room has been added) ----
   { id: 'restaurant', title: 'Restaurant Basics', teaches: 'restaurant', color: 0xc0392b, thick: 0.055, height: 0.31, room: 'restaurant',
     blurb: 'how to cook, serve and take payment', requires: { object: 'stove' }, desc: 'Taking orders, cooking at the stove, serving the plates and ringing up the bill.' },
@@ -74,7 +76,11 @@ export const SKILL_INFO = {
   },
   'workshop.furniture': {
     name: 'Furniture for Robots', book: 'Furniture for Robots',
-    unlocks: ['Build a wooden chair (and more furniture later)'],
+    unlocks: ['Build wooden chairs, a bookshelf and a dining table when the house needs them', 'Wooden chairs then appear in the Catalogue'],
+  },
+  'workshop.metal': {
+    name: 'Metal Fabrication', book: 'Metal Fabrication for Robots',
+    unlocks: ['Make metal bars in the Metal Factory', 'Cut them at the Metal Cutter', 'Weld the parts and hammer them into shape', 'Build metal chairs and tables, and an electric guitar (with the wood line)'],
   },
   stereo: {
     name: 'Using the stereo', book: 'Stereo User Manual',

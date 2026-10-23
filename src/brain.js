@@ -12,7 +12,8 @@ import { installApproach } from './approach.js';
 import { installPaintings } from './paintbrain.js';
 
 const REST_ACTS = ['takepay', 'serve', 'takeorder', 'cook', 'rwait'];
-import { RECIPES, PLANKS_PER_RUN, STOCK_CAP } from './workshop.js';
+const WORK_ACTS = ['makewood', 'sawwood', 'tap', 'sand', 'tidytools', 'build', 'makemetal', 'cutmetal', 'hammer', 'weld'];
+import { RECIPES, PLANKS_PER_RUN, STOCK_CAP, METAL_PER_RUN, METAL_CAP } from './workshop.js';
 import { sfx, drag as sfxDrag } from './sfx.js';
 import { nextRiff, keepRiff, riffAt, STEPS as RIFF_STEPS } from './riffs.js';
 import { makeStrum, strumPattern } from './strum.js';
@@ -1569,6 +1570,7 @@ export class Brain {
       drums: ['drums'], drumsolo: ['drums.solo'], jamdrums: ['drums.band'], paint: ['easel'], mixpaint: ['easel.colour'], portrait: ['easel.portrait'],
       stargaze: ['telescope'], darkstargaze: ['telescope.dark'], scopecare: ['telescope.care'], dust: ['decorate'],
       makewood: ['workshop.materials'], sawwood: ['workshop.materials'], sand: ['workshop.materials'], tap: ['workshop'], tidytools: ['workshop'],
+      makemetal: ['workshop.metal'], cutmetal: ['workshop.metal'], hammer: ['workshop.metal'], weld: ['workshop.metal'],
       takeorder: ['restaurant'], cook: ['restaurant'], serve: ['restaurant'], takepay: ['restaurant'], rwait: ['restaurant'],
     }[act] || [];
   }
@@ -1584,6 +1586,7 @@ export class Brain {
       scribble: ['easel'], paint: ['easel'], mixpaint: ['easel'], portrait: ['easel'],
       peek: ['telescope'], stargaze: ['telescope'], darkstargaze: ['telescope'], scopecare: ['telescope'], lighton: ['lamp'],
       makewood: ['woodfactory', 'workbench'], sawwood: ['saw', 'workbench'], tap: ['mallet'], sand: ['sander', 'workbench'], tidytools: ['toolbox'], build: ['workbench'],
+      makemetal: ['metalfactory', 'workbench'], cutmetal: ['metalcutter', 'workbench'], hammer: ['anvil'], weld: ['welder'],
     }[act] || [];
     const skill = this.skillNeeds(act);
     // with the music already on he doesn't need to know how to work the stereo to join in
@@ -1614,9 +1617,11 @@ export class Brain {
     if (act === 'putback' || act === 'dropball' || act === 'putguitar' || act === 'leave' || act === 'hangpaint' || act === 'putcanvas') return false;
     if (act === 'visit') return Object.keys(this.w.doors).length > 0 && this.inMain();
     // the Workshop: it has to be added, and the stock has to allow it
-    if (['makewood', 'sawwood', 'tap', 'sand', 'tidytools', 'build'].includes(act)) {
+    if (['makewood', 'sawwood', 'tap', 'sand', 'tidytools', 'build', 'makemetal', 'cutmetal', 'hammer', 'weld'].includes(act)) {
       const st = this.w.stock;
       if (!this.w.doors.workshop) return false;
+      if (act === 'makemetal' && (st.metal + METAL_PER_RUN > METAL_CAP || st.metal >= 8)) return false;
+      if (act === 'cutmetal' && (st.metal < 1 || st.mparts + 2 > 8)) return false;
       if (act === 'makewood' && (st.wood + PLANKS_PER_RUN > STOCK_CAP || st.wood >= 12)) return false;
       if (act === 'sawwood' && (st.wood < 1 || st.parts + 2 > 8)) return false;
       if (act === 'sand' && st.wood < 1) return false;
@@ -1638,6 +1643,7 @@ export class Brain {
     if (easel.includes(act)) return ['easel'];
     if (scope.includes(act)) return ['telescope'];
     if (act === 'read' || act === 'books') return ['shelf'];                // one at a time at the bookshelf
+    if (WORK_ACTS.includes(act)) return ['workshop'];                      // one at a time in the Workshop (the stations and the bench are shared)
     return [];
   }
   busyElsewhere(names) { const o = this.other; return !!o && names.some((n) => o.using && o.using.has(n)); }
@@ -1687,6 +1693,7 @@ export class Brain {
       easel: ['scribble', 'paint', 'mixpaint', 'portrait'], telescope: ['peek', 'stargaze', 'darkstargaze', 'scopecare'],
       stove: REST_ACTS, kitchencounter: REST_ACTS, register: REST_ACTS, diningtable: REST_ACTS, diningtable2: REST_ACTS,
       workbench: ['build', 'makewood', 'sawwood'], toolbox: ['tidytools'], woodfactory: ['makewood'], saw: ['sawwood', 'makewood'], mallet: ['tap', 'build'], sander: ['sand', 'build'],
+      metalfactory: ['makemetal'], metalcutter: ['cutmetal', 'makemetal'], welder: ['weld', 'build'], anvil: ['hammer', 'build'],
     }[name] || (this.obj(name) && this.obj(name).sit ? ['read', 'sit', 'sitguitar'] : []);
     return list.filter((a) => this.available(a));
   }
@@ -1732,7 +1739,7 @@ export class Brain {
       wander: 3, sit: 0.7, sitguitar: 1.1, slouch: 0.5, dancemoves: 1.5, ballroom: 1.5, piano: 1, sitpiano: 1.2, plink: 1.4, dance: 1.8, jam: 0.9, jampiano: 0.5, jamsit: 0.9, lamp: 1.2, mood: 1.1,
       read: 1.8 + unread * 1.8, stretch: 1.3, wave: 0.7, ball: 2, dribble: 1.1, toss: 1.1, rearrange: 0.7, guitar: 1.6, riff: 1.0, plant: 0.6, jamguitar: 1.5, visit: 0.4,
       takeorder: 40, cook: 35, serve: 45, takepay: 50,
-      build: 2.0, makewood: 0.5, sawwood: 0.6, tap: 0.5, sand: 0.4, tidytools: 0.4,
+      build: 2.0, makewood: 0.5, sawwood: 0.6, tap: 0.5, sand: 0.4, tidytools: 0.4, makemetal: 0.5, cutmetal: 0.6, hammer: 0.5, weld: 0.4,
       bang: 1.3, drums: 1.6, drumsolo: 1.2, jamdrums: 1.5, scribble: 1.3, paint: 1.6, mixpaint: 1.3, portrait: 1.4,
       peek: 1.3, stargaze: 1.6, darkstargaze: 1.3, scopecare: 0.6, dust: 0.9,
     };
@@ -1853,6 +1860,7 @@ export class Brain {
       easel: ['scribble', 'paint', 'mixpaint', 'portrait'],
       telescope: ['peek', 'stargaze', 'darkstargaze', 'scopecare'],
       workbench: ['build'], toolbox: ['tidytools'], woodfactory: ['makewood'], saw: ['sawwood'], mallet: ['tap'], sander: ['sand'],
+      metalfactory: ['makemetal'], metalcutter: ['cutmetal'], welder: ['weld'], anvil: ['hammer'],
       botprinter: ['buildbot'],
     }[name];
     if (name === 'botprinter') {

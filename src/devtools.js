@@ -39,7 +39,9 @@ export const MANIFEST = {
     workbench: { room: 'workshop', skills: ['workshop'] }, toolbox: { room: 'workshop', skills: ['workshop'] }, mallet: { room: 'workshop', skills: ['workshop'] },
     woodfactory: { room: 'workshop', skills: ['workshop.materials'] }, saw: { room: 'workshop', skills: ['workshop.materials'] }, sander: { room: 'workshop', skills: ['workshop.materials'] },
     botprinter: { skills: [] },       // the Build a Bot machine (premium, one use): tested by sweepGal
-    footstool: { room: 'workshop', built: true }, woodshelves: { room: 'workshop', built: true }, builtchair: { room: 'workshop', built: true },
+    footstool: { room: 'workshop', built: true }, woodshelves: { room: 'workshop', built: true }, builtchair: { room: 'workshop', built: true }, metalchair: { room: 'workshop', built: true },
+    // the metal line (tested by sweepMetal)
+    metalfactory: { room: 'workshop', skills: ['workshop.metal'] }, metalcutter: { room: 'workshop', skills: ['workshop.metal'] }, welder: { room: 'workshop', skills: ['workshop.metal'] }, anvil: { room: 'workshop', skills: ['workshop.metal'] },
     // the Restaurant (another added room): the kitchen and the dining room
     stove: { room: 'restaurant', skills: ['restaurant'] }, kitchencounter: { room: 'restaurant', skills: ['restaurant'] }, register: { room: 'restaurant', skills: ['restaurant'] },
     diningtable: { room: 'restaurant', skills: ['restaurant'] }, diningtable2: { room: 'restaurant', skills: ['restaurant'] },
@@ -74,7 +76,11 @@ export const MANIFEST = {
     tap: { objects: ['mallet'], skills: ['workshop'], room: 'workshop', stock: { wood: 0, parts: 0 }, touches: ['mallet'] },
     sand: { objects: ['sander', 'workbench'], skills: ['workshop.materials'], room: 'workshop', stock: { wood: 2, parts: 0 }, touches: ['sander', 'workbench'] },
     tidytools: { objects: ['toolbox'], skills: ['workshop'], room: 'workshop', stock: { wood: 0, parts: 0 }, touches: ['toolbox'] },
-    build: { objects: ['workbench', 'saw', 'mallet', 'toolbox'], skills: ['workshop'], room: 'workshop', stock: { wood: 0, parts: 4 }, max: 260, touches: ['workbench', 'saw', 'mallet', 'toolbox', 'sander', 'woodfactory'] },
+    makemetal: { objects: ['metalfactory', 'workbench'], skills: ['workshop.metal'], room: 'workshop', stock: { metal: 0 }, touches: ['metalfactory', 'workbench'] },
+    cutmetal: { objects: ['metalcutter', 'workbench'], skills: ['workshop.metal'], room: 'workshop', stock: { metal: 2 }, touches: ['metalcutter', 'workbench'] },
+    hammer: { objects: ['anvil'], skills: ['workshop.metal'], room: 'workshop', stock: {}, touches: ['anvil'] },
+    weld: { objects: ['welder'], skills: ['workshop.metal'], room: 'workshop', stock: {}, touches: ['welder'] },
+    build: { objects: ['workbench', 'saw', 'mallet', 'toolbox'], skills: ['workshop', 'decorate'], room: 'workshop', stock: { wood: 0, parts: 4 }, max: 260, touches: ['workbench', 'saw', 'mallet', 'toolbox', 'sander', 'woodfactory'] },
     // the Restaurant: `customer` is the state of a customer set up before it starts (customers.js stage()); the rest as for the Workshop
     takeorder: { objects: ['stove', 'kitchencounter', 'register', 'diningtable'], skills: ['restaurant'], room: 'restaurant', customer: 'waiting', touches: ['diningtable'] },
     cook: { objects: ['stove', 'kitchencounter', 'register', 'diningtable'], skills: ['restaurant'], room: 'restaurant', customer: 'ordered', max: 200, touches: ['stove', 'kitchencounter'] },
@@ -114,7 +120,7 @@ export const MANIFEST = {
     painting: { then: 'paint' }, colour: { then: 'mixpaint' }, portrait: { then: 'portrait' },
     stars: { then: 'stargaze' }, darksky: { then: 'darkstargaze' }, scopecare: { then: 'scopecare' },
     decorating: { then: 'dust' },
-    workshop: { then: 'build' }, woodmetal: { then: 'makewood' }, furniture: { then: 'build' }, restaurant: { then: 'takeorder' },
+    workshop: { then: 'build' }, woodmetal: { then: 'makewood' }, furniture: { then: 'build' }, metalfab: { then: 'makemetal' }, restaurant: { then: 'takeorder' },
   },
   // records and tracks that must exist
   albums: {
@@ -143,6 +149,9 @@ export const MANIFEST = {
     { id: 'scope-aim', activity: 'stargaze', pose: 'scopeAim', t: 2.2, view: 'top', expect: 'one hand on top of the barrel while the tube swings round' },
     { id: 'scope-wrong', activity: 'peek', pose: 'scopeWrong', t: 2.8, view: 'side', expect: 'eye at the big lens end, hand on the barrel, other hand on his knee' },
     { id: 'scope-care', activity: 'scopecare', pose: 'scopeCare', t: 13, view: 'front', expect: 'squatting beside the tripod with a hand on one leg' },
+    { id: 'metal-cut', activity: 'cutmetal', pose: 'workCut', t: 4, view: 'front', expect: 'standing at the metal cutter, right hand gripping the lever and pulling it down, left hand holding the bar; the blade comes down with the lever' },
+    { id: 'metal-weld', activity: 'weld', pose: 'workWeld', t: 4, view: 'front', expect: 'torch pointing down at the seam with a bright glow and a few sparks, left hand steadying the parts' },
+    { id: 'metal-hammer', activity: 'hammer', pose: 'workTap', t: 4, view: 'front', expect: 'hammer raised over the anvil, left hand on the piece' },
     { id: 'dust-frame', activity: 'dust', pose: 'reach', t: 2.5, view: 'front', expect: 'facing the wall, right hand wiping along the lower edge of a frame (not inside the wall or his own head)' },
     { id: 'dance-twist', activity: 'dancemoves', pose: 'twist', t: 4, view: 'front', expect: 'hips and shoulders twisting opposite ways, knees bent and apart, elbows bent, feet flat' },
     { id: 'dance-shuffle', activity: 'dancemoves', pose: 'shuffle', t: 4, view: 'front', expect: 'one foot slides forward at a time, elbows bent and pumping alternately' },
@@ -274,6 +283,7 @@ T.addObject = (id) => { // through the Catalogue, like a user would
   if (def.locked) return false;
   if (def.room && !W().rooms.isAdded(def.room)) { unlockRoom(def.room); W().rooms.add(def.room); }          // the Catalogue lists a room's things only once the room is added
   if (def.built && !((W().stock.items[id] || 0) > 0)) W().stock.items[id] = 1;      // something Guy built: make sure there is one in storage to add
+  if (def.needsSkill && !skillsOf().has(def.needsSkill)) skillsOf().learn(def.needsSkill);        // listed only once Guy (or GAL) has the book's skill
   return machineClick('objects', def.name) && isPresent(id);
 };
 T.addBook = (id) => {
@@ -299,7 +309,7 @@ T.prep = (name) => {
   if (m.room && !R().isAdded(m.room)) { unlockRoom(m.room); R().add(m.room); }                           // the room the activity happens in
   for (const id of m.objects || []) if (T.addObject(id)) done.push(id);
   T.learn(m.skills || []);
-  if (m.stock) { Object.assign(W().stock, { wood: 0, parts: 0 }, m.stock); W().syncStock(); }
+  if (m.stock) { Object.assign(W().stock, { wood: 0, parts: 0, metal: 0, mparts: 0, hw: 0 }, m.stock); W().syncStock(); }
   if (m.painted) { const e = W().objects.easel; if (e && !e.painted) { e.paint.dab(0.5, 0.5, '#2a62d8', 60); e.paint.stroke(0.1, 0.2, 0.9, 0.8, '#d0312d', 14); e.painted = true; } }       // a painting on the easel to hang
   if (m.customer) { const r = W().restaurant; r.clear(); r.paused = true; r.stage(m.customer); }       // a customer in the right state, and no others arriving
   // dribbling and tossing need the ball clear of furniture (he kicks it free first in real play): put it in open floor
@@ -1126,7 +1136,7 @@ T.resetRooms = () => {
   for (const r of ROOM_CATALOG) R().reset(r.id);                                  // its furniture goes with it
   for (const [name, o] of Object.entries(W().objects)) if (o.kind) { W().storeInstance(name); b.objectRemoved(name); }       // and what Guy built that stands in his room
   W().paintings.reset();                                                          // Guy's paintings come down and the list is emptied
-  const st = W().stock; st.wood = 0; st.parts = 0; st.items = {}; st.coins = 0;   // and what the Workshop made and the Restaurant earned
+  const st = W().stock; st.wood = 0; st.parts = 0; st.metal = 0; st.mparts = 0; st.hw = 0; st.items = {}; st.coins = 0;   // and what the Workshop made and the Restaurant earned
   if (W().gal.exists()) W().gal.remove();                                       // GAL goes too (the machine is not given back)
   delete W().removed.botprinter;
   W().restaurant.clear(); W().restaurant.paused = false; W().restaurant.nServed = 0; W().restaurant.stats = { arrived: 0, paid: 0, gaveUp: 0 };
@@ -1494,11 +1504,12 @@ T.sweepVisit = () => {
 
 // ---- 18. The Workshop: the furniture and tools, and what Guy builds with them (src/workobjects.js, workbrain.js, workshop.js) ----
 const SHOP = ['workbench', 'toolbox', 'woodfactory', 'saw', 'mallet', 'sander'];
-const ALL_SHOP_SKILLS = ['workshop', 'workshop.materials', 'workshop.furniture'];
+const ALL_SHOP_SKILLS = ['workshop', 'workshop.materials', 'workshop.furniture', 'decorate'];
+const METAL = ['metalfactory', 'metalcutter', 'welder', 'anvil'];
 const shopSetup = (wall = 'right', skills = ALL_SHOP_SKILLS) => {
   T.settle();                                                                      // (a cut-short job puts its stock back while he settles: do that first)
   T.resetRooms(); T.removeAll(); T.forget(); skillsOf().fading.clear(); T.settle(); T.home();
-  const st0 = W().stock; st0.wood = 0; st0.parts = 0; st0.items = {};
+  const st0 = W().stock; st0.wood = 0; st0.parts = 0; st0.metal = 0; st0.mparts = 0; st0.hw = 0; st0.items = {};
   const res = R().add('workshop', { walls: [wall] });
   for (const id of SHOP) T.addObject(id);
   T.learn(skills);
@@ -1542,7 +1553,7 @@ T.sweepWorkshop = () => {
   const noBench = b.interact('workbench');
   out.push(result('workshop: the workbench names the book he still needs (Workshop Basics)', !noBench.ok && /Workshop Basics/.test(noBench.message) && kind(noBench.message), { noBench }));
   // 3. a whole build from nothing: planks from the factory, sawn, tapped, sanded, finished and counted in storage
-  const builds = [['footstool', 'right'], ['footstool', 'front'], ['footstool', 'back'], ['woodshelves', 'right'], ['chair', 'right']];
+  const builds = [['footstool', 'right'], ['footstool', 'front'], ['footstool', 'back'], ['builtchair', 'right']];
   for (const [recipe, wall] of builds) {
     shopSetup(wall);
     const R0 = RECIPES_DEF[recipe];
@@ -1829,6 +1840,8 @@ const SIDES_TESTS = [
   ['sander', 'sand', 'workshop', { wood: 2, parts: 0 }, null, (s) => s.poses.has('workSand')], ['workbench', 'sawwood', 'workshop', { wood: 2, parts: 0 }, null, (s) => s.poses.has('workSaw')],
   ['stove', 'cook', 'restaurant', null, 'ordered', (s) => s.poses.has('workTap') && s.cooked], ['kitchencounter', 'serve', 'restaurant', null, 'cooked', (s) => s.served],
   ['register', 'takepay', 'restaurant', null, 'paying', (s) => s.coins > 0],
+  ['metalfactory', 'makemetal', 'workshop', { metal: 0 }, null, (s) => s.metal >= 4], ['metalcutter', 'cutmetal', 'workshop', { metal: 2 }, null, (s) => s.poses.has('workCut')],
+  ['welder', 'weld', 'workshop', {}, null, (s) => s.poses.has('workWeld')], ['anvil', 'hammer', 'workshop', {}, null, (s) => s.poses.has('workTap')],
 ];
 T.sweepSides = (only = null, onlyRot = null, onlyWall = null) => {
   const out = [], base = errors.length, w = W(), b = B(), g = G();
@@ -1855,20 +1868,20 @@ T.sweepSides = (only = null, onlyRot = null, onlyWall = null) => {
         o.set(x2, z2); void x; void z;
         const clash = w.obstacles.some((p) => p !== o.obstacle && p.x0 < o.obstacle.x1 && p.x1 > o.obstacle.x0 && p.z0 < o.obstacle.z1 && p.z1 > o.obstacle.z0);
         if (clash || !w.fits(o, o.x, o.z)) { o.rotate(0); continue; }          // that spot is taken by another piece: not a test of this one
-        if (stock) { Object.assign(w.stock, { wood: 0, parts: 0 }, stock); w.syncStock(); }
+        if (stock) { Object.assign(w.stock, { wood: 0, parts: 0, metal: 0, mparts: 0 }, stock); w.syncStock(); }
         if (customer) { w.restaurant.clear(); w.restaurant.paused = true; w.restaurant.headless = true; w.restaurant.stage(customer); }
         tried++;
         b.queue = []; b.step = null; b.choose(act);
         let t = 0, off = 0, done = false, pressed = 0; const e0 = errors.length, hist = [];
         const labels = [];
-        const seen = { poses: new Set(), lid: false, cooked: false, served: false, wood: 0, coins: 0 };
+        const seen = { poses: new Set(), lid: false, cooked: false, served: false, wood: 0, metal: 0, coins: 0 };
         while (t < 260) {
           step(0.25); t += 0.25;
           if (b.step) seen.poses.add(b.pose);
           if (labels[labels.length - 1] !== label()) labels.push(label().slice(0, 50) + '@' + g.pos.x.toFixed(1) + ',' + g.pos.z.toFixed(1));
           if (w.objects.toolbox && w.objects.toolbox.open > 0.2) seen.lid = true;
           if (customer && w.restaurant.list[0] && ['cooked', 'eating'].includes(w.restaurant.list[0].state)) seen.cooked = true;
-          seen.served = w.restaurant.nServed > 0; seen.coins = w.stock.coins; seen.wood = Math.max(seen.wood, w.stock.wood);
+          seen.served = w.restaurant.nServed > 0; seen.coins = w.stock.coins; seen.wood = Math.max(seen.wood, w.stock.wood); seen.metal = Math.max(seen.metal, w.stock.metal);
           if (!w.walkable(g.pos.x, g.pos.z) && !w.inMain(g.pos.x, g.pos.z)) off++;
           hist.push([g.pos.x, g.pos.z]);
           if (hist.length > 4) { const a = hist[hist.length - 5]; if (b.moving && Math.hypot(a[0] - g.pos.x, a[1] - g.pos.z) < 0.12) pressed += 0.25; }       // walking but getting nowhere: pushing against a wall
@@ -1886,6 +1899,96 @@ T.sweepSides = (only = null, onlyRot = null, onlyWall = null) => {
   }
   T.resetRooms(); T.removeAll(); T.settle();
   out.push(result('sides: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
+// ---- 18b. The Workshop's metal line: Metal Factory, Metal Cutter, Welder, Hammer & Anvil, and what Guy builds from metal (workobjects.js, workbrain.js) ----
+const metalSetup = (wall = 'right') => {
+  const res = shopSetup(wall, [...ALL_SHOP_SKILLS, 'workshop.metal']);
+  for (const id of METAL) T.addObject(id);
+  return res;
+};
+T.sweepMetal = () => {
+  const out = [], base = errors.length, w = W(), b = B(), g = G();
+  // 1. the metal line is added through the Catalogue with its book, and stands in the room
+  for (const wall of ['right', 'front', 'back']) {
+    const res = metalSetup(wall);
+    const objs = [...SHOP, ...METAL].map((id) => w.objects[id]).filter(Boolean);
+    out.push(result(`metal: ${wall} wall: the four metal pieces are added through the Catalogue, with their book on the shelf`, res.ok && METAL.every((id) => !!w.objects[id]) && w.objects.shelf.books.some((r) => r.def.id === 'metalfab'), { res: res.ok, have: METAL.filter((id) => !!w.objects[id]) }));
+    const inside = objs.every((o) => w.roomIdAt(o.x, o.z) === 'workshop' && w.fits(o, o.x, o.z));
+    let overlap = null;
+    for (let i = 0; i < objs.length; i++) for (let j = i + 1; j < objs.length; j++) if (rectsOv(objs[i].obstacle, objs[j].obstacle)) overlap = [objs[i].name, objs[j].name];
+    out.push(result(`metal: ${wall} wall: everything stands inside the room, clear of the door and of each other`, inside && !overlap, { inside, overlap }));
+    const stands = [['metalfactory', 0.78], ['metalcutter', 0.72], ['welder', 0.7], ['anvil', 0.55]].map(([n, f]) => { const o = w.objects[n], l = o.local(0, f); return { n, x: o.x + l.x, z: o.z + l.z }; });
+    const badStand = stands.filter((p) => w.roomIdAt(p.x, p.z) !== 'workshop' || w.obstacles.some((o) => p.x > o.x0 - 0.25 && p.x < o.x1 + 0.25 && p.z > o.z0 - 0.25 && p.z < o.z1 + 0.25 && o !== w.objects[p.n].obstacle));
+    out.push(result(`metal: ${wall} wall: the place he stands to use each one is free floor`, !badStand.length, { badStand: badStand.map((p) => p.n) }));
+  }
+  // 2. what he says when he cannot (kind messages)
+  shopSetup('right', ['workshop']); for (const id of METAL) T.addObject(id);
+  b.queue = []; b.step = null;
+  const kind = (m) => !BANNED.test(m);
+  const noBook = b.interact('metalfactory');
+  out.push(result('metal: without the book he is refused kindly and told which book', !noBook.ok && /Metal Fabrication for Robots/.test(noBook.message) && kind(noBook.message), { noBook }));
+  T.learn(['workshop.metal']);
+  const noBars = b.interact('metalcutter');
+  out.push(result('metal: with the book but no bars he says to make some at the Metal Factory', !noBars.ok && /Metal Factory/.test(noBars.message) && kind(noBars.message), { noBars }));
+  const noParts = b.interact('welder');
+  out.push(result('metal: with the book but no parts he says to cut some at the Metal Cutter', !noParts.ok && /Metal Cutter/.test(noParts.message) && kind(noParts.message), { noParts }));
+  // 3. a whole metal build from nothing: bars from the factory, cut, welded, hammered, finished and standing in the Workshop
+  for (const [recipe, wall] of [['metalchair', 'right'], ['metalchair', 'front'], ['metalchair', 'back']]) {
+    metalSetup(wall);
+    const R0 = RECIPES_DEF[recipe];
+    b.pickRecipe = () => recipe;
+    const door = w.doors.workshop, s0 = sfxNow();
+    const bars = Math.ceil(R0.metal.parts / 2), runs = Math.ceil(bars / 4);
+    const r = b.interact('workbench');
+    let t = 0, wentIn = false, bad = 0, armed = false;
+    while (t < 700) {
+      step(0.25); t += 0.25;
+      if (!armed && b.last === 'build') { armed = true; b.pendingActivity = 'wander'; }
+      if (b.inWorkshop()) wentIn = true;
+      if (!w.walkable(g.pos.x, g.pos.z) && !w.inMain(g.pos.x, g.pos.z)) bad++;
+      if (armed && wentIn && b.inMain() && b.last !== 'build' && door.open === 0) break;
+    }
+    delete b.pickRecipe;
+    const st = w.stock, s1 = sfxNow(), cu = w.objects.metalcutter, wd = w.objects.welder, an = w.objects.anvil, mf = w.objects.metalfactory;
+    const item = Object.values(w.objects).filter((o) => o.kind === R0.object && w.roomIdAt(o.x, o.z) === 'workshop').length;
+    const left = runs * 4 - bars;
+    out.push(result(`metal: build ${recipe} from nothing (${wall} wall): it goes in, makes bars, cuts, welds, hammers, finishes and comes out, and the chair stands in the Workshop`, r.ok && wentIn && item === 1 && (st.items[R0.object] || 0) === 0 && b.inMain() && door.open === 0, { r, wentIn, item, inMain: b.inMain(), open: door.open, t }));
+    out.push(result(`metal: build ${recipe} (${wall}): the stock adds up (${bars} bars cut, ${left} left over, no parts left, nothing carried or left on a machine)`, st.metal === left && st.mparts === 0 && st.hw === 0 && st.wood === 0 && b.carry === null && !cu.barA.visible && !wd.assembly.children.length && !an.assembly.children.length && !mf.tray.children.length && !(w.building || []).length, { stock: JSON.parse(JSON.stringify(st)), left, carry: b.carry }));
+    const need = ['machine', 'thud', 'lid', 'knock', 'sizzle', 'chime'];
+    out.push(result(`metal: build ${recipe} (${wall}): every step makes its sound`, need.every((k) => heard(s0, s1, k) > 0), { silent: need.filter((k) => !(heard(s0, s1, k) > 0)) }));
+    out.push(result(`metal: build ${recipe} (${wall}): he never stands where he should not, and there are no errors`, bad === 0 && errors.length === base, { bad, errors: errors.slice(base) }));
+  }
+  // 4. cut short at each station: the stock is put back and nothing is left on a machine or in his hands
+  const cut = (label, setup, act, cond, expect) => {
+    metalSetup('right');
+    Object.assign(w.stock, { wood: 0, parts: 0, metal: 0, mparts: 0, hw: 0 }, setup); w.syncStock();
+    b.pickRecipe = () => 'metalchair';
+    b.queue = []; b.step = null; b.choose(act);
+    const t = runUntil(cond, 200);
+    const during = { ...w.stock };
+    b.skip(); T.settle();
+    delete b.pickRecipe;
+    const st = w.stock, cu = w.objects.metalcutter, wd = w.objects.welder, an = w.objects.anvil;
+    const ok = t < 200 && st.metal === expect.metal && st.mparts === expect.mparts && b.carry === null && !cu.barA.visible && !wd.assembly.children.length && !an.assembly.children.length && b.inMain() && !(w.building || []).length;
+    out.push(result(`metal: cut short ${label}: the stock is put back and nothing is left on a machine or in his hands`, ok, { during: { metal: during.metal, mparts: during.mparts }, after: { metal: st.metal, mparts: st.mparts }, expect, carry: b.carry, t }));
+  };
+  cut('while carrying the bar to the cutter', { metal: 3 }, 'cutmetal', () => b.carry === 'bar', { metal: 3, mparts: 0 });
+  cut('while cutting', { metal: 3 }, 'cutmetal', () => b.pose === 'workCut' && b.step && b.step.t > 2, { metal: 3, mparts: 0 });
+  cut('while carrying the parts away', { metal: 3 }, 'cutmetal', () => b.carry === 'mparts', { metal: 2, mparts: 2 });
+  cut('while welding', { mparts: 6 }, 'build', () => b.pose === 'workWeld' && b.step && b.step.t > 2, { metal: 0, mparts: 6 });
+  cut('while hammering', { mparts: 6 }, 'build', () => b.pose === 'workTap' && b.step && b.step.fx.work && b.step.fx.work.obj === 'anvil' && b.step.t > 2, { metal: 0, mparts: 6 });
+  cut('while carrying the welded piece', { mparts: 6 }, 'build', () => b.carry === 'mpiece', { metal: 0, mparts: 6 });
+  // 5. the Catalogue lists what is in storage, and Add makes a real chair he can sit on
+  T.resetRooms(); T.removeAll(); R().add('workshop'); w.stock.items = { metalchair: 1 };
+  openObjects('all');
+  const card = machineCard('Metal Chair (built by Guy)');
+  out.push(result('metal: the Catalogue shows the metal chair in storage and offers Add', !!card && /In storage: 1/.test(card.textContent) && !!card.querySelector('.act')));
+  card.querySelector('.act').click(); machine().hidden = true;
+  out.push(result('metal: a metal chair Guy built is a chair he can sit on', b.chairs().some((c) => c.name === 'metalchair_1') && !w.stock.items.metalchair));
+  T.resetRooms(); T.removeAll(); T.settle(); machine().hidden = true;
+  out.push(result('metal: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
 };
 
@@ -2508,6 +2611,7 @@ T.runAll = () => {
   report.visit = S(T.sweepVisit);
   report.restaurant = S(T.sweepRestaurant);
   report.sides = S(T.sweepSides);
+  report.metal = S(T.sweepMetal);
   report.gal = S(T.sweepGal);
   report.paintings = S(T.sweepPaintings);
   report.errorsLogged = errors.length;
