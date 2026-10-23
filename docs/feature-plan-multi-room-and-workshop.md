@@ -381,6 +381,7 @@ Each phase can be tested on its own. No phase needs the Restaurant.
 
 - Guy cooks, serves food to customers and handles payment.
 - New 3D model characters enter the restaurant through an **elevator on the Restaurant's wall**.
+- **Staffing:** if X Bot is available, she tends to each customer who comes in. When several customers arrive at once, GUY assists her.
 - Not planned in detail. It will reuse the room model (section 4), premium gating (section 6) and door placement (section 5), plus new character models and a payment flow that needs its own design.
 - The elevator is a wall feature, so it should be placed by the same search as doors.
 
@@ -660,6 +661,8 @@ Recorded from the owner's description. Nothing is built.
 **X Bot's unprompted prompts.** X Bot also engages with GUY on her own, for example:
 - she turns on the stereo and asks GUY to dance;
 - she sits down at the piano and motions for GUY to come and play along (sitting on the bench, or standing beside the piano).
+
+**Names.** X Bot is to be called **GAL** (proposed by the owner, a female version of GUY). What GAL stands for is still to be decided.
 
 **Two characters.** GUY is the main character, built from the Mixamo Y Bot model (GUY = Genetically Universal Ybot). X Bot is the second character. "Y Bot" is the model's name, not a second character.
 
