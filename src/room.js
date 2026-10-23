@@ -418,6 +418,17 @@ export function buildRoom(scene) {
     front: { rotY: Math.PI, lo: -ROOM.w / 2, hi: ROOM.w / 2, plane: new THREE.Plane(new THREE.Vector3(0, 0, -1), ROOM.d / 2),
       at: (u, v) => new THREE.Vector3(u, v, ROOM.d / 2), near: (x0, x1, z0, z1) => z1 > ROOM.d / 2 - 0.1, span: (x0, x1) => [x0, x1] },
   };
+  for (const k of Object.keys(WALL)) WALL[k].n = new THREE.Vector3(Math.sin(WALL[k].rotY), 0, Math.cos(WALL[k].rotY));      // the way into the room
+  // A wall of an added room, in world terms: `p0` the point on the floor at u = 0, `n` the way into the room, `t` the way u grows.
+  // The same fields as the main room's walls above, so wall pieces (pictures, Guy's paintings) hang on it just the same.
+  const makeWall = (p0, n, t, lo, hi) => ({
+    rotY: Math.atan2(n.x, n.z), lo, hi, p0, n, t,
+    plane: new THREE.Plane(n.clone(), -n.dot(p0)),
+    at: (u, v) => new THREE.Vector3(p0.x + t.x * u, v, p0.z + t.z * u),
+    uv: (p) => ({ u: (p.x - p0.x) * t.x + (p.z - p0.z) * t.z, v: p.y }),
+    near: (x0, x1, z0, z1) => Math.min(...[[x0, z0], [x0, z1], [x1, z0], [x1, z1]].map(([x, z]) => (x - p0.x) * n.x + (z - p0.z) * n.z)) < 0.1,
+    span: (x0, x1, z0, z1) => { const s = [[x0, z0], [x0, z1], [x1, z0], [x1, z1]].map(([x, z]) => (x - p0.x) * t.x + (z - p0.z) * t.z); return [Math.min(...s), Math.max(...s)]; },
+  });
   const MACHINE_RECT = { u0: -2.7, u1: -1.9, v0: 1.0, v1: 2.3 };   // the Catalogue on the left wall
   const overlap1 = (a0, a1, b0, b1) => a1 > b0 && a0 < b1;
 
@@ -471,7 +482,7 @@ export function buildRoom(scene) {
         return true;
       },
       // a point on the plane the piece lives on -> its (u, v)
-      uv(p) { return this.wall === 'left' ? { u: p.z, v: p.y } : this.wall === 'back' ? { u: p.x, v: p.y } : { u: p.x, v: p.z }; },
+      uv(p) { return this.wall && WALL[this.wall].uv ? WALL[this.wall].uv(p) : this.wall === 'left' ? { u: p.z, v: p.y } : this.wall === 'back' ? { u: p.x, v: p.y } : { u: p.x, v: p.z }; },
     };
     d.set(o.u, o.v);
     decor[name] = d;
@@ -865,7 +876,12 @@ export function buildRoom(scene) {
         cx.beginPath(); cx.moveTo(u0 * 256, v0 * 320); cx.lineTo(u1 * 256, v1 * 320); cx.stroke(); tex.needsUpdate = true;
       },
       dab(u, v, color, r = 7) { cx.fillStyle = color; cx.beginPath(); cx.arc(u * 256, v * 320, r, 0, Math.PI * 2); cx.fill(); tex.needsUpdate = true; },
+      canvas: cv,
+      // put a saved picture back on the canvas (src/paintings.js)
+      draw(img) { cx.drawImage(img, 0, 0, 256, 320); tex.needsUpdate = true; },
+      ver: 0,                                                                       // counts changes to the canvas, so the picture is saved only when it changed
     };
+    for (const k of ['clear', 'stroke', 'dab', 'draw']) { const f = obj.paint[k]; obj.paint[k] = (...a) => { obj.paint.ver++; return f(...a); }; }
     return obj;
   };
 
@@ -1193,7 +1209,20 @@ export function buildRoom(scene) {
     const bounds = wall === 'right' ? { minX: ROOM.w / 2, maxX: ROOM.w / 2 + N, minZ: c - L / 2, maxZ: c + L / 2 }
       : wall === 'front' ? { minX: c - L / 2, maxX: c + L / 2, minZ: ROOM.d / 2, maxZ: ROOM.d / 2 + N }
         : { minX: c - L / 2, maxX: c + L / 2, minZ: -ROOM.d / 2 - N, maxZ: -ROOM.d / 2 };
-    return { group: g, bounds };
+    return { group: g, bounds, N, L };
+  };
+
+  // The three walls of an added room as places to hang things: `<id>:far` (facing the door) and `<id>:a`, `<id>:b` (the sides).
+  const roomWalls = (id, shell) => {
+    const g = shell.group, N = shell.N, L = shell.L;
+    g.updateWorldMatrix(true, false);
+    const P = (x, z) => g.localToWorld(V3(x, 0, z));
+    const D = (x, z) => V3(x, 0, z).applyQuaternion(g.quaternion).normalize();
+    return {
+      [`${id}:far`]: makeWall(P(0, -N), D(0, 1), D(1, 0), -L / 2, L / 2),
+      [`${id}:a`]: makeWall(P(-L / 2, -N / 2), D(1, 0), D(0, 1), -N / 2, N / 2),
+      [`${id}:b`]: makeWall(P(L / 2, -N / 2), D(-1, 0), D(0, 1), -N / 2, N / 2),
+    };
   };
 
   // The way from a wall into the room (the local +z of anything hung on it).
@@ -1231,6 +1260,28 @@ export function buildRoom(scene) {
     skillMachine: machine,
     removed: {},                  // objects (and decor) the user took out, kept so they can be put back
     decor, decorFits,
+    // ---- Guy's paintings (src/paintings.js) ----
+    // Every wall a painting can hang on: Guy's room (the two walls the camera sees) and the three walls of each added room.
+    hangWalls: () => [{ key: 'left', room: 'main' }, { key: 'back', room: 'main' }, ...Object.keys(WALL).filter((k) => k.includes(':')).map((key) => ({ key, room: key.split(':')[0] }))],
+    wallFrame: (key) => WALL[key] || null,
+    PAINTING: { hw: 0.295, hh: 0.3575 },
+    MACHINE_RECT,
+    // A painting on a wall: the artwork is `source` (a canvas, 0.5 x 0.625 m) in a wooden frame. Its texture is `.tex` on the returned piece.
+    addPainting(name, label, source, wall, u, v) {
+      const art = (g) => {
+        const f = 0.045, w = 0.5, h = 0.625;
+        box(w + f * 2, h + f * 2, 0.04, mat(0x7a4f2a), 0, 0, 0.02, g);
+        const tex = new THREE.CanvasTexture(source);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex }));
+        m.position.z = 0.0415;
+        g.add(m);
+        g.userData.tex = tex;
+      };
+      const d = makeDecor(name, label, { wall, hw: 0.295, hh: 0.3575, u, v }, art);
+      d.tex = d.group.userData.tex;
+      return d;
+    },
     // ---- doors and the rooms behind them (see src/rooms.js) ----
     doors, DOOR, planDoor, doorBlockers, findWallSpot,
     // Put a door for room `def` at (wall, u). The caller has already cleared whatever was in its way.
@@ -1242,6 +1293,7 @@ export function buildRoom(scene) {
       room.add(shell.group);
       room.add(cut);
       doors[def.id] = { id: def.id, name: def.name, wall, u, group, leaf: group.userData.leaf, shell, cut, rect: doorRect(wall, u), rectIn: doorRectIn(wall, u), open: 0, openTo: 0 };
+      Object.assign(WALL, roomWalls(def.id, shell));           // its walls can hold wall pieces (Guy's paintings)
       if (def.elevator) {                                       // a room with an elevator (the Restaurant): a cabin against the far wall
         const b = shell.bounds, sgn = WALL[wall].rotY === Math.PI ? -1 : 1;
         const N = wall === 'right' ? b.maxX - b.minX : b.maxZ - b.minZ, Lw = wall === 'right' ? b.maxZ - b.minZ : b.maxX - b.minX;
@@ -1263,6 +1315,10 @@ export function buildRoom(scene) {
       if (!d) return false;
       for (const g of [d.group, d.shell.group, d.cut]) { room.remove(g); disposeTree(g); }
       if (d.elevator) obstacles.splice(obstacles.indexOf(d.elevator.obstacle), 1);
+      for (const key of Object.keys(WALL).filter((k) => k.startsWith(`${id}:`))) {         // what hung on its walls is put away (Guy's paintings go to the Catalogue)
+        for (const [name, dc] of Object.entries(decor)) if (dc.wall === key) { room.remove(dc.group); delete decor[name]; world.removed[name] = dc; }
+        delete WALL[key];
+      }
       if (!Object.values(doors).some((o) => o !== d && o.wall === d.wall)) wallMeshes[d.wall].visible = true;
       delete doors[id];
       return true;

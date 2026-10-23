@@ -99,6 +99,7 @@ export const MANIFEST = {
     scopecare: { objects: ['telescope'], skills: ['telescope.care'], touches: ['telescope'] },
     // internal recovery activities and aliases: exercised through the interruption sweep, not on their own
     books: { alias: true }, putback: { internal: true }, putguitar: { internal: true }, dropball: { internal: true }, lighton: { internal: true },
+    hangpaint: { objects: ['easel'], painted: true, max: 220, touches: ['easel'] }, putcanvas: { internal: true },      // hanging a painting (sweepPaintings tests it in depth)
     visit: { internal: true }, leave: { internal: true }, rwait: { internal: true },      // rwait: waiting by the till for customers (tested by sweepRestaurant)
          // through the door of an added room and back: tested by sweepVisit
   },
@@ -147,6 +148,7 @@ export const MANIFEST = {
     { id: 'sit-rest', activity: 'sit', pose: 'sitRest', t: 5, view: 'side', expect: 'sitting on the seat (not hovering), thighs level, hands resting on the knees, head turning slowly' },
     { id: 'sit-guitar', activity: 'sitguitar', pose: 'sitGuitar', t: 6, view: 'front', expect: 'seated, the guitar held on the lap and chest, left hand on the neck, right hand strumming; the chair does not pass through the guitar' },
     { id: 'slouch', activity: 'slouch', pose: 'slouch', t: 6, view: 'side', expect: 'on the drum stool, round-shouldered, knees apart, hands hanging between the knees' },
+    { id: 'paint-takedown', activity: 'hangpaint', pose: 'reach', t: 1.5, view: 'front', expect: 'at the easel, one hand on the canvas as he lifts it off (the easel goes blank at that moment), then he carries it held up in front of him' },
     { id: 'cook-stir', activity: 'cook', pose: 'workTap', t: 4, view: 'front', expect: 'standing at the stove, lid off the pot, a wooden spoon in the right hand circling in the pot, left hand resting on the hob, steam rising' },
     { id: 'record-carry', activity: 'dance', pose: 'walk', t: 0, view: 'front', album: true, expect: 'sleeve hangs from his hand by its top edge (only when a record is used)' },
   ],
@@ -294,6 +296,7 @@ T.prep = (name) => {
   for (const id of m.objects || []) if (T.addObject(id)) done.push(id);
   T.learn(m.skills || []);
   if (m.stock) { Object.assign(W().stock, { wood: 0, parts: 0 }, m.stock); W().syncStock(); }
+  if (m.painted) { const e = W().objects.easel; if (e && !e.painted) { e.paint.dab(0.5, 0.5, '#2a62d8', 60); e.paint.stroke(0.1, 0.2, 0.9, 0.8, '#d0312d', 14); e.painted = true; } }       // a painting on the easel to hang
   if (m.customer) { const r = W().restaurant; r.clear(); r.paused = true; r.stage(m.customer); }       // a customer in the right state, and no others arriving
   // dribbling and tossing need the ball clear of furniture (he kicks it free first in real play): put it in open floor
   if (['dribble', 'toss'].includes(name) && W().ball) { W().ball.position.x = 0.8; W().ball.position.z = 2.4; W().ball.userData.vel.set(0, 0, 0); }
@@ -369,6 +372,7 @@ T.run = (name, { max = (MANIFEST.activities[name] || {}).max || 150, prep = true
   rep.errors = errors.slice(base);
   if (b.userMusic) b.stereoControl('stop');
   if ((MANIFEST.activities[name] || {}).customer) W().restaurant.clear();           // nobody is left in the restaurant to keep him there
+  if (name === 'hangpaint') W().paintings.reset();                                  // and the painting he hung comes down again
   const s = T.settle();
   rep.idleAfter = s.ok;
   rep.warnings = grazes(rep.overlaps);
@@ -1116,6 +1120,7 @@ T.resetRooms = () => {
   const b = B();
   for (const r of ROOM_CATALOG) R().reset(r.id);                                  // its furniture goes with it
   for (const [name, o] of Object.entries(W().objects)) if (o.kind) { W().storeInstance(name); b.objectRemoved(name); }       // and what Guy built that stands in his room
+  W().paintings.reset();                                                          // Guy's paintings come down and the list is emptied
   const st = W().stock; st.wood = 0; st.parts = 0; st.items = {}; st.coins = 0;   // and what the Workshop made and the Restaurant earned
   W().restaurant.clear(); W().restaurant.paused = false; W().restaurant.nServed = 0; W().restaurant.stats = { arrived: 0, paid: 0, gaveUp: 0 };
   b.carry = null; b.restJob = null;
@@ -2051,6 +2056,161 @@ T.sweepStart = () => {
   return out;
 };
 
+// Guy's paintings (paintings.js / paintbrain.js): hanging from the easel's menu, the three-per-wall limit, replacing the oldest, every
+// room's walls, the Catalogue, saving, and being cut short.
+T.sweepPaintings = () => {
+  const out = [], base = errors.length, w = W(), b = B(), P = w.paintings;
+  const COLS = ['#d0312d', '#2a62d8', '#f2c500', '#2e9e4a', '#8e44ad', '#e67e22', '#16a085', '#c0392b', '#34495e', '#e84393'];
+  let ci = 0;
+  const easel = () => w.objects.easel;
+  const paintIt = () => { const e = easel(); e.paint.dab(0.5, 0.5, COLS[ci % COLS.length], 60); e.paint.stroke(0.1, 0.2, 0.9, 0.8, COLS[(ci + 3) % COLS.length], 14); e.painted = true; ci++; };
+  const fresh = () => { T.settle(); T.resetRooms(); T.removeAll(); T.forget(); skillsOf().fading.clear(); T.settle(); T.home(); T.addObject('easel'); easel().paint.clear(); easel().painted = false; P.reset(); };
+  // paint something and ask for it to be hung (through the real menu button if asked); follow Guy until it is done
+  const hangOne = ({ viaMenu = false } = {}) => {
+    for (let i = 0; i < 20 && (b.paintingNow() || b.carry); i++) { b.skip(); step(1); }        // he is not in the middle of painting (he likes to paint again once a painting is hung)
+    paintIt();
+    const n0 = P.items.length, msgs = [], old = b.onBuilt;
+    let at = null;
+    b.onBuilt = (m) => { msgs.push(m); at = { x: G().pos.x, z: G().pos.z }; };
+    let ok;
+    if (viaMenu) { window.__guyOpenMenu('easel'); const btn = document.querySelector('#menu [data-act="hang"]'); ok = !btn.hidden; btn.click(); } else ok = b.hangPainting().ok;
+    let t = 0;
+    while (t < 240) { step(0.5); t += 0.5; if (P.items.length > n0 && b.last !== 'hangpaint' && !P.carried && !b.carry) break; }
+    b.onBuilt = old;
+    return { ok, at, secs: t, msgs, rec: P.items[P.items.length - 1] };
+  };
+  const counts = () => { const c = {}; for (const r of P.hung()) c[r.wall] = (c[r.wall] || 0) + 1; return c; };
+  const wallsOk = () => Object.values(counts()).every((n) => n <= 3);
+  const allFit = () => P.hung().every((r) => { const d = w.decor[P.name(r)]; return d && d.wall === r.wall && w.decorFits(d, d.u, d.v); });
+  try {
+    // 1. the long-press menu of the easel: the button is there only when there is a painting to hang
+    fresh();
+    window.__guyOpenMenu('easel');
+    const hidden0 = document.querySelector('#menu [data-act="hang"]').hidden;
+    paintIt();
+    window.__guyOpenMenu('easel');
+    const hidden1 = document.querySelector('#menu [data-act="hang"]').hidden;
+    T.addObject('piano'); window.__guyOpenMenu('piano'); const hiddenOther = document.querySelector('#menu [data-act="hang"]').hidden;
+    document.getElementById('menu').hidden = true;
+    out.push(result('paintings: the easel menu shows "Hang painting" only while a painting is on the easel (never for other things)', hidden0 && !hidden1 && hiddenOther, { hidden0, hidden1, hiddenOther }));
+    easel().paint.clear(); easel().painted = false;
+    const none = b.hangPainting();
+    out.push(result('paintings: with no painting he says so kindly and does nothing', !none.ok && !BANNED.test(none.message) && b.pendingActivity !== 'hangpaint', { none }));
+
+    // 2. one painting through the real button: off the easel, carried, hung on a main-room wall by Guy's choice, he stands in front of it
+    fresh();
+    const one = hangOne({ viaMenu: true });
+    const rec = one.rec, d = rec && w.decor[P.name(rec)], F = rec && w.wallFrame(rec.wall);
+    const wallPt = F && F.at(rec.u, 0), dist = wallPt && one.at ? Math.hypot(one.at.x - wallPt.x, one.at.z - wallPt.z) : 99;
+    out.push(result('paintings: "Hang painting" sends Guy to the easel, he takes the painting off (the easel is blank), carries it and hangs it on a wall', one.ok && !!d && !P.easelHas() && !easel().painted && P.hung().length === 1 && rec.room === 'main' && !b.carry && !P.carried, { ok: one.ok, secs: one.secs, rec }));
+    out.push(result('paintings: he stands in front of the wall to hang it, and the painting fits there (clear of windows, pictures and the Catalogue)', dist > 0.4 && dist < 1.1 && allFit(), { dist: +dist.toFixed(2) }));
+    out.push(result('paintings: the toast says where he hung it, kindly', one.msgs.length === 1 && /hung a painting in your room/.test(one.msgs[0]) && !BANNED.test(one.msgs[0]), { msgs: one.msgs }));
+    out.push(result('paintings: the hung painting is a wall piece the user can drag and remove like any picture (it is in world.decor, removable)', !!d && d.decor === true && d.removable === true));
+
+    // 3. at most three per wall; he spreads them out; when every wall is full the oldest is replaced and goes to the Catalogue
+    for (let i = 0; i < 9; i++) hangOne();
+    const hungN = P.hung().length;
+    out.push(result('paintings: never more than 3 of his paintings on one wall', wallsOk() && hungN <= 6, { counts: counts(), hungN }));
+    const stored = P.stored(), hung = P.hung();
+    out.push(result('paintings: with every wall full he takes the oldest down and hangs the new one; the old ones are in the Catalogue (nothing is thrown away)', stored.length > 0 && P.items.length === 10 && stored.every((s) => hung.every((h) => s.t < h.t)), { stored: stored.map((r) => r.id), hung: hung.map((r) => r.id) }));
+    out.push(result('paintings: every hung painting still fits its wall (no overlaps, nothing over the Catalogue, a window or a door)', allFit()));
+    out.push(result('paintings: he spreads them over the walls instead of filling one first', Object.keys(counts()).length >= 2, { counts: counts() }));
+
+    // 4. the Catalogue: a thumbnail of each picture, Take down for the hung ones, Hang it for the stored ones
+    openObjects('all');
+    const head = [...machine().querySelectorAll('h4')].find((h) => /Guy's paintings/.test(h.textContent));
+    const cards = head ? (() => { const c = []; for (let n = head.nextElementSibling; n && n.tagName !== 'H4'; n = n.nextElementSibling) if (n.classList.contains('card')) c.push(n); return c; })() : [];
+    const thumbs = cards.filter((c) => c.querySelector('img.thumb') && /^data:image\//.test(c.querySelector('img.thumb').getAttribute('src'))).length;
+    out.push(result('paintings: the Catalogue lists every painting with a thumbnail of the picture', !!head && cards.length === P.items.length && thumbs === P.items.length, { cards: cards.length, items: P.items.length, thumbs }));
+    const takeBtn = cards.map((c) => c.querySelector('.act.rm')).find(Boolean);
+    const total0 = P.items.length, hung0 = P.hung().length;
+    if (takeBtn) takeBtn.click();
+    out.push(result('paintings: "Take down" in the Catalogue takes a painting off its wall into storage (still listed)', P.hung().length === hung0 - 1 && P.items.length === total0 && allFit(), { hung0, now: P.hung().length }));
+    openObjects('all');
+    const hangBtn = [...machine().querySelectorAll('.card')].filter((c) => c.querySelector('img.thumb') && /Hang it/.test(c.textContent)).map((c) => c.querySelector('.act'))[0];
+    const stored0 = P.stored().length;
+    if (hangBtn) hangBtn.click();
+    out.push(result('paintings: "Hang it" puts a stored painting on a free wall at once (never beyond three a wall)', P.stored().length === stored0 - 1 && wallsOk() && allFit(), { stored0, now: P.stored().length }));
+    let guard = 0;
+    while (P.stored().length && guard++ < 20 && /^Hung in/.test(P.hangStored(P.stored()[0].id))) { /* fill every free place */ }
+    const full = P.stored().length ? P.hangStored(P.stored()[0].id) : null;
+    out.push(result('paintings: with no free wall "Hang it" says so kindly and the painting stays stored', full === null || (/full or blocked/.test(full) && !BANNED.test(full)), { full }));
+    machine().hidden = true;
+
+    // 5. the Workshop and the Restaurant have walls too: paintings hang there and he goes through the door for them
+    fresh();
+    unlockRoom('workshop'); R().add('workshop');
+    unlockRoom('restaurant'); R().add('restaurant', { walls: ['front', 'back'] });
+    for (let i = 0; i < 14; i++) hangOne();
+    const inRooms = P.hung().filter((r) => r.room !== 'main'), roomsSeen = new Set(inRooms.map((r) => r.room));
+    out.push(result('paintings: with more rooms he hangs paintings in the Workshop and the Restaurant too, three to a wall at most', inRooms.length >= 4 && roomsSeen.has('workshop') && roomsSeen.has('restaurant') && wallsOk(), { counts: counts() }));
+    out.push(result('paintings: the ones in added rooms fit their walls (the elevator, furniture and windows are never covered)', allFit()));
+    for (let i = 0; i < 40 && !b.inMain(); i++) step(2);
+    out.push(result('paintings: afterwards he comes back to his own room', b.inMain()));
+    T.settle();                                                                              // the door is shut behind him before the room goes
+    const before = P.items.length, inWorkshop = P.hung().filter((r) => r.room === 'workshop').length;
+    R().reset('workshop'); step(1);
+    out.push(result('paintings: taking a room away puts the paintings on its walls into the Catalogue (none lost, none left floating)', inWorkshop > 0 && P.items.length === before && !P.hung().some((r) => r.room === 'workshop') && P.stored().length >= inWorkshop && Object.keys(w.removed).every((k) => !k.startsWith('guypaint_')) && allFit(), { inWorkshop }));
+    const target = P.hung()[0];
+    if (target) { const nm = P.name(target); w.removeObject(nm); b.objectRemoved(nm); step(1); }
+    out.push(result('paintings: a painting the user removes from the wall goes to the Catalogue as a stored painting', !!target && !P.get(target.id).room && !w.decor[P.name(target)] && !w.removed[P.name(target)], { id: target && target.id }));
+
+    // 6. saving: what hangs where, what is stored, and what is on the easel come back
+    fresh();
+    for (let i = 0; i < 4; i++) hangOne();
+    const dd = w.decor[P.name(P.hung()[0])];
+    if (dd) dd.set(dd.u + 0.3 > 4 ? dd.u - 0.3 : dd.u + 0.3, dd.v);                              // the user slides one along its wall
+    step(1);
+    paintIt(); easel().paint.ver++; P.tSave = 4; P.update(0.1);                                 // a painting left on the easel is saved too
+    const snap = JSON.parse(JSON.stringify(P.snapshot()));
+    const key = (r) => `${r.id}:${r.room}:${r.wall}:${r.u}:${r.v}`;
+    const was = P.items.map(key).join('|');
+    P.load(snap); step(1);
+    const now = P.items.map(key).join('|');
+    out.push(result('paintings: saving and loading brings every painting back where it was (including one the user slid along its wall)', was === now && P.hung().every((r) => !!w.decor[P.name(r)]) && allFit(), { was, now }));
+    out.push(result('paintings: the picture on the easel is saved too', typeof snap.easel === 'string' && /^data:image\//.test(snap.easel)));
+    const ghost = JSON.parse(JSON.stringify(snap));
+    ghost.items.push({ id: 99, img: snap.items[0].img, room: 'nowhere', wall: 'nowhere:far', u: 0, v: 1.6, t: 99 });
+    P.load(ghost); step(1);
+    out.push(result('paintings: a saved painting whose room is no longer there is kept in the Catalogue', !!P.get(99) && !P.get(99).room && !w.decor[P.name(P.get(99))]));
+    const before2 = P.items.length;
+    P.load({ v: 7 }); P.load(null); P.load({ v: 1, items: 'x' });
+    out.push(result('paintings: a damaged save does nothing', P.items.length === before2));
+    const KEYP = 'guy.paintings.v1', was2 = localStorage.getItem(KEYP), persist = P.persist;
+    let stored2 = false;
+    try { P.persist = true; P.save(); const raw = localStorage.getItem(KEYP); stored2 = !!raw && JSON.parse(raw).items.length === P.items.length; } finally { P.persist = persist; if (was2 === null) localStorage.removeItem(KEYP); else localStorage.setItem(KEYP, was2); }
+    out.push(result('paintings: they are written to the browser storage', stored2));
+
+    // 7. cut short while carrying: the painting goes back on the easel; with no easel it goes to the Catalogue
+    fresh();
+    paintIt(); b.hangPainting();
+    let t7 = 0; while (t7 < 90 && b.carry !== 'canvas') { step(0.25); t7 += 0.25; }
+    const carried = b.carry === 'canvas' && !P.easelHas();
+    b.skip();
+    let t8 = 0; while (t8 < 120 && (b.carry || P.carried || b.last === 'hangpaint' || !P.easelHas())) { step(0.5); t8 += 0.5; }
+    out.push(result('paintings: told to stop with the painting in his hands he takes it back to the easel', carried && P.easelHas() && !b.carry && !P.carried && P.hung().length === 0 && P.stored().length === 0, { carried, t8, last: b.last }));
+    paintIt(); P.reset(); easel().painted = true;
+    b.hangPainting();
+    t7 = 0; while (t7 < 90 && b.carry !== 'canvas') { step(0.25); t7 += 0.25; }
+    w.removeObject('easel'); b.objectRemoved('easel');
+    t8 = 0; while (t8 < 120 && (b.carry || P.carried)) { step(0.5); t8 += 0.5; }
+    out.push(result('paintings: if the easel is taken away while he carries it the painting goes to the Catalogue, not lost', !b.carry && !P.carried && P.items.length === 1 && !P.items[0].room, { items: P.items.length }));
+
+    // 8. no wall at all: he says so kindly and the painting stays on the easel
+    fresh();
+    const savedWalls = w.hangWalls;
+    w.hangWalls = () => [];
+    paintIt();
+    const noWall = b.hangPainting();
+    w.hangWalls = savedWalls;
+    out.push(result('paintings: with no wall to hang on he says so kindly and the painting stays on the easel', !noWall.ok && !BANNED.test(noWall.message) && P.easelHas(), { noWall }));
+  } finally {
+    P.reset(); T.resetRooms(); T.settle(); T.home();
+  }
+  out.push(result('paintings: no errors were logged', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 T.runAll = () => {
   const report = { coverage: T.coverage() };
   // each sweep starts with no added room: the Workshop (and what it made) is taken away again after any sweep that added it
@@ -2086,6 +2246,7 @@ T.runAll = () => {
   report.workshop = S(T.sweepWorkshop);
   report.visit = S(T.sweepVisit);
   report.restaurant = S(T.sweepRestaurant);
+  report.paintings = S(T.sweepPaintings);
   report.errorsLogged = errors.length;
   return report;
 };

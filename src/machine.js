@@ -76,7 +76,7 @@ export const OBJECT_CATALOG = [
 
 const KEY = 'guy.room.v1';
 
-export function initMachine({ world, guy, persist, notify, remove, rooms }) {
+export function initMachine({ world, guy, persist, notify, remove, rooms, paintings }) {
   const root = document.getElementById('machine');
   const body = root.querySelector('.body');
   const chipBar = root.querySelector('.chips');
@@ -223,8 +223,10 @@ export function initMachine({ world, guy, persist, notify, remove, rooms }) {
         const here = items.filter((d) => objectStatus(d) === 'inroom').length;
         sections.push({ c, items, here });
       }
+      const pics = paintings ? paintings.items : [];
       chipBar.innerHTML = [{ id: 'all', name: 'All', icon: '', here: sections.reduce((n, s) => n + s.here, 0), total: sections.reduce((n, s) => n + s.items.length, 0) }]
         .concat(sections.map((s) => ({ id: s.c.id, name: s.c.name, icon: s.c.icon, here: s.here, total: s.items.length })))
+        .concat(pics.length ? [{ id: 'paintings', name: "Guy's paintings", icon: '🖼️', here: paintings.hung().length, total: pics.length }] : [])
         .map((c) => `<button class="chip${cat === c.id ? ' on' : ''}" data-cat="${c.id}">${c.icon ? c.icon + ' ' : ''}${c.name} <span>${c.here}/${c.total}</span></button>`).join('');
       for (const { c, items, here } of sections) {
         if (cat !== 'all' && cat !== c.id) continue;
@@ -255,6 +257,18 @@ export function initMachine({ world, guy, persist, notify, remove, rooms }) {
           return [...head, objectCard(d)];
         });
         groups[`${c.icon} ${c.name} · ${here} of ${items.length} in the room`] = cards;
+      }
+      if (pics.length && (cat === 'all' || cat === 'paintings')) {            // what Guy has painted: hung on a wall, or waiting in the Catalogue (a thumbnail of each picture)
+        const sorted = pics.slice().sort((a, b) => a.t - b.t);
+        groups[`🖼️ Guy's paintings · ${paintings.hung().length} hung, ${paintings.stored().length} in the Catalogue`] = sorted.map((r) => {
+          const base = { icon: r.img ? `<img class="thumb" alt="" src="${esc(r.img)}">` : '🖼️', name: `Painting ${sorted.indexOf(r) + 1}`, status: r.room ? 'inroom' : 'available' };
+          if (r.room) {
+            const i = handlers.push(() => { paintings.takeDown(r.id); notify('Took the painting down. It is in the Catalogue.'); render(); }) - 1;
+            return card({ ...base, desc: `Hanging in ${paintings.roomName(r.room)}.`, label: 'Take down', action: i, danger: true });
+          }
+          const i = handlers.push(() => { notify(paintings.hangStored(r.id)); render(); }) - 1;
+          return card({ ...base, desc: 'Waiting in the Catalogue.', label: 'Hang it', action: i, note: 'Hangs on a free wall.' });
+        });
       }
       delete groups['In the room']; delete groups['Add to the room']; delete groups['Premium · coming soon'];
     } else if (tab === 'records') {
@@ -295,6 +309,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms }) {
   }
 
   if (rooms) rooms.onChange(() => { if (!root.hidden) render(); });
+  if (paintings) paintings.onChange(() => { if (!root.hidden) render(); });
   root.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => { tab = t.dataset.tab; render(); }));
   chipBar.addEventListener('click', (e) => { const b = e.target.closest('[data-cat]'); if (b) { cat = b.dataset.cat; render(); } });
   const close = () => { root.hidden = true; };

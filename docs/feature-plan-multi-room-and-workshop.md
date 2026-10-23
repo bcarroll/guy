@@ -683,7 +683,9 @@ Recorded from the owner's description. Nothing is built.
 
 **Testing.** To be written when planned: a second character needs its own sweep (its own activities, no interference with Guy's paths), the order-taking path, and the unprompted prompts.
 
-## 19. Future Idea: Guy Hangs His Paintings on Walls (not built yet)
+## 19. Guy Hangs His Paintings on Walls (built)
+
+**Built** as described below (`src/paintings.js`, `src/paintbrain.js`, `sweepPaintings`): the Hang painting menu item on the easel, Guy choosing the wall (his own room's two visible walls and the three walls of every added room), three per wall, the oldest replaced when every wall is full, stored paintings with thumbnails in the Catalogue, and saving (`guy.paintings.v1`, which also saves the picture on the easel). The easel painting is no longer in the "not saved" list.
 
 Guy leaves each painting on the easel when he finishes it, as now. If the user likes a painting, they can have Guy hang it on a wall.
 

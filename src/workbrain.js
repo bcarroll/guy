@@ -196,7 +196,7 @@ export function installWorkshop(Brain, POSES, H) {
       else if (this.carry === 'planks') w.addStock('wood', PLANKS_PER_RUN);
       else if (this.carry === 'parts') w.addStock('parts', PARTS_PER_PLANK);
       else if (this.carry === 'piece') w.addStock('parts', this.pieceParts || 0);          // the parts he had knocked together go back as parts
-      this.carry = null; this.pieceParts = 0;
+      if (this.carry !== 'canvas') this.carry = null; this.pieceParts = 0;
       if (this.assembling) { w.addStock('parts', this.assembling); this.assembling = 0; }   // parts left on the mallet block
 
       const sw = this.obj('saw');

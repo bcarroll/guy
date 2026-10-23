@@ -13,6 +13,7 @@ import { config as riffConfig } from './riffs.js';
 import { ALBUM_CATALOG } from './albums.js';
 import { initUpdateCheck } from './update.js';
 import { Restaurant } from './customers.js';
+import { Paintings } from './paintings.js';
 import { dev } from './devunlock.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -104,6 +105,8 @@ const skills = new Skills(params.get('skills'));
 const brain = new Brain(guy, world, (t) => (label.textContent = t), skills);
 // the Restaurant's customers (they only come once the room is added, stocked, and Guy has read "Restaurant Basics")
 world.restaurant = new Restaurant(world, { skillOk: () => skills.has('restaurant'), guyAt: () => guy.root.position });
+// Guy's paintings: hung on the walls of any room, the rest kept in the Catalogue (they are saved unless ?fresh)
+world.paintings = new Paintings(world, { persist: !params.has('fresh') });
 
 // ---- skills panel + "learned something" toast ----
 const panel = document.getElementById('skills');
@@ -166,8 +169,9 @@ const rooms = initRooms({
   },
 });
 world.rooms = rooms;
+rooms.onChange(() => world.paintings.sync());        // a room taken away: the paintings on its walls go to the Catalogue
 const machineUI = initMachine({
-  world, guy, persist: !params.has('fresh'), rooms,
+  world, guy, persist: !params.has('fresh'), rooms, paintings: world.paintings,
   notify: (msg) => { showToast(msg); renderSkills(); sfx('pop'); },
   remove: (id) => removeById(id),
 });
@@ -180,6 +184,7 @@ layout.restore();
 rooms.restore();
 machineUI.restoreExtras();         // the rooms are back, so what belongs to them (the Workshop's furniture) can be added now ...
 layout.restore();                  // ... and put where it was left
+world.paintings.restore();         // then Guy's paintings, on the walls of the rooms that are back
 layout.start();
 initUpdateCheck();
 // The build this page is running, in the top-left corner: the short commit id (the first seven characters of the id). Checking
@@ -532,6 +537,7 @@ function openMenu(hit, x, y) {
   const turnable = hit.decor && !hit.decor.wall && hit.decor.hx !== hit.decor.hz;   // a rectangular rug can be turned; wall pieces and round things cannot
   menu.querySelectorAll('[data-act^="rot"]').forEach((b) => (b.hidden = !!(hit.ball || (hit.decor && !turnable))));
   menu.querySelectorAll('[data-act="interact"]').forEach((b) => (b.hidden = !!hit.decor));
+  menu.querySelectorAll('[data-act="hang"]').forEach((b) => (b.hidden = !(hit.obj && hit.obj.name === 'easel' && world.paintings.easelHas())));      // a painting is on the easel
   menu.querySelectorAll('[data-act="remove"]').forEach((b) => (b.hidden = !!(hit.obj && hit.obj.removable === false)));
   // the first button says what the object is for
   const oname = hit.ball ? 'ball' : hit.obj && hit.obj.name;
@@ -575,6 +581,11 @@ menu.addEventListener('click', (e) => {
   if (act === 'interact') {
     const r = brain.interact(t.ball ? 'ball' : t.obj.name);
     showToast(r.message);
+    closeMenu();
+    return;
+  }
+  if (act === 'hang') {                                 // long-press the easel > Hang painting: Guy takes it down and decides where it goes
+    showToast(brain.hangPainting().message);
     closeMenu();
     return;
   }

@@ -7,6 +7,7 @@ import { randomSong, makeJam, plinkSong } from './songs.js';
 import { installHobbies } from './hobbybrain.js';
 import { installWorkshop } from './workbrain.js';
 import { installRestaurant, REST_OBJECTS, REST_JOBS } from './restbrain.js';
+import { installPaintings } from './paintbrain.js';
 
 const REST_ACTS = ['takepay', 'serve', 'takeorder', 'cook', 'rwait'];
 import { RECIPES, PLANKS_PER_RUN, STOCK_CAP } from './workshop.js';
@@ -542,6 +543,7 @@ export class Brain {
     this.initHobbies();
     this.initWork();
     this.initRest();
+    this.initPaint();
   }
 
   // ---- step builders ----
@@ -558,6 +560,7 @@ export class Brain {
       ...this.hobbyActivities(),
       ...this.workActivities(),
       ...this.restActivities(),
+      ...this.paintActivities(),
       wander: () => {
         const p = this.freeSpot();
         return ['wandering', this.walk(p.x, p.z), this.play('idle', rand(2, 4))];
@@ -1558,7 +1561,7 @@ export class Brain {
       const b = this.w.ball.position;
       if (this.w.obstacles.some((o) => o.active !== false && b.x > o.x0 - 0.5 && b.x < o.x1 + 0.5 && b.z > o.z0 - 0.5 && b.z < o.z1 + 0.5)) return false;
     }
-    if (act === 'putback' || act === 'dropball' || act === 'putguitar' || act === 'leave') return false;
+    if (act === 'putback' || act === 'dropball' || act === 'putguitar' || act === 'leave' || act === 'hangpaint' || act === 'putcanvas') return false;
     if (act === 'visit') return Object.keys(this.w.doors).length > 0 && this.inMain();
     // the Workshop: it has to be added, and the stock has to allow it
     if (['makewood', 'sawwood', 'tap', 'sand', 'tidytools', 'build'].includes(act)) {
@@ -1689,6 +1692,7 @@ export class Brain {
     this.workCleanup();                                      // cut short in the Workshop: what he carries goes back in the stock
     let name = force;
     if (!name && !this.inMain() && !this.lockedInside() && !this.restStays()) name = 'leave';             // he is in an added room: back through the door before anything else
+    if (!name && this.carry === 'canvas') name = 'putcanvas';                  // cut short with a painting in his hands: back to the easel with it
     if (!name && this.gtr.held && this.obj('guitar') && !this.guitarLocked()) name = 'putguitar'; // still holding the guitar: back on its stand (not while locked in on it)
     if (!name && this.lampOffByMe && this.obj('lamp') && !this.obj('lamp').on) name = 'lighton'; // he switched it off for the stars and never put it back
     if (!name && this.ballHeld) name = 'dropball'; // still holding the ball: put it down first
@@ -1865,6 +1869,7 @@ export class Brain {
     this.time += dt;
     this.w.updateDoors(dt);               // doors swing open and shut
     if (this.w.restaurant) this.w.restaurant.update(dt);      // customers arrive, order, eat and pay (customers.js)
+    if (this.w.paintings) this.w.paintings.update(dt);        // Guy's paintings: saved when they change, and put away ones filed in the Catalogue
     this.skills.tick(dt);                 // skills whose book was forgotten fade away
     this.autoAdvance();
     const g = this.g;
@@ -2487,5 +2492,6 @@ function angDiff(a, b) {
 installHobbies(Brain, POSES, { sitLegs, env, smooth, clamp, lerp, rand, pick, makeGrid, cellBlocked, INFLATE });
 installWorkshop(Brain, POSES, { smooth, clamp, lerp, rand, pick });
 installRestaurant(Brain, POSES, { smooth, clamp, lerp, rand, pick });
+installPaintings(Brain);
 
 export { ROOM, basePose, sitLegs, makeGrid, findPath, cellBlocked, MAIN_FRAME, INFLATE };
