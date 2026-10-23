@@ -8,6 +8,7 @@ import { Skills, SKILL_INFO } from './skills.js';
 import { sfx, drag as sfxDrag, setMuted, isMuted } from './sfx.js';
 import { initMachine } from './machine.js';
 import { initRooms } from './rooms.js';
+import { initLayout } from './layout.js';
 import { ALBUM_CATALOG } from './albums.js';
 import { initUpdateCheck } from './update.js';
 
@@ -140,8 +141,14 @@ const machineUI = initMachine({
   notify: (msg) => { showToast(msg); renderSkills(); sfx('pop'); },
   remove: (id) => removeById(id),
 });
-rooms.restore();            // before the extras, so the strip in front of a door is already clear for them
+// Where everything was last time: the catalogue's additions first, then every piece back in its place (and what the user took
+// out), then the door of any added room (anything standing in its way comes out), then start saving changes as they happen.
+const layout = initLayout({ world, guy, remove: (id) => removeById(id), persist: !params.has('fresh') });
+world.layout = layout;
 machineUI.restoreExtras();
+layout.restore();
+rooms.restore();
+layout.start();
 initUpdateCheck();
 if (params.get('records') === 'all' && world.objects.shelf) ALBUM_CATALOG.forEach((a) => { if (!world.objects.shelf.albums.some((r) => r.def.id === a.id)) world.objects.shelf.addAlbum(a); }); // testing aid
 renderSkills();

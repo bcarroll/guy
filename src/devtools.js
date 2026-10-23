@@ -9,6 +9,7 @@
 import { OBJECT_CATALOG } from './machine.js';
 import { BOOK_CATALOG, SKILL_INFO } from './skills.js';
 import { ROOM_CATALOG } from './rooms.js';
+import { initLayout } from './layout.js';
 import { ALBUM_CATALOG } from './albums.js';
 import { TRACKS, trackSeconds } from './audio.js';
 import { POSES } from './brain.js';
@@ -1220,6 +1221,133 @@ T.sweepSaves = () => {
   return out;
 };
 
+// ---- 11. Layout: where everything is (and what was taken out) is remembered between visits (src/layout.js) ----------------------
+const roomDrop = (id) => { if (id === 'ball') { W().removeBall(); B().ballRemoved(); } else { W().removeObject(id); B().objectRemoved(id); } };
+const near = (a, b) => Math.abs(a - b) < 0.011;
+T.sweepLayout = () => {
+  const out = [], base = errors.length, w = W(), L = () => w.layout;
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  T.resetRooms(); T.removeAll(); T.settle(); T.home();
+  for (const id of ['armchair', 'plant', 'lamp', 'bench', 'telescope', 'piano', 'table', 'rug', 'picture', 'ball']) T.addObject(id);
+  const moveTo = (name, pref) => { const o = w.objects[name], s = w.findSpot(o, pref, null); if (s) o.set(s.x, s.z); return !!s; };
+  // 1. a snapshot is stable, and survives being written out as JSON and read back
+  const s0 = JSON.stringify(L().snapshot());
+  out.push(result('layout: a snapshot of an unchanged room is the same every time', s0 === JSON.stringify(L().snapshot()) && s0 === JSON.stringify(JSON.parse(s0))));
+  // 2. move, turn and remove things the way the user and Guy do
+  moveTo('armchair', { x: -3.2, z: 0.5 }); w.objects.armchair.rotate(1);
+  moveTo('plant', { x: 2, z: 1.5 }); moveTo('lamp', { x: -4.2, z: -1 });
+  w.objects.telescope.setAim(0.7, 0.3);
+  const pic = w.decor.picture, rug = w.decor.rug;
+  for (let u = -3.5; u <= 3.5; u += 0.5) { if (Math.abs(u - pic.u) > 1 && w.decorFits(pic, u, 2.0)) { pic.set(u, 2.0); break; } }
+  rug.set(-1.5, 1.0);
+  w.ball.position.set(-2.2, 0.18, 2.4);
+  roomDrop('bench');
+  const s1 = clone(L().snapshot());
+  // 3. a new visit: the pieces start in their default places, then the saved layout is put back
+  moveTo('armchair', { x: 3, z: 2 }); w.objects.armchair.rotate(1); moveTo('plant', { x: -3, z: -1 }); moveTo('lamp', { x: 3.5, z: -1 });
+  w.objects.telescope.setAim(-1.2, 0.8); rug.set(1, -1); w.restoreObject('bench', { x: G().pos.x, z: G().pos.z });
+  const did = L().apply(clone(s1));
+  const nowSnap = L().snapshot();
+  const keyDiff = []; for (const n of Object.keys(s1.objects)) { const a = s1.objects[n], b = nowSnap.objects[n]; if (!b || !near(a.x, b.x) || !near(a.z, b.z) || a.rot !== b.rot) keyDiff.push(n); }
+  out.push(result('layout: restoring puts every piece back at its saved spot and turn', did.applied && !keyDiff.length && JSON.stringify(Object.keys(nowSnap.objects).sort()) === JSON.stringify(Object.keys(s1.objects).sort()), { keyDiff, replaced: did.replaced }));
+  out.push(result('layout: restoring is exact: a snapshot taken straight after equals the one restored', JSON.stringify(nowSnap) === JSON.stringify(s1)));
+  const arm = w.objects.armchair;
+  out.push(result('layout: a turned piece faces the saved way at once (no spinning round on the first frame)', near(arm.group.rotation.y, arm.yaw) && arm.rot === s1.objects.armchair.rot));
+  out.push(result('layout: the telescope keeps its aim', near(w.objects.telescope.aim.yaw, s1.objects.telescope.aim.yaw) && near(w.objects.telescope.aim.pitch, s1.objects.telescope.aim.pitch)));
+  out.push(result('layout: wall pieces and the rug keep their places', near(w.decor.picture.u, s1.decor.picture.u) && near(w.decor.picture.v, s1.decor.picture.v) && near(w.decor.rug.u, s1.decor.rug.u) && near(w.decor.rug.v, s1.decor.rug.v)));
+  out.push(result('layout: what the user took out stays out (and can be put back from the Catalogue)', !w.objects.bench && !!w.removed.bench && did.removed.includes('bench')));
+  out.push(result('layout: the ball is where it was left', near(w.ball.position.x, -2.2) && near(w.ball.position.z, 2.4) && !w.ballGone));
+  // 4. the ball can be gone too
+  L().apply({ ...clone(s1), ball: null });
+  out.push(result('layout: a ball the user took out stays out', w.ballGone === true));
+  T.addObject('ball');
+  // 5. a damaged save: a piece saved on top of the piano or outside the room is moved to a free spot, junk is ignored
+  const bad = clone(s1);
+  bad.objects.plant = { x: w.objects.piano.x, z: w.objects.piano.z, rot: 0 };
+  bad.objects.lamp = { x: 99, z: -99, rot: 0 };
+  bad.decor.picture = { u: 50, v: 9, rot: 0 };
+  const dBad = L().apply(bad);
+  out.push(result('layout: pieces saved where they cannot be are moved to a free spot', Object.values(w.objects).every((o) => w.fits(o, o.x, o.z)) && Object.values(w.decor).every((d) => w.decorFits(d, d.u, d.v)) && dBad.replaced.includes('plant') && dBad.replaced.includes('lamp'), { replaced: dBad.replaced }));
+  const before = JSON.stringify(L().snapshot());
+  let threw = null;
+  try { for (const j of [null, undefined, {}, [], 'x', { v: 2, objects: {} }, { v: 1, objects: { plant: { x: 'a', z: NaN } }, decor: { picture: { u: null } }, out: [5, null], ball: 'x' }]) L().apply(j); } catch (e) { threw = String(e); }
+  out.push(result('layout: nothing, junk or a newer format changes nothing and does not throw', !threw && before === JSON.stringify(L().snapshot()), { threw }));
+  out.push(result('layout: with saving off (?fresh) restore does nothing', L().restore().applied === false));
+  // 6. through real storage: a second copy of the module writes only when something changed, and a visit reads it back
+  const L2 = initLayout({ world: w, guy: G(), remove: roomDrop, persist: true, key: 'guy.layout.test' });
+  try {
+    const first = L2.save(), again = L2.save();
+    moveTo('plant', { x: 2.5, z: 2.5 });
+    const changed = L2.save();
+    const savedPlant = [w.objects.plant.x, w.objects.plant.z];
+    moveTo('plant', { x: -3, z: -2 });
+    const back = L2.restore();
+    out.push(result('layout: saving writes once, skips an unchanged room, writes again after a change; restoring reads it back', first && !again && changed && back.applied && near(w.objects.plant.x, savedPlant[0]) && near(w.objects.plant.z, savedPlant[1]), { first, again, changed }));
+  } finally { try { localStorage.removeItem('guy.layout.test'); } catch { /* no storage */ } }
+  // 7. with a door: the door goes back last, and a piece saved in its way comes out
+  const free = clone(L().snapshot());
+  const dr = R().add('workshop', { at: { wall: 'right', u: 2.6 } });
+  const rs = clone(R().snapshot()), ls = clone(L().snapshot());
+  R().reset('workshop'); L().apply(clone(free));
+  const legacy = clone(free); legacy.objects.plant = { x: 4.5, z: 2.6, rot: 0 };          // an older save with a piece standing where the door goes
+  L().apply(legacy);
+  const rr = R().restoreFrom(rs);
+  out.push(result('layout: the saved door goes back last and clears the way', dr.ok && rr.length === 1 && rr[0].ok && !doorProblems('workshop').length && !!w.removed.plant, { rr, problems: doorProblems('workshop') }));
+  R().reset('workshop'); L().apply(clone(ls));
+  // 8. Guy stands on a free spot even if the saved layout has furniture where he starts
+  G().root.position.set(w.objects.armchair.x, 0, w.objects.armchair.z);
+  const moved = L().unstickGuy();
+  const gp = G().pos;
+  out.push(result('layout: Guy never starts inside furniture', moved && !w.obstacles.some((o) => gp.x > o.x0 - 0.4 && gp.x < o.x1 + 0.4 && gp.z > o.z0 - 0.4 && gp.z < o.z1 + 0.4)));
+  T.home(); T.resetRooms(); machine().hidden = true;
+  out.push(result('layout: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
+// ---- 12. Automatic refresh when a newer build is deployed (src/update.js) ----------------------------------------------------------
+T.sweepUpdate = () => {
+  const out = [], base = errors.length, U = window.__guyUpdate;
+  if (!U) return [result('update: the QA hook exists', false)];
+  const oldReload = U.reloadFn, oldSave = window.__guySave;
+  let reloads = 0, saves = 0;
+  U.reloadFn = () => { reloads++; }; window.__guySave = () => { saves++; };
+  const bar = () => document.getElementById('update-bar');
+  const showing = () => !!bar() && !bar().hidden;
+  try {
+    U.reset();
+    out.push(result('update: the same build id is not an update (no bar, no refresh)', U.apply(U.buildId, 'poll') === false && !showing() && !U.pending() && !reloads));
+    // found while the tab is open: a friendly bar, a countdown, then the refresh, with the layout saved first
+    const stale = U.apply('newer-1', 'poll');
+    out.push(result('update: a newer build found while the tab is open shows a "Refreshing…" bar and waits', stale && showing() && /Refreshing/.test(bar().textContent) && U.pending() && reloads === 0));
+    const bh = [...bar().querySelectorAll('button')].map((b) => b.getBoundingClientRect().height);
+    out.push(result('update: the bar has Refresh and Later buttons, 44 px high', bh.length === 2 && bh.every((h) => h >= 44), { bh }));
+    U.flush();
+    out.push(result('update: when the countdown ends it saves the layout, then refreshes once', reloads === 1 && saves === 1 && !U.pending()));
+    // "Later" puts it off, and it stays off
+    U.reset(); reloads = 0;
+    U.apply('newer-2', 'poll');
+    bar().querySelector('.later').click();
+    U.flush();
+    const again = U.apply('newer-2', 'poll');
+    out.push(result('update: Later cancels the refresh and keeps the bar away', again && reloads === 0 && !showing() && !U.pending()));
+    // the tab coming back into view refreshes at once, with no bar
+    U.reset(); reloads = 0; saves = 0;
+    U.apply('newer-3', 'visible');
+    out.push(result('update: a tab coming back into view refreshes at once, saving first, with no bar', reloads === 1 && saves === 1 && !showing()));
+    // a refresh that does not bring the new build must not loop
+    U.apply('newer-3', 'visible');
+    out.push(result('update: the same build is not refreshed for twice in a row; the bar offers a manual Refresh instead', reloads === 1 && showing() && !/Refreshing/.test(bar().textContent)));
+    bar().querySelector('.go').click();
+    out.push(result('update: the manual Refresh button refreshes', reloads === 2));
+    U.apply('newer-4', 'visible');
+    out.push(result('update: a build newer still is refreshed for', reloads === 3));
+  } finally {
+    U.reloadFn = oldReload; window.__guySave = oldSave; U.reset();
+  }
+  out.push(result('update: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 T.runAll = () => {
   const report = { coverage: T.coverage() };
   report.objects = summarise(T.sweepObjects());
@@ -1243,6 +1371,8 @@ T.runAll = () => {
   report.doors = summarise(T.sweepDoors());
   report.gating = summarise(T.sweepGating());
   report.saves = summarise(T.sweepSaves());
+  report.layout = summarise(T.sweepLayout());
+  report.update = summarise(T.sweepUpdate());
   report.errorsLogged = errors.length;
   return report;
 };

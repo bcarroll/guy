@@ -9,4 +9,4 @@ wandering, playing the piano, dancing to the boombox, kicking a ball, toggling t
 Controls: drag = orbit, scroll = zoom, F = follow cam, Space = skip to next activity.
 Debug URLs: `?act=piano|dance|ball|lamp|books|stretch|wave`, `?follow`, `?nostart`. In the console `sim(seconds)` fast-forwards.
 
-Code map: `src/room.js` (furniture, doors), `src/rooms.js` (extra rooms added from the Catalogue's Rooms tab), `src/guy.js` (FBX + skeleton driver), `src/brain.js` (poses, activities, A* pathing), `src/audio.js` (synth).
+Code map: `src/room.js` (furniture, doors), `src/rooms.js` (extra rooms added from the Catalogue's Rooms tab), `src/layout.js` (remembers where everything is between visits), `src/update.js` (refreshes the page when a newer build is deployed), `src/guy.js` (FBX + skeleton driver), `src/brain.js` (poses, activities, A* pathing), `src/audio.js` (synth).

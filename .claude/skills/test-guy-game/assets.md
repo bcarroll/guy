@@ -169,9 +169,15 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 - Entries with `room: '<id>'` are not listed (not even as locked) until that room is added and unlocked.
 - Test aids: `T.resetRooms()`, `R().add(id, { at, walls })`, `R().setUnlocked(id, bool)`, `R().snapshot()` / `R().restoreFrom()` (`R()` is `window.brain.w.rooms`).
 
+## Saved layout and automatic updates (`src/layout.js`, `src/update.js`)
+
+- **Layout** (`guy.layout.v1`): every piece of furniture (x, z, quarter turns), every wall piece and the rug (u, v, turns), the telescope's aim, the ball (x, z, or gone), and the list of pieces taken out (by the user, or to make way for a door). Written about 3 s after anything changes (Guy pushes things too), when the tab is hidden and just before an update refresh. Restoring sets every piece straight to its saved spot, then moves any piece that does not fit (corrupt save, a door now in the way) to the nearest free place, and stands Guy on a free spot if furniture is where he starts. `?fresh` neither reads nor writes it. Order on a visit: catalogue extras, layout, the door of any added room (anything in its way comes out), start saving.
+- **Not saved:** the easel painting, the lamp (on/off, colour), which record is on the stereo's table, Guy's own position and what he is doing.
+- **Update refresh:** when the live `version.json` id differs from the running build: a tab coming back into view refreshes at once (no bar); a watched tab shows "Refreshing…" for 4 s with **Refresh** / **Later**; the layout is written first (`window.__guySave`); the same build is never refreshed for twice within 2 minutes (the bar then offers a manual Refresh, so a stale cache cannot cause a loop). Test hooks: `__guyUpdate.apply(id, source)`, `.flush()`, `.reset()`, `.reloadFn`.
+
 ## Regression watch (bugs found and fixed; make sure they stay fixed)
 
-- Intermittent, cause not found yet: `sweepBookRules` "speed reading: without it he sits in a chair to read" failed once in the first full `runAll()` after the Rooms and doors work and passed on the next 5 runs. No door is in the room during that sweep, so it is probably an older layout-dependent flake. If it comes back, check which chairs were reachable.
+- Intermittent, older than the Rooms work (cause not found yet): reading-related sweeps fail now and then on a random layout: `sweepBookRules` ("speed reading: ... sits in a chair"), `sweepSounds` ("reading makes a sit sound"), `sweepMoves` ("moved while in use: read"), and `sweepActivities` `read` (arm inside the easel while walking past, 8 samples). Measured on 12 loops of objects, activities, moves, bookRules and sounds: the checkout before the Rooms work failed bookRules 1 and sounds 1; the checkout with rooms, doors, layout and update failed activities 3 and bookRules 1. Too few runs to say the second is worse. If it comes back, note the layout (`T.state()`, `Object.keys(brain.w.objects)`) and which chairs were reachable.
 
 - Removing an object mid-interaction used to throw every frame and freeze rendering: `sweepRemovals` and `brain.safeUpdate`.
 - Negative beat index right after a track starts crashed the guitar/piano jam ("reading 'bass'"): `sweepTracks`.

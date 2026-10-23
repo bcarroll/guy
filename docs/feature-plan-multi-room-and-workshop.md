@@ -15,6 +15,8 @@
 - The saved door is placed again at the start of a visit, before the Catalogue's extras. Core wall pieces the user removed come back on a new visit (existing behaviour), so anything in the door's way is taken out again.
 - Sweeps added: `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves` (in `runAll`). `sweepMachine` now counts only listed objects.
 
+**Also built:** saving every object's position, turn and removed state (`src/layout.js`, `guy.layout.v1`, `sweepLayout`) and an automatic refresh when a newer build is deployed (`src/update.js`, `sweepUpdate`). This changes the plan's section 9A: built copies, when they exist, must be part of the layout snapshot (one entry per copy), and the saved layout restores before the Catalogue's extras are counted. The easel painting, the lamp and Guy's own position are not saved yet.
+
 ---
 
 ## 1. Summary

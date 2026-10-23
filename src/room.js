@@ -1063,7 +1063,7 @@ export function buildRoom(scene) {
     removed: {},                  // objects (and decor) the user took out, kept so they can be put back
     decor, decorFits,
     // ---- doors and the rooms behind them (see src/rooms.js) ----
-    doors, DOOR, planDoor, doorBlockers,
+    doors, DOOR, planDoor, doorBlockers, findWallSpot,
     // Put a door for room `def` at (wall, u). The caller has already cleared whatever was in its way.
     addDoor(def, wall, u) {
       if (doors[def.id]) return doors[def.id];
