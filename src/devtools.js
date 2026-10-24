@@ -50,9 +50,13 @@ export const MANIFEST = {
     // the Restaurant (another added room): the kitchen and the dining room
     stove: { room: 'restaurant', skills: ['restaurant'] }, kitchencounter: { room: 'restaurant', skills: ['restaurant'] }, register: { room: 'restaurant', skills: ['restaurant'] },
     diningtable: { room: 'restaurant', skills: ['restaurant'] }, diningtable2: { room: 'restaurant', skills: ['restaurant'] },
+    // the Backyard (another added room, outdoors). The shed and the mower are premium: the harness adds them with the dev unlock
+    soccergoal: { room: 'backyard', skills: ['outdoor.soccer'] }, basketballhoop: { room: 'backyard', skills: ['outdoor.basketball'] },
+    lawnchair: { room: 'backyard', skills: ['outdoor'] }, birdbath: { room: 'backyard', skills: ['outdoor'] }, skyswitch: { room: 'backyard', skills: ['outdoor'] },
+    shed: { room: 'backyard', skills: ['outdoor'], premium: true }, mower: { room: 'backyard', skills: ['outdoor'], premium: true },
   },
   // rooms the user can add from the Catalog's Rooms tab (tested by sweepRooms / sweepDoors / sweepGating / sweepSaves)
-  rooms: { workshop: {}, restaurant: {} },
+  rooms: { workshop: {}, restaurant: {}, backyard: {} },
   // activities: objects that must be in the room, skills needed, `music` = needs the stereo already playing,
   // touches = objects Guy's arms may legitimately be inside the bounding box of (hands on keys, pushing, ...)
   activities: {
@@ -104,6 +108,16 @@ export const MANIFEST = {
     stargaze: { objects: ['telescope'], skills: ['telescope'], touches: ['telescope'] },
     darkstargaze: { objects: ['telescope', 'lamp'], skills: ['telescope.dark'], touches: ['telescope', 'lamp'] },
     scopecare: { objects: ['telescope'], skills: ['telescope.care'], touches: ['telescope'] },
+    // the Backyard (outdoors). The ball sports need the outdoor skill books; the shed and mower are premium
+    yardsit: { objects: ['lawnchair'], room: 'backyard', touches: ['lawnchair'] },
+    birdbath: { objects: ['birdbath'], room: 'backyard', touches: ['birdbath'] },
+    skyswitch: { objects: ['skyswitch'], room: 'backyard', touches: ['skyswitch'] },
+    mow: { objects: ['shed', 'mower'], room: 'backyard', max: 240, touches: ['shed', 'mower'] },
+    yardpoke: { objects: ['soccergoal'], skills: ['outdoor.soccer'], room: 'backyard', touches: ['soccergoal', 'basketballhoop'] },
+    goalshot: { objects: ['soccergoal'], skills: ['outdoor.soccer'], room: 'backyard', max: 200, touches: ['soccergoal'] },
+    soccertoss: { objects: ['soccergoal'], skills: ['outdoor.soccer'], room: 'backyard', max: 200, touches: ['soccergoal'] },
+    hoopshoot: { objects: ['basketballhoop'], skills: ['outdoor.basketball'], room: 'backyard', max: 200, touches: ['basketballhoop'] },
+    hoopdribble: { objects: ['basketballhoop'], skills: ['outdoor.basketball'], room: 'backyard', max: 200, touches: ['basketballhoop'] },
     // internal recovery activities and aliases: exercised through the interruption sweep, not on their own
     books: { alias: true }, putback: { internal: true }, putguitar: { internal: true }, dropball: { internal: true }, lighton: { internal: true },
     hangpaint: { objects: ['easel'], painted: true, max: 220, touches: ['easel'] }, putcanvas: { internal: true },      // hanging a painting (sweepPaintings tests it in depth)
@@ -119,6 +133,7 @@ export const MANIFEST = {
     painting: { then: 'paint' }, colour: { then: 'mixpaint' }, portrait: { then: 'portrait' },
     stars: { then: 'stargaze' }, darksky: { then: 'darkstargaze' }, scopecare: { then: 'scopecare' },
     decorating: { then: 'dust' },
+    outdoor: { then: 'yardsit' }, soccer: { then: 'goalshot' }, basketball: { then: 'hoopshoot' },
     workshop: { then: 'build' }, woodmetal: { then: 'build' }, furniture: { then: 'build' }, metalfab: { then: 'build' }, restaurant: { then: 'takeorder' },
   },
   // records and tracks that must exist
@@ -147,6 +162,9 @@ export const MANIFEST = {
     { id: 'scope-peer', activity: 'stargaze', pose: 'scopePeer', t: 6, view: 'side', expect: 'eye at the eyepiece (rear end), knees bent, left hand on the focus knob, right hand on the barrel' },
     { id: 'scope-aim', activity: 'stargaze', pose: 'scopeAim', t: 2.2, view: 'top', expect: 'one hand on top of the barrel while the tube swings round' },
     { id: 'scope-wrong', activity: 'peek', pose: 'scopeWrong', t: 2.8, view: 'side', expect: 'eye at the big lens end, hand on the barrel, other hand on his knee' },
+    { id: 'yard-shoot', activity: 'hoopshoot', pose: 'shoot', t: 0.9, view: 'side', expect: 'knees dipped then extended, both hands up at the release with the basketball just leaving them, facing the hoop' },
+    { id: 'yard-sit', activity: 'yardsit', pose: 'sitRest', t: 6, view: 'side', expect: 'seated in the lawn chair, back against it, legs clear of the frame' },
+    { id: 'yard-mow', activity: 'mow', pose: 'walk', t: 1, view: 'side', push: true, expect: 'both hands on the mower handle, walking behind it, stripes cut in the grass' },
     { id: 'scope-care', activity: 'scopecare', pose: 'scopeCare', t: 13, view: 'front', expect: 'squatting beside the tripod with a hand on one leg' },
     { id: 'stool-dust', activity: 'dusttop', pose: 'reach', t: 4, view: 'front', dist: 3.6, expect: 'standing ON the foot stool (feet on top of it, not in the floor), right hand wiping along the top of the window frame, the stool not passing through him' },
     { id: 'dust-frame', activity: 'dust', pose: 'reach', t: 2.5, view: 'front', expect: 'facing the wall, right hand wiping along the lower edge of a frame (not inside the wall or his own head)' },
@@ -277,13 +295,17 @@ const unlockRoom = (id) => { if (!W().rooms.isUnlocked(id)) W().rooms.setUnlocke
 T.addObject = (id) => { // through the Catalog, like a user would
   const def = OBJECT_CATALOG.find((d) => d.id === id);
   if (isPresent(id)) return true;
-  if (def.locked) return false;
+  const premium = def.locked && (MANIFEST.objects[id] || {}).premium;       // a premium thing: the harness uses the dev unlock, like the premium records
+  if (def.locked && !premium) return false;
   if (def.room && !W().rooms.isAdded(def.room)) { unlockRoom(def.room); W().rooms.add(def.room); }          // the Catalog lists a room's things only once the room is added
   if (def.built && !((W().stock.items[id] || 0) > 0)) W().stock.items[id] = 1;      // something Guy built: make sure there is one in storage to add
   if (def.needsSkill && !skillsOf().has(def.needsSkill)) skillsOf().learn(def.needsSkill);        // listed only once Guy (or GAL) has the book's skill
   const also = MANIFEST.objects[id] && MANIFEST.objects[id].alsoRoom;
   if (also && !W().rooms.isAdded(also)) { unlockRoom(also); W().rooms.add(also); }
-  return machineClick('objects', def.name) && isPresent(id);
+  const was = dev.all; if (premium) dev.all = true;
+  const ok = machineClick('objects', def.name) && isPresent(id);
+  dev.all = was;
+  return ok;
 };
 T.addBook = (id) => {
   const def = BOOK_CATALOG.find((b) => b.id === id);
@@ -305,7 +327,8 @@ T.forget = () => skillsOf().known.clear();
 T.prep = (name) => {
   const m = MANIFEST.activities[name] || {};
   const done = [];
-  if (m.room && !R().isAdded(m.room)) { unlockRoom(m.room); R().add(m.room); }                           // the room the activity happens in
+  if (m.room && !R().isAdded(m.room)) { unlockRoom(m.room); R().add(m.room); }
+  if (m.room === 'backyard' && W().yard) W().yard.snapNight(false);                                          // always the same daylight for the pictures                           // the room the activity happens in
   for (const id of m.objects || []) if (T.addObject(id)) done.push(id);
   T.learn(m.skills || []);
   if (m.recipe) {                                                                                    // what to build (the house's real needs are tested by sweepNeeds)
@@ -1178,7 +1201,7 @@ T.sweepRooms = () => {
   let m = openTab('rooms');
   const titles = () => [...m.querySelectorAll('.card .title')].map((e) => e.textContent);
   const btn = machineCard('Workshop') && machineCard('Workshop').querySelector('.act');
-  out.push(result('rooms: the Rooms tab offers the Workshop and the Restaurant ("Add to my home") and not the main room', titles().join() === ROOM_CATALOG.map((x) => x.name).join() && !!btn && btn.textContent === 'Add to my home', { titles: titles() }));
+  out.push(result('rooms: the Rooms tab offers the Workshop, the Backyard and the Restaurant ("Add to my home") and not the main room', [...titles()].sort().join() === ROOM_CATALOG.map((x) => x.name).sort().join() && !!btn && btn.textContent === 'Add to my home', { titles: titles() }));
   if (btn) btn.click();
   step(1);
   const door = w.doors.workshop;
@@ -1395,6 +1418,16 @@ T.sweepLayout = () => {
   const rr = R().restoreFrom(rs);
   out.push(result('layout: the saved door goes back last and clears the way', dr.ok && rr.length === 1 && rr[0].ok && !doorProblems('workshop').length && !!w.removed.plant, { rr, problems: doorProblems('workshop') }));
   R().reset('workshop'); L().apply(clone(ls));
+  // 7b. the Backyard's day or night is saved and comes back
+  { const wasYard = !!R().isAdded('backyard'); if (!wasYard) { unlockRoom('backyard'); R().add('backyard'); }
+    const y = w.yard; y.snapNight(true);
+    const night = clone(L().snapshot());
+    y.snapNight(false); L().apply(clone(night));
+    const sk = y.isNight();
+    y.snapNight(false);
+    const day = clone(L().snapshot()); y.snapNight(true); L().apply(clone(day));
+    out.push(result('layout: the backyard remembers night and day', night.sky === true && sk === true && day.sky === false && y.isNight() === false, { sk }));
+    y.snapNight(false); if (!wasYard) R().reset('backyard'); }
   // 8. Guy stands on a free spot even if the saved layout has furniture where he starts
   G().root.position.set(w.objects.armchair.x, 0, w.objects.armchair.z);
   const moved = L().unstickGuy();

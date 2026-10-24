@@ -7,6 +7,7 @@ import { TIMING_SKILLS } from './skills.js';
 import { randomSong, makeJam, plinkSong } from './songs.js';
 import { installHobbies } from './hobbybrain.js';
 import { installWorkshop } from './workbrain.js';
+import { installYard, YARD_ACTS } from './yardbrain.js';
 import { installRestaurant, REST_OBJECTS, REST_JOBS } from './restbrain.js';
 import { installApproach } from './approach.js';
 import { installPaintings } from './paintbrain.js';
@@ -481,6 +482,18 @@ export const POSES = {
   dribble(g, t, dur, ctx) { ballHands(g, ctx, 1); },
   toss(g, t, dur, ctx) { ballHands(g, ctx, 1); },
   putdown(g, t, dur, ctx) { ballHands(g, ctx, 1); },
+  // a set shot: knees bend with the ball at the chest, then he rises, lifts it over his head and lets it go; the hands follow through (computeBall)
+  shoot(g, t, dur, ctx) {
+    ballHands(g, ctx, 1);
+    const dip = smooth(clamp((t - 0.35) / 0.55, 0, 1)) * (1 - smooth(clamp((t - 0.95) / 0.2, 0, 1)));
+    for (const side of ['Left', 'Right']) {
+      g.set(`${side}UpLeg`, Q('x', -0.55 * dip));
+      g.set(`${side}Leg`, Q('x', 0.95 * dip));
+      g.set(`${side}Foot`, Q('x', -0.4 * dip));
+    }
+    g.hipsOffset.y = -0.16 * dip + 0.04 * Math.sin(clamp((t - 1.0) / 0.4, 0, 1) * Math.PI);
+    g.set('Spine1', Q('x', 0.05 * dip - 0.06 * smooth(clamp((t - 1.0) / 0.3, 0, 1))));
+  },
 
   // Playing piano while dancing along to the stereo: hands keep playing, body grooves on the beat.
   pianoGroove(g, t, dur, ctx) {
@@ -570,6 +583,7 @@ export class Brain {
     return {
       ...this.hobbyActivities(),
       ...this.workActivities(),
+      ...this.yardActivities(),
       ...this.restActivities(),
       ...(this.galActivities ? this.galActivities() : {}),       // working with GAL (gal.js)
       ...this.paintActivities(),
@@ -770,7 +784,7 @@ export class Brain {
       putguitar: () => ['putting the guitar back', this.walkAt(this.gname, 0, 0.62, Math.PI),
         this.play('putGuitar', 2.4, { guitar: true, at: [1.3, () => this.setGuitarHeld(false)] })],
       // he was interrupted while holding the ball: put it down
-      dropball: () => ['putting the ball down', this.play('putdown', 2.0, { ball: true, at: [1.0, () => this.releaseBall()] })],
+      dropball: () => ['putting the ball down', this.play('putdown', 2.0, { ball: true, ballKind: this.heldKind && this.heldKind !== 'main' && this.inYard() ? this.heldKind : 'main', at: [1.0, () => this.releaseBall()] })],
     };
   }
 
@@ -968,8 +982,12 @@ export class Brain {
   // Where the ball is while Guy handles it, and where his hands go: hands on either side, a hand on top, ...
   computeBall(s) {
     this.ballPos = null;
+    this.ballTarget = null;
     if (s.type !== 'play' || !s.fx.ball) return null;
-    const root = this.g.root, ball = this.w.ball, t = s.t, pose = s.pose;
+    const kind = s.fx.ballKind || 'main';
+    const root = this.g.root, ball = kind === 'main' ? this.w.ball : this.w.yard.balls[kind], t = s.t, pose = s.pose;
+    if (!ball) return null;                                // (a yard ball goes with its goal or hoop)
+    this.ballTarget = ball;
     const sm = (x) => smooth(clamp(x, 0, 1));
     const P = (x, y, z) => root.localToWorld(new THREE.Vector3(x, y, z));
     const chest = () => P(0, 1.0, 0.34);
@@ -1025,6 +1043,16 @@ export class Brain {
       }
       st.look = -clamp((root.worldToLocal(c.clone()).y - 1.3) / 1.2, 0, 1) * 0.55; // eyes follow it up
       this.ballPos = c;
+    } else if (pose === 'shoot') {
+      const up = P(0, 1.95, 0.3), sh = (x) => sm(x);
+      if (t < 0.45) { const c = chest(); st = two(c); this.ballPos = c; }
+      else if (t < 1.05) {                                  // up from the chest to over the head while the knees straighten
+        const k = sh((t - 0.45) / 0.6), c = new THREE.Vector3().lerpVectors(chest(), up, k);
+        st = two(c); st.look = -0.55 * k; this.ballPos = c;
+      } else {                                              // let go: the hands follow through towards the rim and relax
+        const k = sh((t - 1.05) / 0.9), w = 1 - sh((t - 1.35) / 0.9);
+        st = { R: P(0.06, 2.1 + 0.05 * k, 0.45), wR: w, L: P(-0.06, 2.08, 0.42), wL: w, look: -0.55 * (1 - sh((t - 1.6) / 0.8)) };
+      }
     } else if (pose === 'putdown') {
       const F = P(0, 0.18, 0.52);
       const c = new THREE.Vector3().lerpVectors(chest(), F, sm(t / 0.9));
@@ -1294,7 +1322,7 @@ export class Brain {
   }
 
   // ---- Chairs: any armchair or chair in the room can be sat on ----
-  chairs() { return Object.values(this.w.objects).filter((o) => o.sit); }
+  chairs() { return Object.values(this.w.objects).filter((o) => o.sit && !o.yard); }       // (the lawn chair is for the yard activity, not for 'sit')
 
   // The chairs he can walk up to right now: the spot in front of the seat is inside the room and not blocked.
   openChairs() {
@@ -1624,13 +1652,14 @@ export class Brain {
       stargaze: ['telescope'], darkstargaze: ['telescope.dark'], scopecare: ['telescope.care'], dust: ['decorate'], dusttop: ['decorate'],
       tidytools: ['workshop'],
       takeorder: ['restaurant'], cook: ['restaurant'], serve: ['restaurant'], takepay: ['restaurant'], rwait: ['restaurant'],
+      goalshot: ['outdoor.soccer'], soccertoss: ['outdoor.soccer'], hoopshoot: ['outdoor.basketball'], hoopdribble: ['outdoor.basketball'],
     }[act] || [];
   }
 
   available(act) {
     // shut in a room by a locked door: only what can be done in that room
     const shut = this.stuckIn();
-    if (shut) return shut === 'workshop' ? WORK_ACTS.includes(act) && this.availableIn(act) : shut === 'restaurant' ? (REST_JOBS.includes(act) || act === 'rwait') && this.availableIn(act) : false;
+    if (shut) return shut === 'workshop' ? WORK_ACTS.includes(act) && this.availableIn(act) : shut === 'backyard' ? YARD_ACTS.includes(act) && this.availableIn(act) : shut === 'restaurant' ? (REST_JOBS.includes(act) || act === 'rwait') && this.availableIn(act) : false;
     return this.availableIn(act);
   }
   availableIn(act) {
@@ -1644,6 +1673,8 @@ export class Brain {
       scribble: ['easel'], paint: ['easel'], mixpaint: ['easel'], portrait: ['easel'],
       peek: ['telescope'], stargaze: ['telescope'], darkstargaze: ['telescope'], scopecare: ['telescope'], lighton: ['lamp'],
       tidytools: ['toolbox'],
+      yardsit: ['lawnchair'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], mow: ['mower', 'shed'],
+      goalshot: ['soccergoal'], soccertoss: ['soccergoal'], hoopshoot: ['basketballhoop'], hoopdribble: ['basketballhoop'],
     }[act] || [];
     const skill = this.skillNeeds(act);
     // with the music already on he doesn't need to know how to work the stereo to join in
@@ -1672,6 +1703,12 @@ export class Brain {
       const b = this.w.ball.position;
       if (this.w.obstacles.some((o) => o.active !== false && b.x > o.x0 - 0.5 && b.x < o.x1 + 0.5 && b.z > o.z0 - 0.5 && b.z < o.z1 + 0.5)) return false;
     }
+    if (YARD_ACTS.includes(act)) {                                  // the Backyard: it has to be added and its door not locked; the balls are there with their goal and hoop
+      if (!this.yardOpen()) return false;
+      if (act === 'yardpoke') return this.pokeKinds().length > 0;
+      if (['goalshot', 'soccertoss'].includes(act) && !this.yardBall('soccer')) return false;
+      if (['hoopshoot', 'hoopdribble'].includes(act) && !this.yardBall('basketball')) return false;
+    }
     if (act === 'putback' || act === 'dropball' || act === 'putguitar' || act === 'leave' || act === 'hangpaint' || act === 'putcanvas') return false;
     if (act === 'visit') return this.inMain() && Object.keys(this.w.doors).some((id) => !this.doorLockedFor(id));
     // the Workshop: it has to be added (and its door unlocked), and for building there has to be something to build
@@ -1696,6 +1733,12 @@ export class Brain {
     if (easel.includes(act)) return ['easel'];
     if (scope.includes(act)) return ['telescope'];
     if (act === 'read' || act === 'books') return ['shelf'];                // one at a time at the bookshelf
+    if (act === 'goalshot' || act === 'soccertoss') return ['soccergoal'];
+    if (act === 'hoopshoot' || act === 'hoopdribble') return ['basketballhoop'];
+    if (act === 'yardpoke') return ['yardpoke'];
+    if (act === 'yardsit') return ['lawnchair'];
+    if (act === 'mow') return ['mower'];
+    if (act === 'birdbath' || act === 'skyswitch') return [act];
     if (WORK_ACTS.includes(act)) return ['workshop'];                      // one at a time in the Workshop (the stations and the bench are shared)
     return [];
   }
@@ -1749,6 +1792,7 @@ export class Brain {
       easel: ['scribble', 'paint', 'mixpaint', 'portrait'], telescope: ['peek', 'stargaze', 'darkstargaze', 'scopecare'],
       stove: REST_ACTS, kitchencounter: REST_ACTS, register: REST_ACTS, diningtable: REST_ACTS, diningtable2: REST_ACTS,
       workbench: ['build'], toolbox: ['tidytools'], woodfactory: ['build'], metalfactory: ['build'],
+      soccergoal: ['goalshot', 'soccertoss', 'yardpoke'], basketballhoop: ['hoopshoot', 'hoopdribble', 'yardpoke'], lawnchair: ['yardsit'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], shed: ['mow'], mower: ['mow'],
     }[name] || (this.obj(name) && this.obj(name).seats ? REST_ACTS : this.obj(name) && this.obj(name).guitar ? ['guitar', 'riff', 'jamguitar'] : this.obj(name) && this.obj(name).sit ? ['read', 'sit', 'sitguitar'] : []);
     return list.filter((a) => this.available(a));
   }
@@ -1797,6 +1841,7 @@ export class Brain {
       build: 2.0, tidytools: 0.4,
       bang: 1.3, drums: 1.6, drumsolo: 1.2, jamdrums: 1.5, scribble: 1.3, paint: 1.6, mixpaint: 1.3, portrait: 1.4,
       peek: 1.3, stargaze: 1.6, darkstargaze: 1.3, scopecare: 0.6, dust: 0.9, dusttop: 1.0,
+      yardsit: 0.9, birdbath: 0.7, skyswitch: 0.6, mow: 0.5, yardpoke: 1.1, goalshot: 1.4, soccertoss: 0.8, hoopshoot: 1.4, hoopdribble: 0.9,
     };
     if (this.extraWeights) Object.assign(weights, this.extraWeights());      // working with GAL, or (for GAL) inviting Guy
     // a skill that is being forgotten is used less and less
@@ -1812,12 +1857,14 @@ export class Brain {
       sit: ['rest'], sitguitar: ['guitar'], slouch: ['drums', 'rest'],
       scribble: ['paint'], paint: ['paint'], mixpaint: ['paint'], portrait: ['paint'],
       peek: ['scope'], stargaze: ['scope'], darkstargaze: ['scope'], scopecare: ['scope', 'fidget'], dust: ['fidget'], dusttop: ['fidget'],
+      yardsit: ['rest'], birdbath: ['fidget'], skyswitch: ['fidget'], mow: ['chore'], yardpoke: ['yardball'], goalshot: ['yardball'], soccertoss: ['yardball'], hoopshoot: ['yardball'], hoopdribble: ['yardball'],
     };
     // the last two activities count, so he doesn't drift back to the same theme straight away
     const lastTags = [this.last, this.prev].flatMap((n) => tags[n] || []);
     this.restCleanup();                                      // cut short in the Restaurant: the dish goes back, the order waits again
     this.workCleanup();                                      // cut short in the Workshop: what he carries goes back in the stock
     let name = force;
+    if (!name && this.ballHeld && this.inYard()) name = 'dropball';        // out in the yard with a ball in his hands: set it down before anything else
     if (!name && !this.inMain() && !this.lockedInside() && !this.restStays() && !this.stuckIn()) name = 'leave';             // he is in an added room: back through the door before anything else
     if (!name && this.carry === 'canvas') name = 'putcanvas';                  // cut short with a painting in his hands: back to the easel with it
     if (!name && this.gtr.held && this.obj('guitar') && !this.guitarLocked()) name = 'putguitar'; // still holding the guitar: back on its stand (not while locked in on it)
@@ -1920,6 +1967,7 @@ export class Brain {
       telescope: ['peek', 'stargaze', 'darkstargaze', 'scopecare'],
       workbench: ['build'], toolbox: ['tidytools'], woodfactory: ['build'], metalfactory: ['build'],
       botprinter: ['buildbot'], workstation: ['learn'],
+      soccergoal: ['goalshot', 'soccertoss', 'yardpoke'], basketballhoop: ['hoopshoot', 'hoopdribble', 'yardpoke'], lawnchair: ['yardsit'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], shed: ['mow'], mower: ['mow'],
     }[name] || (this.obj(name) && this.obj(name).kind === 'footstool' ? ['dusttop'] : this.obj(name) && this.obj(name).guitar ? (k('guitar') ? (this.music ? ['jamguitar'] : ['guitar']) : []) : undefined);
     if (this.obj(name) && this.obj(name).guitar) this.wantGuitar = name;
     if (name === 'botprinter') {
@@ -2099,7 +2147,7 @@ export class Brain {
           const facing = Math.abs(angDiff(want, root.rotation.y));
           const speed = clamp(finalDist * 2, 0.4, 1.25) * (facing < 0.8 ? 1 : 0.15) * (s.push ? s.push.spd / 1.1 : 1) * k;
           this.moveBy(Math.sin(root.rotation.y) * speed * dt, Math.cos(root.rotation.y) * speed * dt);
-          if (s.push) { s.push.obj.set(root.position.x + s.push.relx, root.position.z + s.push.relz); sfxDrag(clamp(speed / 1.1, 0.25, 1), s.push.obj.weight); }   // furniture scraping along the floor
+          if (s.push) { s.push.obj.set(root.position.x + s.push.relx, root.position.z + s.push.relz); if (s.push.obj.name === 'mower') this.mowTrail(s.push.obj); else sfxDrag(clamp(speed / 1.1, 0.25, 1), s.push.obj.weight); }   // furniture scraping along the floor
           else if (Math.floor(this.walkPhase / Math.PI) !== Math.floor((this.walkPhase + speed * dt * 5.2) / Math.PI)) sfx('step');
           this.walkPhase += speed * dt * 5.2;
           this.moving = true;
@@ -2275,8 +2323,12 @@ export class Brain {
     }
     const ball = this.w.ball;
     if (ball) {
-      if (this.ballPos) { ball.position.copy(this.ballPos); ball.userData.vel.set(0, 0, 0); ball.userData.kinematic = true; }
-      else ball.userData.kinematic = false;
+      if (this.ballPos && (!this.ballTarget || this.ballTarget === ball)) { ball.position.copy(this.ballPos); ball.userData.vel.set(0, 0, 0); ball.userData.kinematic = true; }
+      else if (!this.ballPos) ball.userData.kinematic = false;
+    }
+    for (const yb of Object.values(this.w.yard.balls)) {                  // the Backyard's balls: in his hands, or free
+      if (this.ballPos && this.ballTarget === yb) { yb.position.copy(this.ballPos); yb.userData.vel.set(0, 0, 0); yb.userData.kinematic = true; yb.userData.holder = this; }
+      else if (yb.userData.holder === this) { yb.userData.kinematic = false; yb.userData.holder = null; }
     }
     if (!this.g.loaded) return;
     this.lateHobbies();
@@ -2662,6 +2714,7 @@ function angDiff(a, b) {
 
 installHobbies(Brain, POSES, { sitLegs, env, smooth, clamp, lerp, rand, pick, makeGrid, cellBlocked, INFLATE });
 installWorkshop(Brain, POSES, { smooth, clamp, lerp, rand, pick });
+installYard(Brain, POSES, { clamp, rand, pick, makeGrid, cellBlocked, INFLATE });
 installRestaurant(Brain, POSES, { smooth, clamp, lerp, rand, pick });
 installApproach(Brain);                                      // stations are used from whichever side is free (approach.js)
 installPaintings(Brain);

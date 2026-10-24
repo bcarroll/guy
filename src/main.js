@@ -538,6 +538,12 @@ function interactLabel(name) {
     case 'botprinter': return '🤖 Build GAL';
     case 'workstation': return '🖥️ Use Workstation';
     case 'plant': case 'flowerplant': case 'tree': return '🌱 Tend Plant';
+    case 'soccergoal': return '⚽ Take Shots';
+    case 'basketballhoop': return '🏀 Shoot Hoops';
+    case 'lawnchair': return '🪑 Sit Down';
+    case 'birdbath': return '🐦 Look at the Bird Bath';
+    case 'skyswitch': return w.yard && w.yard.isNight() ? '☀️ Switch to Day' : '🌙 Switch to Night';
+    case 'shed': case 'mower': return '🚜 Mow the Lawn';
     default: return brain.obj(name) && brain.obj(name).guitar ? '🎸 Play Guitar' : brain.obj(name) && brain.obj(name).kind === 'footstool' ? '🪜 Stand on It to Clean' : brain.obj(name) && brain.obj(name).sit ? '🪑 Sit Down' : '▶ Use';
   }
 }
@@ -794,7 +800,7 @@ window.__ui = { controlsEnabled: () => controls.enabled, pick, floorAt, get pend
 // Debug helper: fast-forward the simulation without rendering (window.sim(seconds)).
 window.sim = (sec, dt = 1 / 30) => {
   for (let t = 0; t < sec; t += dt) {
-    brain.safeUpdate(dt); guy.apply(dt); brain.safeLate(); world.lamp.tick(brain.currentBeat()); updateBall(dt); for (const o of Object.values(world.objects)) o.update(dt);
+    brain.safeUpdate(dt); guy.apply(dt); brain.safeLate(); world.lamp.tick(brain.currentBeat()); updateBall(dt); for (const o of Object.values(world.objects)) o.update(dt); world.yard.update(dt);
   }
   if (follow) { controls.target.copy(guy.pos).setY(1.1); controls.update(); }
 };
@@ -813,7 +819,7 @@ renderer.setAnimationLoop(() => {
   space.position.copy(camera.position);
   world.lamp.tick(brain.currentBeat());
   world.skillMachine.userData.update(performance.now() / 1000);
-  for (const o of Object.values(world.objects)) o.update(dt);
+  for (const o of Object.values(world.objects)) o.update(dt); world.yard.update(dt);
   updateBall(dt);
   if (follow && guy.loaded) {
     camGoal.copy(guy.pos).setY(1.1);

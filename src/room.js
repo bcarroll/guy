@@ -4,6 +4,8 @@ import { sfx } from './sfx.js';
 import { makeWorkshopBuilders } from './workobjects.js';
 import { makeRestaurantBuilders } from './restobjects.js';
 import { makeBotBuilders } from './botobjects.js';
+import { buildYardShell, makeYardBuilders } from './yardobjects.js';
+import { makeYard } from './yardballs.js';
 
 export const ROOM = { w: 10, d: 8, h: 3.2 }; // x in [-5,5], z in [-4,4]
 
@@ -1078,6 +1080,26 @@ export function buildRoom(scene) {
     box(0.05, 2.2, 1.8, m, 0.18, 1.1, 0, g);
     for (let i = 0; i <= 5; i++) box(0.4, 0.04, 1.8, m, 0, 0.02 + i * 0.43, 0, g);
   });
+  // ---- Backyard furniture (src/yardobjects.js), placed in the Backyard's own frame like the Workshop's
+  const yardB = makeYardBuilders({ makeObject, box, mat });
+  // (all placed exactly: the far fence has the goal and the shed, the hoop and the lawn chair stand against the side fences, the bath and
+  // the mower in the open, the switch by the door wall. `n` metres in from the door wall, `lat` along it from the middle.)
+  const YARD_LAYOUT = {
+    soccergoal: (N, L) => ({ n: N - 0.7, lat: L * 0.12, face: 'door', exact: true }),
+    shed: (N, L) => ({ n: N - 0.8, lat: -(L / 2 - 1.1), face: 'door', exact: true }),
+    basketballhoop: (N, L) => ({ n: N * 0.5, lat: -(L / 2 - 0.65), face: 'plusLat', exact: true }),
+    lawnchair: (N, L) => ({ n: 1.7, lat: -(L / 2 - 1.0), face: 'door', exact: true }),
+    birdbath: (N, L) => ({ n: N * 0.6, lat: L / 2 - 1.2, face: 'door', exact: true }),
+    skyswitch: (N, L) => ({ n: 1.1, lat: L / 2 - 0.8, face: 'minusLat', exact: true }),
+    mower: (N, L) => ({ n: N * 0.42, lat: L * 0.1, face: 'door', exact: true }),
+  };
+  const yardSpot = (id) => (w) => {
+    if (!w.doors.backyard) return null;
+    const { n: N, l: L } = w.shellSize('backyard'), ax = w.shellAxes('backyard');
+    const s = YARD_LAYOUT[id](N, L), p = w.shellPoint('backyard', s.n, s.lat);
+    const face = s.face === 'door' ? ax.toDoor : s.face === 'minusLat' ? ax.lat.clone().negate() : ax.lat;
+    return { x: p.x, z: p.z, rot: w.rotFacing(face.x, face.z), exact: !!s.exact };
+  };
   const INSTANCE_KINDS = {
     eguitar: { build: (name, x, z) => buildGuitar(x, z, name, true), pref: { x: 2.2, z: -1.6 } },
     bookshelf2: { build: buildBookshelf2, pref: { x: 4.1, z: -2.2 } },
@@ -1124,6 +1146,13 @@ export function buildRoom(scene) {
     register: [rest.register, restSpot('register')],
     diningtable: [(x = 0, z = 0) => rest.diningtable('diningtable', x, z), restSpot('diningtable')],
     diningtable2: [(x = 0, z = 0) => rest.diningtable('diningtable2', x, z), restSpot('diningtable2')],
+    soccergoal: [yardB.soccergoal, yardSpot('soccergoal')],
+    basketballhoop: [yardB.basketballhoop, yardSpot('basketballhoop')],
+    lawnchair: [yardB.lawnchair, yardSpot('lawnchair')],
+    birdbath: [yardB.birdbath, yardSpot('birdbath')],
+    skyswitch: [yardB.skyswitch, yardSpot('skyswitch')],
+    shed: [yardB.shed, yardSpot('shed')],
+    mower: [yardB.mower, yardSpot('mower')],
     workbench: [work.workbench, shopSpot('workbench')],
     toolbox: [work.toolbox, shopSpot('toolbox')],
     woodfactory: [work.woodfactory, shopSpot('woodfactory')],
@@ -1265,6 +1294,13 @@ export function buildRoom(scene) {
     const g = new THREE.Group();
     g.position.copy(W.at(c, 0));
     g.rotation.y = W.rotY;
+    const bounds0 = wall === 'right' ? { minX: ROOM.w / 2, maxX: ROOM.w / 2 + N, minZ: c - L / 2, maxZ: c + L / 2 }
+      : wall === 'front' ? { minX: c - L / 2, maxX: c + L / 2, minZ: ROOM.d / 2, maxZ: ROOM.d / 2 + N }
+        : { minX: c - L / 2, maxX: c + L / 2, minZ: -ROOM.d / 2 - N, maxZ: -ROOM.d / 2 };
+    if (def.outdoor) {                         // open air: a lawn, a fence, the sun and moon lamps; no walls or ceiling (src/yardobjects.js)
+      const yard = buildYardShell(g, L, N, ROOM.h);
+      return { group: g, bounds: bounds0, N, L, outdoor: true, yard };
+    }
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(L, N), new THREE.MeshStandardMaterial({ color: def.look.floor, roughness: 0.9 }));
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(0, 0.002, -N / 2);
@@ -1372,7 +1408,8 @@ export function buildRoom(scene) {
       room.add(shell.group);
       room.add(cut);
       doors[def.id] = { id: def.id, name: def.name, wall, u, group, leaf: group.userData.leaf, shell, cut, rect: doorRect(wall, u), rectIn: doorRectIn(wall, u), open: 0, openTo: 0, locked: false };
-      Object.assign(WALL, roomWalls(def.id, shell));           // its walls can hold wall pieces (Guy's paintings)
+      if (!shell.outdoor) Object.assign(WALL, roomWalls(def.id, shell));           // its walls can hold wall pieces (Guy's paintings); a fence cannot
+      if (shell.outdoor && world.yard) world.yard.attach(doors[def.id]);
       if (def.elevator) {                                       // a room with an elevator (the Restaurant): a cabin against the far wall
         const b = shell.bounds, sgn = WALL[wall].rotY === Math.PI ? -1 : 1;
         const N = wall === 'right' ? b.maxX - b.minX : b.maxZ - b.minZ, Lw = wall === 'right' ? b.maxZ - b.minZ : b.maxX - b.minX;
@@ -1679,5 +1716,6 @@ export function buildRoom(scene) {
       return true;
     },
   };
+  world.yard = makeYard({ world, room, objects, obstacles });
   return world;
 }

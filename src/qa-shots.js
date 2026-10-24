@@ -148,6 +148,15 @@ export function install(T, h) {
       T.freeze(); T.frameRoom('workshop'); await settleFrames(3);
       return { data: capture() };
     });
+    for (const night of [false, true]) {
+      add(night ? 'room-backyard-night' : 'room-backyard', 'rooms', async () => {
+        await clean(night ? 46 : 45);
+        for (const id of ['soccergoal', 'basketballhoop', 'lawnchair', 'birdbath', 'skyswitch', 'shed', 'mower']) T.addObject(id);
+        window.brain.w.yard.snapNight(night);
+        T.freeze(); T.frameRoom('backyard'); await settleFrames(4);
+        return { data: capture() };
+      });
+    }
     add('room-restaurant', 'rooms', async () => {
       await clean(43);
       T.prep('takeorder');

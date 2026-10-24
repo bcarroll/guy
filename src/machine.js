@@ -17,6 +17,7 @@ export const OBJECT_CATEGORIES = [
   { id: 'hobbies', name: 'Hobbies', icon: '🎨' },
   { id: 'workshop', name: 'Workshop', icon: '🛠️' },
   { id: 'restaurant', name: 'Restaurant', icon: '🍽️' },
+  { id: 'backyard', name: 'Backyard', icon: '🌳' },
   { id: 'robots', name: 'Robots', icon: '🤖' },
   { id: 'furniture', name: 'Furniture', icon: '🛋️' },
   { id: 'decor', name: 'Decor & lighting', icon: '🖼️' },
@@ -24,7 +25,7 @@ export const OBJECT_CATEGORIES = [
 ];
 
 // The order of the sub-headings inside a category that uses them (Decor & lighting has a lot of things in it).
-export const DECOR_SUBS = ['Plants', 'Wall art', 'Windows', 'Rugs', 'Lighting', 'Small furniture', 'Workbench & storage', 'Woodwork', 'Metalwork', 'Built by Guy', 'Kitchen', 'Dining'];
+export const DECOR_SUBS = ['Sports', 'Garden', 'Premium', 'Plants', 'Wall art', 'Windows', 'Rugs', 'Lighting', 'Small furniture', 'Workbench & storage', 'Woodwork', 'Metalwork', 'Built by Guy', 'Kitchen', 'Dining'];
 
 export const OBJECT_CATALOG = [
   { id: 'piano', cat: 'music', name: 'Upright Piano', icon: '🎹', desc: 'Scales, tunes and jam sessions. Heavy: only you can move it.', core: true },
@@ -73,6 +74,15 @@ export const OBJECT_CATALOG = [
   { id: 'register', cat: 'restaurant', sub: 'Dining', name: 'Cash Register', icon: '💵', desc: 'Where customers pay when they have finished. Ding!', free: true, room: 'restaurant' },
   { id: 'diningtable', cat: 'restaurant', sub: 'Dining', name: 'Dining Table', icon: '🍽️', desc: 'A table for two with two chairs. Customers sit here to eat.', free: true, room: 'restaurant' },
   { id: 'diningtable2', cat: 'restaurant', sub: 'Dining', name: 'Second Dining Table', icon: '🍽️', desc: 'Another table for two, so more customers can eat at once.', free: true, room: 'restaurant' },
+  // The Backyard (a room added from the Rooms tab): an outdoor room. See src/yardobjects.js and src/yardbrain.js.
+  // The goal and the hoop each bring a ball; their books ("Soccer for Robots", "Basketball for Robots") can go on the shelf once Guy or GAL has read "Outdoor Sports".
+  { id: 'soccergoal', cat: 'backyard', sub: 'Sports', name: 'Soccer Goal', icon: '🥅', desc: 'A goal with a net, and a soccer ball to kick at it. Heavy: only you can move it. Its book, "Soccer for Robots", adds goal shots and more once "Outdoor Sports" has been read.', free: true, room: 'backyard' },
+  { id: 'basketballhoop', cat: 'backyard', sub: 'Sports', name: 'Basketball Hoop', icon: '🏀', desc: 'A hoop on a pole, and a basketball. Heavy: only you can move it. Its book, "Basketball for Robots", adds shooting at the hoop and more once "Outdoor Sports" has been read.', free: true, room: 'backyard' },
+  { id: 'lawnchair', cat: 'backyard', sub: 'Garden', name: 'Lawn Chair', icon: '🪑', desc: 'A striped folding chair for sitting in the sun, or under the moon. Comes with the book "Outdoor Sports".', free: true, room: 'backyard', book: 'outdoor' },
+  { id: 'birdbath', cat: 'backyard', sub: 'Garden', name: 'Bird Bath', icon: '🐦', desc: 'A stone basin of water. Guy stops to look and dip a finger in.', free: true, room: 'backyard' },
+  { id: 'skyswitch', cat: 'backyard', sub: 'Garden', name: 'Sun & Moon Switch', icon: '🌗', desc: 'A post with a lever that switches the yard between its artificial sun and its artificial moon. Guy and GAL use it too, and you can ask Guy to flip it (long-press it).', free: true, room: 'backyard' },
+  { id: 'shed', cat: 'backyard', sub: 'Premium', name: 'Garden Shed', icon: '🛖', desc: 'A little wooden shed. Heavy: only you can move it. Unlocks the push lawn mower.', free: true, locked: true, room: 'backyard' },
+  { id: 'mower', cat: 'backyard', sub: 'Premium', name: 'Push Lawn Mower', icon: '🚜', desc: 'Guy gets the shed open and pushes the mower round the lawn, leaving stripes. Listed once the shed is in the yard.', free: true, locked: true, room: 'backyard', needsObject: 'shed' },
   // Build a Bot: a super premium one-use printer. Guy uses it and it folds itself into GAL (src/gal.js).
   { id: 'botprinter', cat: 'robots', name: 'Build a Bot Machine', icon: '🤖', desc: 'A 3D printer that can be used once: it prints a second robot, GAL, and folds itself away into her. Heavy: only you can move it.', locked: true },
   // Learning Workstation: premium. Guy taps the screen and a panel lists the books on the shelf; Learn teaches him at once, no reading. The book stays on the shelf.
@@ -106,7 +116,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
   const hasObject = inRoom;
   // things that belong to a room the user has not added (or that is not unlocked) are not listed at all
   // (and a thing that needs a skill is not listed until Guy or GAL has it, unless it is already in the room or was taken out of it)
-  const live = (d) => (!d.room || (!!rooms && rooms.isLive(d.room))) && (!d.needsSkill || dev.all || knows(d.needsSkill) || inRoom(d.id) || !!world.removed[d.id]);
+  const live = (d) => (!d.room || (!!rooms && rooms.isLive(d.room))) && (!d.needsObject || inRoom(d.needsObject) || inRoom(d.id) || !!world.removed[d.id]) && (!d.needsSkill || dev.all || knows(d.needsSkill) || inRoom(d.id) || !!world.removed[d.id]);
   const shelf = () => world.objects.shelf;
   const albumStatus = (a) => {
     if (a.premium && !dev.all) return 'locked';
@@ -118,6 +128,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
   const bookStatus = (b) => {
     if (b.locked && !dev.all) return 'locked';
     if (shelf() && shelf().books.some((r) => r.def.id === b.id)) return 'shelf';
+    if (b.unlockedBy && !dev.all && !knows(b.unlockedBy)) return 'needs-skill';
     if (!shelf()) return 'needs-shelf';
     if (b.requires && b.requires.object && !hasObject(b.requires.object)) return 'needs-object';
     return 'available';
@@ -309,6 +320,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
         const reqName = b.requires && b.requires.object ? (OBJECT_CATALOG.find((d) => d.id === b.requires.object) || {}).name : '';
         if (st === 'shelf') bookGroups['On the shelf'].push(card({ ...base, label: '✓ On the shelf' }));
         else if (st === 'available') bookGroups['Add to the shelf'].push(card({ ...base, label: 'Add to shelf', action: i }));
+        else if (st === 'needs-skill') bookGroups['Not available yet'].push(card({ ...base, label: 'Read the first book', note: 'Guy or GAL has to read "' + ((BOOK_CATALOG.find((x) => x.teaches === b.unlockedBy) || {}).title || 'the first book') + '" first.' }));
         else if (st === 'needs-object') bookGroups['Not available yet'].push(card({ ...base, label: 'Needs ' + reqName, note: `Add the ${reqName} to the room first.` }));
         else if (st === 'needs-shelf') bookGroups['Not available yet'].push(card({ ...base, label: 'Needs a bookshelf', note: 'Put the bookshelf back first.' }));
         else bookGroups['Premium · coming soon'].push(card({ ...base, label: '🔒 Locked', note: reqName ? `Needs the ${reqName}.` : '' }));

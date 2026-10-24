@@ -42,6 +42,13 @@ machine check of this list; this file adds the expectations a human or Claude ne
 | kitchencounter | **Kitchen Counter** (Restaurant): counter with a fridge and three plate places | heavy | `restaurant` | `serve` (needs a cooked plate) | 0.62 m in front, beside the plate's place; hand reaches the plate | cooked plates wait here |
 | register | **Cash Register** (Restaurant): counter with a till, coin tray and bell; coins show earnings (`world.stock.coins`, one per 2 coins up to 10) | medium | `restaurant` | `takepay` (needs a customer at the till) | 0.62 m in front, left of centre; finger on the till button; the customer stands at the right end | the bell rings, ding + cash sounds |
 | diningtable, diningtable2 | **Dining Table** (Restaurant): table for two with a chair at each end (0.95 x 1.95) | medium | `restaurant` | `takeorder` (needs a waiting customer) | stands 1.42 m out from the chair end, facing the customer; serves from the side (0.78 m) | customers sit on the chairs; plates appear in front of them |
+| soccergoal | **Soccer Goal** (Backyard; `room: 'backyard'`, `book:'soccer'`): goal frame with a net; adds a soccer ball that lives in the yard | heavy | `outdoor.soccer` | `goalshot`, `soccertoss`, `yardpoke` | kicks from 2-4 m out, facing the goal | goals and misses are counted in `world.yard.score`; the ball is removed with the goal |
+| basketballhoop | **Basketball Hoop** (Backyard): pole, backboard, rim and net; adds a basketball | heavy | `outdoor.basketball` | `hoopshoot`, `hoopdribble` | set shot from 2-3 m out, `shoot` pose | swish detected at the rim; some shots miss |
+| lawnchair | **Lawn Chair** (Backyard; comes with "Outdoor Sports for Robots", `yard:true`): a folding chair | light | none | `yardsit` | sits (`sitRest`) facing the yard | not used by the indoor `sit` activity |
+| birdbath | **Bird Bath** (Backyard): stone basin with water | medium | none | `birdbath` | stands at the basin and splashes | `splash` sound |
+| skyswitch | **Sun & Moon Switch** (Backyard): a post with a lever; flips the artificial sun and moon | medium | none | `skyswitch` | pulls the lever; the sky eases to night or day over 1.6 s | the user can also flip it from its long-press menu; day/night is saved (`sky` in the layout). ASSUMPTION: the request text was cut off at "day/night setting b..." |
+| shed | **Garden Shed** (Backyard, **premium**: `free:true, locked:true`): the door swings open for the mower | heavy | `outdoor` | part of `mow` | | harness adds it with the dev unlock (`MANIFEST.objects.shed.premium`) |
+| mower | **Push Lawn Mower** (Backyard, **premium**, `needsObject:'shed'`): listed once the shed is there | medium | `outdoor` | `mow` | pushes it round the lawn in a loop, leaving cut stripes and the `motor` sound | |
 | metalchair | **Metal Chair (built by Guy)**: like the wooden one but steel; one more of the built kinds (see the next row) | light | none | none | | a chair he can sit on |
 | footstool, woodshelves, builtchair | **Built by Guy** (Workshop): not added from the Catalog like the rest; when Guy finishes one it stands in the Workshop at once (`world.placeBuilt`, the middle of the room); only when there is no room does it go to storage (`world.stock.items`), and "Add" in the Catalog takes one out as a real object named `<kind>_<n>` with `kind` set | light / medium / light | none | none | | a built chair is a chair he can sit on; Remove (long-press) puts it back in storage |
 
@@ -82,6 +89,9 @@ left wall and cannot be removed, moved or rotated.
 | furniture | Furniture for Robots (Workshop) | `workshop.furniture` | workbench | `build` | the wooden chair (advanced) |
 | metalfab | Metal Fabrication for Robots (Workshop) | `workshop.metal` | metalfactory | `makemetal` | the metal chair (and metal tables, and an electric guitar with the wood line); comes with the Metal Factory |
 | restaurant | Restaurant Basics (Restaurant) | `restaurant` | stove | `takeorder` | customers only come once he has read it; comes with the stove |
+| outdoor | Outdoor Sports for Robots (Backyard) | `outdoor` | lawnchair | `yardsit` | comes with the lawn chair; unlocks the soccer and basketball books (Books tab: "Read the first book" until then) |
+| soccer | Soccer for Robots (Backyard; `unlockedBy:'outdoor'`) | `outdoor.soccer` | soccergoal | `goalshot` | kicking and tossing the soccer ball |
+| basketball | Basketball for Robots (Backyard; `unlockedBy:'outdoor'`) | `outdoor.basketball` | basketballhoop | `hoopshoot` | shooting and dribbling the basketball |
 
 Guy learns a skill only after keeping the book open for 8 s (3.2 s at full Speed Reading); interrupted reads teach nothing.
 
@@ -124,7 +134,7 @@ playback panel or the top-shelf record list; Guy then joins in without touching 
 
 ## Activities (`activities()` in `src/brain.js`)
 
-wander, stretch, wave, stereoon, stereooff (menu only), piano, sitpiano, plink, jam, jampiano, jamsit, dance, lamp, mood, plant, read (alias `books`),
+wander, stretch, wave, yardsit, birdbath, skyswitch, mow, yardpoke, goalshot, soccertoss, hoopshoot, hoopdribble (Backyard), stereoon, stereooff (menu only), piano, sitpiano, plink, jam, jampiano, jamsit, dance, lamp, mood, plant, read (alias `books`),
 rearrange, ball, dribble, toss, guitar, riff (makes up riffs on the guitar, see below), jamguitar, bang, drums, drumsolo, jamdrums, scribble, paint, mixpaint, portrait, peek,
 stargaze, darkstargaze, scopecare, dancemoves, ballroom, dust (needs `decorate` and a wall piece with clear floor in front); tidytools, dusttop, build (the Workshop, see below); takeorder, cook, serve, takepay (the Restaurant, see below; internal: rwait); hangpaint (from the easel's long-press menu, see Guy's paintings below; internal: putcanvas); internal: stuck (shut in a locked room), putback, putguitar, dropball, lighton, visit and leave (through the door of an added room and back: tested by `T.sweepVisit`).
 Needs and allowed arm contacts are in `MANIFEST.activities`.
@@ -133,6 +143,10 @@ Needs and allowed arm contacts are in `MANIFEST.activities`.
 
 | id | run | look for |
 |---|---|---|
+| yard-shoot | `hoopshoot`, pose `shoot`, t 1.2, side | knees dipped then extended, both hands up at the release, ball leaving them, facing the hoop |
+| yard-sit | `yardsit`, pose `sitRest`, t 6, side | seated in the lawn chair, legs clear of the frame |
+| yard-mow | `mow`, pose `walk`, t 1, side | both hands on the mower handle, walking behind it, stripes cut |
+| room-backyard, room-backyard-night | room picture | fence on three sides, all seven objects clear of each other; at night the blue tint, stars and moon |
 | read-grab-mid | `T.moment('read','grab',1.2,'hand:Right')` | thumb-up handshake grip around the book; arm in front of him (never swinging behind him) |
 | read-sit | `T.moment('read','readSit',8,'front')` | book open, **pages face Guy**, both hands on the lower edges, legs hang clear of the chair |
 | read-turn | `T.moment('read','readSit',0,'front',{turning:true})` | right hand on Guy's side of the pages while the page flips |
@@ -175,6 +189,7 @@ book list popup (long-press a lower shelf at a book: title, read / not read).
 |---|---|---|---|---|
 | workshop | **Workshop**: free, unlocked by default. Adds a closed door with a sign and a grey room (floor, three walls, ceiling) behind it | right, front, back (never left: the Catalog) | same as Guy's room: 10 wide x 8 deep, whichever wall (no `size` in the catalog entry) | Guy can go in: long-press the door > "Go into the Workshop" (see below). The room is empty until the Workshop objects exist |
 | restaurant | **Restaurant**: a **premium** room (`premium: true`, `unlocked: false`): the Rooms tab lists it under "Premium · coming soon" as 🔒 Premium with no Add button, and none of its objects or its book are listed until it is unlocked (`R().setUnlocked('restaurant', true)`, a dev bypass the harness uses via `unlockRoom`; there is no way to pay yet). The same room in warm colours, with an **elevator** against the far wall (`elevator: true`: a cabin with sliding doors, an obstacle) | front, back, right (`planDoor` skips a wall that already has a room's door, so with the Workshop on the right the Restaurant takes the front or back) | 10 x 8 like the others | customers arrive and leave through the elevator; see "The Restaurant" below |
+| backyard | **Backyard**: free, an **outdoor** room (`outdoor: true`): grass, a fence on three sides, no walls or ceiling; a gantry with a sun disc and a moon disc, a see-through blue night tint, stars at night. Cheap on phones: no real extra lights | right, front, back | like the others | day/night is saved; balls have their own physics (`yardballs.js`); mown stripes are cosmetic |
 
 Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 - A door is 1.0 m wide and 2.2 m tall, with a 1.0 m floor strip in front of it that furniture cannot be put or pushed into and wall pieces cannot cover.
@@ -265,6 +280,8 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 - **Speed** (the dropdown beside Follow, `#speed-sel`, 1x / 2x / 3x / 4x, remembered in `guy.speed.v1`, always 1x under `?fresh`): scales his walking (and turning and pushing furniture) and the idle pauses between interactions (`brain.speed`). The interactions themselves (playing, reading, painting, waving ...) run at normal speed. Tested by `T.sweepLock` and `T.sweepSpeed`.
 
 ## Regression watch (bugs found and fixed; make sure they stay fixed)
+
+- **Backyard** (found while building): a ball resting inside the goal or hoop footprint never left, so later shots were skipped (the yard now rolls it out the front after 0.9 s); the mower's corner idle step must not declare `needs` (it triggered `checkMoved` and abandoned the mow); the fence must be single-sided or it hides the yard from the default camera; the shed is scaled to 0.82 or it does not fit. Covered by `yard-*` activity runs and the `layout: the backyard remembers night and day` check.
 
 - A step that moves the thing it `needs` is abandoned by `checkMoved` ("the stool was moved: letting go"): the foot stool pickup and put-down steps have no `needs`.
 - `findSpot` keeps a new thing about a metre from walls and neighbours, so a crowded plan (the Workshop's far wall) silently puts things somewhere else: those pieces are placed with `exact: true`. `T.sweepMetal` checks the layout on all three walls.

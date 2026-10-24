@@ -16,6 +16,10 @@ export const ROOM_CATALOG = [
   { id: 'restaurant', name: 'Restaurant', icon: '🍽️', unlocked: false, premium: true, doorWalls: ['front', 'back', 'right'], elevator: true,
     desc: 'A kitchen and dining room. Customers arrive by elevator and Guy cooks and serves.',
     look: { frame: 0x6b4a2b, door: 0x2f6f8f, panel: 0x3d86a8, floor: 0xb98a55, wall: 0xeadbc0 } },
+  // The Backyard: an open-air room (grass, a fence, no ceiling) with a goal, a hoop, a lawn chair, a bird bath and a switch for day and night.
+  { id: 'backyard', name: 'Backyard', icon: '🌳', unlocked: true, outdoor: true, doorWalls: ['right', 'front', 'back'],
+    desc: 'An outdoor room with a lawn and a fence. Soccer, basketball, a lawn chair, a bird bath, and an artificial sun and moon you can switch.',
+    look: { frame: 0x6b4a2b, door: 0x6f9f4a, panel: 0x8cc063, floor: 0x5fa046, wall: 0xb48a58 } },
 ];
 
 const KEY = 'guy.rooms.v1';

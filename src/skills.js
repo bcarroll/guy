@@ -58,6 +58,14 @@ export const BOOK_CATALOG = [
     blurb: 'dark-sky stargazing', requires: { object: 'telescope' }, desc: 'Switch the lights off first and the stars come out.' },
   { id: 'scopecare', title: 'Looking After Your Telescope', teaches: 'telescope.care', color: 0x95a5a6, thick: 0.05, height: 0.3,
     blurb: 'how to look after a telescope', requires: { object: 'telescope' }, desc: 'Wiping the lens, cleaning the tube, checking the tripod.' },
+  // The Backyard (a room added from the Rooms tab). "Outdoor Sports" comes with the lawn chair; reading it unlocks the other two
+  // (`unlockedBy`: they cannot go on the shelf until Guy or GAL knows that skill).
+  { id: 'outdoor', title: 'Outdoor Sports', teaches: 'outdoor', color: 0x3a8a3a, thick: 0.05, height: 0.3, room: 'backyard',
+    blurb: 'how to warm up and play outside', desc: 'Warming up, fair play and how to throw and kick. Unlocks the soccer and basketball books.' },
+  { id: 'soccer', title: 'Soccer for Robots', teaches: 'outdoor.soccer', color: 0xf2f2f2, thick: 0.055, height: 0.31, room: 'backyard', unlockedBy: 'outdoor',
+    blurb: 'shots at the goal and ball handling', requires: { object: 'soccergoal' }, desc: 'Lining up a shot, striking the ball into the goal, and tossing it up and catching it.' },
+  { id: 'basketball', title: 'Basketball for Robots', teaches: 'outdoor.basketball', color: 0xd9741d, thick: 0.055, height: 0.31, room: 'backyard', unlockedBy: 'outdoor',
+    blurb: 'dribbling and shooting hoops', requires: { object: 'basketballhoop' }, desc: 'Dribbling, and the set shot: bend the knees, lift the ball and let it go towards the hoop.' },
 ];
 export const BOOK_DEFS = BOOK_CATALOG.filter((b) => b.start);
 
@@ -81,6 +89,18 @@ export const SKILL_INFO = {
   'workshop.metal': {
     name: 'Metal Fabrication', book: 'Metal Fabrication for Robots',
     unlocks: ['Build metal chairs and tables at the Metal Factory', 'Build an electric guitar (with the Wood Factory)'],
+  },
+  outdoor: {
+    name: 'Outdoor sports', book: 'Outdoor Sports',
+    unlocks: ['Unlocks the soccer and basketball books in the Catalog', 'Before the sports books he can only poke a ball about the yard'],
+  },
+  'outdoor.soccer': {
+    name: 'Soccer', book: 'Soccer for Robots',
+    unlocks: ['Take shots at the goal (some go in)', 'Toss the soccer ball up and catch it'],
+  },
+  'outdoor.basketball': {
+    name: 'Basketball', book: 'Basketball for Robots',
+    unlocks: ['Dribble the basketball', 'Shoot at the hoop with a proper set shot (some go in)'],
   },
   stereo: {
     name: 'Using the stereo', book: 'Stereo User Manual',
