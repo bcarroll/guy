@@ -11,9 +11,15 @@ const norm = (t) => ' ' + String(t || '').toLowerCase().replace(/[’']/g, '').r
 
 // what a sentence can mean: [regex, intent]; first match wins. 'object' goes through interact(name), 'act' is an activity name.
 const OBJECTS = [
+  // the Backyard first: its words ("lawn chair", "basketball", "soccer ball") would otherwise be taken for the chair or the ball in his room
+  [/ lawn ?chair /, 'lawnchair'], [/ (mow|mows|mowing|mowed|mower|lawn ?mower|lawn|grass|shed) /, 'mower'],
+  [/ (basketball|hoops?|dunk) /, 'basketballhoop'], [/ (soccer|football|goal|penalty|penalties) /, 'soccergoal'],
+  [/ (bird ?baths?|birds?) /, 'birdbath'],
   [/ (piano|keys|keyboard) /, 'piano'], [/ (guitar|strum) /, 'guitar'], [/ (drums?|drum kit|sticks) /, 'drums'],
   [/ (lamp|lights?) /, 'lamp'], [/ (stereo|music|tunes|radio|record player) /, 'table'], [/ (ball|dribble|toss) /, 'ball'],
   [/ (paint|painting|easel|draw|sketch|scribble) /, 'easel'], [/ (telescope|stars?|stargaze|sky) /, 'telescope'],
+  [/ (sky switch|night|nighttime|daytime|sunrise|sunset|sunshine|moon|sun) /, 'skyswitch'],           // (after the telescope: "look at the night sky" is still the stars)
+  [/ (workbench|work bench|tinker|build) /, 'workbench'], [/ (toolbox|tool box|tools?) /, 'toolbox'],
   [/ (plants?|tree|flowers?|water) /, 'plant'], [/ (chair|armchair|couch) /, 'sit'], [/ (workstation|work station|terminal|computer) /, 'workstation'],
 ];
 const ACTS = [[/ (dance|boogie|groove) /, 'dance'], [/ (sit|rest|relax) /, 'sit'], [/ (stretch) /, 'stretch'], [/ (wave|hello|hi|hey) /, 'wave'], [/ (wander|walk around|stroll) /, 'wander']];
@@ -65,7 +71,8 @@ export function parse(text, ctx = {}) {
 
 // Guy is too busy to do something new: working, serving, painting, locked in on something, shut in, or away from the room
 const BUSY = ['build', 'tidytools', 'takeorder', 'cook', 'serve', 'takepay', 'rwait', 'paint', 'portrait', 'mixpaint', 'putcanvas', 'hangpaint', 'buildbot', 'orderbuild', 'bandplay', 'bandjam'];
-export const guyBusy = (b) => !!(b.lock || b.stuckIn() || !b.inMain() || (b.restStays && b.restStays()) || (b.step || b.queue.length) && BUSY.includes(b.last));
+// `here`: the thing he was asked to use is in the room he is standing in, so being away from his own room does not count as busy
+export const guyBusy = (b, here = false) => !!(b.lock || b.stuckIn() || (!here && !b.inMain()) || (b.restStays && b.restStays()) || (b.step || b.queue.length) && BUSY.includes(b.last));
 
 export function createVoice({ world, brain, say = () => {}, speaking = null, screen = null, toast = () => {} }) {
   const gal = () => world.gal;
@@ -147,7 +154,9 @@ export function createVoice({ world, brain, say = () => {}, speaking = null, scr
       if (!plan || !g.startDuo(plan)) { speak('guy', galOk() ? 'We cannot jam right now.' : 'I need GAL to jam. She is not here.'); return res(false); }
       return res(true);                                // the lines come from the duo itself (gal.js)
     }
-    const guyFree = !guyBusy(brain);
+    // the object he was asked to use is in the room he is in (the yard, say): then he does it himself, he does not hand it to GAL
+    const here = req.type === 'object' && req.name !== 'sit' && !!brain.obj(req.name) && world.roomIdAt(brain.obj(req.name).x, brain.obj(req.name).z) === world.roomIdAt(brain.g.root.position.x, brain.g.root.position.z);
+    const guyFree = !guyBusy(brain, here);
     if (aud || explicit || !guyFree) {
       if (!galOk()) { speak('guy', explicit ? 'GAL is not here.' : 'I am busy, and GAL is not here.'); return res(false); }
       const r = doIt(gal().brain, req);

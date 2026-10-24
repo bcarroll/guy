@@ -2086,8 +2086,10 @@ export class Brain {
         // an activity the user asked for takes priority, once whatever he is holding has been put away
         const wanted = this.pendingActivity;
         const holding = this.held || this.ballHeld || this.gtr.held;
-        // (an activity back in his room waits until he is back in it: choose() sends him through the door first)
-        if (wanted && !holding && (wanted === 'leave' || this.inMain())) { this.pendingActivity = null; this.choose(wanted); } else this.choose();
+        // (an activity back in his room waits until he is back in it: choose() sends him through the door first. One that belongs to the
+        // room he is already in (mowing, when he is out in the yard) starts right away: it must not wait for him to walk out and back in.)
+        const hereAct = (this.inYard() && YARD_ACTS.includes(wanted)) || (this.inWorkshop() && WORK_ACTS.includes(wanted));
+        if (wanted && !holding && (wanted === 'leave' || this.inMain() || hereAct)) { this.pendingActivity = null; this.choose(wanted); } else this.choose();
         next = this.queue.shift();
       }
       while (next && next.type === 'plan') {

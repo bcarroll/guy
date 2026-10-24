@@ -1224,6 +1224,50 @@ T.sweepYardOrders = () => {
   return out;
 };
 
+// ---- 12c. Telling him to mow the lawn (and the other yard jobs) by voice, and while he is already out in the yard (src/voice.js, brain.js update) ----
+// "mow the lawn" used to come back as "I did not catch that" (the parser knew nothing of the yard), and an order for the yard given while he was
+// already out there made him walk back indoors first (and, with no GAL, was refused as "busy").
+T.sweepYardVoice = () => {
+  const out = [], base = errors.length, w = W(), b = B(), V = window.__voice;
+  window.__voiceNoAudio = true;
+  T.settle(); T.resetRooms(); T.removeAll(); T.forget(); skillsOf().fading.clear(); T.settle(); T.home();
+  unlockRoom('backyard'); R().add('backyard');
+  for (const id of ['lawnchair', 'shed', 'mower']) T.addObject(id);
+  T.settle();
+  const reset = () => { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; };
+  // 1. from his own room: the sentence is understood, and he really mows (the mower leaves its spot)
+  reset(); T.home(); T.settle();
+  const m0 = w.objects.mower && { x: w.objects.mower.x, z: w.objects.mower.z };
+  const r1 = V.run('Guy, mow the lawn please');
+  out.push(result('yard voice: "mow the lawn" is understood and he says he is on it', r1.ok && r1.intent.type === 'object' && r1.intent.name === 'mower' && r1.lines.length === 1 && r1.lines[0].who === 'guy' && b.pendingActivity === 'mow', { intent: r1.intent, lines: r1.lines, pending: b.pendingActivity }));
+  const seen1 = []; const orig1 = b.choose.bind(b); b.choose = (f) => { orig1(f); seen1.push(b.last); };
+  let t = 0, moved = 0; try { while (t < 260 && moved < 0.8) { step(0.25); t += 0.25; const m = w.objects.mower; if (m && m0) moved = Math.max(moved, Math.hypot(m.x - m0.x, m.z - m0.z)); } } finally { b.choose = orig1; }
+  out.push(result('yard voice: told "mow the lawn" he walks out and pushes the mower across the lawn', seen1.includes('mow') && moved >= 0.8, { seen: seen1, moved }));
+  // 2. already out in the yard doing something else: he finishes it quickly and mows, without walking indoors first, and without needing GAL
+  reset(); T.home(); T.settle();
+  const ri = b.interact('lawnchair');
+  let t2 = 0; while (t2 < 90 && !(b.inYard() && b.step && b.step.fx && b.step.fx.chairSit)) { step(0.25); t2 += 0.25; }
+  const seated = b.inYard() && !!(b.step && b.step.fx && b.step.fx.chairSit);
+  const seen2 = []; const orig2 = b.choose.bind(b); b.choose = (f) => { orig2(f); seen2.push(b.last); };
+  let r2 = null, mowing = false, t3 = 0;
+  try {
+    r2 = V.run('mow the lawn');
+    while (t3 < 20 && !mowing) { step(0.25); t3 += 0.25; mowing = b.last === 'mow' && !!b.step; }
+  } finally { b.choose = orig2; }
+  out.push(result('yard voice: out in the yard (in the lawn chair) "mow the lawn" is his to do, not handed to GAL or refused as busy', ri.ok && seated && r2.ok && r2.lines.length === 1 && r2.lines[0].who === 'guy' && !/GAL|busy/.test(r2.lines[0].text), { ri, seated, r2: r2 && r2.lines }));
+  out.push(result('yard voice: he finishes sitting quickly and starts mowing within seconds, without leaving the yard first', mowing && t3 < 12 && !seen2.includes('leave') && b.inYard(), { seen: seen2, t3, inYard: b.inYard() }));
+  // 3. an order for the yard that he cannot do says why (the door is locked), it does not vanish
+  reset(); T.home(); T.settle();
+  R().setDoorLocked('backyard', true);
+  const r4 = V.run('mow the lawn');
+  out.push(result('yard voice: with the yard door locked he says so instead of silently doing nothing', !r4.ok && r4.lines.length >= 1 && r4.lines[0].text.length > 5 && !b.pendingActivity, { lines: r4.lines, pending: b.pendingActivity }));
+  R().setDoorLocked('backyard', false);
+  reset();
+  T.resetRooms(); T.removeAll(); T.settle();
+  out.push(result('yard voice: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 T.sweepRooms = () => {
   const out = [], base = errors.length, w = W();
   T.resetRooms(); T.settle(); T.home();
@@ -2940,6 +2984,7 @@ T.runAll = () => {
   report.sides = S(T.sweepSides);
   report.metal = S(T.sweepMetal);
   report.yardOrders = S(T.sweepYardOrders);
+  report.yardVoice = S(T.sweepYardVoice);
   report.needs = S(T.sweepNeeds);
   report.gal = S(T.sweepGal);
   report.workstation = S(T.sweepWorkstation);
@@ -3104,6 +3149,9 @@ const VOICE_PHRASES = [
   ['lock the screen', 'screen', null], ['unlock the screen', 'screen', null], ['lock the screen camera only', 'screen', null],
   ['tell GAL to play the guitar', 'gal', null], ['ask gal to jam', 'gal', null], ['jam', 'jam', null], ['I am bored', 'next', null], ['something else', 'next', null],
   ['learn everything', 'learn', null], ['use the workstation to learn piano', 'learn', null], ['tell GAL to learn all skills', 'gal', null], ['use the workstation', 'object', 'workstation'],
+  ['mow the lawn', 'object', 'mower'], ['Guy, go and mow the grass please', 'object', 'mower'], ['use the shed', 'object', 'mower'], ['sit in the lawn chair', 'object', 'lawnchair'],
+  ['shoot some hoops', 'object', 'basketballhoop'], ['play basketball', 'object', 'basketballhoop'], ['take some shots at the goal', 'object', 'soccergoal'], ['kick the soccer ball', 'object', 'soccergoal'],
+  ['look at the bird bath', 'object', 'birdbath'], ['switch to night', 'object', 'skyswitch'], ['look at the night sky', 'object', 'telescope'], ['build something', 'object', 'workbench'], ['tidy the tools', 'object', 'toolbox'],
   ['xyzzy plugh', 'unknown', null], ['what is the capital of France', 'unknown', null], ['', 'empty', null],
 ];
 T.sweepVoice = async () => {
