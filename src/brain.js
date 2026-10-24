@@ -1238,7 +1238,7 @@ export class Brain {
       if (!d.wall) continue;
       const back = d.wall === 'back';
       const x = back ? d.u : -ROOM.w / 2 + 0.55, z = back ? -ROOM.d / 2 + 0.55 : d.u;
-      if (!this.onFloor(x, z, 0.1) || cellBlocked(grid, x, z)) continue;
+      if (!this.onFloor(x, z, 0.1, 0) || cellBlocked(grid, x, z)) continue;
       spots.push({ d, x, z, yaw: back ? Math.PI : -Math.PI / 2 });
     }
     if (!spots.length) { this.queue.length = 0; return []; }
@@ -1510,13 +1510,13 @@ export class Brain {
   // The room he is in right now ('main' while he is in a doorway), and its floor to wander on (kept a little way from the walls).
   hereId() { const r = this.w.roomIdAt(this.g.root.position.x, this.g.root.position.z); return r === 'door' || !this.w.doors[r] ? 'main' : r; }
   // Is (x, z) on the floor of a room (main or an added one), at least `m` metres in from its walls? (Not in a doorway.)
-  onFloor(x, z, m = 0) {
+  onFloor(x, z, m = 0, mz = m) {
     const id = this.w.roomIdAt(x, z);
-    if (id === 'main') return Math.abs(x) <= 4.5 - m && z >= -3.5 + m && z <= 3.6 - m;
+    if (id === 'main') return Math.abs(x) <= 4.5 - m && z >= -3.5 + mz && z <= 3.6 - mz;
     const d = this.w.doors[id];
     if (!d) return false;
     const b = d.shell.bounds;
-    return x >= b.minX + m && x <= b.maxX - m && z >= b.minZ + m && z <= b.maxZ - m;
+    return x >= b.minX + m && x <= b.maxX - m && z >= b.minZ + mz && z <= b.maxZ - mz;
   }
   // The room an object stands in ('main' for his own and for a doorway), or null when there is no such object.
   roomOfObj(name) { const o = this.obj(name); if (!o) return null; const r = this.w.roomIdAt(o.x, o.z); return this.w.doors[r] ? r : 'main'; }
@@ -1692,7 +1692,7 @@ export class Brain {
     const o = this.obj(name), own = { drums: [0.55, 1.15], easel: [0, 0.8] }[name];
     if (!o || !own) return true;
     const l = o.local(own[0], own[1]), x = o.x + l.x, z = o.z + l.z;
-    if (!this.onFloor(x, z, 0.1)) return false;
+    if (!this.onFloor(x, z, 0.1, 0)) return false;
     return !cellBlocked(makeGrid(this.w.obstacles, 0.05, 0, o.obstacle), x, z);       // not inside another object (furniture merely nearby is fine: he walks round it)
   }
 

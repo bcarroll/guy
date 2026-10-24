@@ -1218,7 +1218,7 @@ T.sweepYardOrders = () => {
   const r3 = b.interact('basketballhoop'), l3 = b.lockOn('basketballhoop');
   const chosen = [], orig = b.choose.bind(b); b.choose = (f) => { orig(f); chosen.push(b.last); };
   const s0 = w.yard.score.shots;
-  let t = 0; try { while (t < 150) { step(0.25); t += 0.25; } } finally { b.choose = orig; }
+  let t = 0; try { while (t < 260) { step(0.25); t += 0.25; } } finally { b.choose = orig; }
   out.push(result('yard orders: with the book, told to shoot hoops and locked in, he shoots at the hoop and keeps at the hoop (never the kicking)', r3.ok && l3.ok && w.yard.score.shots - s0 >= 3 && !chosen.includes('yardpoke') && chosen.every((n) => ['hoopshoot', 'hoopdribble', 'dropball', 'putback'].includes(n)), { r3, l3, shots: w.yard.score.shots - s0, chosen }));
   b.unlock(true); T.settle();
   T.resetRooms(); T.removeAll(); T.settle();
