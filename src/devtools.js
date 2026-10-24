@@ -1192,6 +1192,38 @@ const doorProblems = (id) => {
   return bad;
 };
 
+// ---- 12b. Telling him to use the goal or the hoop (src/brain.js interact, yardbrain.js) ----
+// Before the sport's book he used to just poke the ball about with his foot, whatever he was told, and locking in kept him at it.
+T.sweepYardOrders = () => {
+  const out = [], base = errors.length, w = W(), b = B();
+  T.settle(); T.resetRooms(); T.removeAll(); T.forget(); skillsOf().fading.clear(); T.settle(); T.home();
+  unlockRoom('backyard'); R().add('backyard');
+  for (const id of ['soccergoal', 'basketballhoop']) T.addObject(id);
+  T.forget();
+  const kind = (m) => !/\b(fail|failed|error|wrong|can't|cannot|lost|broken|dangerous)\b/i.test(m);
+  for (const [obj, title] of [['basketballhoop', 'Basketball for Robots'], ['soccergoal', 'Soccer for Robots']]) {
+    b.queue = []; b.step = null; b.pendingActivity = null;
+    const r = b.interact(obj), l = b.lockOn(obj);
+    out.push(result(`yard orders: told to use the ${obj} before reading, he says which books he needs (Outdoor Sports, then ${title}) and does not just poke the ball`, !r.ok && !l.ok && r.message.includes('Outdoor Sports') && r.message.includes(title) && kind(r.message) && b.pendingActivity !== 'yardpoke' && !b.lock, { r, l }));
+    T.learn(['outdoor']);
+    const r2 = b.interact(obj);
+    out.push(result(`yard orders: with Outdoor Sports read he names only ${title}`, !r2.ok && r2.message.includes(title) && !r2.message.includes('Outdoor Sports'), { r2 }));
+    T.forget();
+  }
+  // with the book: told to shoot hoops and locked in, he really shoots (and keeps doing hoop things, not kicking)
+  T.learn(['outdoor', 'outdoor.basketball']); T.settle();
+  b.queue = []; b.step = null; b.pendingActivity = null;
+  const r3 = b.interact('basketballhoop'), l3 = b.lockOn('basketballhoop');
+  const chosen = [], orig = b.choose.bind(b); b.choose = (f) => { orig(f); chosen.push(b.last); };
+  const s0 = w.yard.score.shots;
+  let t = 0; try { while (t < 150) { step(0.25); t += 0.25; } } finally { b.choose = orig; }
+  out.push(result('yard orders: with the book, told to shoot hoops and locked in, he shoots at the hoop and keeps at the hoop (never the kicking)', r3.ok && l3.ok && w.yard.score.shots - s0 >= 3 && !chosen.includes('yardpoke') && chosen.every((n) => ['hoopshoot', 'hoopdribble', 'dropball', 'putback'].includes(n)), { r3, l3, shots: w.yard.score.shots - s0, chosen }));
+  b.unlock(true); T.settle();
+  T.resetRooms(); T.removeAll(); T.settle();
+  out.push(result('yard orders: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 T.sweepRooms = () => {
   const out = [], base = errors.length, w = W();
   T.resetRooms(); T.settle(); T.home();
@@ -2907,6 +2939,7 @@ T.runAll = () => {
   report.restaurant = S(T.sweepRestaurant);
   report.sides = S(T.sweepSides);
   report.metal = S(T.sweepMetal);
+  report.yardOrders = S(T.sweepYardOrders);
   report.needs = S(T.sweepNeeds);
   report.gal = S(T.sweepGal);
   report.workstation = S(T.sweepWorkstation);
