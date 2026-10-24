@@ -1045,16 +1045,10 @@ export function buildRoom(scene) {
   const SHOP_LAYOUT = {
     workbench: (N, L) => ({ n: N - 0.6, lat: 0, face: 'door' }),
     toolbox: (N, L) => ({ n: N - 0.45, lat: 1.7, face: 'door' }),
+    // the two factories do all the building (nothing else is in the room): the wood one by the left wall, the metal one on the far wall
+    // left of the workbench (placed exactly: the far wall is busy, and findSpot keeps a new thing a metre from the walls and its neighbours)
     woodfactory: (N, L) => ({ n: N * 0.25, lat: L / 2 - 0.7, face: 'minusLat' }),
-    sander: (N, L) => ({ n: N * 0.575, lat: L / 2 - 0.6, face: 'minusLat' }),
-    saw: (N, L) => ({ n: N * 0.25, lat: -(L / 2 - 0.65), face: 'plusLat' }),
-    mallet: (N, L) => ({ n: N * 0.575, lat: -(L / 2 - 0.7), face: 'plusLat' }),
-    // the metal line: the factory and the cutter on the far wall left of the workbench, the welder and the anvil between the wood stations
-    // (these two are placed exactly: the far wall is full, and findSpot keeps a new thing a metre from the walls and from its neighbours)
     metalfactory: (N, L) => ({ n: N - 0.98, lat: -(L / 2 - 1.05), face: 'door', exact: true }),
-    metalcutter: (N, L) => ({ n: N - 0.83, lat: -(L / 2 - 1.05) + 1.075, face: 'door', exact: true }),
-    welder: (N, L) => ({ n: N * 0.4, lat: L / 2 - 0.8, face: 'minusLat' }),
-    anvil: (N, L) => ({ n: N * 0.4, lat: -(L / 2 - 0.8), face: 'plusLat' }),
   };
   const shopSpot = (id) => (w) => {
     if (!w.doors.workshop) return null;
@@ -1162,13 +1156,7 @@ export function buildRoom(scene) {
     workbench: [work.workbench, shopSpot('workbench')],
     toolbox: [work.toolbox, shopSpot('toolbox')],
     woodfactory: [work.woodfactory, shopSpot('woodfactory')],
-    saw: [work.saw, shopSpot('saw')],
-    mallet: [work.mallet, shopSpot('mallet')],
-    sander: [work.sander, shopSpot('sander')],
     metalfactory: [work.metalfactory, shopSpot('metalfactory')],
-    metalcutter: [work.metalcutter, shopSpot('metalcutter')],
-    welder: [work.welder, shopSpot('welder')],
-    anvil: [work.anvil, shopSpot('anvil')],
     armchair2: [(x = 0, z = 0) => buildArmchair('armchair2', x, z, 0x8a3b4a), { x: 1.7, z: 3.0 }],
     chair: [(x = 0, z = 0) => buildWoodenChair('chair', x, z), { x: -2.4, z: 3.0 }],
     chair2: [(x = 0, z = 0) => buildWoodenChair('chair2', x, z), { x: -3.2, z: 3.2 }],
@@ -1638,12 +1626,10 @@ export function buildRoom(scene) {
       }
       return false;
     },
-    // What the Workshop has in stock: planks, cut parts, and finished things waiting in storage (counts per kind). Saved with the layout.
-    // `coins` is what the Restaurant has earned (no cap).
-    stock: { wood: 0, parts: 0, metal: 0, mparts: 0, hw: 0, items: {}, coins: 0 },
-    syncStock() {                                    // keep the piles on the workbench and the coins in the till in step with the counts
-      const b = objects.workbench;
-      if (b) { b.setWood(world.stock.wood); b.setParts(world.stock.parts); b.setMetal(world.stock.metal); b.setMParts(world.stock.mparts); b.setHW(world.stock.hw); }
+    // What the Workshop has made and the Restaurant has earned: finished things waiting in storage (counts per kind) and the coins in the
+    // till (no cap). Saved with the layout.
+    stock: { items: {}, coins: 0 },
+    syncStock() {                                    // keep the coins in the till in step with the count
       const r = objects.register;
       if (r) r.setCoins(world.stock.coins);
     },
@@ -1651,11 +1637,6 @@ export function buildRoom(scene) {
       world.stock.coins = Math.max(0, Math.min(999999, (world.stock.coins || 0) + n));
       world.syncStock();
       return world.stock.coins;
-    },
-    addStock(kind, n) {
-      world.stock[kind] = Math.max(0, Math.min(40, (world.stock[kind] || 0) + n));
-      world.syncStock();
-      return world.stock[kind];
     },
     // Take a built thing out of storage and put it in Guy's room (`free`: it is being restored from a save, so storage is not touched).
     // Returns its name, or null if there is none in storage or no room for it.
@@ -1732,7 +1713,6 @@ export function buildRoom(scene) {
       if (!spot) { world.removeObject(id); delete world.removed[id]; return false; }
       o.home = { x: spot.x, z: spot.z };
       o.set(spot.x, spot.z);
-      if (id === 'workbench') world.syncStock();
       return true;
     },
   };

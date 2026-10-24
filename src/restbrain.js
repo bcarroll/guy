@@ -21,11 +21,9 @@ export function installRestaurant(Brain, POSES, H) {
   const { smooth, clamp, rand } = H;
   const sm = (x) => smooth(clamp(x, 0, 1));
 
-  // stirring the pot is a "work" step like sawing and tapping; the workbrain handles those, this handles the stirring
-  const baseCompute = Brain.prototype.computeWork;
+  // stirring the pot is the one "work" step (the hands at work: hobbybrain.js asks computeWork for them)
   Brain.prototype.computeWork = function (s, dt) {
-    if (s.fx.work.kind === 'stir') return this.computeStir(s, dt);
-    return baseCompute.call(this, s, dt);
+    return s.fx.work.kind === 'stir' ? this.computeStir(s, dt) : null;
   };
 
   Object.assign(Brain.prototype, {
@@ -205,7 +203,6 @@ export function installRestaurant(Brain, POSES, H) {
       };
       o.stirring = true;
       this.hobProps.tool = out.tool;
-      this.hobProps.sandPiece = null;
       return out;
     },
   });

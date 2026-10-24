@@ -169,7 +169,7 @@ export function installHobbies(Brain, POSES, H) {
       const e = this.obj('easel');
       if (e && e.restPalette) e.restPalette.visible = true;
       if (s.type !== 'play' || !s.fx) return null;
-      if (s.fx.work) return this.computeWork(s, dt);                    // the Workshop (workbrain.js)
+      if (s.fx.work) return this.computeWork(s, dt);                    // hands at work (the stove: restbrain.js)
       if (s.fx.drums) return this.computeDrums(s);
       if (s.fx.paint) return this.computePaint(s, dt);
       if (s.fx.scope) return this.computeScope(s, dt);
@@ -181,7 +181,7 @@ export function installHobbies(Brain, POSES, H) {
       if (!s) return null;
       if (s.fx && (s.fx.drums || s.fx.sitDrum)) return 'drums';
       if (s.fx && s.fx.paint) return 'easel';
-      if (s.fx && s.fx.work) return s.fx.work.obj;                       // the Workshop station he is working at
+      if (s.fx && s.fx.work) return s.fx.work.obj;                       // the station he is working at
       if (s.type === 'walk' && s.direct && s.anchor && (s.anchor.name === 'drums' || s.anchor.name === 'easel')) return s.anchor.name;
       return null;
     },
@@ -470,7 +470,7 @@ export function installHobbies(Brain, POSES, H) {
     // ------------------------------------------------------------------ props follow the hands
     lateHobbies() {
       const hp = this.hobProps || {}, P = this.props;
-      if (this.lateWork) this.lateWork();                               // what he carries, and the saw / mallet in his hand
+      if (this.lateWork) this.lateWork();                               // what he carries, and the spoon in his hand
       if (!P) return;
       const g = this.g;
       for (const [side, key] of [['Left', 'stickL'], ['Right', 'stickR']]) {
