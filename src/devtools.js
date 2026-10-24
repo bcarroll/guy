@@ -41,14 +41,12 @@ export const MANIFEST = {
     // decor furniture and plants (real objects): the plants are tended, the tables are only furniture
     flowerplant: { skills: [] }, tree: { skills: [] }, coffeetable: { skills: [] }, nightstand: { skills: [] },
     // the Workshop (a room added from the Rooms tab: T.addObject adds it first) and what Guy builds there (counted in storage, added one at a time)
-    workbench: { room: 'workshop', skills: ['workshop'] }, toolbox: { room: 'workshop', skills: ['workshop'] }, mallet: { room: 'workshop', skills: ['workshop'] },
-    woodfactory: { room: 'workshop', skills: ['workshop.materials'] }, saw: { room: 'workshop', skills: ['workshop.materials'] }, sander: { room: 'workshop', skills: ['workshop.materials'] },
+    workbench: { room: 'workshop', skills: ['workshop'] }, toolbox: { room: 'workshop', skills: ['workshop'] },
+    woodfactory: { room: 'workshop', skills: ['workshop.materials'] }, metalfactory: { room: 'workshop', skills: ['workshop.metal'] },
     botprinter: { skills: [] },       // the Build a Bot machine (premium, one use): tested by sweepGal
     workstation: { skills: [] },      // the Learning Workstation (premium): tested by sweepWorkstation
     footstool: { room: 'workshop', built: true }, woodshelves: { room: 'workshop', built: true }, builtchair: { room: 'workshop', built: true }, metalchair: { room: 'workshop', built: true }, bookshelf2: { room: 'workshop', built: true }, eguitar: { room: 'workshop', built: true },
     diningtable3: { room: 'workshop', built: true, alsoRoom: 'restaurant' }, diningtable4: { room: 'workshop', built: true, alsoRoom: 'restaurant' },       // (they go in the Restaurant, so it has to be there)
-    // the metal line (tested by sweepMetal)
-    metalfactory: { room: 'workshop', skills: ['workshop.metal'] }, metalcutter: { room: 'workshop', skills: ['workshop.metal'] }, welder: { room: 'workshop', skills: ['workshop.metal'] }, anvil: { room: 'workshop', skills: ['workshop.metal'] },
     // the Restaurant (another added room): the kitchen and the dining room
     stove: { room: 'restaurant', skills: ['restaurant'] }, kitchencounter: { room: 'restaurant', skills: ['restaurant'] }, register: { room: 'restaurant', skills: ['restaurant'] },
     diningtable: { room: 'restaurant', skills: ['restaurant'] }, diningtable2: { room: 'restaurant', skills: ['restaurant'] },
@@ -82,17 +80,9 @@ export const MANIFEST = {
     guitar: { objects: ['guitar'], skills: ['guitar'], touches: ['guitar'] },
     riff: { objects: ['guitar'], skills: ['guitar'], touches: ['guitar'] },
     // the Workshop: `room` is added first, `stock` is what the Workshop has when it starts, `max` how long (simulated seconds) it may take
-    makewood: { objects: ['woodfactory', 'workbench'], skills: ['workshop.materials'], room: 'workshop', stock: { wood: 0, parts: 0 }, touches: ['woodfactory', 'workbench'] },
-    sawwood: { objects: ['saw', 'workbench'], skills: ['workshop.materials'], room: 'workshop', stock: { wood: 2, parts: 0 }, touches: ['saw', 'workbench'] },
-    tap: { objects: ['mallet'], skills: ['workshop'], room: 'workshop', stock: { wood: 0, parts: 0 }, touches: ['mallet'] },
-    sand: { objects: ['sander', 'workbench'], skills: ['workshop.materials'], room: 'workshop', stock: { wood: 2, parts: 0 }, touches: ['sander', 'workbench'] },
-    tidytools: { objects: ['toolbox'], skills: ['workshop'], room: 'workshop', stock: { wood: 0, parts: 0 }, touches: ['toolbox'] },
+    tidytools: { objects: ['toolbox'], skills: ['workshop'], room: 'workshop', touches: ['toolbox'] },
     dusttop: { objects: ['window', 'window2', 'footstool'], skills: ['decorate'], room: 'workshop', max: 90, touches: ['footstool'] },
-    makemetal: { objects: ['metalfactory', 'workbench'], skills: ['workshop.metal'], room: 'workshop', stock: { metal: 0 }, touches: ['metalfactory', 'workbench'] },
-    cutmetal: { objects: ['metalcutter', 'workbench'], skills: ['workshop.metal'], room: 'workshop', stock: { metal: 2 }, touches: ['metalcutter', 'workbench'] },
-    hammer: { objects: ['anvil'], skills: ['workshop.metal'], room: 'workshop', stock: {}, touches: ['anvil'] },
-    weld: { objects: ['welder'], skills: ['workshop.metal'], room: 'workshop', stock: {}, touches: ['welder'] },
-    build: { objects: ['workbench', 'saw', 'mallet', 'toolbox'], skills: ['workshop', 'decorate'], room: 'workshop', recipe: 'footstool', stock: { wood: 0, parts: 4 }, max: 260, touches: ['workbench', 'saw', 'mallet', 'toolbox', 'sander', 'woodfactory', 'tree', 'footstool', 'chair', 'chair2', 'armchair', 'armchair2', 'builtchair', 'metalchair'] },
+    build: { objects: ['woodfactory', 'metalfactory'], skills: ['workshop', 'decorate'], room: 'workshop', recipe: 'footstool', max: 260, touches: ['woodfactory', 'metalfactory', 'tree', 'telescope', 'flowerplant', 'plant', 'footstool', 'chair', 'chair2', 'armchair', 'armchair2', 'builtchair', 'metalchair'] },
     // the Restaurant: `customer` is the state of a customer set up before it starts (customers.js stage()); the rest as for the Workshop
     takeorder: { objects: ['stove', 'kitchencounter', 'register', 'diningtable'], skills: ['restaurant'], room: 'restaurant', customer: 'waiting', touches: ['diningtable'] },
     cook: { objects: ['stove', 'kitchencounter', 'register', 'diningtable'], skills: ['restaurant'], room: 'restaurant', customer: 'ordered', max: 200, touches: ['stove', 'kitchencounter'] },
@@ -144,7 +134,7 @@ export const MANIFEST = {
     stars: { then: 'stargaze' }, darksky: { then: 'darkstargaze' }, scopecare: { then: 'scopecare' },
     decorating: { then: 'dust' },
     outdoor: { then: 'yardsit' }, soccer: { then: 'goalshot' }, basketball: { then: 'hoopshoot' },
-    workshop: { then: 'build' }, woodmetal: { then: 'makewood' }, furniture: { then: 'build' }, metalfab: { then: 'makemetal' }, restaurant: { then: 'takeorder' },
+    workshop: { then: 'build' }, woodmetal: { then: 'build' }, furniture: { then: 'build' }, metalfab: { then: 'build' }, restaurant: { then: 'takeorder' },
   },
   // records and tracks that must exist
   albums: {
@@ -177,9 +167,6 @@ export const MANIFEST = {
     { id: 'yard-mow', activity: 'mow', pose: 'walk', t: 1, view: 'side', push: true, expect: 'both hands on the mower handle, walking behind it, stripes cut in the grass' },
     { id: 'scope-care', activity: 'scopecare', pose: 'scopeCare', t: 13, view: 'front', expect: 'squatting beside the tripod with a hand on one leg' },
     { id: 'stool-dust', activity: 'dusttop', pose: 'reach', t: 4, view: 'front', dist: 3.6, expect: 'standing ON the foot stool (feet on top of it, not in the floor), right hand wiping along the top of the window frame, the stool not passing through him' },
-    { id: 'metal-cut', activity: 'cutmetal', pose: 'workCut', t: 4, view: 'front', expect: 'standing at the metal cutter, right hand gripping the lever and pulling it down, left hand holding the bar; the blade comes down with the lever' },
-    { id: 'metal-weld', activity: 'weld', pose: 'workWeld', t: 4, view: 'front', expect: 'torch pointing down at the seam with a bright glow and a few sparks, left hand steadying the parts' },
-    { id: 'metal-hammer', activity: 'hammer', pose: 'workTap', t: 4, view: 'front', expect: 'hammer raised over the anvil, left hand on the piece' },
     { id: 'dust-frame', activity: 'dust', pose: 'reach', t: 2.5, view: 'front', expect: 'facing the wall, right hand wiping along the lower edge of a frame (not inside the wall or his own head)' },
     { id: 'dance-twist', activity: 'dancemoves', pose: 'twist', t: 4, view: 'front', expect: 'hips and shoulders twisting opposite ways, knees bent and apart, elbows bent, feet flat' },
     { id: 'dance-shuffle', activity: 'dancemoves', pose: 'shuffle', t: 4, view: 'front', expect: 'one foot slides forward at a time, elbows bent and pumping alternately' },
@@ -344,7 +331,6 @@ T.prep = (name) => {
   if (m.room === 'backyard' && W().yard) W().yard.snapNight(false);                                          // always the same daylight for the pictures                           // the room the activity happens in
   for (const id of m.objects || []) if (T.addObject(id)) done.push(id);
   T.learn(m.skills || []);
-  if (m.stock) { Object.assign(W().stock, { wood: 0, parts: 0, metal: 0, mparts: 0, hw: 0 }, m.stock); W().syncStock(); }
   if (m.recipe) {                                                                                    // what to build (the house's real needs are tested by sweepNeeds)
     const r = RECIPES_DEF[m.recipe];
     for (const [n, o] of Object.entries(W().objects)) if (o.kind === r.object) { W().storeInstance(n); B().objectRemoved(n); }       // (and none of them already: he stops at the recipe's cap)
@@ -1166,10 +1152,7 @@ T.sweepSounds = () => {
   act('the brush and the paint', 'brush', 'paint');
   act('the telescope focus ticks', 'tick', 'stargaze');
   act('wiping the telescope', 'wipe', 'scopecare');
-  act('the Wood Factory runs', 'machine', 'makewood');
-  act('sawing a plank', 'saw', 'sawwood');
-  act('tapping with the rubber mallet', 'tap', 'tap');
-  act('sanding', 'sand', 'sand');
+  act('a factory runs', 'machine', 'build');
   act('the toolbox lid', 'lid', 'tidytools', 2);
   act('he sits down in a chair', 'sit', 'sit');
   sound('learning something chimes', 'chime', () => { /* main.js asks for it when brain.onLearn fires */ if (brain.onLearn) brain.onLearn({ blurb: 'a test' }); });
@@ -1188,7 +1171,7 @@ T.resetRooms = () => {
   for (const r of ROOM_CATALOG) R().reset(r.id);                                  // its furniture goes with it
   for (const [name, o] of Object.entries(W().objects)) if (o.kind) { W().storeInstance(name); b.objectRemoved(name); }       // and what Guy built that stands in his room
   W().paintings.reset();                                                          // Guy's paintings come down and the list is emptied
-  const st = W().stock; st.wood = 0; st.parts = 0; st.metal = 0; st.mparts = 0; st.hw = 0; st.items = {}; st.coins = 0;   // and what the Workshop made and the Restaurant earned
+  const st = W().stock; st.items = {}; st.coins = 0;   // and what the Workshop made and the Restaurant earned
   if (W().gal.exists()) W().gal.remove();                                       // GAL goes too (the machine is not given back)
   delete W().removed.botprinter;
   W().restaurant.clear(); W().restaurant.paused = false; W().restaurant.nServed = 0; W().restaurant.stats = { arrived: 0, paid: 0, gaveUp: 0 };
@@ -1601,13 +1584,13 @@ T.sweepVisit = () => {
 };
 
 // ---- 18. The Workshop: the furniture and tools, and what Guy builds with them (src/workobjects.js, workbrain.js, workshop.js) ----
-const SHOP = ['workbench', 'toolbox', 'woodfactory', 'saw', 'mallet', 'sander'];
+const SHOP = ['workbench', 'toolbox', 'woodfactory'];
 const ALL_SHOP_SKILLS = ['workshop', 'workshop.materials', 'workshop.furniture', 'decorate'];
-const METAL = ['metalfactory', 'metalcutter', 'welder', 'anvil'];
+const METAL = ['metalfactory'];
 const shopSetup = (wall = 'right', skills = ALL_SHOP_SKILLS) => {
   T.settle();                                                                      // (a cut-short job puts its stock back while he settles: do that first)
   T.resetRooms(); T.removeAll(); T.forget(); skillsOf().fading.clear(); T.settle(); T.home();
-  const st0 = W().stock; st0.wood = 0; st0.parts = 0; st0.metal = 0; st0.mparts = 0; st0.hw = 0; st0.items = {};
+  W().stock.items = {};
   const res = R().add('workshop', { walls: [wall] });
   for (const id of SHOP) T.addObject(id);
   T.learn(skills);
@@ -1625,7 +1608,7 @@ T.sweepWorkshop = () => {
   const ax = (id) => { const o = w.objects[id]; return o ? { x: o.x, z: o.z } : null; };
   for (const wall of ['right', 'front', 'back']) {
     const res = shopSetup(wall);
-    out.push(result(`workshop: ${wall} wall: the room and all six pieces of furniture are added through the Catalog`, res.ok && SHOP.every((id) => !!w.objects[id]), { res: res.ok }));
+    out.push(result(`workshop: ${wall} wall: the room and its three pieces of furniture are added through the Catalog`, res.ok && SHOP.every((id) => !!w.objects[id]), { res: res.ok }));
     const objs = SHOP.map((id) => w.objects[id]).filter(Boolean);
     const inside = objs.every((o) => w.roomIdAt(o.x, o.z) === 'workshop' && w.fits(o, o.x, o.z));
     let overlap = null;
@@ -1633,7 +1616,7 @@ T.sweepWorkshop = () => {
     out.push(result(`workshop: ${wall} wall: everything stands inside the room, clear of the door and of each other`, inside && !overlap, { inside, overlap }));
     // where he stands to use each one is free floor in the room
     const axes = w.shellAxes('workshop');
-    const stands = [['workbench', 0.78], ['toolbox', 0.6], ['woodfactory', 0.78], ['saw', 0.72], ['mallet', 0.55], ['sander', 0.52]].map(([n, f]) => { const o = w.objects[n], l = o.local(0, f); return { n, x: o.x + l.x, z: o.z + l.z }; });
+    const stands = [['workbench', 0.78], ['toolbox', 0.6], ['woodfactory', 0.78]].map(([n, f]) => { const o = w.objects[n], l = o.local(0, f); return { n, x: o.x + l.x, z: o.z + l.z }; });
     const badStand = stands.filter((p) => w.roomIdAt(p.x, p.z) !== 'workshop' || w.obstacles.some((o) => p.x > o.x0 - 0.25 && p.x < o.x1 + 0.25 && p.z > o.z0 - 0.25 && p.z < o.z1 + 0.25 && o !== w.objects[p.n].obstacle));
     out.push(result(`workshop: ${wall} wall: the place he stands to use each one is free floor`, !badStand.length, { badStand: badStand.map((p) => p.n) }));
     const wbq = w.objects.workbench.local(0, 1);
@@ -1642,23 +1625,23 @@ T.sweepWorkshop = () => {
   // 2. what he says when he cannot (kind messages)
   shopSetup('right', []);
   b.queue = []; b.step = null;
-  const noBook = b.interact('saw');
+  const noBook = b.interact('woodfactory');
   const kind = (m) => !BANNED.test(m);                       // kind wording (these messages are longer than a toast)
-  out.push(result('workshop: without the book he is refused kindly and told which book', !noBook.ok && /Wood & Metal Basics/.test(noBook.message) && kind(noBook.message), { noBook }));
-  T.learn(['workshop.materials']);
-  const noWood = b.interact('saw');
-  out.push(result('workshop: with the book but no planks he says to make some at the Wood Factory', !noWood.ok && /Wood Factory/.test(noWood.message) && kind(noWood.message), { noWood }));
+  out.push(result('workshop: without the book he is refused kindly and told which book', !noBook.ok && /Workshop Basics/.test(noBook.message) && kind(noBook.message), { noBook }));
   const noBench = b.interact('workbench');
   out.push(result('workshop: the workbench names the book he still needs (Workshop Basics)', !noBench.ok && /Workshop Basics/.test(noBench.message) && kind(noBench.message), { noBench }));
-  // 3. a whole build from nothing: planks from the factory, sawn, tapped, sanded, finished and counted in storage
+  T.learn(['workshop']);
+  w.removeObject('woodfactory'); b.objectRemoved('woodfactory');
+  const noFac = b.interact('workbench');
+  out.push(result('workshop: with the book but no factory he says he needs one', !noFac.ok && /Factory/.test(noFac.message) && kind(noFac.message), { noFac }));
+  // 3. a whole build from nothing: the factory alone makes it, he takes it off the tray, and it is put together where it is needed
   const builds = [['footstool', 'right'], ['footstool', 'front'], ['footstool', 'back'], ['builtchair', 'right']];
   for (const [recipe, wall] of builds) {
     shopSetup(wall);
     const R0 = RECIPES_DEF[recipe];
     b.pickRecipe = () => recipe;
     const door = w.doors.workshop, s0 = sfxNow();
-    const planks = Math.ceil(R0.parts / 2), runs = Math.ceil(planks / 4);
-    const r = b.interact('workbench');
+    const r = b.interact('woodfactory');
     let t = 0, wentIn = false, bad = 0, doorOpened = false, armed = false;
     while (t < 520) {
       step(0.25); t += 0.25;
@@ -1669,46 +1652,35 @@ T.sweepWorkshop = () => {
       if (armed && wentIn && b.inMain() && b.last !== 'build' && door.open === 0) break;
     }
     delete b.pickRecipe;
-    const st = w.stock, s1 = sfxNow(), saw = w.objects.saw, ml = w.objects.mallet, fac = w.objects.woodfactory, tb = w.objects.toolbox, wb = w.objects.workbench;
+    const st = w.stock, s1 = sfxNow(), fac = w.objects.woodfactory;
     const made = Object.values(w.objects).filter((o) => o.kind === R0.object), item = made.length, where = made.map((o) => w.roomIdAt(o.x, o.z)).join();       // flat-packed, carried out and put together where it is needed
-    const stored0 = st.items[R0.object] || 0;
-    const left = runs * 4 - planks;
-    out.push(result(`workshop: build ${recipe} from nothing (${wall} wall): it goes in, makes planks, saws, taps${R0.sand ? ', sands' : ''}, finishes and comes out, and the thing it made is put together where it is needed (in the room)`, r.ok && wentIn && doorOpened && item === 1 && where === 'main' && stored0 === 0 && b.inMain() && door.open === 0, { r, wentIn, doorOpened, item, where, stored0, inMain: b.inMain(), open: door.open, t }));
-    out.push(result(`workshop: build ${recipe} (${wall}): the stock adds up (${planks} planks sawn, ${left} left over, no parts left, nothing carried or left on a machine)`, st.wood === left && st.parts === 0 && b.carry === null && !saw.plankA.visible && !ml.assembly.children.length && !fac.tray.children.length && tb.open === 0, { stock: JSON.parse(JSON.stringify(st)), left, carry: b.carry }));
-    const needSounds = ['saw', 'tap', 'machine', 'lid', 'chime', ...(R0.sand ? ['sand'] : [])];
+    const stored0 = st.items[R0.object] || 0, wantRoom = 'main';
+    out.push(result(`workshop: build ${recipe} from nothing (${wall} wall): he goes in, presses the Wood Factory's button, takes it off the tray, and it is put together where it is needed (in the ${wantRoom} room)`, r.ok && wentIn && doorOpened && item === 1 && where === wantRoom && stored0 === 0 && b.inMain() && door.open === 0, { r, wentIn, doorOpened, item, where, stored0, inMain: b.inMain(), open: door.open, t }));
+    out.push(result(`workshop: build ${recipe} (${wall}): nothing is left on the factory's tray or in his hands`, b.carry === null && !fac.tray.children.length && fac.running === 0 && !(w.building || []).length, { carry: b.carry, tray: fac.tray.children.length, running: fac.running }));
+    const needSounds = ['click', 'machine', 'chime'];
     out.push(result(`workshop: build ${recipe} (${wall}): every step makes its sound`, needSounds.every((k) => heard(s0, s1, k) > 0), { silent: needSounds.filter((k) => !(heard(s0, s1, k) > 0)) }));
     out.push(result(`workshop: build ${recipe} (${wall}): he never stands where he should not, and there are no errors`, bad === 0 && errors.length === base, { bad, errors: errors.slice(base) }));
   }
-  // 4. cut short: nothing is lost or left behind
-  const cut = (label, cond, expect) => {
+  // 4. cut short, or the factory taken away: nothing is lost or left behind
+  const cut = (label, cond, remove = false, kept = 0) => {
     shopSetup('right');
-    w.stock.wood = 3; w.syncStock();
-    b.queue = []; b.step = null; b.choose('sawwood');
-    const t = runUntil(cond, 90);
-    const had = { carry: b.carry, wood: w.stock.wood, parts: w.stock.parts };
-    b.skip(); T.settle();
-    const st = w.stock, saw = w.objects.saw;
-    out.push(result(`workshop: cut short ${label}: the stock is put back and nothing is left on the sawhorse or in his hands`, t < 90 && st.wood === expect.wood && st.parts === expect.parts && b.carry === null && !saw.plankA.visible && b.inMain(), { had, stock: { wood: st.wood, parts: st.parts }, expect, t }));
-  };
-  cut('while carrying the plank to the sawhorse', () => b.carry === 'plank', { wood: 3, parts: 0 });
-  cut('while sawing', () => b.pose === 'workSaw', { wood: 3, parts: 0 });
-  cut('while carrying the parts away', () => b.carry === 'parts', { wood: 2, parts: 2 });
-  {
-    shopSetup('right');
-    w.stock.wood = 0; w.stock.parts = 4; w.syncStock();
-    b.pickRecipe = () => 'footstool';
+    b.pickRecipe = () => 'builtchair';
     b.queue = []; b.step = null; b.choose('build');
-    const t = runUntil(() => b.pose === 'workTap' && b.step && b.step.t > 2, 120);
-    const during = w.stock.parts;
-    b.skip(); T.settle();
+    const fac = w.objects.woodfactory;
+    const t = runUntil(cond, 90), had = { carry: b.carry, tray: fac.tray.children.length, running: fac.running };
+    if (remove) { w.removeObject('woodfactory'); b.objectRemoved('woodfactory'); } else b.skip();
+    T.settle();
     delete b.pickRecipe;
-    out.push(result('workshop: cut short while tapping the parts together: they go back in the stock', t < 120 && during === 0 && w.stock.parts === 4 && !w.objects.mallet.assembly.children.length && b.carry === null && b.inMain(), { during, after: w.stock.parts, t }));
-  }
+    out.push(result(`workshop: ${label}: nothing is left on the tray or in his hands, nothing is half-made, and he is back in the room`, t < 90 && b.carry === null && !fac.tray.children.length && Object.values(w.objects).filter((o) => o.kind).length + (w.stock.items.builtchair || 0) === kept && !(w.building || []).length && b.inMain(), { had, t, carry: b.carry }));
+  };
+  cut('cut short while the factory runs', () => w.objects.woodfactory.running > 0.5);
+  cut('cut short with the finished thing on the tray', () => w.objects.woodfactory.tray.children.length > 0);
+  cut('cut short while carrying it out flat-packed (the finished chair is set down, not lost)', () => b.carry === 'flat', false, 1);
+  cut('the Wood Factory taken away while it runs', () => w.objects.woodfactory.running > 0.5, true);
   // 5. locked on the workbench he stays in the Workshop between jobs and comes out when told to stop
   shopSetup('right');
-  w.stock.wood = 2; w.syncStock();
   const siteOrig = b.siteFor; b.siteFor = () => null;            // (what he builds stays in the Workshop: a delivery would take him out, which is tested by sweepNeeds)
-  const lk = b.lockOn('workbench');
+  const lk = b.lockOn('toolbox');
   const chosen = []; const origChoose = b.choose.bind(b);
   b.choose = (f) => { origChoose(f); chosen.push(b.last); };
   let stayed = true, lt = 0;
@@ -1716,7 +1688,7 @@ T.sweepWorkshop = () => {
   const stillIn = b.inWorkshop() && !!b.lock;
   b.unlock(true);
   const t5 = runUntil(() => b.inMain() && w.doors.workshop.open === 0, 120);
-  out.push(result('workshop: locked on the workbench he keeps working in the Workshop without going out between jobs, and comes out when told to stop', lk.ok && stayed && stillIn && chosen.length >= 2 && chosen.every((n) => ['build', 'makewood', 'sawwood', 'putback', 'dropball'].includes(n)) && t5 < 120 && b.inMain(), { lk: lk.ok, stayed, stillIn, chosen, t5 }));
+  out.push(result('workshop: locked on the toolbox he keeps working in the Workshop without going out between jobs, and comes out when told to stop', lk.ok && stayed && stillIn && chosen.length >= 2 && chosen.every((n) => ['tidytools', 'putback', 'dropball'].includes(n)) && t5 < 120 && b.inMain(), { lk: lk.ok, stayed, stillIn, chosen, t5 }));
   // 6. what he makes is counted in storage and added to the room from the Catalog, one at a time, as real objects
   T.resetRooms(); T.removeAll(); R().add('workshop'); w.stock.items = { footstool: 2, builtchair: 1 };
   openObjects('all');
@@ -1736,7 +1708,7 @@ T.sweepWorkshop = () => {
   out.push(result('workshop: a restored layout brings the built things back where they were, with the storage counts as saved', !!w.objects.footstool_1 && near(w.objects.footstool_1.x, px) && near(w.objects.footstool_1.z, pz) && !!w.objects.builtchair_1 && w.stock.items.footstool === 1 && !w.stock.items.builtchair, { items: { ...w.stock.items } }));
   // 7. the room takes its furniture and stock with it
   T.resetRooms();
-  out.push(result('workshop: taking the room away takes its furniture and stock with it, and nobody is left inside', !SHOP.some((id) => w.objects[id]) && b.inMain() && w.stock.wood === 0 && Object.keys(w.stock.items).length === 0));
+  out.push(result('workshop: taking the room away takes its furniture and stock with it, and nobody is left inside', !SHOP.some((id) => w.objects[id]) && b.inMain() && Object.keys(w.stock.items).length === 0));
   T.removeAll(); T.settle(); machine().hidden = true;
   out.push(result('workshop: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
@@ -1934,16 +1906,13 @@ T.sweepRestaurant = () => {
 // [object, activity, room, stock, customer, proof]: each is put against each of the four walls of its room, turned every way, and the job has to be
 // really done (`proof` is what must have happened), not just given up on
 const SIDES_TESTS = [
-  ['woodfactory', 'makewood', 'workshop', { wood: 0, parts: 0 }, null, (s) => s.wood >= 4], ['toolbox', 'tidytools', 'workshop', { wood: 0, parts: 0 }, null, (s) => s.lid],
-  ['saw', 'sawwood', 'workshop', { wood: 2, parts: 0 }, null, (s) => s.poses.has('workSaw')], ['mallet', 'tap', 'workshop', { wood: 0, parts: 0 }, null, (s) => s.poses.has('workTap')],
-  ['sander', 'sand', 'workshop', { wood: 2, parts: 0 }, null, (s) => s.poses.has('workSand')], ['workbench', 'sawwood', 'workshop', { wood: 2, parts: 0 }, null, (s) => s.poses.has('workSaw')],
+  ['woodfactory', 'build', 'workshop', null, null, (s) => s.made], ['toolbox', 'tidytools', 'workshop', null, null, (s) => s.lid],
   ['stove', 'cook', 'restaurant', null, 'ordered', (s) => s.poses.has('workTap') && s.cooked], ['kitchencounter', 'serve', 'restaurant', null, 'cooked', (s) => s.served],
   ['register', 'takepay', 'restaurant', null, 'paying', (s) => s.coins > 0],
-  ['metalfactory', 'makemetal', 'workshop', { metal: 0 }, null, (s) => s.metal >= 4], ['metalcutter', 'cutmetal', 'workshop', { metal: 2 }, null, (s) => s.poses.has('workCut')],
-  ['welder', 'weld', 'workshop', {}, null, (s) => s.poses.has('workWeld')], ['anvil', 'hammer', 'workshop', {}, null, (s) => s.poses.has('workTap')],
+  ['metalfactory', 'build', 'workshop', null, null, (s) => s.made],
 ];
 // ---- Locking a door: the robots stay out of the room behind it; the door menu goes to the room on the far side of the face that was pressed ----
-const WORK_NAMES = ['makewood', 'sawwood', 'tap', 'sand', 'tidytools', 'build', 'makemetal', 'cutmetal', 'hammer', 'weld'];
+const WORK_NAMES = ['tidytools', 'build', 'dusttop'];
 T.sweepDoorLock = () => {
   const out = [], base = errors.length, w = W(), b = B(), g = G();
   const menu = document.getElementById('menu'), vis = () => [...menu.querySelectorAll('[data-act]')].filter((x) => !x.hidden);
@@ -2079,30 +2048,33 @@ T.sweepSides = (only = null, onlyRot = null, onlyWall = null) => {
         o.set(x2, z2); void x; void z;
         const clash = w.obstacles.some((p) => p !== o.obstacle && p.x0 < o.obstacle.x1 && p.x1 > o.obstacle.x0 && p.z0 < o.obstacle.z1 && p.z1 > o.obstacle.z0);
         if (clash || !w.fits(o, o.x, o.z)) { o.rotate(0); continue; }          // that spot is taken by another piece: not a test of this one
-        if (stock) { Object.assign(w.stock, { wood: 0, parts: 0, metal: 0, mparts: 0 }, stock); w.syncStock(); }
         if (customer) { w.restaurant.clear(); w.restaurant.paused = true; w.restaurant.headless = true; w.restaurant.stage(customer); }
         tried++;
-        b.queue = []; b.step = null; b.choose(act);
+        b.queue = []; b.step = null;
+        const siteOrig = b.siteFor;
+        if (act === 'build') { T.learn(['workshop', 'workshop.metal']); b.pickRecipe = () => (id === 'metalfactory' ? 'metalchair' : 'footstool'); b.siteFor = () => null; }       // (what he makes stays in the Workshop)
+        b.choose(act);
         let t = 0, off = 0, done = false, pressed = 0; const e0 = errors.length, hist = [];
         const labels = [];
-        const seen = { poses: new Set(), lid: false, cooked: false, served: false, wood: 0, metal: 0, coins: 0 };
+        const seen = { poses: new Set(), lid: false, cooked: false, served: false, made: false, coins: 0 };
         while (t < 260) {
           step(0.25); t += 0.25;
           if (b.step) seen.poses.add(b.pose);
           if (labels[labels.length - 1] !== label()) labels.push(label().slice(0, 50) + '@' + g.pos.x.toFixed(1) + ',' + g.pos.z.toFixed(1));
           if (w.objects.toolbox && w.objects.toolbox.open > 0.2) seen.lid = true;
           if (customer && w.restaurant.list[0] && ['cooked', 'eating'].includes(w.restaurant.list[0].state)) seen.cooked = true;
-          seen.served = w.restaurant.nServed > 0; seen.coins = w.stock.coins; seen.wood = Math.max(seen.wood, w.stock.wood); seen.metal = Math.max(seen.metal, w.stock.metal);
+          seen.served = w.restaurant.nServed > 0; seen.coins = w.stock.coins; if (w.objects[id] && w.objects[id].tray && w.objects[id].tray.children.length) seen.made = true;
           if (!w.walkable(g.pos.x, g.pos.z) && !w.inMain(g.pos.x, g.pos.z)) off++;
           hist.push([g.pos.x, g.pos.z]);
           if (hist.length > 4) { const a = hist[hist.length - 5]; if (b.moving && Math.hypot(a[0] - g.pos.x, a[1] - g.pos.z) < 0.12) pressed += 0.25; }       // walking but getting nowhere: pushing against a wall
           if (b.last !== act && t > 1) { done = true; break; }
         }
         if (customer) w.restaurant.clear();
+        delete b.pickRecipe; b.siteFor = siteOrig;
         const ok = done && off === 0 && pressed < 2 && errors.length === e0 && b.carry === null && proof(seen);
         const ls = b.lastStand, nowhere = !ok && ls && ls.name === id && Object.keys(ls.why).length >= 4;
         if (nowhere) { tried--; T.settle(); continue; }                                 // every side is walled in or taken by other furniture: nothing to test
-        if (ok) passed++; else bad.push({ rot, wall: wallName, gap, pressed, done, off, t, errs: errors.slice(e0, e0 + 1), poses: [...seen.poses].join('/'), labels: labels.slice(0, 6), obj: [+o.x.toFixed(2), +o.z.toFixed(2), o.rot], wood: seen.wood });
+        if (ok) passed++; else bad.push({ rot, wall: wallName, gap, pressed, done, off, t, errs: errors.slice(e0, e0 + 1), poses: [...seen.poses].join('/'), labels: labels.slice(0, 6), obj: [+o.x.toFixed(2), +o.z.toFixed(2), o.rot] });
         T.settle();
       }
     }
@@ -2121,76 +2093,66 @@ const metalSetup = (wall = 'right') => {
 };
 T.sweepMetal = () => {
   const out = [], base = errors.length, w = W(), b = B(), g = G();
-  // 1. the metal line is added through the Catalog with its book, and stands in the room
+  const kind = (m) => !BANNED.test(m);
+  // 1. the Metal Factory is added through the Catalog with its book, and stands in the room
   for (const wall of ['right', 'front', 'back']) {
     const res = metalSetup(wall);
     const objs = [...SHOP, ...METAL].map((id) => w.objects[id]).filter(Boolean);
-    out.push(result(`metal: ${wall} wall: the four metal pieces are added through the Catalog, with their book on the shelf`, res.ok && METAL.every((id) => !!w.objects[id]) && w.objects.shelf.books.some((r) => r.def.id === 'metalfab'), { res: res.ok, have: METAL.filter((id) => !!w.objects[id]) }));
+    out.push(result(`metal: ${wall} wall: the Metal Factory is added through the Catalog, with its book on the shelf`, res.ok && METAL.every((id) => !!w.objects[id]) && w.objects.shelf.books.some((r) => r.def.id === 'metalfab'), { res: res.ok, have: METAL.filter((id) => !!w.objects[id]) }));
     const inside = objs.every((o) => w.roomIdAt(o.x, o.z) === 'workshop' && w.fits(o, o.x, o.z));
     let overlap = null;
     for (let i = 0; i < objs.length; i++) for (let j = i + 1; j < objs.length; j++) if (rectsOv(objs[i].obstacle, objs[j].obstacle)) overlap = [objs[i].name, objs[j].name];
     out.push(result(`metal: ${wall} wall: everything stands inside the room, clear of the door and of each other`, inside && !overlap, { inside, overlap }));
-    const stands = [['metalfactory', 0.78], ['metalcutter', 0.72], ['welder', 0.7], ['anvil', 0.55]].map(([n, f]) => { const o = w.objects[n], l = o.local(0, f); return { n, x: o.x + l.x, z: o.z + l.z }; });
-    const badStand = stands.filter((p) => w.roomIdAt(p.x, p.z) !== 'workshop' || w.obstacles.some((o) => p.x > o.x0 - 0.25 && p.x < o.x1 + 0.25 && p.z > o.z0 - 0.25 && p.z < o.z1 + 0.25 && o !== w.objects[p.n].obstacle));
-    out.push(result(`metal: ${wall} wall: the place he stands to use each one is free floor`, !badStand.length, { badStand: badStand.map((p) => p.n) }));
+    const o = w.objects.metalfactory, l = o.local(0, 0.78), p = { x: o.x + l.x, z: o.z + l.z };
+    const blocked = w.roomIdAt(p.x, p.z) !== 'workshop' || w.obstacles.some((q) => p.x > q.x0 - 0.25 && p.x < q.x1 + 0.25 && p.z > q.z0 - 0.25 && p.z < q.z1 + 0.25 && q !== o.obstacle);
+    out.push(result(`metal: ${wall} wall: the place he stands to use the Metal Factory is free floor`, !blocked, { p }));
   }
   // 2. what he says when he cannot (kind messages)
   shopSetup('right', ['workshop']); for (const id of METAL) T.addObject(id);
   b.queue = []; b.step = null;
-  const kind = (m) => !BANNED.test(m);
   const noBook = b.interact('metalfactory');
   out.push(result('metal: without the book he is refused kindly and told which book', !noBook.ok && /Metal Fabrication for Robots/.test(noBook.message) && kind(noBook.message), { noBook }));
-  T.learn(['workshop.metal']);
-  const noBars = b.interact('metalcutter');
-  out.push(result('metal: with the book but no bars he says to make some at the Metal Factory', !noBars.ok && /Metal Factory/.test(noBars.message) && kind(noBars.message), { noBars }));
-  const noParts = b.interact('welder');
-  out.push(result('metal: with the book but no parts he says to cut some at the Metal Cutter', !noParts.ok && /Metal Cutter/.test(noParts.message) && kind(noParts.message), { noParts }));
-  // 3. a whole metal build from nothing: bars from the factory, cut, welded, hammered, finished and standing in the Workshop
-  for (const [recipe, wall] of [['metalchair', 'right'], ['metalchair', 'front'], ['metalchair', 'back']]) {
+  // 3. a whole metal build from nothing: the Metal Factory alone makes it (a guitar uses both factories, metal first)
+  for (const [recipe, wall] of [['metalchair', 'right'], ['metalchair', 'front'], ['metalchair', 'back'], ['eguitar', 'right']]) {
     metalSetup(wall);
     const R0 = RECIPES_DEF[recipe];
     b.pickRecipe = () => recipe;
     const door = w.doors.workshop, s0 = sfxNow();
-    const bars = Math.ceil(R0.metal.parts / 2), runs = Math.ceil(bars / 4);
-    const r = b.interact('workbench');
-    let t = 0, wentIn = false, bad = 0, armed = false;
+    const r = b.interact(recipe === 'eguitar' ? 'workbench' : 'metalfactory');
+    let t = 0, wentIn = false, bad = 0, armed = false; const order = [];
     while (t < 700) {
       step(0.25); t += 0.25;
       if (!armed && b.last === 'build') { armed = true; b.pendingActivity = 'wander'; }
       if (b.inWorkshop()) wentIn = true;
+      for (const f of ['metalfactory', 'woodfactory']) if (w.objects[f] && w.objects[f].running > 0 && !order.includes(f)) order.push(f);
       if (!w.walkable(g.pos.x, g.pos.z) && !w.inMain(g.pos.x, g.pos.z)) bad++;
       if (armed && wentIn && b.inMain() && b.last !== 'build' && door.open === 0) break;
     }
     delete b.pickRecipe;
-    const st = w.stock, s1 = sfxNow(), cu = w.objects.metalcutter, wd = w.objects.welder, an = w.objects.anvil, mf = w.objects.metalfactory;
+    const st = w.stock, s1 = sfxNow(), mf = w.objects.metalfactory, wf = w.objects.woodfactory;
     const made = Object.values(w.objects).filter((o) => o.kind === R0.object), item = made.length, where = made.map((o) => w.roomIdAt(o.x, o.z)).join();
-    const left = runs * 4 - bars;
-    out.push(result(`metal: build ${recipe} from nothing (${wall} wall): it goes in, makes bars, cuts, welds, hammers, finishes and comes out, and the chair is put together in the room`, r.ok && wentIn && item === 1 && where === 'main' && (st.items[R0.object] || 0) === 0 && b.inMain() && door.open === 0, { r, wentIn, item, where, inMain: b.inMain(), open: door.open, t }));
-    out.push(result(`metal: build ${recipe} (${wall}): the stock adds up (${bars} bars cut, ${left} left over, no parts left, nothing carried or left on a machine)`, st.metal === left && st.mparts === 0 && st.hw === 0 && st.wood === 0 && b.carry === null && !cu.barA.visible && !wd.assembly.children.length && !an.assembly.children.length && !mf.tray.children.length && !(w.building || []).length, { stock: JSON.parse(JSON.stringify(st)), left, carry: b.carry }));
-    const need = ['machine', 'thud', 'lid', 'knock', 'sizzle', 'chime'];
+    const want = recipe === 'eguitar' ? 'metalfactory,woodfactory' : 'metalfactory';
+    out.push(result(`metal: build ${recipe} from nothing (${wall} wall): he goes in, uses ${recipe === 'eguitar' ? 'the Metal Factory and then the Wood Factory' : 'the Metal Factory alone'}, comes out, and it is put together in the room`, r.ok && wentIn && item === 1 && where === 'main' && (st.items[R0.object] || 0) === 0 && order.join() === want && b.inMain() && door.open === 0, { r, wentIn, item, where, order, inMain: b.inMain(), open: door.open, t }));
+    out.push(result(`metal: build ${recipe} (${wall}): nothing is left on a factory's tray or in his hands`, b.carry === null && !mf.tray.children.length && !wf.tray.children.length && !(w.building || []).length, { carry: b.carry }));
+    const need = ['machine', 'click', 'chime'];
     out.push(result(`metal: build ${recipe} (${wall}): every step makes its sound`, need.every((k) => heard(s0, s1, k) > 0), { silent: need.filter((k) => !(heard(s0, s1, k) > 0)) }));
     out.push(result(`metal: build ${recipe} (${wall}): he never stands where he should not, and there are no errors`, bad === 0 && errors.length === base, { bad, errors: errors.slice(base) }));
   }
-  // 4. cut short at each station: the stock is put back and nothing is left on a machine or in his hands
-  const cut = (label, setup, act, cond, expect) => {
+  // 4. cut short, or a factory taken away part-way through the guitar: nothing is left behind
+  const cut = (label, cond, remove = null) => {
     metalSetup('right');
-    Object.assign(w.stock, { wood: 0, parts: 0, metal: 0, mparts: 0, hw: 0 }, setup); w.syncStock();
-    b.pickRecipe = () => 'metalchair';
-    b.queue = []; b.step = null; b.choose(act);
+    b.pickRecipe = () => 'eguitar';
+    b.queue = []; b.step = null; b.choose('build');
     const t = runUntil(cond, 200);
-    const during = { ...w.stock };
-    b.skip(); T.settle();
+    if (remove) { w.removeObject(remove); b.objectRemoved(remove); } else b.skip();
+    T.settle();
     delete b.pickRecipe;
-    const st = w.stock, cu = w.objects.metalcutter, wd = w.objects.welder, an = w.objects.anvil;
-    const ok = t < 200 && st.metal === expect.metal && st.mparts === expect.mparts && b.carry === null && !cu.barA.visible && !wd.assembly.children.length && !an.assembly.children.length && b.inMain() && !(w.building || []).length;
-    out.push(result(`metal: cut short ${label}: the stock is put back and nothing is left on a machine or in his hands`, ok, { during: { metal: during.metal, mparts: during.mparts }, after: { metal: st.metal, mparts: st.mparts }, expect, carry: b.carry, t }));
+    const mf = w.objects.metalfactory, wf = w.objects.woodfactory;
+    out.push(result(`metal: ${label}: nothing is left on a tray or in his hands, nothing is half-made, and he is back in the room`, t < 200 && b.carry === null && !(mf && mf.tray.children.length) && !(wf && wf.tray.children.length) && !Object.values(w.objects).some((o) => o.kind) && !w.stock.items.eguitar && !(w.building || []).length && b.inMain(), { t, carry: b.carry }));
   };
-  cut('while carrying the bar to the cutter', { metal: 3 }, 'cutmetal', () => b.carry === 'bar', { metal: 3, mparts: 0 });
-  cut('while cutting', { metal: 3 }, 'cutmetal', () => b.pose === 'workCut' && b.step && b.step.t > 2, { metal: 3, mparts: 0 });
-  cut('while carrying the parts away', { metal: 3 }, 'cutmetal', () => b.carry === 'mparts', { metal: 2, mparts: 2 });
-  cut('while welding', { mparts: 6 }, 'build', () => b.pose === 'workWeld' && b.step && b.step.t > 2, { metal: 0, mparts: 6 });
-  cut('while hammering', { mparts: 6 }, 'build', () => b.pose === 'workTap' && b.step && b.step.fx.work && b.step.fx.work.obj === 'anvil' && b.step.t > 2, { metal: 0, mparts: 6 });
-  cut('while carrying the welded piece', { mparts: 6 }, 'build', () => b.carry === 'mpiece', { metal: 0, mparts: 6 });
+  cut('cut short while the Metal Factory runs', () => w.objects.metalfactory.running > 0.5);
+  cut('cut short carrying the hardware to the Wood Factory', () => b.carry === 'bars');
+  cut('the Wood Factory taken away while the hardware is carried to it', () => b.carry === 'bars', 'woodfactory');
   // 5. the Catalog lists what is in storage, and Add makes a real chair he can sit on
   T.resetRooms(); T.removeAll(); R().add('workshop'); w.stock.items = { metalchair: 1 };
   openObjects('all');

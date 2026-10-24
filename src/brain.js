@@ -13,8 +13,7 @@ import { installApproach } from './approach.js';
 import { installPaintings } from './paintbrain.js';
 
 const REST_ACTS = ['takepay', 'serve', 'takeorder', 'cook', 'rwait'];
-const WORK_ACTS = ['makewood', 'sawwood', 'tap', 'sand', 'tidytools', 'build', 'makemetal', 'cutmetal', 'hammer', 'weld'];
-import { RECIPES, PLANKS_PER_RUN, STOCK_CAP, METAL_PER_RUN, METAL_CAP } from './workshop.js';
+const WORK_ACTS = ['tidytools', 'build'];
 import { sfx, drag as sfxDrag } from './sfx.js';
 import { findBooks, learnBooks } from './learn.js';
 import { nextRiff, keepRiff, riffAt, STEPS as RIFF_STEPS } from './riffs.js';
@@ -1651,8 +1650,7 @@ export class Brain {
       piano: ['piano'], sitpiano: ['piano'], dribble: ['ball'], toss: ['ball'], mood: ['lighting'], guitar: ['guitar'], sitguitar: ['guitar'], riff: ['guitar'],
       drums: ['drums'], drumsolo: ['drums.solo'], jamdrums: ['drums.band'], paint: ['easel'], mixpaint: ['easel.colour'], portrait: ['easel.portrait'],
       stargaze: ['telescope'], darkstargaze: ['telescope.dark'], scopecare: ['telescope.care'], dust: ['decorate'], dusttop: ['decorate'],
-      makewood: ['workshop.materials'], sawwood: ['workshop.materials'], sand: ['workshop.materials'], tap: ['workshop'], tidytools: ['workshop'],
-      makemetal: ['workshop.metal'], cutmetal: ['workshop.metal'], hammer: ['workshop.metal'], weld: ['workshop.metal'],
+      tidytools: ['workshop'],
       takeorder: ['restaurant'], cook: ['restaurant'], serve: ['restaurant'], takepay: ['restaurant'], rwait: ['restaurant'],
       goalshot: ['outdoor.soccer'], soccertoss: ['outdoor.soccer'], hoopshoot: ['outdoor.basketball'], hoopdribble: ['outdoor.basketball'],
     }[act] || [];
@@ -1674,8 +1672,7 @@ export class Brain {
       bang: ['drums'], drums: ['drums'], drumsolo: ['drums'], jamdrums: ['drums'],
       scribble: ['easel'], paint: ['easel'], mixpaint: ['easel'], portrait: ['easel'],
       peek: ['telescope'], stargaze: ['telescope'], darkstargaze: ['telescope'], scopecare: ['telescope'], lighton: ['lamp'],
-      makewood: ['woodfactory', 'workbench'], sawwood: ['saw', 'workbench'], tap: ['mallet'], sand: ['sander', 'workbench'], tidytools: ['toolbox'], build: ['workbench'],
-      makemetal: ['metalfactory', 'workbench'], cutmetal: ['metalcutter', 'workbench'], hammer: ['anvil'], weld: ['welder'],
+      tidytools: ['toolbox'],
       yardsit: ['lawnchair'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], mow: ['mower', 'shed'],
       goalshot: ['soccergoal'], soccertoss: ['soccergoal'], hoopshoot: ['basketballhoop'], hoopdribble: ['basketballhoop'],
     }[act] || [];
@@ -1714,16 +1711,10 @@ export class Brain {
     }
     if (act === 'putback' || act === 'dropball' || act === 'putguitar' || act === 'leave' || act === 'hangpaint' || act === 'putcanvas') return false;
     if (act === 'visit') return this.inMain() && Object.keys(this.w.doors).some((id) => !this.doorLockedFor(id));
-    // the Workshop: it has to be added, and the stock has to allow it
-    if (['makewood', 'sawwood', 'tap', 'sand', 'tidytools', 'build', 'makemetal', 'cutmetal', 'hammer', 'weld'].includes(act)) {
-      const st = this.w.stock;
+    // the Workshop: it has to be added (and its door unlocked), and for building there has to be something to build
+    if (['tidytools', 'build'].includes(act)) {
       if (!this.w.doors.workshop || this.doorLockedFor('workshop')) return false;
-      if (act === 'makemetal' && (st.metal + METAL_PER_RUN > METAL_CAP || st.metal >= 8)) return false;
-      if (act === 'cutmetal' && (st.metal < 1 || st.mparts + 2 > 8)) return false;
-      if (act === 'makewood' && (st.wood + PLANKS_PER_RUN > STOCK_CAP || st.wood >= 12)) return false;
-      if (act === 'sawwood' && (st.wood < 1 || st.parts + 2 > 8)) return false;
-      if (act === 'sand' && st.wood < 1) return false;
-      if (act === 'build') return !!this.pickRecipe() && need.every((n) => this.obj(n));
+      if (act === 'build') return !!this.pickRecipe();
     }
     if (REST_JOBS.includes(act) || act === 'rwait') return this.restAvailable(act);
     if (act === 'read' && !this.obj('shelf').books.some((b) => b.mesh.visible)) return false;
@@ -1800,8 +1791,7 @@ export class Brain {
       ball: ['dribble', 'toss', 'ball'], guitar: ['guitar', 'riff', 'jamguitar'], drums: ['bang', 'drums', 'drumsolo', 'jamdrums'],
       easel: ['scribble', 'paint', 'mixpaint', 'portrait'], telescope: ['peek', 'stargaze', 'darkstargaze', 'scopecare'],
       stove: REST_ACTS, kitchencounter: REST_ACTS, register: REST_ACTS, diningtable: REST_ACTS, diningtable2: REST_ACTS,
-      workbench: ['build', 'makewood', 'sawwood'], toolbox: ['tidytools'], woodfactory: ['makewood'], saw: ['sawwood', 'makewood'], mallet: ['tap', 'build'], sander: ['sand', 'build'],
-      metalfactory: ['makemetal'], metalcutter: ['cutmetal', 'makemetal'], welder: ['weld', 'build'], anvil: ['hammer', 'build'],
+      workbench: ['build'], toolbox: ['tidytools'], woodfactory: ['build'], metalfactory: ['build'],
       soccergoal: ['goalshot', 'soccertoss'], basketballhoop: ['hoopshoot', 'hoopdribble'], lawnchair: ['yardsit'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], shed: ['mow'], mower: ['mow'],
     }[name] || (this.obj(name) && this.obj(name).seats ? REST_ACTS : this.obj(name) && this.obj(name).guitar ? ['guitar', 'riff', 'jamguitar'] : this.obj(name) && this.obj(name).sit ? ['read', 'sit', 'sitguitar'] : []);
     return list.filter((a) => this.available(a));
@@ -1848,7 +1838,7 @@ export class Brain {
       wander: 3, sit: 0.7, sitguitar: 1.1, slouch: 0.5, dancemoves: 1.5, ballroom: 1.5, piano: 1, sitpiano: 1.2, plink: 1.4, dance: 1.8, jam: 0.9, jampiano: 0.5, jamsit: 0.9, lamp: 1.2, mood: 1.1,
       read: 1.8 + unread * 1.8, stretch: 1.3, wave: 0.7, ball: 2, dribble: 1.1, toss: 1.1, rearrange: 0.7, guitar: 1.6, riff: 1.0, plant: 0.6, jamguitar: 1.5, visit: 0.4,
       takeorder: 40, cook: 35, serve: 45, takepay: 50,
-      build: 2.0, makewood: 0.5, sawwood: 0.6, tap: 0.5, sand: 0.4, tidytools: 0.4, makemetal: 0.5, cutmetal: 0.6, hammer: 0.5, weld: 0.4,
+      build: 2.0, tidytools: 0.4,
       bang: 1.3, drums: 1.6, drumsolo: 1.2, jamdrums: 1.5, scribble: 1.3, paint: 1.6, mixpaint: 1.3, portrait: 1.4,
       peek: 1.3, stargaze: 1.6, darkstargaze: 1.3, scopecare: 0.6, dust: 0.9, dusttop: 1.0,
       yardsit: 0.9, birdbath: 0.7, skyswitch: 0.6, mow: 0.5, yardpoke: 1.1, goalshot: 1.4, soccertoss: 0.8, hoopshoot: 1.4, hoopdribble: 0.9,
@@ -1975,8 +1965,7 @@ export class Brain {
       drums: this.music && k('drums.band') ? ['jamdrums'] : ['bang', 'drums', 'drumsolo'],
       easel: ['scribble', 'paint', 'mixpaint', 'portrait'],
       telescope: ['peek', 'stargaze', 'darkstargaze', 'scopecare'],
-      workbench: ['build'], toolbox: ['tidytools'], woodfactory: ['makewood'], saw: ['sawwood'], mallet: ['tap'], sander: ['sand'],
-      metalfactory: ['makemetal'], metalcutter: ['cutmetal'], welder: ['weld'], anvil: ['hammer'],
+      workbench: ['build'], toolbox: ['tidytools'], woodfactory: ['build'], metalfactory: ['build'],
       botprinter: ['buildbot'], workstation: ['learn'],
       soccergoal: ['goalshot', 'soccertoss'], basketballhoop: ['hoopshoot', 'hoopdribble'], lawnchair: ['yardsit'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], shed: ['mow'], mower: ['mow'],
     }[name] || (this.obj(name) && this.obj(name).kind === 'footstool' ? ['dusttop'] : this.obj(name) && this.obj(name).guitar ? (k('guitar') ? (this.music ? ['jamguitar'] : ['guitar']) : []) : undefined);
@@ -1986,8 +1975,9 @@ export class Brain {
       if (g && g.exists()) return { ok: false, message: 'GAL is already here: the machine can only be used once.' };
       if (!g || !g.g || !g.g.loaded) return { ok: false, message: 'GAL is still getting ready. Try again in a moment.' };
     }
+    this.forceLine = { woodfactory: 'wood', metalfactory: 'metal' }[name] || null;          // a factory he is pointed at builds something of its own line
     const wmsg = this.workRefusal(name) || this.restRefusal(name);
-    if (wmsg) return { ok: false, message: wmsg };
+    if (wmsg) { this.forceLine = null; return { ok: false, message: wmsg }; }
     // told to use the goal or the hoop before reading that sport's book: say so (otherwise all he would do is poke the ball about with his foot)
     const sport = { soccergoal: ['outdoor.soccer', 'Soccer for Robots'], basketballhoop: ['outdoor.basketball', 'Basketball for Robots'] }[name];
     if (sport && !k(sport[0])) return { ok: false, message: `Guy doesn't know how to play that yet. ${k('outdoor') ? '' : 'He has to read "Outdoor Sports" first. '}Add "${sport[1]}" to the shelf and he'll read it.` };
@@ -2002,7 +1992,7 @@ export class Brain {
     }
     if (REST_OBJECTS.includes(name) || (this.obj(name) && this.obj(name).seats)) tries = this.restTries(name);
     const act = (tries || []).filter((a) => this.available(a));
-    if (!act.length) return { ok: false, message: "Guy can't do anything with that right now." };
+    if (!act.length) { this.forceLine = null; return { ok: false, message: "Guy can't do anything with that right now." }; }
     if (name === 'workstation') this.learnPlan = null;                  // (the panel, not an order)
     if (this.lock && this.lock.name !== name) this.unlock(false);     // told to do something else: the lock is over
     this.skip();                                   // stands up, switches the stereo off, etc. first

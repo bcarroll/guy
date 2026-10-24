@@ -16,13 +16,13 @@ export const BOOK_CATALOG = [
     blurb: 'how to play the guitar', requires: { object: 'guitar' }, desc: 'Open chords and strumming patterns.' },
   // ---- the Workshop (listed only once the Workshop room has been added) ----
   { id: 'workshop', title: 'Workshop Basics', teaches: 'workshop', color: 0xb5651d, thick: 0.055, height: 0.31, room: 'workshop',
-    blurb: 'how to work at the workbench and build a wooden foot stool', requires: { object: 'workbench' }, desc: 'Working at the workbench, taking tools from the toolbox, and a first project: a wooden foot stool.' },
+    blurb: 'how to use the workbench and the Wood Factory, and build a wooden foot stool', requires: { object: 'workbench' }, desc: 'Working at the workbench, tidying the toolbox, and a first project made at the Wood Factory: a wooden foot stool.' },
   { id: 'woodmetal', title: 'Wood & Metal Basics', teaches: 'workshop.materials', color: 0x2a9d8f, thick: 0.06, height: 0.32, room: 'workshop',
-    blurb: 'how to make planks, saw and sand wood, and build wooden shelves', requires: { object: 'woodfactory' }, desc: 'Run the Wood Factory, saw planks into parts and sand them smooth. Wooden shelves are the project.' },
+    blurb: 'how to build bigger wooden things at the Wood Factory', requires: { object: 'woodfactory' }, desc: 'Run the Wood Factory for bigger projects: a bookshelf, a wooden dining table and the wooden body of an electric guitar.' },
   { id: 'furniture', title: 'Furniture for Robots', teaches: 'workshop.furniture', color: 0x6d4c41, thick: 0.07, height: 0.34, room: 'workshop',
     blurb: 'how to build wooden chairs', requires: { object: 'workbench' }, desc: 'Bigger projects, starting with a wooden chair. Best read after the basics.' },
   { id: 'metalfab', title: 'Metal Fabrication for Robots', teaches: 'workshop.metal', color: 0x546e7a, thick: 0.07, height: 0.34, room: 'workshop',
-    blurb: 'how to cut, weld and hammer metal, and build metal chairs and tables', requires: { object: 'metalfactory' }, desc: 'Run the Metal Factory, cut bars to length, weld the parts and hammer them true. Metal chairs and tables are the projects, and an electric guitar when the wood line is there too.' },
+    blurb: 'how to build metal chairs and tables at the Metal Factory', requires: { object: 'metalfactory' }, desc: 'Run the Metal Factory to build metal chairs and tables, and the metal hardware of an electric guitar when the Wood Factory is there too.' },
   // ---- the Restaurant (listed only once the Restaurant room has been added) ----
   { id: 'restaurant', title: 'Restaurant Basics', teaches: 'restaurant', color: 0xc0392b, thick: 0.055, height: 0.31, room: 'restaurant',
     blurb: 'how to cook, serve and take payment', requires: { object: 'stove' }, desc: 'Taking orders, cooking at the stove, serving the plates and ringing up the bill.' },
@@ -72,7 +72,7 @@ export const BOOK_DEFS = BOOK_CATALOG.filter((b) => b.start);
 export const SKILL_INFO = {
   workshop: {
     name: 'Workshop basics', book: 'Workshop Basics',
-    unlocks: ['Work at the workbench and use the toolbox', 'Tap parts together with the rubber mallet', 'Build a wooden foot stool'],
+    unlocks: ['Work at the workbench and use the toolbox', 'Run the Wood Factory to build a wooden foot stool'],
   },
   restaurant: {
     name: 'Restaurant basics', book: 'Restaurant Basics',
@@ -80,7 +80,7 @@ export const SKILL_INFO = {
   },
   'workshop.materials': {
     name: 'Wood & Metal Basics', book: 'Wood & Metal Basics',
-    unlocks: ['Make planks in the Wood Factory', 'Saw planks into parts', 'Sand wood smooth', 'Build wooden shelves'],
+    unlocks: ['Build a bookshelf and wooden dining tables at the Wood Factory', 'Make the wooden body of an electric guitar'],
   },
   'workshop.furniture': {
     name: 'Furniture for Robots', book: 'Furniture for Robots',
@@ -88,7 +88,7 @@ export const SKILL_INFO = {
   },
   'workshop.metal': {
     name: 'Metal Fabrication', book: 'Metal Fabrication for Robots',
-    unlocks: ['Make metal bars in the Metal Factory', 'Cut them at the Metal Cutter', 'Weld the parts and hammer them into shape', 'Build metal chairs and tables, and an electric guitar (with the wood line)'],
+    unlocks: ['Build metal chairs and tables at the Metal Factory', 'Build an electric guitar (with the Wood Factory)'],
   },
   outdoor: {
     name: 'Outdoor sports', book: 'Outdoor Sports',

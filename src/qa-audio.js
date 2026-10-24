@@ -20,7 +20,7 @@ const SPEC = {
   click: { dur: [0.005, 0.1], bright: 'high' }, tick: { dur: [0.005, 0.1], bright: 'high' }, sit: { dur: [0.1, 0.8], bright: 'any' }, leaf: { dur: [0.08, 0.6], bright: 'high' },
   brush: { dur: [0.03, 0.3], bright: 'high', soft: true }, dab: { dur: [0.03, 0.3], bright: 'any', soft: true }, wipe: { dur: [0.1, 0.6], bright: 'high' }, step: { dur: [0.02, 0.3], bright: 'low' },
   place: { dur: [0.05, 0.5], bright: 'low' },
-  saw: { dur: [0.3, 0.8], bright: 'high' }, tap: { dur: [0.03, 0.3], bright: 'any' }, sand: { dur: [0.1, 0.6], bright: 'high' }, machine: { dur: [0.3, 1.0], bright: 'any' }, lid: { dur: [0.03, 0.4], bright: 'any' },
+  machine: { dur: [0.3, 1.0], bright: 'any' }, lid: { dur: [0.03, 0.4], bright: 'any' },
   ding: { dur: [0.2, 1.0], bright: 'mid' }, cash: { dur: [0.12, 0.6], bright: 'high' }, sizzle: { dur: [0.3, 1.2], bright: 'high' }, plate: { dur: [0.02, 0.3], bright: 'high' }, lift: { dur: [0.3, 1.0], bright: 'mid' },
   splash: { dur: [0.1, 0.6], bright: 'high' }, swish: { dur: [0.1, 0.6], bright: 'high' }, motor: { dur: [0.1, 0.5], bright: 'low' },
   chime: { dur: [0.4, 1.2], bright: 'mid' }, pop: { dur: [0.03, 0.3], bright: 'any' }, whoosh: { dur: [0.1, 0.6], bright: 'high' },
