@@ -118,12 +118,12 @@ export function installHobbies(Brain, POSES, H) {
             if (this.w.obstacles.some((o) => o !== t.obstacle && o.active !== false && tip.x > o.x0 - 0.45 && tip.x < o.x1 + 0.45 && tip.z > o.z0 - 0.45 && tip.z < o.z1 + 0.45)) continue;
             // where he will stand to look through it (behind the eyepiece for 'sky', in front of the lens for 'room')
             const spot = c.clone().addScaledVector(dir, mode === 'room' ? 1.25 : -1.15);
-            if (Math.abs(spot.x) > 4.3 || spot.z < -3.3 || spot.z > 3.5 || cellBlocked(grid, spot.x, spot.z)) continue;
+            if (!this.onFloor(spot.x, spot.z, 0.2) || cellBlocked(grid, spot.x, spot.z)) continue;
             // stand beside the tube to swing it: the side that is free
             const perp = V(-dir.z, 0, dir.x);
             for (const sgn of [1, -1]) {
               const side = c.clone().addScaledVector(perp, sgn * 0.78);
-              if (Math.abs(side.x) > 4.4 || side.z < -3.4 || side.z > 3.6 || cellBlocked(sideGrid, side.x, side.z)) continue;
+              if (!this.onFloor(side.x, side.z, 0.1) || cellBlocked(sideGrid, side.x, side.z)) continue;
               const cd = V(Math.sin(wy0), 0, Math.cos(wy0));
               const toHand = V(cd.x, 0, cd.z);
               // swing with whichever hand is on the tube's front end side
@@ -147,7 +147,7 @@ export function installHobbies(Brain, POSES, H) {
           const E = t.eyepiece(), O = t.objective();
           const d = O.clone().sub(E).normalize(), dh = V(d.x, 0, d.z).normalize();
           const c = t.tube.localToWorld(V(0, 0, 0));
-          const ok = (p) => Math.abs(p.x) < 4.4 && p.z > -3.4 && p.z < 3.6 && !cellBlocked(grid, p.x, p.z);
+          const ok = (p) => this.onFloor(p.x, p.z, 0.1) && !cellBlocked(grid, p.x, p.z);
           const cands = [];
           if (kind === 'peer') for (const back of [0.3, 0.4, 0.5, 0.6]) cands.push([E.clone().addScaledVector(dh, -back), dh.clone()]);
           else if (kind === 'wrong') for (const out of [0.55, 0.65, 0.8]) cands.push([O.clone().addScaledVector(dh, out), dh.clone().negate()]);
