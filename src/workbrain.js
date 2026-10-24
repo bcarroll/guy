@@ -58,7 +58,7 @@ export function installWorkshop(Brain, POSES, H) {
     // ------------------------------------------------------------------ where he is
     inWorkshop() { return this.w.roomIdAt(this.g.root.position.x, this.g.root.position.z) === ID; },
     // locked on something that is in the Workshop (so he stays in there between activities)
-    lockedInside() { return this.inWorkshop() && this.lockHere(); },
+    lockedInside() { return (this.inWorkshop() && this.lockHere()) || this.lockedInYard(); },
     // locked on something that is in the Workshop (so a trip does not end with him walking out)
     lockHere() { const o = this.lock && this.obj(this.lock.name); return !!o && this.w.roomIdAt(o.x, o.z) === ID; },
 
