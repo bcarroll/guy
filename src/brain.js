@@ -1066,14 +1066,15 @@ export class Brain {
 
   // ---- Moving furniture: Guy walks behind an object and pushes it along a collision-free route ----
   // Returns walk/push steps, or null if the object can't be taken there.
-  planPush(obj, tx, tz, from = null) {
-    const obstacles = this.w.obstacles;
+  // `room`: { fr, bd } (the grid frame and the floor bounds of an added room, e.g. the Backyard) when the pushing is done there; null is his own room.
+  planPush(obj, tx, tz, from = null, room = null) {
+    const obstacles = this.w.obstacles, fr = room ? room.fr : MAIN_FRAME;
     const sx = from ? from.x : obj.x, sz = from ? from.z : obj.z;   // where the object starts this leg
     const r = Math.max(obj.w, obj.d) / 2 + 0.05;
-    const objGrid = makeGrid(obstacles, r, r, obj.obstacle);
+    const objGrid = makeGrid(obstacles, r, room ? 0 : r, obj.obstacle, fr);       // (an added room's grid is already inside its fence)
     // the object may already sit closer to its neighbours than this clearance: let it leave
-    for (let i = 0; i < NX; i++) for (let j = 0; j < NZ; j++) {
-      if (Math.hypot(X0 + i * CELL - sx, Z0 + j * CELL - sz) < 0.45) objGrid[i + j * NX] = 0;
+    for (let i = 0; i < fr.NX; i++) for (let j = 0; j < fr.NZ; j++) {
+      if (Math.hypot(fr.X0 + i * CELL - sx, fr.Z0 + j * CELL - sz) < 0.45) objGrid[i + j * fr.NX] = 0;
     }
     if (cellBlocked(objGrid, tx, tz)) return null;
     const route = findPath(objGrid, sx, sz, tx, tz, true);
@@ -1081,7 +1082,7 @@ export class Brain {
     const pts = [{ x: sx, z: sz }];
     for (const p of route) if (Math.hypot(p.x - pts.at(-1).x, p.z - pts.at(-1).z) > 0.12) pts.push(p);
     if (pts.length < 2 || pts.length > 7) return null;
-    const guyGrid = makeGrid(obstacles, INFLATE, 0, obj.obstacle);
+    const guyGrid = makeGrid(obstacles, INFLATE, 0, obj.obstacle, fr);
     const spd = obj.weight === 'medium' ? 0.45 : 0.75;
     const steps = [];
     for (let i = 0; i + 1 < pts.length; i++) {
@@ -1091,7 +1092,9 @@ export class Brain {
       const off = Math.abs(d.x) * obj.w / 2 + Math.abs(d.z) * obj.d / 2 + 0.45;
       const S = { x: A.x - d.x * off, z: A.z - d.z * off };
       const S2 = { x: B.x - d.x * off, z: B.z - d.z * off };
-      const inRoom = (q) => Math.abs(q.x) <= 4.5 && q.z >= -3.5 && q.z <= 3.6; // Guy can't stand in the wall
+      const bd = room && room.bd;
+      const inRoom = room ? (q) => q.x >= bd.minX + 0.6 && q.x <= bd.maxX - 0.6 && q.z >= bd.minZ + 0.6 && q.z <= bd.maxZ - 0.6   // (nor against a fence)
+        : (q) => Math.abs(q.x) <= 4.5 && q.z >= -3.5 && q.z <= 3.6; // Guy can't stand in the wall
       if (!inRoom(S) || !inRoom(S2) || cellBlocked(guyGrid, S.x, S.z) || cellBlocked(guyGrid, S2.x, S2.z) || !lineClear(guyGrid, S, S2)) return null;
       const yaw = Math.atan2(d.x, d.z);
       steps.push(this.walk(S.x, S.z, yaw));
@@ -1101,14 +1104,14 @@ export class Brain {
   }
 
   // planPush, and if Guy has no room to get behind the object (it is jammed against something), slide it out sideways first.
-  planPushVia(obj, tx, tz) {
-    const direct = this.planPush(obj, tx, tz);
+  planPushVia(obj, tx, tz, room = null) {
+    const direct = this.planPush(obj, tx, tz, null, room);
     if (direct) return direct;
     for (const [dx, dz] of [[1.4, 0], [-1.4, 0], [0, 1.4], [0, -1.4], [1.0, 1.0], [-1.0, 1.0]]) {
       const w = { x: obj.x + dx, z: obj.z + dz };
-      const first = this.planPush(obj, w.x, w.z);
+      const first = this.planPush(obj, w.x, w.z, null, room);
       if (!first) continue;
-      const second = this.planPush(obj, tx, tz, w);
+      const second = this.planPush(obj, tx, tz, w, room);
       if (second) return [...first, ...second];
     }
     return null;
@@ -1706,7 +1709,7 @@ export class Brain {
     if (YARD_ACTS.includes(act)) {                                  // the Backyard: it has to be added and its door not locked; the balls are there with their goal and hoop
       if (!this.yardOpen()) return false;
       if (act === 'yardpoke') return this.pokeKinds().length > 0;
-      if (act === 'mow' && !this.mowRoute()) return false;               // no clear lawn: not something he sets out to do (he would open the shed for nothing)
+      if (act === 'mow' && !this.mowRoute({ pushable: true })) return false;               // no clear lawn: not something he sets out to do (he would open the shed for nothing)
       if (['goalshot', 'soccertoss'].includes(act) && !this.yardBall('soccer')) return false;
       if (['hoopshoot', 'hoopdribble'].includes(act) && !this.yardBall('basketball')) return false;
     }
@@ -1954,7 +1957,7 @@ export class Brain {
     if (rm && rm !== 'main' && rm !== 'door' && this.doorLockedFor(rm)) return { ok: false, message: `The ${this.w.doors[rm].name} door is locked. Unlock it first (long-press the door).` };
     if (this.stuckIn() && rm !== this.stuckIn()) return { ok: false, message: this.shutInMessage(this.stuckIn()) };        // shut in: only what is in the room with him
     // told to mow with no clear lawn: say so (he used to say "On it!", open the shed, find no room and quietly give up)
-    if ((name === 'mower' || name === 'shed') && this.obj('mower') && this.obj('shed') && this.yardOpen() && !this.mowRoute()) return { ok: false, message: 'There is no clear stretch of lawn for the mower. Move things away from around it, and leave a little room behind it for Guy.' };
+    if ((name === 'mower' || name === 'shed') && this.obj('mower') && this.obj('shed') && this.yardOpen() && !this.mowRoute({ pushable: true })) return { ok: false, message: 'There is no clear stretch of lawn for the mower. Guy shifts light things (the chair, the bird bath, plants) himself, but not the shed, the goal or the hoop: move those away from the mower, and leave a little room behind it for Guy.' };
     let tries = {
       // with the stereo already playing, an instrument means playing along with it
       piano: k('piano') ? (this.music ? ['jamsit', 'jampiano', 'jam'] : ['sitpiano', 'piano']) : ['plink'],

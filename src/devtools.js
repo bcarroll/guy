@@ -1273,6 +1273,23 @@ T.sweepYardVoice = () => {
   // (and back with room to spare it is on again)
   if (mw) mw.set(bd.minX + (bd.maxX - bd.minX) * 0.42, (bd.minZ + bd.maxZ) / 2);
   out.push(result('yard voice: with room round the mower again he is willing to mow', b.available('mow') === true, { avail: b.available('mow') }));
+  // 2d. things in the way of the mowing: the light ones (chair, bird bath, plant, small cabinet) he shifts aside himself, then he mows
+  reset(); T.home(); T.settle();
+  for (const id of ['birdbath', 'flowerplant', 'nightstand']) T.addObject(id);
+  T.settle();
+  const mw3 = w.objects.mower;
+  if (m0 && mw3) mw3.set(m0.x, m0.z);
+  const ring = [['lawnchair', 1.0, 0], ['birdbath', -1.0, 0], ['flowerplant', 0, 1.0], ['nightstand', 0, -1.0]];
+  for (const [n, dx, dz] of ring) if (w.objects[n] && mw3) w.objects[n].set(mw3.x + dx, mw3.z + dz);
+  const spots0 = ring.map(([n]) => ({ n, x: w.objects[n].x, z: w.objects[n].z }));
+  const plain = b.mowRoute(), pushy = b.mowRoute({ pushable: true });
+  out.push(result('yard voice: with light things all round the mower there is no plain loop, but there is one if Guy shifts them', !plain && !!pushy && pushy.blockers.length >= 1, { plain: !!plain, blockers: pushy && pushy.blockers }));
+  const r6 = b.interact('mower');
+  const seen6 = []; const orig6 = b.choose.bind(b); b.choose = (f) => { orig6(f); seen6.push(b.last); };
+  let t6 = 0, moved6 = 0;
+  try { while (t6 < 500 && moved6 < 0.8) { step(0.25); t6 += 0.25; const mm = w.objects.mower; moved6 = mm && m0 ? Math.hypot(mm.x - m0.x, mm.z - m0.z) : 0; } } finally { b.choose = orig6; }
+  const shifted = spots0.filter((s) => Math.hypot(w.objects[s.n].x - s.x, w.objects[s.n].z - s.z) > 0.5).map((s) => s.n);
+  out.push(result('yard voice: long-press Mow the Lawn with light things in the way: he shifts them aside, then mows', r6.ok && shifted.length >= 1 && moved6 >= 0.8 && seen6.includes('mow'), { r6, shifted, moved6, seen: seen6, t6 }));
   // 3. an order for the yard that he cannot do says why (the door is locked), it does not vanish
   reset(); T.home(); T.settle();
   R().setDoorLocked('backyard', true);

@@ -111,11 +111,14 @@ export function installYard(Brain, POSES, H) {
     // mowRoute() gives the loop he would push the mower round from where it stands now: { pts, dd } (the four corners, the direction of each leg), or null
     // when there is no clear stretch of lawn (things too close to the mower, or it is jammed against a fence). Asked before he is sent
     // (so an order he cannot carry out says so, instead of him opening the shed and giving up) and again when the plan is made.
-    mowRoute() {
+    // `pushable`: count the things Guy can shove aside (the lawn chair, the bird bath, a plant...) as not in the way; the route then lists
+    // them in `blockers`. The shed, the goal and the hoop are heavy: only the user can move those.
+    mowRoute({ pushable = false } = {}) {
       const m = this.obj('mower'), shed = this.obj('shed');
       if (!m || !shed || !this.w.doors[ID]) return null;
       const bd = this.w.doors[ID].shell.bounds, fr = this.yardFrame();
-      const grid = makeGrid(this.w.obstacles, 0.5, 0, m.obstacle, fr);
+      const movers = pushable ? this.yardMovers() : [];
+      const grid = makeGrid(movers.length ? this.w.obstacles.filter((o) => !movers.some((mo) => mo.obstacle === o)) : this.w.obstacles, 0.5, 0, m.obstacle, fr);
       const BEHIND = 0.95;
       const clearLine = (a, b, off) => {                                    // the mower's line a-b, and Guy's line behind it
         const n = Math.max(2, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 0.2));
@@ -142,14 +145,78 @@ export function installYard(Brain, POSES, H) {
         }
         if (route) break;
       }
+      if (route && pushable) { const cor = this.mowCorridor(route); route.blockers = movers.filter((mo) => this.mowBlocks(mo, cor)).map((mo) => mo.name); }
       return route;
+    },
+
+    // What in the yard Guy can shove out of the way: everything that is not heavy, except the mower itself and the sky switch (a post
+    // by the fence, not furniture).
+    yardMovers() {
+      return Object.values(this.w.objects).filter((o) => o.weight !== 'heavy' && o.name !== 'mower' && o.name !== 'skyswitch' && o.obstacle && this.w.roomIdAt(o.x, o.z) === ID);
+    },
+    // Points along a route where the mower and then Guy (behind it) pass.
+    mowCorridor(route) {
+      const out = [];
+      for (let i = 0; i < 4; i++) {
+        const a = route.pts[i], b = route.pts[i + 1], d = route.dd[i], n = Math.max(2, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 0.2));
+        for (let k = 0; k <= n; k++) {
+          const x = a.x + ((b.x - a.x) * k) / n, z = a.z + ((b.z - a.z) * k) / n;
+          out.push({ x, z }, { x: x - d.x * 0.95, z: z - d.z * 0.95 });
+        }
+      }
+      return out;
+    },
+    mowBlocks(o, corridor) {
+      const ob = o.obstacle;
+      return corridor.some((c) => c.x > ob.x0 - 0.5 && c.x < ob.x1 + 0.5 && c.z > ob.z0 - 0.5 && c.z < ob.z1 + 0.5);
+    },
+    // Places to leave `o` where it is clear of the mowing and of everything else, the nearest first.
+    yardSpots(o, corridor) {
+      const bd = this.w.doors[ID].shell.bounds, half = Math.max(o.w, o.d) / 2, out = [];
+      for (let x = bd.minX + 1.0 + half; x <= bd.maxX - 1.0 - half; x += 0.4) {
+        for (let z = bd.minZ + 1.0 + half; z <= bd.maxZ - 1.0 - half; z += 0.4) {
+          const x0 = x - o.w / 2 - 0.5, x1 = x + o.w / 2 + 0.5, z0 = z - o.d / 2 - 0.5, z1 = z + o.d / 2 + 0.5;
+          if (this.w.obstacles.some((ob) => ob !== o.obstacle && ob.active !== false && x1 > ob.x0 && x0 < ob.x1 && z1 > ob.z0 && z0 < ob.z1)) continue;
+          if (corridor.some((c) => Math.hypot(c.x - x, c.z - z) < half + 0.9)) continue;
+          out.push({ x, z, d: Math.hypot(x - o.x, z - o.z) });
+        }
+      }
+      return out.sort((a, b) => a.d - b.d).slice(0, 14);
+    },
+    // A plan step: when reached, pushes `name` somewhere clear of the mowing (nothing to do if it is already clear).
+    shoveAside(name, corridor) {
+      return {
+        type: 'plan',
+        fn: () => {
+          const o = this.obj(name);
+          if (!o || !this.mowBlocks(o, corridor)) return [];
+          const room = { fr: this.yardFrame(), bd: this.w.doors[ID].shell.bounds };
+          for (const s of this.yardSpots(o, corridor)) {
+            const steps = this.planPushVia(o, s.x, s.z, room);
+            if (steps) return [this.play('idle', 0.3), ...steps, this.play('idle', 0.5)];
+          }
+          this.ui(`could not move the ${name} out of the way`); this.queue.length = 0; return [];
+        },
+      };
     },
 
     mowPlan() {
       const m = this.obj('mower'), shed = this.obj('shed');
       if (!m || !shed) { this.queue.length = 0; return []; }
-      const BEHIND = 0.95, route = this.mowRoute();
-      if (!route) { this.ui('no room to mow'); this.queue.length = 0; return []; }
+      let route = this.mowRoute();
+      if (!route) {                                                         // things in the way: shove the light ones aside first, then mow
+        const r2 = this.mowRoute({ pushable: true });
+        if (!r2) { this.ui('no room to mow'); this.queue.length = 0; return []; }
+        const cor = this.mowCorridor(r2);
+        return [...r2.blockers.map((n) => this.shoveAside(n, cor)),
+          { type: 'plan', fn: () => { const rr = this.mowRoute(); if (!rr) { this.ui('no room to mow'); this.queue.length = 0; return []; } return this.mowLoop(rr); } }];
+      }
+      return this.mowLoop(route);
+    },
+
+    // The steps for pushing the mower once round `route`.
+    mowLoop(route) {
+      const m = this.obj('mower'), BEHIND = 0.95;
       const { pts, dd } = route, steps = [];
       const faceFor = (d) => this.w.rotFacing(-d.x, -d.z);                  // (the mower's front is its local -z)
       const behind = (p, d) => ({ x: p.x - d.x * BEHIND, z: p.z - d.z * BEHIND });
