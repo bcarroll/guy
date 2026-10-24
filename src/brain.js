@@ -1706,6 +1706,7 @@ export class Brain {
     if (YARD_ACTS.includes(act)) {                                  // the Backyard: it has to be added and its door not locked; the balls are there with their goal and hoop
       if (!this.yardOpen()) return false;
       if (act === 'yardpoke') return this.pokeKinds().length > 0;
+      if (act === 'mow' && !this.mowRoute()) return false;               // no clear lawn: not something he sets out to do (he would open the shed for nothing)
       if (['goalshot', 'soccertoss'].includes(act) && !this.yardBall('soccer')) return false;
       if (['hoopshoot', 'hoopdribble'].includes(act) && !this.yardBall('basketball')) return false;
     }
@@ -1952,6 +1953,8 @@ export class Brain {
     const there = this.obj(name), rm = there && this.w.roomIdAt(there.x, there.z);
     if (rm && rm !== 'main' && rm !== 'door' && this.doorLockedFor(rm)) return { ok: false, message: `The ${this.w.doors[rm].name} door is locked. Unlock it first (long-press the door).` };
     if (this.stuckIn() && rm !== this.stuckIn()) return { ok: false, message: this.shutInMessage(this.stuckIn()) };        // shut in: only what is in the room with him
+    // told to mow with no clear lawn: say so (he used to say "On it!", open the shed, find no room and quietly give up)
+    if ((name === 'mower' || name === 'shed') && this.obj('mower') && this.obj('shed') && this.yardOpen() && !this.mowRoute()) return { ok: false, message: 'There is no clear stretch of lawn for the mower. Move things away from around it, and leave a little room behind it for Guy.' };
     let tries = {
       // with the stereo already playing, an instrument means playing along with it
       piano: k('piano') ? (this.music ? ['jamsit', 'jampiano', 'jam'] : ['sitpiano', 'piano']) : ['plink'],

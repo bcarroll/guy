@@ -1264,6 +1264,15 @@ T.sweepYardVoice = () => {
   b.interact('lawnchair');
   let t5 = 0; while (t5 < 30 && w.objects.shed && w.objects.shed.openTo === 1) { step(0.25); t5 += 0.25; }
   out.push(result('yard voice: cut short with the shed door open, he shuts it again', openedShed && !!w.objects.shed && w.objects.shed.openTo === 0, { openedShed, openTo: w.objects.shed && w.objects.shed.openTo }));
+  // 2c. long-press > Mow the Lawn with no clear lawn (the mower jammed in a corner): he says so kindly and does not go and open the shed
+  reset(); T.home(); T.settle();
+  const mw = w.objects.mower, bd = w.doors.backyard.shell.bounds;
+  if (mw) mw.set(bd.minX + 0.3, bd.minZ + 0.3);
+  const r5 = b.interact('mower'), r5b = b.interact('shed');
+  out.push(result('yard voice: long-press the mower or shed with no clear lawn: a kind message, nothing started, and he does not choose to mow on his own', !r5.ok && !r5b.ok && /clear stretch of lawn/.test(r5.message) && !/\b(fail|failed|error|wrong|can't|cannot)\b/i.test(r5.message) && !b.pendingActivity && b.available('mow') === false, { r5, r5b, pending: b.pendingActivity, avail: b.available('mow') }));
+  // (and back with room to spare it is on again)
+  if (mw) mw.set(bd.minX + (bd.maxX - bd.minX) * 0.42, (bd.minZ + bd.maxZ) / 2);
+  out.push(result('yard voice: with room round the mower again he is willing to mow', b.available('mow') === true, { avail: b.available('mow') }));
   // 3. an order for the yard that he cannot do says why (the door is locked), it does not vanish
   reset(); T.home(); T.settle();
   R().setDoorLocked('backyard', true);

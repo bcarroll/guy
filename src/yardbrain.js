@@ -107,10 +107,13 @@ export function installYard(Brain, POSES, H) {
     },
 
     // ------------------------------------------------------------------ mowing
-    // a rectangle round the lawn, pushing the mower: the first corner is where it stands. Picks one that is clear of everything.
-    mowPlan() {
+    // A rectangle round the lawn, pushing the mower: the first corner is where it stands. Picks one that is clear of everything.
+    // mowRoute() gives the loop he would push the mower round from where it stands now: { pts, dd } (the four corners, the direction of each leg), or null
+    // when there is no clear stretch of lawn (things too close to the mower, or it is jammed against a fence). Asked before he is sent
+    // (so an order he cannot carry out says so, instead of him opening the shed and giving up) and again when the plan is made.
+    mowRoute() {
       const m = this.obj('mower'), shed = this.obj('shed');
-      if (!m || !shed) { this.queue.length = 0; return []; }
+      if (!m || !shed || !this.w.doors[ID]) return null;
       const bd = this.w.doors[ID].shell.bounds, fr = this.yardFrame();
       const grid = makeGrid(this.w.obstacles, 0.5, 0, m.obstacle, fr);
       const BEHIND = 0.95;
@@ -126,7 +129,7 @@ export function installYard(Brain, POSES, H) {
       const start = { x: m.x, z: m.z };
       const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
       let route = null;
-      for (const [w, h] of [[2.8, 1.8], [2.2, 1.4], [1.6, 1.0]]) {
+      for (const [w, h] of [[2.8, 1.8], [2.2, 1.4], [1.6, 1.0], [1.2, 0.8]]) {
         for (const [ax, az] of dirs) {                                      // the first leg goes along (ax, az); the loop turns left or right
           for (const turn of [1, -1]) {
             const bx = -az * turn, bz = ax * turn;                          // the second leg's direction
@@ -139,6 +142,13 @@ export function installYard(Brain, POSES, H) {
         }
         if (route) break;
       }
+      return route;
+    },
+
+    mowPlan() {
+      const m = this.obj('mower'), shed = this.obj('shed');
+      if (!m || !shed) { this.queue.length = 0; return []; }
+      const BEHIND = 0.95, route = this.mowRoute();
       if (!route) { this.ui('no room to mow'); this.queue.length = 0; return []; }
       const { pts, dd } = route, steps = [];
       const faceFor = (d) => this.w.rotFacing(-d.x, -d.z);                  // (the mower's front is its local -z)
