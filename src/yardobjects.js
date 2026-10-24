@@ -309,7 +309,7 @@ export function makeYardBuilders({ makeObject, box, mat }) {
     });
     o.running = false;
     o.setRunning = (v) => { o.running = !!v; };
-    onUpdate(o, (dt) => { if (o.running) { o.group.position.y = Math.sin(performance.now() / 22) * 0.004; } else o.group.position.y = 0; });
+    onUpdate(o, (dt) => { if (o.running) { o.group.position.y = Math.sin(performance.now() / 22) * 0.004; } else o.group.position.y = 0; if (o.tether) o.tether(); });   // (tether: while it is put away it follows the shed, if the shed is moved)
     addAt(o);
     o.handlePoint = () => o.at(0, 1.0, 0.52);
     return o;

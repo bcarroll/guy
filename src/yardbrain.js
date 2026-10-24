@@ -107,6 +107,63 @@ export function installYard(Brain, POSES, H) {
     },
 
     // ------------------------------------------------------------------ mowing
+    // ------------------------------------------------------------------ the mower lives in the shed
+    // The spot in front of the shed door where the mower is rolled out to, and the way out (the direction the shed's door faces).
+    shedPark() {
+      const s = this.obj('shed');
+      if (!s) return null;
+      const o = s.local(0, 1), len = Math.hypot(o.x, o.z) || 1, out = { x: o.x / len, z: o.z / len };
+      return { x: s.x + out.x * 1.5, z: s.z + out.z * 1.5, out };
+    },
+    // Is the mower put away (standing inside the shed)?
+    mowerInShed() {
+      const m = this.obj('mower'), s = this.obj('shed');
+      return !!m && !!s && Math.hypot(m.x - s.x, m.z - s.z) < 0.4;
+    },
+    // Keeps a mower that is inside the shed inside it when the shed is dragged about or turned. Called whenever a new activity begins.
+    mowerSync() {
+      const m = this.obj('mower');
+      if (!m) return;
+      if (!this.mowerInShed()) { m.tether = null; return; }
+      m.tether = () => {
+        const ss = this.obj('shed'), mm = this.obj('mower');
+        if (!mm) return;
+        if (!ss) { mm.tether = null; return; }
+        if (mm.x !== ss.x || mm.z !== ss.z || mm.rot !== ss.rot) { mm.rot = ss.rot; mm.set(ss.x, ss.z); }
+      };
+    },
+    // Where the mowing can start: where the mower stands; or, when it is put away, a few places in front of the shed door (straight out, or
+    // a little to either side: the shed stands close to a fence, which can leave no room for the loop straight out from it).
+    mowStarts() {
+      const m = this.obj('mower');
+      if (!this.mowerInShed()) return [{ x: m.x, z: m.z }];
+      const p = this.shedPark(), s = this.obj('shed');
+      if (!p) return [{ x: m.x, z: m.z }];
+      const side = { x: -p.out.z, z: p.out.x }, out = [];
+      for (const depth of [1.5, 2.0]) for (const lat of [0, 0.6, -0.6, 1.2, -1.2]) out.push({ x: s.x + p.out.x * depth + side.x * lat, z: s.z + p.out.z * depth + side.z * lat });
+      return out;
+    },
+    // The steps that put the mower away when the lawn is done: push it to the shed door, then in (the door is open), and Guy shuts the door
+    // after it. Whatever is in the way of the push (it never is, normally) is skipped: the mower is simply put in.
+    putMowerAway() {
+      const m = this.obj('mower'), s = this.obj('shed'), park = this.shedPark();
+      if (!m || !s || !park) return [];
+      const steps = [];
+      if (Math.hypot(m.x - park.x, m.z - park.z) > 0.35) {
+        const to = this.planPushVia(m, park.x, park.z, { fr: this.yardFrame(), bd: this.w.doors[ID].shell.bounds });
+        if (to) steps.push(...to);
+      }
+      steps.push(this.play('idle', 0.8, { needs: ['shed', 'mower'], at: [0.2, () => {
+        const mm = this.obj('mower'), ss = this.obj('shed');
+        if (!mm || !ss) return;
+        mm.setRunning(false);
+        mm.rot = ss.rot; mm.set(ss.x, ss.z);                        // (front first, into the shed)
+        this.mowerSync();
+        sfx('click');
+      }] }));
+      return steps;
+    },
+
     // A rectangle round the lawn, pushing the mower: the first corner is where it stands. Picks one that is clear of everything.
     // mowRoute() gives the loop he would push the mower round from where it stands now: { pts, dd } (the four corners, the direction of each leg), or null
     // when there is no clear stretch of lawn (things too close to the mower, or it is jammed against a fence). Asked before he is sent
@@ -129,17 +186,20 @@ export function installYard(Brain, POSES, H) {
         }
         return true;
       };
-      const start = { x: m.x, z: m.z };
+      const starts = this.mowStarts();
       const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
       let route = null;
       for (const [w, h] of [[2.8, 1.8], [2.2, 1.4], [1.6, 1.0], [1.2, 0.8]]) {
-        for (const [ax, az] of dirs) {                                      // the first leg goes along (ax, az); the loop turns left or right
-          for (const turn of [1, -1]) {
-            const bx = -az * turn, bz = ax * turn;                          // the second leg's direction
-            const pts = [start, { x: start.x + ax * w, z: start.z + az * w }, { x: start.x + ax * w + bx * h, z: start.z + az * w + bz * h },
-              { x: start.x + bx * h, z: start.z + bz * h }, start];
-            const dd = [{ x: ax, z: az }, { x: bx, z: bz }, { x: -ax, z: -az }, { x: -bx, z: -bz }];
-            if (dd.every((d, i) => clearLine(pts[i], pts[i + 1], d))) { route = { pts, dd }; break; }
+        for (const start of starts) {
+          for (const [ax, az] of dirs) {                                    // the first leg goes along (ax, az); the loop turns left or right
+            for (const turn of [1, -1]) {
+              const bx = -az * turn, bz = ax * turn;                        // the second leg's direction
+              const pts = [start, { x: start.x + ax * w, z: start.z + az * w }, { x: start.x + ax * w + bx * h, z: start.z + az * w + bz * h },
+                { x: start.x + bx * h, z: start.z + bz * h }, start];
+              const dd = [{ x: ax, z: az }, { x: bx, z: bz }, { x: -ax, z: -az }, { x: -bx, z: -bz }];
+              if (dd.every((d, i) => clearLine(pts[i], pts[i + 1], d))) { route = { pts, dd }; break; }
+            }
+            if (route) break;
           }
           if (route) break;
         }
@@ -224,7 +284,7 @@ export function installYard(Brain, POSES, H) {
       for (let i = 0; i < 4; i++) {
         const d = dd[i], from = pts[i], to = pts[i + 1], g0 = behind(from, d), g1 = behind(to, d);
         steps.push({ ...this.walk(g0.x, g0.z, Math.atan2(d.x, d.z)), direct: i > 0 });
-        steps.push(this.play('idle', 0.4, { at: [0, () => { const mm = this.obj('mower'); if (mm) { mm.rot = faceFor(d); mm.set(from.x, from.z); sfx('click'); } }] }));
+        steps.push(this.play('idle', 0.4, { at: [0, () => { const mm = this.obj('mower'); if (mm) { mm.tether = null; mm.rot = faceFor(d); mm.set(from.x, from.z); sfx('click'); } }] }));
         steps.push({ ...this.walk(g1.x, g1.z, Math.atan2(d.x, d.z)), direct: true, push: { obj: m, relx: d.x * BEHIND, relz: d.z * BEHIND, spd: 1.1 } });
       }
       return steps;
@@ -246,6 +306,7 @@ export function installYard(Brain, POSES, H) {
     yardCleanup() {
       const s = this.obj('shed');
       if (s && s.openTo) { s.setOpen(false); sfx('lid'); }
+      this.mowerSync();
     },
 
     // ------------------------------------------------------------------ the activities
@@ -277,6 +338,7 @@ export function installYard(Brain, POSES, H) {
           this.play('reach', 1.6, { needs: ['shed'], at: [0.8, () => { const s = this.obj('shed'); if (s) { s.setOpen(true); sfx('lid'); } }], target: () => this.obj('shed').knobPoint() }),
           this.play('idle', 0.8),
           { type: 'plan', fn: () => this.mowPlan() },
+          { type: 'plan', fn: () => this.putMowerAway() },               // the lawn is done: the mower goes back in the shed
           this.stand('shed', 1.2, () => this.obj('shed').knobPoint()),
           this.play('reach', 1.6, { needs: ['shed'], at: [0.8, () => { const s = this.obj('shed'); if (s) { s.setOpen(false); sfx('lid'); } }], target: () => this.obj('shed').knobPoint() })]),
         // no book yet: just poking a ball about with his foot
