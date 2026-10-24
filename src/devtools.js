@@ -258,8 +258,10 @@ T.home = () => { G().root.position.set(0, 0, 2); G().root.rotation.y = 0; };
 T.settle = (maxSec = 90) => {
   const b = B();
   b.skip();
-  b.pendingActivity = 'wander';
   let t = 0;
+  // free activities now happen in whatever room he is in, so a tidy-up that must end in his own room sends him home first
+  if (!b.inMain() && !b.stuckIn() && !b.lockedInside()) { b.pendingActivity = 'leave'; while (t < maxSec && !b.inMain()) { step(0.25); t += 0.25; } b.stayRoom = null; b.skip(); }
+  b.pendingActivity = 'wander';
   while (t < maxSec) {
     step(0.25); t += 0.25;
     if (holdingNothing() && !seated() && (!b.music || b.userMusic) && b.last === 'wander' && b.step) break;
@@ -1216,11 +1218,135 @@ T.sweepYardOrders = () => {
   const r3 = b.interact('basketballhoop'), l3 = b.lockOn('basketballhoop');
   const chosen = [], orig = b.choose.bind(b); b.choose = (f) => { orig(f); chosen.push(b.last); };
   const s0 = w.yard.score.shots;
-  let t = 0; try { while (t < 150) { step(0.25); t += 0.25; } } finally { b.choose = orig; }
+  let t = 0; try { while (t < 260) { step(0.25); t += 0.25; } } finally { b.choose = orig; }
   out.push(result('yard orders: with the book, told to shoot hoops and locked in, he shoots at the hoop and keeps at the hoop (never the kicking)', r3.ok && l3.ok && w.yard.score.shots - s0 >= 3 && !chosen.includes('yardpoke') && chosen.every((n) => ['hoopshoot', 'hoopdribble', 'dropball', 'putback'].includes(n)), { r3, l3, shots: w.yard.score.shots - s0, chosen }));
   b.unlock(true); T.settle();
   T.resetRooms(); T.removeAll(); T.settle();
   out.push(result('yard orders: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
+// ---- 12c. Telling him to mow the lawn (and the other yard jobs) by voice, and while he is already out in the yard (src/voice.js, brain.js update) ----
+// "mow the lawn" used to come back as "I did not catch that" (the parser knew nothing of the yard), and an order for the yard given while he was
+// already out there made him walk back indoors first (and, with no GAL, was refused as "busy").
+T.sweepYardVoice = () => {
+  const out = [], base = errors.length, w = W(), b = B(), V = window.__voice;
+  window.__voiceNoAudio = true;
+  T.settle(); T.resetRooms(); T.removeAll(); T.forget(); skillsOf().fading.clear(); T.settle(); T.home();
+  unlockRoom('backyard'); R().add('backyard');
+  for (const id of ['lawnchair', 'shed', 'mower']) T.addObject(id);
+  T.settle();
+  const reset = () => { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; };
+  // 1. from his own room: the sentence is understood, and he really mows (the mower leaves its spot)
+  reset(); T.home(); T.settle();
+  const m0 = w.objects.mower && { x: w.objects.mower.x, z: w.objects.mower.z };
+  const r1 = V.run('Guy, mow the lawn please');
+  out.push(result('yard voice: "mow the lawn" is understood and he says he is on it', r1.ok && r1.intent.type === 'object' && r1.intent.name === 'mower' && r1.lines.length === 1 && r1.lines[0].who === 'guy' && b.pendingActivity === 'mow', { intent: r1.intent, lines: r1.lines, pending: b.pendingActivity }));
+  const seen1 = []; const orig1 = b.choose.bind(b); b.choose = (f) => { orig1(f); seen1.push(b.last); };
+  let t = 0, moved = 0; try { while (t < 260 && moved < 0.8) { step(0.25); t += 0.25; const m = w.objects.mower; if (m && m0) moved = Math.max(moved, Math.hypot(m.x - m0.x, m.z - m0.z)); } } finally { b.choose = orig1; }
+  out.push(result('yard voice: told "mow the lawn" he walks out and pushes the mower across the lawn', seen1.includes('mow') && moved >= 0.8, { seen: seen1, moved }));
+  // 2. already out in the yard doing something else: he finishes it quickly and mows, without walking indoors first, and without needing GAL
+  reset(); T.home(); T.settle();
+  const ri = b.interact('lawnchair');
+  let t2 = 0; while (t2 < 90 && !(b.inYard() && b.step && b.step.fx && b.step.fx.chairSit)) { step(0.25); t2 += 0.25; }
+  const seated = b.inYard() && !!(b.step && b.step.fx && b.step.fx.chairSit);
+  const seen2 = []; const orig2 = b.choose.bind(b); b.choose = (f) => { orig2(f); seen2.push(b.last); };
+  let r2 = null, mowing = false, t3 = 0;
+  try {
+    r2 = V.run('mow the lawn');
+    while (t3 < 20 && !mowing) { step(0.25); t3 += 0.25; mowing = b.last === 'mow' && !!b.step; }
+  } finally { b.choose = orig2; }
+  out.push(result('yard voice: out in the yard (in the lawn chair) "mow the lawn" is his to do, not handed to GAL or refused as busy', ri.ok && seated && r2.ok && r2.lines.length === 1 && r2.lines[0].who === 'guy' && !/GAL|busy/.test(r2.lines[0].text), { ri, seated, r2: r2 && r2.lines }));
+  out.push(result('yard voice: he finishes sitting quickly and starts mowing within seconds, without leaving the yard first', mowing && t3 < 12 && !seen2.includes('leave') && b.inYard(), { seen: seen2, t3, inYard: b.inYard() }));
+  // 2b. cut short while mowing (the shed door is open): he shuts it again, it is not left hanging open
+  reset(); T.home(); T.settle();
+  b.interact('mower');
+  let t4 = 0; while (t4 < 120 && !(w.objects.shed && w.objects.shed.openTo === 1)) { step(0.25); t4 += 0.25; }
+  const openedShed = !!w.objects.shed && w.objects.shed.openTo === 1;
+  b.interact('lawnchair');
+  let t5 = 0; while (t5 < 30 && w.objects.shed && w.objects.shed.openTo === 1) { step(0.25); t5 += 0.25; }
+  out.push(result('yard voice: cut short with the shed door open, he shuts it again', openedShed && !!w.objects.shed && w.objects.shed.openTo === 0, { openedShed, openTo: w.objects.shed && w.objects.shed.openTo }));
+  // 2c. long-press > Mow the Lawn with no clear lawn (the mower jammed in a corner): he says so kindly and does not go and open the shed
+  reset(); T.home(); T.settle();
+  const mw = w.objects.mower, bd = w.doors.backyard.shell.bounds;
+  if (mw) mw.set(bd.minX + 0.3, bd.minZ + 0.3);
+  const r5 = b.interact('mower'), r5b = b.interact('shed');
+  out.push(result('yard voice: long-press the mower or shed with no clear lawn: a kind message, nothing started, and he does not choose to mow on his own', !r5.ok && !r5b.ok && /clear stretch of lawn/.test(r5.message) && !/\b(fail|failed|error|wrong|can't|cannot)\b/i.test(r5.message) && !b.pendingActivity && b.available('mow') === false, { r5, r5b, pending: b.pendingActivity, avail: b.available('mow') }));
+  // (and back with room to spare it is on again)
+  if (mw) mw.set(bd.minX + (bd.maxX - bd.minX) * 0.42, (bd.minZ + bd.maxZ) / 2);
+  out.push(result('yard voice: with room round the mower again he is willing to mow', b.available('mow') === true, { avail: b.available('mow') }));
+  // 2d. things in the way of the mowing: the light ones (chair, bird bath, plant, small cabinet) he shifts aside himself, then he mows
+  reset(); T.home(); T.settle();
+  for (const id of ['birdbath', 'flowerplant', 'nightstand']) T.addObject(id);
+  T.settle();
+  const mw3 = w.objects.mower;
+  if (m0 && mw3) mw3.set(m0.x, m0.z);
+  const ring = [['lawnchair', 1.0, 0], ['birdbath', -1.0, 0], ['flowerplant', 0, 1.0], ['nightstand', 0, -1.0]];
+  for (const [n, dx, dz] of ring) if (w.objects[n] && mw3) w.objects[n].set(mw3.x + dx, mw3.z + dz);
+  const spots0 = ring.map(([n]) => ({ n, x: w.objects[n].x, z: w.objects[n].z }));
+  const plain = b.mowRoute(), pushy = b.mowRoute({ pushable: true });
+  out.push(result('yard voice: with light things all round the mower there is no plain loop, but there is one if Guy shifts them', !plain && !!pushy && pushy.blockers.length >= 1, { plain: !!plain, blockers: pushy && pushy.blockers }));
+  const r6 = b.interact('mower');
+  const seen6 = []; const orig6 = b.choose.bind(b); b.choose = (f) => { orig6(f); seen6.push(b.last); };
+  let t6 = 0, moved6 = 0;
+  try { while (t6 < 500 && moved6 < 0.8) { step(0.25); t6 += 0.25; const mm = w.objects.mower; moved6 = mm && m0 ? Math.hypot(mm.x - m0.x, mm.z - m0.z) : 0; } } finally { b.choose = orig6; }
+  const shifted = spots0.filter((s) => Math.hypot(w.objects[s.n].x - s.x, w.objects[s.n].z - s.z) > 0.5).map((s) => s.n);
+  out.push(result('yard voice: long-press Mow the Lawn with light things in the way: he shifts them aside, then mows', r6.ok && shifted.length >= 1 && moved6 >= 0.8 && seen6.includes('mow'), { r6, shifted, moved6, seen: seen6, t6 }));
+  // 3. an order for the yard that he cannot do says why (the door is locked), it does not vanish
+  reset(); T.home(); T.settle();
+  R().setDoorLocked('backyard', true);
+  const r4 = V.run('mow the lawn');
+  out.push(result('yard voice: with the yard door locked he says so instead of silently doing nothing', !r4.ok && r4.lines.length >= 1 && r4.lines[0].text.length > 5 && !b.pendingActivity, { lines: r4.lines, pending: b.pendingActivity }));
+  R().setDoorLocked('backyard', false);
+  reset();
+  T.resetRooms(); T.removeAll(); T.settle();
+  out.push(result('yard voice: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
+// Every skill works in every room: an object dragged into another room is used there (he goes out and in through the doors), the
+// free activities happen in whichever room he is in, and a two-thing activity needs both things in the same room.
+T.sweepAllRooms = () => {
+  const out = [], base = errors.length, w = W(), b = B();
+  T.settle(); T.resetRooms(); T.removeAll(); T.forget(); skillsOf().fading.clear(); T.settle(); T.home();
+  unlockRoom('workshop'); R().add('workshop');
+  T.addObject('piano'); T.addObject('table');
+  T.learn(['piano', 'stereo']);                                   // (playing along needs the skill: without it the checks below would pass for the wrong reason)
+  T.settle();
+  const bd = w.doors.workshop.shell.bounds, cx = (bd.minX + bd.maxX) / 2, cz = (bd.minZ + bd.maxZ) / 2;
+  const reset = () => { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; b.stayRoom = null; };
+  const PIANO = ['plink', 'piano', 'sitpiano'];
+  // 1. the piano is dragged into the Workshop and he is told to play it from his own room
+  const pi = w.objects.piano; pi.set(cx, cz - 0.8);
+  reset(); T.home(); T.settle();
+  const r1 = b.interact('piano');
+  const seen = []; const o1 = b.choose.bind(b); b.choose = (f) => { o1(f); seen.push(b.last); };
+  let t = 0, playing = false;
+  try { while (t < 160 && !playing) { step(0.25); t += 0.25; playing = b.hereId() === 'workshop' && PIANO.includes(b.last) && !!b.step; } } finally { b.choose = o1; }
+  out.push(result('allrooms: the piano is in the Workshop and he is told to play it: he goes in through the door and plays it there', r1.ok && playing, { r1, seen, t, room: b.hereId() }));
+  // 2. afterwards a free activity happens right there, not after a walk back to his own room
+  b.pendingActivity = 'wander'; b.skip();
+  let t2 = 0, wandered = false; while (t2 < 40 && !wandered) { step(0.25); t2 += 0.25; wandered = b.last === 'wander' && !!b.step; }
+  const seen2 = [], ws = b.waveSpot(), ds = b.danceSpot(), fs = b.freeSpot();
+  for (let i = 0; i < 12 && b.last === 'wander'; i++) { step(0.25); seen2.push(b.hereId()); }       // (while that wander lasts)
+  out.push(result('allrooms: wandering happens in the Workshop he is in (he does not walk home first), and stays on its floor', wandered && seen2.length > 0 && seen2.every((r) => r === 'workshop') && b.onFloor(b.g.root.position.x, b.g.root.position.z, 0), { wandered, room: b.hereId(), seen2: [...new Set(seen2)] }));
+  // 3. the stretch / wave / dance spots are on the floor of the room he is in
+  out.push(result('allrooms: the wave, dance and free spots are inside the room he is in', [ws, ds, fs].every((p) => w.roomIdAt(p.x, p.z) === 'workshop'), { ws, ds, fs }));
+  // 4. two things in one activity: the stereo is in the other room, so playing along is not on offer; bring it in and it is
+  const tb = w.objects.table; tb.set(0, 0);
+  const apart = ['jam', 'jampiano', 'jamsit'].map((a) => b.available(a));
+  tb.set(cx + 1.6, cz + 0.8);
+  const together = ['jam', 'jampiano', 'jamsit'].map((a) => b.available(a));
+  out.push(result('allrooms: the stereo in another room: no playing along with it; in the same room it is on offer', apart.every((x) => x === false) && together.some((x) => x === true), { apart, together }));
+  // 5. the object is taken away while he is in there: he stops and comes out, with no errors
+  w.removeObject('piano'); b.objectRemoved('piano');
+  T.settle();
+  out.push(result('allrooms: the piano taken away: he comes out and carries on in his own room', b.inMain(), { room: b.hereId() }));
+  T.settle(); reset();
+  for (const [n, x, z] of [['piano', -2.5, -2.4], ['table', 2.5, -2.4]]) if (w.objects[n]) w.objects[n].set(x, z);     // (taking a room away in the test deletes what stands in it: they go back to his own room first)
+  T.resetRooms(); T.removeAll(); T.forget(); skillsOf().fading.clear(); b.lastSong = null; T.settle(); T.home();
+  R().setUnlocked('workshop', false);                           // (as it was found)
+  out.push(result('allrooms: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
 };
 
@@ -1671,7 +1797,7 @@ T.sweepWorkshop = () => {
     if (remove) { w.removeObject('woodfactory'); b.objectRemoved('woodfactory'); } else b.skip();
     T.settle();
     delete b.pickRecipe;
-    out.push(result(`workshop: ${label}: nothing is left on the tray or in his hands, nothing is half-made, and he is back in the room`, t < 90 && b.carry === null && !fac.tray.children.length && Object.values(w.objects).filter((o) => o.kind).length + (w.stock.items.builtchair || 0) === kept && !(w.building || []).length && b.inMain(), { had, t, carry: b.carry }));
+    out.push(result(`workshop: ${label}: nothing is left on the tray or in his hands, nothing is half-made, and he is back in the room`, t < 90 && b.carry === null && !fac.tray.children.length && Object.values(w.objects).filter((o) => o.kind).length + (w.stock.items.builtchair || 0) === kept && !(w.building || []).length && b.inMain(), { had, t, carry: b.carry, room: b.hereId(), last: b.last, stay: b.stayRoom, building: (w.building || []).length, tray: fac.tray.children.length }));
   };
   cut('cut short while the factory runs', () => w.objects.woodfactory.running > 0.5);
   cut('cut short with the finished thing on the tray', () => w.objects.woodfactory.tray.children.length > 0);
@@ -2940,6 +3066,8 @@ T.runAll = () => {
   report.sides = S(T.sweepSides);
   report.metal = S(T.sweepMetal);
   report.yardOrders = S(T.sweepYardOrders);
+  report.yardVoice = S(T.sweepYardVoice);
+  report.allRooms = S(T.sweepAllRooms);
   report.needs = S(T.sweepNeeds);
   report.gal = S(T.sweepGal);
   report.workstation = S(T.sweepWorkstation);
@@ -3104,6 +3232,10 @@ const VOICE_PHRASES = [
   ['lock the screen', 'screen', null], ['unlock the screen', 'screen', null], ['lock the screen camera only', 'screen', null],
   ['tell GAL to play the guitar', 'gal', null], ['ask gal to jam', 'gal', null], ['jam', 'jam', null], ['I am bored', 'next', null], ['something else', 'next', null],
   ['learn everything', 'learn', null], ['use the workstation to learn piano', 'learn', null], ['tell GAL to learn all skills', 'gal', null], ['use the workstation', 'object', 'workstation'],
+  ['mow the lawn', 'object', 'mower'], ['Guy, go and mow the grass please', 'object', 'mower'], ['use the shed', 'object', 'mower'], ['sit in the lawn chair', 'object', 'lawnchair'],
+  ['shoot some hoops', 'object', 'basketballhoop'], ['play basketball', 'object', 'basketballhoop'], ['take some shots at the goal', 'object', 'soccergoal'], ['kick the soccer ball', 'object', 'soccergoal'],
+  ['cook dinner', 'object', 'stove'], ['serve the food', 'object', 'kitchencounter'], ['take payment at the register', 'object', 'register'], ['look after the customers', 'object', 'diningtable'],
+  ['look at the bird bath', 'object', 'birdbath'], ['switch to night', 'object', 'skyswitch'], ['look at the night sky', 'object', 'telescope'], ['build something', 'object', 'workbench'], ['tidy the tools', 'object', 'toolbox'],
   ['xyzzy plugh', 'unknown', null], ['what is the capital of France', 'unknown', null], ['', 'empty', null],
 ];
 T.sweepVoice = async () => {
