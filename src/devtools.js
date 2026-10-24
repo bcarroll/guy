@@ -1256,6 +1256,14 @@ T.sweepYardVoice = () => {
   } finally { b.choose = orig2; }
   out.push(result('yard voice: out in the yard (in the lawn chair) "mow the lawn" is his to do, not handed to GAL or refused as busy', ri.ok && seated && r2.ok && r2.lines.length === 1 && r2.lines[0].who === 'guy' && !/GAL|busy/.test(r2.lines[0].text), { ri, seated, r2: r2 && r2.lines }));
   out.push(result('yard voice: he finishes sitting quickly and starts mowing within seconds, without leaving the yard first', mowing && t3 < 12 && !seen2.includes('leave') && b.inYard(), { seen: seen2, t3, inYard: b.inYard() }));
+  // 2b. cut short while mowing (the shed door is open): he shuts it again, it is not left hanging open
+  reset(); T.home(); T.settle();
+  b.interact('mower');
+  let t4 = 0; while (t4 < 120 && !(w.objects.shed && w.objects.shed.openTo === 1)) { step(0.25); t4 += 0.25; }
+  const openedShed = !!w.objects.shed && w.objects.shed.openTo === 1;
+  b.interact('lawnchair');
+  let t5 = 0; while (t5 < 30 && w.objects.shed && w.objects.shed.openTo === 1) { step(0.25); t5 += 0.25; }
+  out.push(result('yard voice: cut short with the shed door open, he shuts it again', openedShed && !!w.objects.shed && w.objects.shed.openTo === 0, { openedShed, openTo: w.objects.shed && w.objects.shed.openTo }));
   // 3. an order for the yard that he cannot do says why (the door is locked), it does not vanish
   reset(); T.home(); T.settle();
   R().setDoorLocked('backyard', true);
@@ -3151,6 +3159,7 @@ const VOICE_PHRASES = [
   ['learn everything', 'learn', null], ['use the workstation to learn piano', 'learn', null], ['tell GAL to learn all skills', 'gal', null], ['use the workstation', 'object', 'workstation'],
   ['mow the lawn', 'object', 'mower'], ['Guy, go and mow the grass please', 'object', 'mower'], ['use the shed', 'object', 'mower'], ['sit in the lawn chair', 'object', 'lawnchair'],
   ['shoot some hoops', 'object', 'basketballhoop'], ['play basketball', 'object', 'basketballhoop'], ['take some shots at the goal', 'object', 'soccergoal'], ['kick the soccer ball', 'object', 'soccergoal'],
+  ['cook dinner', 'object', 'stove'], ['serve the food', 'object', 'kitchencounter'], ['take payment at the register', 'object', 'register'], ['look after the customers', 'object', 'diningtable'],
   ['look at the bird bath', 'object', 'birdbath'], ['switch to night', 'object', 'skyswitch'], ['look at the night sky', 'object', 'telescope'], ['build something', 'object', 'workbench'], ['tidy the tools', 'object', 'toolbox'],
   ['xyzzy plugh', 'unknown', null], ['what is the capital of France', 'unknown', null], ['', 'empty', null],
 ];

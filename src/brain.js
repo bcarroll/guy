@@ -1863,6 +1863,7 @@ export class Brain {
     const lastTags = [this.last, this.prev].flatMap((n) => tags[n] || []);
     this.restCleanup();                                      // cut short in the Restaurant: the dish goes back, the order waits again
     this.workCleanup();                                      // cut short in the Workshop: what he carries goes back in the stock
+    this.yardCleanup();                                      // cut short mowing: the shed door is shut again
     let name = force;
     if (!name && this.ballHeld && this.inYard()) name = 'dropball';        // out in the yard with a ball in his hands: set it down before anything else
     if (!name && !this.inMain() && !this.lockedInside() && !this.restStays() && !this.stuckIn()) name = 'leave';             // he is in an added room: back through the door before anything else

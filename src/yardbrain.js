@@ -164,6 +164,13 @@ export function installYard(Brain, POSES, H) {
       sfx('motor');
     },
 
+    // Cut short while mowing (told to do something else, no room to mow...): the shed door he opened must not be left hanging open.
+    // Called by choose() whenever a new activity begins, so a mow that finished properly (door already shut) is not touched.
+    yardCleanup() {
+      const s = this.obj('shed');
+      if (s && s.openTo) { s.setOpen(false); sfx('lid'); }
+    },
+
     // ------------------------------------------------------------------ the activities
     yardActivities() {
       const w = this.w;
