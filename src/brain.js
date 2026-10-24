@@ -1802,7 +1802,7 @@ export class Brain {
       stove: REST_ACTS, kitchencounter: REST_ACTS, register: REST_ACTS, diningtable: REST_ACTS, diningtable2: REST_ACTS,
       workbench: ['build', 'makewood', 'sawwood'], toolbox: ['tidytools'], woodfactory: ['makewood'], saw: ['sawwood', 'makewood'], mallet: ['tap', 'build'], sander: ['sand', 'build'],
       metalfactory: ['makemetal'], metalcutter: ['cutmetal', 'makemetal'], welder: ['weld', 'build'], anvil: ['hammer', 'build'],
-      soccergoal: ['goalshot', 'soccertoss', 'yardpoke'], basketballhoop: ['hoopshoot', 'hoopdribble', 'yardpoke'], lawnchair: ['yardsit'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], shed: ['mow'], mower: ['mow'],
+      soccergoal: ['goalshot', 'soccertoss'], basketballhoop: ['hoopshoot', 'hoopdribble'], lawnchair: ['yardsit'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], shed: ['mow'], mower: ['mow'],
     }[name] || (this.obj(name) && this.obj(name).seats ? REST_ACTS : this.obj(name) && this.obj(name).guitar ? ['guitar', 'riff', 'jamguitar'] : this.obj(name) && this.obj(name).sit ? ['read', 'sit', 'sitguitar'] : []);
     return list.filter((a) => this.available(a));
   }
@@ -1978,7 +1978,7 @@ export class Brain {
       workbench: ['build'], toolbox: ['tidytools'], woodfactory: ['makewood'], saw: ['sawwood'], mallet: ['tap'], sander: ['sand'],
       metalfactory: ['makemetal'], metalcutter: ['cutmetal'], welder: ['weld'], anvil: ['hammer'],
       botprinter: ['buildbot'], workstation: ['learn'],
-      soccergoal: ['goalshot', 'soccertoss', 'yardpoke'], basketballhoop: ['hoopshoot', 'hoopdribble', 'yardpoke'], lawnchair: ['yardsit'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], shed: ['mow'], mower: ['mow'],
+      soccergoal: ['goalshot', 'soccertoss'], basketballhoop: ['hoopshoot', 'hoopdribble'], lawnchair: ['yardsit'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], shed: ['mow'], mower: ['mow'],
     }[name] || (this.obj(name) && this.obj(name).kind === 'footstool' ? ['dusttop'] : this.obj(name) && this.obj(name).guitar ? (k('guitar') ? (this.music ? ['jamguitar'] : ['guitar']) : []) : undefined);
     if (this.obj(name) && this.obj(name).guitar) this.wantGuitar = name;
     if (name === 'botprinter') {
@@ -1988,6 +1988,9 @@ export class Brain {
     }
     const wmsg = this.workRefusal(name) || this.restRefusal(name);
     if (wmsg) return { ok: false, message: wmsg };
+    // told to use the goal or the hoop before reading that sport's book: say so (otherwise all he would do is poke the ball about with his foot)
+    const sport = { soccergoal: ['outdoor.soccer', 'Soccer for Robots'], basketballhoop: ['outdoor.basketball', 'Basketball for Robots'] }[name];
+    if (sport && !k(sport[0])) return { ok: false, message: `Guy doesn't know how to play that yet. ${k('outdoor') ? '' : 'He has to read "Outdoor Sports" first. '}Add "${sport[1]}" to the shelf and he'll read it.` };
     if (this.obj(name) && this.obj(name).kind === 'footstool') {
       if (!k('decorate')) return { ok: false, message: 'Guy does not know about looking after the room yet. Add the book "Home Decorating for Robots" to the shelf and he will read it.' };
       if (!this.stoolJob()) return { ok: false, message: 'There is no window top to clean right now.' };
