@@ -1923,6 +1923,9 @@ export class Brain {
     this.yardCleanup();                                      // cut short mowing: the shed door is shut again
     let name = force;
     if (!name && this.ballHeld && this.inYard()) name = 'dropball';        // out in the yard with a ball in his hands: set it down before anything else
+    // He is in an added room: back through the door before anything else, unless he went there to use something that stands in it (a piano
+    // dragged into the Workshop ...): then it is his room for now, and free activities happen there too.
+    if (!name && !this.inMain() && this.hereId() !== this.stayRoom && !this.lockedInside() && !this.restStays() && !this.stuckIn()) name = 'leave';
     if (!name && this.carry === 'canvas') name = 'putcanvas';                  // cut short with a painting in his hands: back to the easel with it
     if (!name && this.gtr.held && this.obj('guitar') && !this.guitarLocked()) name = 'putguitar'; // still holding the guitar: back on its stand (not while locked in on it)
     if (!name && this.lampOffByMe && this.obj('lamp') && !this.obj('lamp').on) name = 'lighton'; // he switched it off for the stars and never put it back
@@ -1964,10 +1967,14 @@ export class Brain {
     // can only do what can be done in there (available()), so no trip is needed.
     const where = this.roomForAct(name), here = this.hereId();
     this.actRoom = where;
+    if (ACT_OBJ[name]) this.stayRoom = where;                      // (done at an object in that room: he stays there afterwards)
+    else if (!FREE_ACTS.includes(name)) this.stayRoom = null;
     let label, steps;
     try { [label, ...steps] = acts[name](); } finally { this.actRoom = null; }
     if (!this.stuckIn() && where !== here && !OWN_ROOM_ACTS.includes(name)) {
-      const trip = [...(here !== 'main' ? this.doorOut(here) : []), ...(where !== 'main' ? this.doorIn(where) : [])];
+      // (the yard, Workshop and Restaurant jobs go in through their own door themselves: they only need him out of the room he is in)
+      const ownTrip = YARD_ACTS.includes(name) || WORK_ACTS.includes(name) || REST_JOBS.includes(name) || REST_ACTS.includes(name);
+      const trip = [...(here !== 'main' ? this.doorOut(here) : []), ...(where !== 'main' && !ownTrip ? this.doorIn(where) : [])];
       steps = [...trip, ...steps];
     }
     this.ui(this.lock ? `🔒 ${label}` : label);
@@ -2113,7 +2120,7 @@ export class Brain {
   // The animation loop must never die: if anything goes wrong mid-activity (an object removed from under him, say),
   // drop the activity, tidy up, and carry on.
   safeUpdate(dt) {
-    try { this.update(dt); this.faults = 0; } catch (err) { console.error('Guy stumbled:', err); this.recover(); }
+    try { this.update(dt); this.faults = 0; } catch (err) { console.error('Guy stumbled:', err, err && err.stack && err.stack.split('\n')[1]); this.recover(); }
   }
 
   safeLate() {
@@ -2188,6 +2195,7 @@ export class Brain {
       if (!s.path) {
         if (s.anchor) {
           const o = this.obj(s.anchor.name);
+          if (!o) { this.queue = []; this.step = null; return; }              // (the thing he was walking to is gone: nothing more to do here)
           const l = o.local(s.anchor.dx, s.anchor.dz);
           s.x = o.x + l.x; s.z = o.z + l.z;
           if (s.anchor.yaw !== null) s.yaw = s.anchor.yaw + o.yaw;

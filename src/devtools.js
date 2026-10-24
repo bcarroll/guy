@@ -258,8 +258,10 @@ T.home = () => { G().root.position.set(0, 0, 2); G().root.rotation.y = 0; };
 T.settle = (maxSec = 90) => {
   const b = B();
   b.skip();
-  b.pendingActivity = 'wander';
   let t = 0;
+  // free activities now happen in whatever room he is in, so a tidy-up that must end in his own room sends him home first
+  if (!b.inMain() && !b.stuckIn() && !b.lockedInside()) { b.pendingActivity = 'leave'; while (t < maxSec && !b.inMain()) { step(0.25); t += 0.25; } b.stayRoom = null; b.skip(); }
+  b.pendingActivity = 'wander';
   while (t < maxSec) {
     step(0.25); t += 0.25;
     if (holdingNothing() && !seated() && (!b.music || b.userMusic) && b.last === 'wander' && b.step) break;
@@ -1302,6 +1304,52 @@ T.sweepYardVoice = () => {
   return out;
 };
 
+// Every skill works in every room: an object dragged into another room is used there (he goes out and in through the doors), the
+// free activities happen in whichever room he is in, and a two-thing activity needs both things in the same room.
+T.sweepAllRooms = () => {
+  const out = [], base = errors.length, w = W(), b = B();
+  T.settle(); T.resetRooms(); T.removeAll(); T.forget(); skillsOf().fading.clear(); T.settle(); T.home();
+  unlockRoom('workshop'); R().add('workshop');
+  T.addObject('piano'); T.addObject('table');
+  T.learn(['piano', 'stereo']);                                   // (playing along needs the skill: without it the checks below would pass for the wrong reason)
+  T.settle();
+  const bd = w.doors.workshop.shell.bounds, cx = (bd.minX + bd.maxX) / 2, cz = (bd.minZ + bd.maxZ) / 2;
+  const reset = () => { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; b.stayRoom = null; };
+  const PIANO = ['plink', 'piano', 'sitpiano'];
+  // 1. the piano is dragged into the Workshop and he is told to play it from his own room
+  const pi = w.objects.piano; pi.set(cx, cz - 0.8);
+  reset(); T.home(); T.settle();
+  const r1 = b.interact('piano');
+  const seen = []; const o1 = b.choose.bind(b); b.choose = (f) => { o1(f); seen.push(b.last); };
+  let t = 0, playing = false;
+  try { while (t < 160 && !playing) { step(0.25); t += 0.25; playing = b.hereId() === 'workshop' && PIANO.includes(b.last) && !!b.step; } } finally { b.choose = o1; }
+  out.push(result('allrooms: the piano is in the Workshop and he is told to play it: he goes in through the door and plays it there', r1.ok && playing, { r1, seen, t, room: b.hereId() }));
+  // 2. afterwards a free activity happens right there, not after a walk back to his own room
+  b.pendingActivity = 'wander'; b.skip();
+  let t2 = 0, wandered = false; while (t2 < 40 && !wandered) { step(0.25); t2 += 0.25; wandered = b.last === 'wander' && !!b.step; }
+  const seen2 = [], ws = b.waveSpot(), ds = b.danceSpot(), fs = b.freeSpot();
+  for (let i = 0; i < 12 && b.last === 'wander'; i++) { step(0.25); seen2.push(b.hereId()); }       // (while that wander lasts)
+  out.push(result('allrooms: wandering happens in the Workshop he is in (he does not walk home first), and stays on its floor', wandered && seen2.length > 0 && seen2.every((r) => r === 'workshop') && b.onFloor(b.g.root.position.x, b.g.root.position.z, 0), { wandered, room: b.hereId(), seen2: [...new Set(seen2)] }));
+  // 3. the stretch / wave / dance spots are on the floor of the room he is in
+  out.push(result('allrooms: the wave, dance and free spots are inside the room he is in', [ws, ds, fs].every((p) => w.roomIdAt(p.x, p.z) === 'workshop'), { ws, ds, fs }));
+  // 4. two things in one activity: the stereo is in the other room, so playing along is not on offer; bring it in and it is
+  const tb = w.objects.table; tb.set(0, 0);
+  const apart = ['jam', 'jampiano', 'jamsit'].map((a) => b.available(a));
+  tb.set(cx + 1.6, cz + 0.8);
+  const together = ['jam', 'jampiano', 'jamsit'].map((a) => b.available(a));
+  out.push(result('allrooms: the stereo in another room: no playing along with it; in the same room it is on offer', apart.every((x) => x === false) && together.some((x) => x === true), { apart, together }));
+  // 5. the object is taken away while he is in there: he stops and comes out, with no errors
+  w.removeObject('piano'); b.objectRemoved('piano');
+  T.settle();
+  out.push(result('allrooms: the piano taken away: he comes out and carries on in his own room', b.inMain(), { room: b.hereId() }));
+  T.settle(); reset();
+  for (const [n, x, z] of [['piano', -2.5, -2.4], ['table', 2.5, -2.4]]) if (w.objects[n]) w.objects[n].set(x, z);     // (taking a room away in the test deletes what stands in it: they go back to his own room first)
+  T.resetRooms(); T.removeAll(); T.forget(); skillsOf().fading.clear(); b.lastSong = null; T.settle(); T.home();
+  R().setUnlocked('workshop', false);                           // (as it was found)
+  out.push(result('allrooms: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 T.sweepRooms = () => {
   const out = [], base = errors.length, w = W();
   T.resetRooms(); T.settle(); T.home();
@@ -1749,7 +1797,7 @@ T.sweepWorkshop = () => {
     if (remove) { w.removeObject('woodfactory'); b.objectRemoved('woodfactory'); } else b.skip();
     T.settle();
     delete b.pickRecipe;
-    out.push(result(`workshop: ${label}: nothing is left on the tray or in his hands, nothing is half-made, and he is back in the room`, t < 90 && b.carry === null && !fac.tray.children.length && Object.values(w.objects).filter((o) => o.kind).length + (w.stock.items.builtchair || 0) === kept && !(w.building || []).length && b.inMain(), { had, t, carry: b.carry }));
+    out.push(result(`workshop: ${label}: nothing is left on the tray or in his hands, nothing is half-made, and he is back in the room`, t < 90 && b.carry === null && !fac.tray.children.length && Object.values(w.objects).filter((o) => o.kind).length + (w.stock.items.builtchair || 0) === kept && !(w.building || []).length && b.inMain(), { had, t, carry: b.carry, room: b.hereId(), last: b.last, stay: b.stayRoom, building: (w.building || []).length, tray: fac.tray.children.length }));
   };
   cut('cut short while the factory runs', () => w.objects.woodfactory.running > 0.5);
   cut('cut short with the finished thing on the tray', () => w.objects.woodfactory.tray.children.length > 0);
@@ -3019,6 +3067,7 @@ T.runAll = () => {
   report.metal = S(T.sweepMetal);
   report.yardOrders = S(T.sweepYardOrders);
   report.yardVoice = S(T.sweepYardVoice);
+  report.allRooms = S(T.sweepAllRooms);
   report.needs = S(T.sweepNeeds);
   report.gal = S(T.sweepGal);
   report.workstation = S(T.sweepWorkstation);

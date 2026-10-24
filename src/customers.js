@@ -85,9 +85,9 @@ export class Restaurant {
   find(job) {
     const free = (c) => !c.claim;
     switch (job) {
-      case 'takeorder': return this.list.find((c) => c.state === 'waiting' && free(c) && this.obj(c.seat.table));
+      case 'takeorder': return this.list.find((c) => c.state === 'waiting' && free(c) && c.seat && this.obj(c.seat.table));
       case 'cook': return this.obj('stove') && this.obj('kitchencounter') && this.slotFree() >= 0 ? this.list.find((c) => c.state === 'ordered' && free(c)) : undefined;
-      case 'serve': return this.list.find((c) => c.state === 'cooked' && free(c) && this.obj(c.seat.table) && this.obj('kitchencounter'));
+      case 'serve': return this.list.find((c) => c.state === 'cooked' && free(c) && c.seat && this.obj(c.seat.table) && this.obj('kitchencounter'));
       case 'takepay': return this.obj('register') ? this.list.find((c) => c.state === 'paying' && free(c)) : undefined;
       default: return undefined;
     }
