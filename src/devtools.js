@@ -1304,6 +1304,55 @@ T.sweepYardVoice = () => {
   return out;
 };
 
+// The lawn mower lives in the shed: when the lawn is done Guy pushes it to the door and in, and shuts the door; the next mow takes it out
+// again; a shed that is dragged about takes its mower with it.
+T.sweepMowerShed = () => {
+  const out = [], base = errors.length, w = W(), b = B();
+  T.settle(); T.resetRooms(); T.removeAll(); T.forget(); skillsOf().fading.clear(); T.settle(); T.home();
+  unlockRoom('backyard'); R().add('backyard');
+  for (const id of ['shed', 'mower']) T.addObject(id);
+  T.settle();
+  const reset = () => { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; };
+  const inside = () => { const m = w.objects.mower, s = w.objects.shed; return !!m && !!s && Math.hypot(m.x - s.x, m.z - s.z) < 0.1; };
+  const mowOnce = (limit = 420) => {
+    reset(); T.home(); T.settle();
+    const r = b.interact('mower');
+    let t = 0, went = 0, done = false;
+    const s = w.objects.shed;
+    while (t < limit && !done) {
+      step(0.25); t += 0.25;
+      const m = w.objects.mower; if (m && s) went = Math.max(went, Math.hypot(m.x - s.x, m.z - s.z));
+      done = false;
+      if (t > 20 && went > 0.8 && inside() && s.open < 0.05 && s.openTo === 0) done = true;
+    }
+    return { r, t, went, done };
+  };
+  // 1. a first mow (the mower stands out on the lawn): when it is done the mower is in the shed and the door is shut
+  const a = mowOnce();
+  out.push(result('mower shed: after mowing the mower has been put back in the shed and the door is shut', a.r.ok && a.went > 0.8 && inside() && w.objects.shed.openTo === 0, a));
+  // 2. the next mow takes it out of the shed (it is not stuck in there) and puts it back again
+  const b2 = mowOnce();
+  out.push(result('mower shed: told to mow again, he takes it out of the shed, mows, and puts it away again', b2.r.ok && b2.went > 1.0 && inside() && w.objects.shed.openTo === 0, b2));
+  // 3. drag the shed: the mower inside goes with it
+  const sh = w.objects.shed, mw = w.objects.mower;
+  b.mowerSync();                                              // (what every new activity does first; Guy himself is not stepped here: he would go mowing)
+  const bd = w.doors.backyard.shell.bounds;
+  sh.set(sh.x + (sh.x > (bd.minX + bd.maxX) / 2 ? -1.2 : 1.2), sh.z);
+  mw.update(0.03);
+  out.push(result('mower shed: the shed is dragged to another spot and the mower inside goes with it', inside(), { shed: [sh.x, sh.z], mower: [mw.x, mw.z] }));
+  // 4. cut short mid-mow: the door is shut again (the mower stays on the lawn, nothing is stuck)
+  reset(); T.home(); T.settle();
+  b.interact('mower');
+  let t4 = 0; while (t4 < 200 && !(w.objects.mower && Math.hypot(w.objects.mower.x - sh.x, w.objects.mower.z - sh.z) > 1.2 && b.last === 'mow')) { step(0.25); t4 += 0.25; }
+  b.interact('lawnchair');
+  let t5 = 0; while (t5 < 40 && sh.openTo === 1) { step(0.25); t5 += 0.25; }
+  const far = Math.hypot(mw.x - sh.x, mw.z - sh.z);
+  out.push(result('mower shed: cut short on the lawn: the door is shut again and the mower is either put away or left clear of the shed', sh.openTo === 0 && (inside() || far > 1.0), { openTo: sh.openTo, t4, far }));
+  T.settle(); T.resetRooms(); T.removeAll(); T.settle();
+  out.push(result('mower shed: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 // Every skill works in every room: an object dragged into another room is used there (he goes out and in through the doors), the
 // free activities happen in whichever room he is in, and a two-thing activity needs both things in the same room.
 T.sweepAllRooms = () => {
@@ -3067,6 +3116,7 @@ T.runAll = () => {
   report.metal = S(T.sweepMetal);
   report.yardOrders = S(T.sweepYardOrders);
   report.yardVoice = S(T.sweepYardVoice);
+  report.mowerShed = S(T.sweepMowerShed);
   report.allRooms = S(T.sweepAllRooms);
   report.needs = S(T.sweepNeeds);
   report.gal = S(T.sweepGal);
