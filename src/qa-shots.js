@@ -144,7 +144,7 @@ export function install(T, h) {
     });
     add('room-workshop', 'rooms', async () => {
       await clean(42);
-      for (const id of ['workbench', 'toolbox', 'woodfactory', 'saw', 'mallet', 'sander']) T.addObject(id);
+      for (const id of ['workbench', 'toolbox', 'woodfactory', 'metalfactory']) T.addObject(id);
       T.freeze(); T.frameRoom('workshop'); await settleFrames(3);
       return { data: capture() };
     });

@@ -533,14 +533,8 @@ function interactLabel(name) {
     case 'telescope': return '🔭 Look through Telescope';
     case 'workbench': return '🛠️ Build Something';
     case 'toolbox': return '🧰 Tidy the Tools';
-    case 'woodfactory': return '🏭 Make Planks';
-    case 'saw': return '🪚 Saw a Plank';
-    case 'mallet': return '🔨 Tap Things Together';
-    case 'sander': return '🧽 Sand Some Wood';
-    case 'metalfactory': return '🏭 Make Metal Bars';
-    case 'metalcutter': return '✂️ Cut a Metal Bar';
-    case 'welder': return '🔥 Weld Something';
-    case 'anvil': return '🔨 Hammer Metal';
+    case 'woodfactory': return '🏭 Build Something Wooden';
+    case 'metalfactory': return '🏭 Build Something Metal';
     case 'botprinter': return '🤖 Build GAL';
     case 'workstation': return '🖥️ Use Workstation';
     case 'plant': case 'flowerplant': case 'tree': return '🌱 Tend Plant';

@@ -13,8 +13,7 @@ export const BARKS = {
   scribble: ['A quick sketch.'], paint: ['Let me paint.'], mixpaint: ['Mixing some colours.'], portrait: ['A portrait, I think.'],
   peek: ['A quick look through the telescope.'], stargaze: ['Stargazing.'], darkstargaze: ['Lights off, for the stars.'], scopecare: ['The telescope needs looking after.'],
   rearrange: ['This could be arranged better.'], stereoon: ['Some music.'], stereooff: ['That is enough music.'],
-  makewood: ['Off to make some planks.'], sawwood: ['Sawing.'], tap: ['Tap, tap.'], sand: ['Sanding.'], tidytools: ['Tidying the tools.'], build: ['I am building something.'],
-  makemetal: ['Making metal bars.'], cutmetal: ['Cutting metal.'], hammer: ['Hammer time.'], weld: ['Welding.'],
+  tidytools: ['Tidying the tools.'], build: ['I am building something.'],
   visit: ['Let me have a look in there.'], learn: ['Off to the workstation.'],
 };
 export const NO_BARK = ['wander', 'books', 'putback', 'putguitar', 'dropball', 'lighton', 'putcanvas', 'hangpaint', 'leave', 'stuck', 'rwait',

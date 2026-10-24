@@ -50,7 +50,7 @@ export class GalBrain extends Brain {
 
   // she does not use the Workshop, push furniture about or build robots; and she needs the stereo for her invitation
   galBlocks(act) {
-    if (['makewood', 'sawwood', 'tap', 'sand', 'tidytools', 'makemetal', 'cutmetal', 'hammer', 'weld', 'rearrange', 'buildbot', 'bandjam', 'bandplay', 'orderbuild'].includes(act)) return true;       // (she does build what the house needs: 'build')
+    if (['tidytools', 'rearrange', 'buildbot', 'bandjam', 'bandplay', 'orderbuild'].includes(act)) return true;       // (she does build what the house needs: 'build')
     if (act === 'invitedance') return !(this.obj('table') && this.skills.has('stereo') && !this.music && this.w.gal.canInvite());
     return false;
   }

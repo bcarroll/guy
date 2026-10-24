@@ -64,7 +64,7 @@ export function parse(text, ctx = {}) {
 }
 
 // Guy is too busy to do something new: working, serving, painting, locked in on something, shut in, or away from the room
-const BUSY = ['build', 'makewood', 'sawwood', 'tap', 'sand', 'tidytools', 'makemetal', 'cutmetal', 'hammer', 'weld', 'takeorder', 'cook', 'serve', 'takepay', 'rwait', 'paint', 'portrait', 'mixpaint', 'putcanvas', 'hangpaint', 'buildbot', 'orderbuild', 'bandplay', 'bandjam'];
+const BUSY = ['build', 'tidytools', 'takeorder', 'cook', 'serve', 'takepay', 'rwait', 'paint', 'portrait', 'mixpaint', 'putcanvas', 'hangpaint', 'buildbot', 'orderbuild', 'bandplay', 'bandjam'];
 export const guyBusy = (b) => !!(b.lock || b.stuckIn() || !b.inMain() || (b.restStays && b.restStays()) || (b.step || b.queue.length) && BUSY.includes(b.last));
 
 export function createVoice({ world, brain, say = () => {}, speaking = null, screen = null, toast = () => {} }) {
