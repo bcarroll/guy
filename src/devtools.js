@@ -2490,6 +2490,21 @@ T.sweepNeeds = () => {
   b.forceBook = rec; b.pendingActivity = null; b.choose('read');
   const got = runUntil(() => b.skills.has(rec.def.teaches), 120);
   out.push(result('needs: he reads a book from the built bookshelf like from the first one', got < 120 && b.skills.has(rec.def.teaches), { book: rec.def.id, got }));
+  // the built bookshelf is a clone of the skill bookshelf: the same look, size and weight, its own list of what stands on it, the same
+  // long-press list, and told to use it he reads from that shelf (not from the first one)
+  const mat0 = (o) => { const m = o.group.children.find((c) => c.material && c.material.color); return m ? m.material.color.getHex() : null; };
+  out.push(result('needs: the built bookshelf is a clone of the skill bookshelf (same look, size and weight)', !!shelf2 && mat0(shelf2) === mat0(sh) && shelf2.weight === sh.weight && shelf2.bw === sh.bw && shelf2.bd === sh.bd && shelf2.h === sh.h, { a: shelf2 && mat0(shelf2), b: mat0(sh), wa: shelf2 && shelf2.weight, wb: sh.weight }));
+  const onBuilt = shelf2 ? shelf2.heldBooks() : [], onFirst = sh.heldBooks();
+  out.push(result('needs: each bookshelf lists what stands on it (the first one, its stack and the built one together are all the books)', onBuilt.length > 0 && onBuilt.every((r) => r.host === shelf2.name) && onFirst.every((r) => !r.host) && onBuilt.length + onFirst.length === sh.books.length, { built: onBuilt.length, first: onFirst.length, all: sh.books.length }));
+  window.__guyOpenBooks(shelf2.name);
+  const rows = document.querySelectorAll('#albummenu .brow').length, shown = onBuilt.filter((r) => r.mesh.visible).length;
+  out.push(result('needs: long-pressing the built bookshelf lists the books standing on it', rows === shown && rows > 0, { rows, shown }));
+  document.getElementById('albummenu').hidden = true;
+  T.forget(); skillsOf().fading.clear(); b.queue = []; b.step = null; b.skip(); T.settle();
+  const said = b.interact(shelf2.name);
+  let heldHost = null, tt = 0; while (tt < 60 && !heldHost) { step(0.25); tt += 0.25; if (b.held && b.held.host) heldHost = b.held.host; else if (b.held) heldHost = '(first)'; }
+  out.push(result('needs: told to use the built bookshelf he takes a book from that shelf, not from the first one', said.ok && heldHost === shelf2.name, { said, heldHost }));
+  b.queue = []; b.step = null; b.skip(); T.settle();
   // records too: past the top shelf's twelve they stand on the built shelf, and Guy fetches one from there for the stereo
   T.addObject('table'); for (const a of ALBUM_CATALOG) T.addAlbum(a.id);
   const albumsAfter = () => { for (const r of [...sh.albums]) { sh.albums.splice(sh.albums.indexOf(r), 1); r.mesh.parent && r.mesh.parent.remove(r.mesh); } };

@@ -294,6 +294,7 @@ export function buildRoom(scene) {
   objects.shelf.removable = false; // the bookshelf is where Guy learns: it can be moved but never removed
   objects.shelf.books = shelfBooks;
   objects.shelf.addBook = addBook;
+  objects.shelf.heldBooks = () => shelfBooks.filter((r) => !r.host);          // (on it, or in the stack beside it; a built bookshelf has its own list)
 
   // Record sleeves go on the top shelf (row 4), cover facing the room. Books never use this shelf.
   const shelfAlbums = [];
@@ -362,6 +363,7 @@ export function buildRoom(scene) {
   };
   objects.shelf.albums = shelfAlbums;
   objects.shelf.addAlbum = addAlbum;
+  objects.shelf.heldAlbums = () => shelfAlbums.filter((r) => !r.host);
   BOOK_DEFS.forEach(addBook);
 
   // Floor lamp (light), its bulb moves with it
@@ -1075,13 +1077,19 @@ export function buildRoom(scene) {
     for (const y of [0.04, 0.4, 0.76, 1.12, 1.34]) box(0.86, 0.03, 0.34, light, 0, y, 0, g);
     for (const [x2, y, c] of [[-0.25, 0.44, 0xd9534f], [-0.2, 0.44, 0x4a90d9], [0.2, 0.8, 0x6bbf59], [0.3, 0.8, 0xe9c46a]]) box(0.06, 0.2, 0.16, mat(c), x2, y + 0.1, 0.0, g);
   });
-  const buildBookshelf2 = (name, x = 0, z = 0) => makeObject(name, x, z, 0.5, 1.9, 2.2, 'medium', (g) => {
-    const m = mat(0xa87a4a);
-    box(0.4, 2.2, 0.05, m, 0, 1.1, -0.9, g);
-    box(0.4, 2.2, 0.05, m, 0, 1.1, 0.9, g);
-    box(0.05, 2.2, 1.8, m, 0.18, 1.1, 0, g);
-    for (let i = 0; i <= 5; i++) box(0.4, 0.04, 1.8, m, 0, 0.02 + i * 0.43, 0, g);
-  });
+  // A bookshelf Guy or GAL built is a clone of the skill bookshelf: the same shelf (looks, size, weight) holding the books and records
+  // that did not fit on the others, and used the same way (read from it, long-press for its book and record lists).
+  const buildBookshelf2 = (name, x = 0, z = 0) => {
+    const o = makeObject(name, x, z, 0.5, 1.9, 2.2, 'heavy', (g) => {
+      box(0.4, 2.2, 0.05, shelfMat, 0, 1.1, -0.9, g);
+      box(0.4, 2.2, 0.05, shelfMat, 0, 1.1, 0.9, g);
+      box(0.05, 2.2, 1.8, shelfMat, 0.18, 1.1, 0, g);
+      for (let i = 0; i <= 5; i++) box(0.4, 0.04, 1.8, shelfMat, 0, 0.02 + i * 0.43, 0, g);
+    });
+    o.heldBooks = () => shelfBooks.filter((r) => r.host === o.name);
+    o.heldAlbums = () => shelfAlbums.filter((r) => r.host === o.name);
+    return o;
+  };
   // ---- Backyard furniture (src/yardobjects.js), placed in the Backyard's own frame like the Workshop's
   const yardB = makeYardBuilders({ makeObject, box, mat });
   // (all placed exactly: the far fence has the goal and the shed, the hoop and the lawn chair stand against the side fences, the bath and

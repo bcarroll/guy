@@ -1313,7 +1313,9 @@ export class Brain {
   readSteps(only = null) {
     const shelf = this.obj('shelf');
     const top = shelf.stackTop ? shelf.stackTop() : null;           // from the stack beside the shelf he can only take the top book
-    const books = only ? [only] : shelf.books.filter((b) => b.mesh.visible && (!b.stack || b === top));
+    const from = this.readFrom; this.readFrom = null;               // told to read at one particular bookshelf (the skill one or a built clone)
+    const there = from && this.obj(from) && this.obj(from).heldBooks ? this.obj(from).heldBooks() : null;
+    const books = only ? [only] : (there || shelf.books).filter((b) => b.mesh.visible && (!b.stack || b === top));
     const unread = books.filter((b) => !this.skills.has(b.def.teaches));
     const book = pick(unread.length ? unread : books); // he is curious about the books he has not read yet
     const speed = this.readSpeed();
@@ -1851,7 +1853,7 @@ export class Brain {
       stove: REST_ACTS, kitchencounter: REST_ACTS, register: REST_ACTS, diningtable: REST_ACTS, diningtable2: REST_ACTS,
       workbench: ['build'], toolbox: ['tidytools'], woodfactory: ['build'], metalfactory: ['build'],
       soccergoal: ['goalshot', 'soccertoss'], basketballhoop: ['hoopshoot', 'hoopdribble'], lawnchair: ['yardsit'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], shed: ['mow'], mower: ['mow'],
-    }[name] || (this.obj(name) && this.obj(name).seats ? REST_ACTS : this.obj(name) && this.obj(name).guitar ? ['guitar', 'riff', 'jamguitar'] : this.obj(name) && this.obj(name).sit ? ['read', 'sit', 'sitguitar'] : []);
+    }[name] || (this.obj(name) && this.obj(name).seats ? REST_ACTS : this.obj(name) && this.obj(name).guitar ? ['guitar', 'riff', 'jamguitar'] : this.obj(name) && this.obj(name).heldBooks ? ['read'] : this.obj(name) && this.obj(name).sit ? ['read', 'sit', 'sitguitar'] : []);
     return list.filter((a) => this.available(a));
   }
 
@@ -1946,6 +1948,7 @@ export class Brain {
         name = pick(fresh.length ? fresh : opts);
         if (PLANT_NAMES.includes(L.name)) this.forcePlant = L.name;
         if (this.obj(L.name) && this.obj(L.name).sit) this.activeChair = L.name;
+        if (this.obj(L.name) && this.obj(L.name).heldBooks) this.readFrom = L.name;
       }
     }
     if (!name && this.restStays()) name = this.restNext();             // customers about: he stays and looks after them
@@ -1958,6 +1961,7 @@ export class Brain {
       for (const [k, v] of entries) { if ((r -= v) <= 0) { name = k; break; } }
       name ||= this.stuckIn() ? 'stuck' : 'wander';
     }
+    if (name !== 'read') this.readFrom = null;
     if (name === 'rearrange') this.lastRearrange = this.time;
     this.prev = this.last;
     this.last = name;
@@ -2068,6 +2072,8 @@ export class Brain {
       return { ok: false, message: name === 'drums' ? "Guy can't get to the drum stool where the kit is. Move it away from the wall." : "Guy can't get in front of the easel where it is. Move it away from the wall." };
     }
     if (REST_OBJECTS.includes(name) || (this.obj(name) && this.obj(name).seats)) tries = this.restTries(name);
+    if (this.obj(name) && this.obj(name).heldBooks && !this.obj(name).heldBooks().some((b) => b.mesh.visible)) return { ok: false, message: 'There are no books on that bookshelf right now.' };
+    if (this.obj(name) && this.obj(name).heldBooks && !tries) tries = ['read'];                // a bookshelf built as a clone of the skill one: read what stands on it
     const act = (tries || []).filter((a) => this.available(a));
     if (!act.length) { this.forceLine = null; return { ok: false, message: "Guy can't do anything with that right now." }; }
     if (name === 'workstation') this.learnPlan = null;                  // (the panel, not an order)
@@ -2075,6 +2081,7 @@ export class Brain {
     this.skip();                                   // stands up, switches the stereo off, etc. first
     if (PLANT_NAMES.includes(name)) this.forcePlant = name;   // the plant he was asked about, not just any plant
     this.pendingActivity = pick(act);
+    this.readFrom = this.pendingActivity === 'read' && this.obj(name) && this.obj(name).heldBooks ? name : null;       // at the shelf he was pointed at
     this.pendingChair = this.obj(name) && this.obj(name).sit ? name : null;     // sit on the chair he was pointed at
     return { ok: true, message: 'On it!' };
   }
