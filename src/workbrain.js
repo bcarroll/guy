@@ -74,8 +74,9 @@ export function installWorkshop(Brain, POSES, H) {
       // (the locked doors are kept out of every choice, but one can be locked while he is on his way: he gives up there, never walks into it)
       return [{ type: 'plan', fn: () => { if (!this.doorLockedFor(id)) return []; this.queue.length = 0; this.ui(`the ${w.doors[id].name} door is locked`); return []; } },
         this.walk(out.x, out.z, face),
-        this.play('reach', 1.6, { at: [0.8, () => { w.setDoorOpen(id, true); sfx('click'); }], target: () => w.doorKnob(id) }),
-        this.play('idle', 0.7),
+        { type: 'plan', fn: () => (w.isDoorOpen(id) ? [] : [      // (a door that is already open is simply walked through)
+          this.play('reach', 1.6, { at: [0.8, () => { w.setDoorOpen(id, true); sfx('click'); }], target: () => w.doorKnob(id) }),
+          this.play('idle', 0.7)]) },
         { ...this.walk(inn.x, inn.z), direct: true }];
     },
     doorOut(id) {

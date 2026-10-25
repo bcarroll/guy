@@ -216,6 +216,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
 
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+  let confirmDestroy = null;                                              // the painting whose Destroy button was tapped once
   function card({ icon, name, desc, status, label, action, note, danger, extra }) {
     const btn = action !== undefined
       ? `<button class="act${danger ? ' rm' : ''}" data-action="${action}">${label}</button>`
@@ -285,8 +286,10 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
         const sorted = pics.slice().sort((a, b) => a.t - b.t);
         groups[`🖼️ GUY's paintings · ${paintings.hung().length} hung, ${paintings.stored().length} in the Catalog`] = sorted.map((r) => {
           const base = { icon: r.img ? `<img class="thumb" alt="" src="${esc(r.img)}">` : '🖼️', name: `Painting ${sorted.indexOf(r) + 1}`, status: r.room ? 'inroom' : 'available' };
-          const destroy = handlers.push(() => { if (window.confirm('Destroy this painting for good? It cannot be brought back.')) { paintings.destroy(r.id); notify('The painting was destroyed.'); render(); } }) - 1;
-          const extra = { label: 'Destroy', action: destroy };
+          // (two taps, in the Catalog itself: a browser dialog would stop everything, and cannot be answered in the QA run)
+          const sure = confirmDestroy === r.id;
+          const destroy = handlers.push(() => { if (!sure) { confirmDestroy = r.id; render(); return; } confirmDestroy = null; paintings.destroy(r.id); notify('The painting was destroyed.'); render(); }) - 1;
+          const extra = { label: sure ? 'Really destroy?' : 'Destroy', action: destroy };
           if (r.room) {
             const i = handlers.push(() => { paintings.takeDown(r.id); notify('Took the painting down. It is in the Catalog.'); render(); }) - 1;
             return card({ ...base, desc: `Hanging in ${paintings.roomName(r.room)}.`, label: 'Take down', action: i, danger: true, extra });

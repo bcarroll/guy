@@ -1735,6 +1735,13 @@ T.sweepLayout = () => {
   T.resetRooms(); T.removeAll(); T.settle(); T.home();
   for (const id of ['armchair', 'plant', 'lamp', 'bench', 'telescope', 'piano', 'table', 'rug', 'picture', 'ball']) T.addObject(id);
   const moveTo = (name, pref) => { const o = w.objects[name], s = w.findSpot(o, pref, null); if (s) o.set(s.x, s.z); return !!s; };
+  // 0. an old save with too many built things in storage (13 foot stools) or kinds that are not built any more (the old shelves) is brought into line
+  { const keep = JSON.stringify(w.stock.items), snap = clone(L().snapshot());
+    snap.stock = { items: { footstool: 13, builtchair: 9, woodshelves: 4, mystery: 2, eguitar: 1 }, coins: 0 };
+    L().apply(snap);
+    const it = w.stock.items;
+    out.push(result('layout: saved storage obeys the Workshop limits (one foot stool, three chairs), and the retired shelves and unknown kinds are dropped', it.footstool === 1 && it.builtchair === 3 && it.eguitar === 1 && !it.woodshelves && !it.mystery, { it }));
+    w.stock.items = JSON.parse(keep); w.syncStock(); }
   // 1. a snapshot is stable, and survives being written out as JSON and read back
   const s0 = JSON.stringify(L().snapshot());
   out.push(result('layout: a snapshot of an unchanged room is the same every time', s0 === JSON.stringify(L().snapshot()) && s0 === JSON.stringify(JSON.parse(s0))));
@@ -3176,17 +3183,18 @@ T.sweepPaintings = () => {
     const cards = head ? (() => { const c = []; for (let n = head.nextElementSibling; n && n.tagName !== 'H4'; n = n.nextElementSibling) if (n.classList.contains('card')) c.push(n); return c; })() : [];
     const thumbs = cards.filter((c) => c.querySelector('img.thumb') && /^data:image\//.test(c.querySelector('img.thumb').getAttribute('src'))).length;
     out.push(result('paintings: the Catalog lists every painting with a thumbnail of the picture', !!head && cards.length === P.items.length && thumbs === P.items.length, { cards: cards.length, items: P.items.length, thumbs }));
-    const takeBtn = cards.map((c) => c.querySelector('.act.rm')).find(Boolean);
+    const takeBtn = cards.map((c) => [...c.querySelectorAll('.act.rm')].find((x) => /Take down/.test(x.textContent))).find(Boolean);
     const total0 = P.items.length, hung0 = P.hung().length;
     if (takeBtn) takeBtn.click();
     out.push(result('paintings: "Take down" in the Catalog takes a painting off its wall into storage (still listed)', P.hung().length === hung0 - 1 && P.items.length === total0 && allFit(), { hung0, now: P.hung().length }));
     openObjects('all');
     const delBtn = [...machine().querySelectorAll('.card')].filter((c) => c.querySelector('img.thumb') && /Hang it/.test(c.textContent)).map((c) => [...c.querySelectorAll('.act.rm')].find((b) => /Destroy/.test(b.textContent)))[0];
-    const total1 = P.items.length, realConfirm = window.confirm;
-    window.confirm = () => false; if (delBtn) delBtn.click();
+    const total1 = P.items.length;
+    if (delBtn) delBtn.click();                                 // (first tap: only asks)
     const keptOnNo = P.items.length === total1;
-    window.confirm = () => true; if (delBtn) delBtn.click(); window.confirm = realConfirm;
-    out.push(result('paintings: "Destroy" in the Catalog asks first, then removes the painting from the inventory for good', !!delBtn && keptOnNo && P.items.length === total1 - 1 && allFit(), { total1, now: P.items.length }));
+    const delBtn2 = [...machine().querySelectorAll('.card .act.rm')].find((x) => /Really destroy/.test(x.textContent));
+    if (delBtn2) delBtn2.click();
+    out.push(result('paintings: "Destroy" in the Catalog asks first (a second tap), then removes the painting from the inventory for good', !!delBtn && !!delBtn2 && keptOnNo && P.items.length === total1 - 1 && allFit(), { total1, now: P.items.length }));
     openObjects('all');
     const hangBtn = [...machine().querySelectorAll('.card')].filter((c) => c.querySelector('img.thumb') && /Hang it/.test(c.textContent)).map((c) => c.querySelector('.act'))[0];
     const stored0 = P.stored().length;
@@ -3272,6 +3280,70 @@ T.sweepPaintings = () => {
   return out;
 };
 
+// ---- 22. The two robots' manners: never inside each other, never moving or putting away what the other is using (brain.js: moveBy, inUse; yardbrain.js: stowAway) ----
+T.sweepBotRules = () => {
+  const out = [], base = errors.length, w = W(), b = B(), gal = w.gal;
+  if (!gal.g || !gal.g.loaded) return [result('bot rules: her model is loaded (wait a moment after the page opens)', false)];
+  galReset();
+  try {
+    const bu = galBuild(); out.push(result('bot rules: GAL is built', bu.ok));
+    const gb = gal.brain, gp = gal.g.root.position, p = G().pos;
+    const stop = () => { for (const x of [b, gb]) { x.queue = []; x.step = null; x.pendingActivity = null; x.using = new Set(); x.chairClaim = null; } };
+    stop();
+    // 1. walking into the other robot slides round it; already overlapping, only moving away is allowed
+    gp.x = 0; gp.z = 0; p.x = -1; p.z = 0;
+    b.moveBy(0.9, 0);
+    const d1 = Math.hypot(p.x - gp.x, p.z - gp.z);
+    out.push(result('bot rules: GUY walking straight into GAL stops at arm\'s length (not inside her)', d1 >= 0.29, { d1 }));
+    p.x = 0.2; p.z = 0;
+    b.moveBy(-0.1, 0);
+    out.push(result('bot rules: when they already overlap he cannot walk further into her', Math.hypot(p.x - gp.x, p.z - gp.z) >= 0.2 - 1e-6, { x: p.x }));
+    const before = Math.hypot(p.x - gp.x, p.z - gp.z); b.moveBy(0.1, 0);
+    out.push(result('bot rules: ...but he can walk away from her', Math.hypot(p.x - gp.x, p.z - gp.z) > before, { before }));
+    // 2. an object the other robot is using is not pushed about
+    stop(); T.home(); T.settle();
+    T.addObject('armchair'); T.settle();
+    const ch = w.objects.armchair;
+    const free = ch && b.planPush(ch, ch.x + 0.8, ch.z);
+    gb.chairClaim = 'armchair';
+    const claimed = ch && b.planPush(ch, ch.x + 0.8, ch.z);
+    out.push(result('bot rules: GUY will not shove a chair GAL is sitting in (or on her way to), and may when she is not', !!ch && !!free && claimed === null, { free: !!free, claimed }));
+    gb.chairClaim = null;
+    // 3. the yard: GAL in the lawn chair is not put away in the shed, and the lawn is not mowed round her
+    stop(); T.removeAll(); T.settle(); T.home();           // (not resetRooms: that sends GAL away)
+    unlockRoom('backyard'); R().add('backyard');
+    for (const id of ['lawnchair', 'shed', 'mower']) T.addObject(id);
+    T.learn(['outdoor']); T.settle();
+    out.push(result('bot rules: with nobody in the lawn chair GUY would mow', b.available('mow')));
+    gb.using = new Set(['lawnchair']);
+    out.push(result('bot rules: with GAL in the lawn chair GUY does not set out to mow (he would have to put the chair away)', !b.available('mow')));
+    const ord = b.interact('mower');
+    out.push(result('bot rules: told to mow while she sits there he says why not', !ord.ok && /using something on the lawn/.test(ord.message), { ord }));
+    const putsChair = b.tidyYard(['lawnchair']).fn().length > 0;
+    out.push(result('bot rules: tidying the yard leaves the chair she is using where it is', !putsChair));
+    gb.using = new Set(['mower']);
+    out.push(result('bot rules: while GAL mows, GUY does not start another yard job', !b.available('yardsit') && !b.available('hoopshoot')));
+    gb.using = new Set();
+    // 3b. a door that is already open is walked through: no reaching for the knob first
+    const dr = w.doors.backyard; dr.open = 1; dr.openTo = 1;
+    const reachOpen = b.doorIn('backyard').filter((x) => x.type === 'plan').map((x) => x.fn()).flat().filter((x) => x.pose === 'reach').length;
+    dr.open = 0; dr.openTo = 0;
+    const reachShut = b.doorIn('backyard').filter((x) => x.type === 'plan').map((x) => x.fn()).flat().filter((x) => x.pose === 'reach').length;
+    out.push(result('bot rules: through a door that is already open he just walks (no reach for the knob); a shut door is opened first', reachOpen === 0 && reachShut === 1, { reachOpen, reachShut }));
+    // 4. objectRemoved still drops work on the removed thing (stepUses is shared with it)
+    stop(); b.step = { type: 'play', fx: { needs: ['lawnchair'] }, t: 0, dur: 1 }; b.objectRemoved('lawnchair');
+    out.push(result('bot rules: removing an object the current step needs still cancels it', b.step === null));
+    // 5. a long stretch of free time: never inside each other
+    galReset(); galBuild(); stop();
+    let t = 0, min = 9, e0 = errors.length;
+    while (t < 300) { step(0.25); t += 0.25; if (w.roomIdAt(G().pos.x, G().pos.z) === w.roomIdAt(gal.g.pos.x, gal.g.pos.z)) min = Math.min(min, Math.hypot(G().pos.x - gal.g.pos.x, G().pos.z - gal.g.pos.z)); }
+    out.push(result('bot rules: for 5 minutes of free time the two never come closer than 25 cm', min >= 0.25 && errors.length === e0, { min, errors: errors.slice(e0) }));
+  } finally { galReset(); }
+  out.push(result('bot rules: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
+
 T.runAll = () => {
   const report = { coverage: T.coverage() };
   // each sweep starts with no added room: the Workshop (and what it made) is taken away again after any sweep that added it
@@ -3318,6 +3390,7 @@ T.runAll = () => {
   report.allRooms = S(T.sweepAllRooms);
   report.needs = S(T.sweepNeeds);
   report.gal = S(T.sweepGal);
+  report.botRules = S(T.sweepBotRules);
   report.workstation = S(T.sweepWorkstation);
   report.paintings = S(T.sweepPaintings);
   report.errorsLogged = errors.length;

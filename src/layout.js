@@ -6,6 +6,8 @@
 // closed. Restoring sets every piece straight to its saved spot (the saved layout was valid as a whole), then checks each piece
 // and moves any that no longer fits (a corrupt save, or a door that now stands where it was) to the nearest free place.
 // Everything else GUY remembers is saved elsewhere: skills (skills.js), the catalog's additions (machine.js), rooms (rooms.js).
+import { RECIPES, STORAGE_CAP } from './workshop.js';
+
 const KEY = 'guy.layout.v1';
 const VERSION = 1;
 
@@ -82,7 +84,13 @@ export function initLayout({ world, guy, remove, persist, key = KEY }) {
     if (st && typeof st === 'object') {
       world.stock.coins = num(st.coins) ? Math.max(0, Math.min(999999, Math.round(st.coins))) : 0;
       world.stock.items = {};
-      for (const [k, v] of Object.entries(st.items && typeof st.items === 'object' ? st.items : {})) if (num(v) && v > 0) world.stock.items[k] = Math.min(99, Math.round(v));
+      // the Workshop's rules apply to what was saved too: only things it still builds are kept (the old non-interactive shelves go), and
+      // storage never holds more of a kind than it would ever make (an old save with 13 foot stools keeps one)
+      for (const [k, v] of Object.entries(st.items && typeof st.items === 'object' ? st.items : {})) {
+        const rec = Object.values(RECIPES).find((r) => r.object === k);
+        if (!rec || !num(v) || v <= 0) continue;
+        world.stock.items[k] = Math.min(STORAGE_CAP, Math.round(v), rec.cap);
+      }
       world.syncStock();
     }
     did.guyMoved = unstickGuy();

@@ -13,6 +13,8 @@ import { installApproach } from './approach.js';
 import { installPaintings } from './paintbrain.js';
 
 const REST_ACTS = ['takepay', 'serve', 'takeorder', 'cook', 'rwait'];
+// how far apart the two robots keep their middles when they walk (each is a 0.5 m box: closer than this and they overlap)
+const BODY_GAP = 0.3;
 const WORK_ACTS = ['tidytools', 'build'];
 // The thing each activity is done at: it is done in whichever room that object stands in (wherever the user dragged it).
 // Activities not listed here either keep to his own room (they use many things: rearrange, ball, plants, chairs ...), have their own
@@ -753,8 +755,9 @@ export class Brain {
         const out = this.doorStand(id), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false), b = door.shell.bounds;
         const direct = (p, yaw = null) => ({ ...this.walk(p.x, p.z, yaw), direct: true });
         const steps = [this.walk(out.x, out.z, face),
-          this.play('reach', 1.6, { at: [0.8, () => w.setDoorOpen(id, true)], target: () => w.doorKnob(id) }),
-          this.play('idle', 0.7),                                               // the door swings open
+          { type: 'plan', fn: () => (w.isDoorOpen(id) ? [] : [                    // (a door that is already open is simply walked through)
+            this.play('reach', 1.6, { at: [0.8, () => w.setDoorOpen(id, true)], target: () => w.doorKnob(id) }),
+            this.play('idle', 0.7)]) },                                         // (the door swings open)
           direct(inn)];
         for (let i = 0; i < 3; i++) steps.push(direct({ x: rand(b.minX + 1.2, b.maxX - 1.2), z: rand(b.minZ + 1.2, b.maxZ - 1.2) }), this.play('idle', rand(1.5, 3)));
         steps.push({ type: 'plan', fn: () => { if (!this.stuckIn()) return []; this.queue.length = 0; this.ui(`shut in the ${door.name} (the door is locked)`); return []; } },      // (locked behind him)
@@ -1084,6 +1087,7 @@ export class Brain {
   // Returns walk/push steps, or null if the object can't be taken there.
   // `room`: { fr, bd } (the grid frame and the floor bounds of an added room, e.g. the Backyard) when the pushing is done there; null is his own room.
   planPush(obj, tx, tz, from = null, room = null) {
+    if (this.otherUses(obj.name)) return null;                      // the other robot is working with it: not to be shoved about
     const obstacles = this.w.obstacles, fr = room ? room.fr : MAIN_FRAME;
     const sx = from ? from.x : obj.x, sz = from ? from.z : obj.z;   // where the object starts this leg
     const r = Math.max(obj.w, obj.d) / 2 + 0.05;
@@ -1764,6 +1768,8 @@ export class Brain {
     }
     if (YARD_ACTS.includes(act)) {                                  // the Backyard: it has to be added and its door not locked; the balls are there with their goal and hoop
       if (!this.yardOpen()) return false;
+      if (act !== 'mow' && this.otherUses('mower')) return false;      // the lawn is being mowed: the yard's things are in the shed until it is done
+      if (act === 'mow' && this.w.yard.STORE.some((it) => it.key !== 'mower' && this.otherUses(it.key))) return false;     // the other robot is sitting in the lawn chair, say: not for him to put away
       if (act === 'yardpoke') return this.pokeKinds().length > 0;
       if (act === 'mow' && !this.mowRoute({ pushable: true, tidied: true })) return false;               // no clear lawn: not something he sets out to do (he would open the shed for nothing)
       if (['goalshot', 'soccertoss'].includes(act) && !this.yardBall('soccer')) return false;
@@ -1877,6 +1883,19 @@ export class Brain {
     return true;
   }
 
+  // Does this step work with the object `name` (it needs it, stands at it, pushes it, sits on it, plays it)?
+  stepUses(st, name) {
+    return !!(st && ((st.fx && st.fx.needs && st.fx.needs.includes(name)) || (st.anchor && st.anchor.name === name) || (st.push && st.push.obj.name === name) || (st.fx && st.fx.sit && (name === 'piano' || name === 'bench')) || (st.fx && st.fx.chairSit && name === (st.fx.chair || 'armchair')) || (st.fx && st.fx.guitar && name === 'guitar') || (st.fx && st.fx.piano && name === 'piano') || (st.fx && (st.fx.drums || st.fx.sitDrum) && name === 'drums') || (st.fx && st.fx.paint && name === 'easel') || (st.fx && st.fx.scope && name === 'telescope')) || (st && st.fx && st.fx.chair === name));
+  }
+  // Is this robot working with `name` right now? Then the other robot must not move it, put it away or take it out of the room.
+  inUse(name) {
+    if (this.using && this.using.has(name)) return true;
+    if (this.chairClaim === name) return true;
+    return this.stepUses(this.step, name);
+  }
+  // Is the other robot working with `name` (see inUse)?
+  otherUses(name) { return !!(this.other && this.other.inUse(name)); }
+
   // The user removed `name`: drop whatever GUY was doing with it.
   objectRemoved(name) {
     if (this.lock && this.lock.name === name) this.unlock(false);
@@ -1884,7 +1903,7 @@ export class Brain {
     if (name === 'lamp') this.lampOffByMe = false;
     if (name === this.gname) { this.gtr.held = false; this.gtr.override = null; this.resetGuitarMesh(); }
     const s = this.step;
-    const uses = (st) => st && ((st.fx && st.fx.needs && st.fx.needs.includes(name)) || (st.anchor && st.anchor.name === name) || (st.push && st.push.obj.name === name) || (st.fx && st.fx.sit && (name === 'piano' || name === 'bench')) || (st.fx && st.fx.chairSit && name === (st.fx.chair || 'armchair')) || (st.fx && st.fx.guitar && name === 'guitar') || (st.fx && st.fx.piano && name === 'piano') || (st.fx && (st.fx.drums || st.fx.sitDrum) && name === 'drums') || (st.fx && st.fx.paint && name === 'easel') || (st.fx && st.fx.scope && name === 'telescope'));
+    const uses = (st) => this.stepUses(st, name);
     if (uses(s) || this.queue.some(uses)) { this.queue = []; this.step = null; this.ui('wondering where the ' + name + ' went'); }
   }
 
@@ -2031,6 +2050,7 @@ export class Brain {
     if (rm && rm !== 'main' && rm !== 'door' && this.doorLockedFor(rm)) return { ok: false, message: `The ${this.w.doors[rm].name} door is locked. Unlock it first (long-press the door).` };
     if (this.stuckIn() && rm !== this.stuckIn()) return { ok: false, message: this.shutInMessage(this.stuckIn()) };        // shut in: only what is in the room with him
     // told to mow with no clear lawn: say so (he used to say "On it!", open the shed, find no room and quietly give up)
+    if ((name === 'mower' || name === 'shed') && this.w.yard && this.w.yard.STORE.some((it) => it.key !== 'mower' && this.otherUses(it.key))) return { ok: false, message: 'The other robot is using something on the lawn. Wait until it is done.' };
     if ((name === 'mower' || name === 'shed') && this.obj('mower') && this.obj('shed') && this.yardOpen() && !this.mowRoute({ pushable: true, tidied: true })) return { ok: false, message: 'There is no clear stretch of lawn for the mower. GUY puts the yard things away in the shed and shifts light things (plants) himself, but not the shed: move it, or anything else heavy, away from the lawn and leave a little room behind the mower for GUY.' };
     let tries = {
       // with the stereo already playing, an instrument means playing along with it
@@ -2227,6 +2247,7 @@ export class Brain {
         if (s.push) {
           // only push if GUY is actually standing where he can reach the object
           const { obj, relx, relz } = s.push;
+          if (this.otherUses(obj.name)) { this.queue.length = 0; s.path = []; finished = true; }      // the other robot has just started using it
           if (Math.hypot(obj.x - root.position.x - relx, obj.z - root.position.z - relz) > 0.4) { this.queue.length = 0; s.path = []; finished = true; }
         }
         if (!finished) {
@@ -2594,6 +2615,20 @@ export class Brain {
         else if (!(nx > o.x0 - m && nx < o.x1 + m && p.z > o.z0 - m && p.z < o.z1 + m)) nx = p.x, nz = p.z + dz;
         else nx = p.x, nz = p.z;
       }
+    }
+    // the two robots do not stand inside each other: a robot that is walking is eased out of the other one (a few centimetres a frame, so
+    // it never pops) and cannot walk further in; walking into the other one slides round it. He is never held still by it.
+    const q = this.other && this.other.g.root.position;
+    if (q && this.other.hereId() === this.hereId()) {
+      let dc = Math.hypot(p.x - q.x, p.z - q.z);
+      if (dc < BODY_GAP) {
+        const ux = dc > 1e-4 ? (p.x - q.x) / dc : Math.sin(this.g.root.rotation.y + Math.PI), uz = dc > 1e-4 ? (p.z - q.z) / dc : Math.cos(this.g.root.rotation.y + Math.PI);
+        const out = Math.min(BODY_GAP - dc, 0.02);
+        const ex = p.x + ux * out, ez = p.z + uz * out;
+        if (ok(ex, ez)) { nx += ux * out; nz += uz * out; dc += out; }
+      }
+      const dn = Math.hypot(nx - q.x, nz - q.z), lim = Math.min(dc, BODY_GAP);
+      if (dn < lim && dn > 1e-6) { nx = q.x + (nx - q.x) / dn * lim; nz = q.z + (nz - q.z) / dn * lim; }
     }
     p.x = nx; p.z = nz;
   }

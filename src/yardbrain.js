@@ -156,6 +156,7 @@ export function installYard(Brain, POSES, H) {
         fn: () => {
           const y = this.w.yard, it = y.itemOf(key);
           if (!it || !this.obj('shed') || y.isStowed(key)) return [];
+          if (this.otherUses(key)) return [];                      // the other robot is sitting in it / playing at it: it stays where it is
           const steps = [];
           if (key.startsWith('ball:')) {
             const kind = key.slice(5);
@@ -181,7 +182,7 @@ export function installYard(Brain, POSES, H) {
           const y = this.w.yard;
           if (!this.obj('shed')) return [];
           const g = this.g.pos;
-          const list = (keys || y.items().map((i) => i.key).filter((k) => mower || k !== 'mower')).filter((k) => y.itemOf(k) && !y.isStowed(k))
+          const list = (keys || y.items().map((i) => i.key).filter((k) => mower || k !== 'mower')).filter((k) => y.itemOf(k) && !y.isStowed(k) && !this.otherUses(k))
             .sort((a, b) => { const pa = this.yardItemAt(a), pb = this.yardItemAt(b); return Math.hypot(pa.x - g.x, pa.z - g.z) - Math.hypot(pb.x - g.x, pb.z - g.z); });
           if (!list.length) return [];
           return [...this.shedDoor(true), ...list.map((k) => this.stowAway(k)), ...(shut ? this.shedDoor(false) : [])];
