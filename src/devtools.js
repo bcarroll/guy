@@ -1366,6 +1366,7 @@ T.sweepDoorMoves = () => {
   const P = dr.wall === 'right' ? bd.minX : dr.wall === 'front' ? bd.minZ : bd.maxZ;
   const at = (n, l) => (dr.wall === 'right' ? { x: P + n, z: dr.u + l } : dr.wall === 'front' ? { x: dr.u + l, z: P + n } : { x: dr.u + l, z: P - n });
   const lamp = w.objects.lamp, piano = w.objects.piano;
+  const start0 = [lamp, piano].map((o) => o && ({ x: o.x, z: o.z, rot: o.rot }));          // (where the Catalog put them: they go back there, or the sweeps that follow find them elsewhere)
   if (!lamp || !piano) return [result('doormoves: the lamp and the piano could be added', false, { lamp: !!lamp, piano: !!piano })];
   const room = (o) => w.roomIdAt(o.x, o.z);
   const put = (o, q) => { o.set(q.x, q.z); w.beginDrag(o); };
@@ -1410,12 +1411,14 @@ T.sweepDoorMoves = () => {
   out.push(result('doormoves: let go in the doorway it is put back where it could stand', inDoor && w.fits(lamp, lamp.x, lamp.z), { inDoor, at: [lamp.x, lamp.z] }));
   // 6. the bookshelf never leaves Guy's room, not even through the door
   piano.set(at(-2.4, sideL).x, at(-2.4, sideL).z);              // (the piano out of the Workshop, so the lamp has free floor to be tried on)
+  piano.rot = 0; piano.set(piano.x, piano.z);                    // (turned the way it was: a piano left turned breaks the sweeps that follow)
   const shelf = w.objects.shelf, g0 = at(0, 0), mid = at(1.8, 0);
   out.push(result('doormoves: the bookshelf may not stand in the Workshop (a lamp may), nor pass the doorway', !!shelf && shelf.mainOnly && !w.fits(shelf, mid.x, mid.z) && w.fits(lamp, mid.x, mid.z) && !w.canTransit(shelf, g0.x, g0.z) && w.canTransit(lamp, g0.x, g0.z), { mainOnly: shelf && shelf.mainOnly }));
   const sx = shelf.x, sz = shelf.z; w.beginDrag(shelf);
   w.dragTo(shelf, sx + 20, sz); w.dragTo(shelf, sx, sz + 20); w.dragTo(shelf, sx - 20, sz); w.dragTo(shelf, sx, sz - 20); w.dropObject(shelf);
   out.push(result('doormoves: dragged hard in every direction the bookshelf stays in Guy\'s room', room(shelf) === 'main', { room: room(shelf) }));
   shelf.set(sx, sz);                                             // (back where it stood: other sweeps expect the bookshelf there)
+  [lamp, piano].forEach((o, i) => { o.rot = start0[i].rot; o.set(start0[i].x, start0[i].z); });
   // 7. nothing in the game moves a thing through a wall: Guy rearranges only his own room's things
   T.settle(); T.resetRooms(); T.removeAll(); T.settle();
   out.push(result('doormoves: no errors', errors.length === base, { errors: errors.slice(base) }));
