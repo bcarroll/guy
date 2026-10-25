@@ -27,6 +27,7 @@ export function initLayout({ world, guy, remove, persist, key = KEY }) {
       instances: Object.values(world.objects).filter((o) => o.kind).map((o) => ({ name: o.name, kind: o.kind })),
       out: Object.keys(world.removed),               // taken out of the room (by the user, or to make way for a door)
       sky: world.yard ? world.yard.isNight() : false,         // the Backyard's day / night switch
+      stowed: world.yard ? world.yard.stowedKeys() : [],       // what is put away in the shed
       ball: world.ballGone ? null : { x: r2(world.ball.position.x), z: r2(world.ball.position.z) },
       stock: { items: { ...world.stock.items }, coins: world.stock.coins || 0 },      // what the Workshop has made
     };
@@ -76,6 +77,7 @@ export function initLayout({ world, guy, remove, persist, key = KEY }) {
       world.ball.userData.vel.set(0, 0, 0);
     }
     if (typeof data.sky === 'boolean' && world.yard) world.yard.snapNight(data.sky);
+    if (Array.isArray(data.stowed) && world.yard) world.yard.setStowed(data.stowed.filter((k) => typeof k === 'string'));
     const st = data.stock;
     if (st && typeof st === 'object') {
       world.stock.coins = num(st.coins) ? Math.max(0, Math.min(999999, Math.round(st.coins))) : 0;

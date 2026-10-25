@@ -1608,6 +1608,8 @@ export function buildRoom(scene) {
       const o = objects[name];
       if (!o || o.removable === false) return;
       if (o.kind === 'bookshelf2') { o.removing = true; rehome(); }      // its books go back to the stack on the floor first
+      if (o.name === 'shed' && world.yard) world.yard.releaseAll();      // whatever was put away in the shed comes back out on the grass
+      if (o.stowed) { o.stowed = false; o.group.visible = true; obstacles.push(o.obstacle); }      // (taken out of the shed for good: it goes the way of any other object)
       obstacles.splice(obstacles.indexOf(o.obstacle), 1);
       delete objects[name];
       room.remove(o.group);
