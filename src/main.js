@@ -454,7 +454,7 @@ let menuTarget = null;
 // was the press on a shelf that holds books (rather than the frame or an empty shelf)?
 function bookHit(h) {
   const sh = h.obj;
-  return sh.books.some((b) => b.mesh.visible && Math.abs(h.point.y - b.y) < 0.3);
+  return sh.heldBooks().some((b) => b.mesh.visible && Math.abs(h.point.y - b.y) < 0.3);
 }
 function closeMenu() { menu.hidden = true; menuTarget = null; albumMenu.hidden = true; }
 
@@ -470,7 +470,7 @@ function placeAlbumMenu(x, y) {
 // the lower shelves hold the books: long-press them to see which ones Guy has read
 function openBookMenu(shelfObj, x, y) {
   albumMenu.querySelector('.title').textContent = '📚 Books on the shelf';
-  albumMenu.querySelector('.list').innerHTML = shelfObj.books.filter((b) => b.mesh.visible).map((b) => {
+  albumMenu.querySelector('.list').innerHTML = shelfObj.heldBooks().filter((b) => b.mesh.visible).map((b) => {
     const read = skills.has(b.def.teaches);
     const st = skills.strength(b.def.teaches);
     const fading = read && st < 1;
@@ -482,7 +482,7 @@ function openBookMenu(shelfObj, x, y) {
 function openAlbumMenu(shelfObj, x, y) {
   albumMenu.querySelector('.title').textContent = '💿 Play a record';
   const list = albumMenu.querySelector('.list');
-  list.innerHTML = shelfObj.albums.map((a) => `<button data-track="${a.def.track}"><span class="ico">${a.def.icon || '💿'}</span><span><b>${a.def.title}</b><small>${a.def.genre}</small></span></button>`).join('');
+  list.innerHTML = shelfObj.heldAlbums().map((a) => `<button data-track="${a.def.track}"><span class="ico">${a.def.icon || '💿'}</span><span><b>${a.def.title}</b><small>${a.def.genre}</small></span></button>`).join('');
   placeAlbumMenu(x, y);
 }
 albumMenu.addEventListener('click', (e) => {
@@ -544,7 +544,7 @@ function interactLabel(name) {
     case 'birdbath': return '🐦 Look at the Bird Bath';
     case 'skyswitch': return w.yard && w.yard.isNight() ? '☀️ Switch to Day' : '🌙 Switch to Night';
     case 'shed': case 'mower': return '🚜 Mow the Lawn';
-    default: return brain.obj(name) && brain.obj(name).guitar ? '🎸 Play Guitar' : brain.obj(name) && brain.obj(name).kind === 'footstool' ? '🪜 Stand on It to Clean' : brain.obj(name) && brain.obj(name).sit ? '🪑 Sit Down' : '▶ Use';
+    default: return brain.obj(name) && brain.obj(name).heldBooks ? '📖 Read a Book' : brain.obj(name) && brain.obj(name).guitar ? '🎸 Play Guitar' : brain.obj(name) && brain.obj(name).kind === 'footstool' ? '🪜 Stand on It to Clean' : brain.obj(name) && brain.obj(name).sit ? '🪑 Sit Down' : '▶ Use';
   }
 }
 
@@ -661,7 +661,7 @@ menu.addEventListener('click', (e) => {
   }
 });
 addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
-window.__guyOpenBooks = () => openBookMenu(world.objects.shelf, 200, 100);          // the long-press book list, for the QA harness
+window.__guyOpenBooks = (name = 'shelf') => openBookMenu(world.objects[name], 200, 100);          // the long-press book list, for the QA harness
 window.__guyOpenDoorMenu = (id, side = 'main') => openMenu({ door: world.doors[id], side }, 120, 120);     // for the QA harness (side: the face pressed)
 window.__guyOpenMenu = (name) => openMenu(name === 'ball' ? { ball: true } : { obj: brain.obj(name) }, 120, 120);     // for the QA harness
 addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') { setSoundMuted(!soundMuted); showToast(soundMuted ? 'Sound muted (M or the speaker to turn it back on)' : 'Sound on'); } });
@@ -722,8 +722,8 @@ canvas.addEventListener('pointerdown', (e) => {
   pending.timer = setTimeout(() => {
     if (!pending) return;
     const h = pending.hit;
-    if (h.obj && h.obj.name === 'shelf' && h.point && h.point.y > TOP_SHELF_Y && h.obj.albums && h.obj.albums.length) openAlbumMenu(h.obj, pending.x, pending.y);
-    else if (h.obj && h.obj.name === 'shelf' && h.point && h.obj.books && h.obj.books.some((b) => b.mesh.visible) && bookHit(h)) openBookMenu(h.obj, pending.x, pending.y);
+    if (h.obj && h.obj.heldAlbums && h.point && h.point.y > TOP_SHELF_Y && h.obj.heldAlbums().length) openAlbumMenu(h.obj, pending.x, pending.y);
+    else if (h.obj && h.obj.heldBooks && h.point && h.obj.heldBooks().some((b) => b.mesh.visible) && bookHit(h)) openBookMenu(h.obj, pending.x, pending.y);
     else openMenu(h, pending.x, pending.y);
     pending = null;
   }, LONG_PRESS_MS);
