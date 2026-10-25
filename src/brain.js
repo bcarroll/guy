@@ -2389,7 +2389,15 @@ export class Brain {
         while (s.path.length > 1 && Math.hypot(wp.x - root.position.x, wp.z - root.position.z) < 0.25) { s.path.shift(); wp = s.path[0]; }
         const dx = wp.x - root.position.x, dz = wp.z - root.position.z;
         const finalDist = Math.hypot(s.x - root.position.x, s.z - root.position.z);
-        if (finalDist > 0.08) {
+        // The other robot is standing where he is going (at the stove, say): he does not pace round her. He stops a little way off, faces the
+        // spot and waits for it to be free; if she stays for ever he gives the activity up.
+        const oth = this.other && this.other.g.root.position;
+        const taken = !s.push && oth && this.other.hereId() === this.hereId() && Math.hypot(oth.x - s.x, oth.z - s.z) < BODY_GAP + 0.4 && Math.hypot(oth.x - s.x, oth.z - s.z) < finalDist && finalDist > 0.25 && finalDist < 1.9;
+        if (taken) {
+          s.waitT = (s.waitT || 0) + dt;
+          this.moving = false; this.turnTo(Math.atan2(s.x - root.position.x, s.z - root.position.z), dt * k, 4);
+          if (s.waitT > 16) { finished = true; this.queue.length = 0; this.ui('gave up waiting for the spot'); }
+        } else if (finalDist > 0.08) {
           const want = Math.atan2(dx, dz);
           this.turnTo(want, dt * k, 6);
           const facing = Math.abs(angDiff(want, root.rotation.y));

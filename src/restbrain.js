@@ -172,7 +172,8 @@ export function installRestaurant(Brain, POSES, H) {
 
         // nothing to do just now: stand by the till until somebody needs him
         rwait: () => {
-          const n = REST_OBJECTS.find((x) => this.obj(x));                       // by the till if there is one, otherwise by whatever is left
+          const have = REST_OBJECTS.filter((x) => this.obj(x));
+          const n = have[this.isGal && have.length > 1 ? 1 : 0];                     // (GUY by the stove, GAL by the next thing along: they do not wait in the same spot)
           return this.restTrip('waiting for customers', [...(n ? [this.walkAt(n, n === 'register' ? -0.25 : 0, n === 'register' ? 0.95 : 1.0, Math.PI)] : []), this.play('idle', rand(3, 5))]);
         },
       };

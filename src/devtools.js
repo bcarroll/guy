@@ -3457,6 +3457,141 @@ T.sweepSports = () => {
   return out;
 };
 
+// ---- 26. Free play, judged as a player would: a long, seeded stretch of both robots living in the full house ----
+// Everything is in the house (every room, every object, every book and record), GAL is built, and the two robots do whatever they choose
+// for `seconds` of game time with a seeded random generator (the same seed always plays the same session). Every frame the harness watches
+// for what a player would call wrong: walking at a wall without getting anywhere, jumping across the room, standing inside each other,
+// pushing or putting away what the other is using, reading a book already read, reaching for the knob of an open door, a lawn left
+// half-mown. `learned: true` starts with every skill known, so every activity is in play; `learned: false` starts with none, so they
+// read their way through the shelf first.
+T.playSession = ({ seed = 1, seconds = 600, learned = true, restaurant = false } = {}) => {
+  const w = W(), b = B(), g = G();
+  const m = { seed, seconds, learned, frames: 0, stuck: [], circling: [], jumps: [], overlapFrames: 0, overlapRun: 0, overlapMax: 0, rereads: [], inUseMoved: [], stowedInUse: [], couldNot: {},
+    acts: { guy: {}, gal: {} }, together: { hoopdefend: 0, goalkeep: 0 }, mows: [], errors: 0, learnedBooks: 0, readStarts: 0, idle: { guy: 0, gal: 0 }, built: 0 };
+  // ---- the full house
+  galReset();
+  dev.all = true;
+  for (const r of ROOM_CATALOG) { unlockRoom(r.id); if (!w.rooms.isAdded(r.id)) w.rooms.add(r.id); }
+  for (const d of BOOK_CATALOG) if (!d.locked) T.addBook(d.id);
+  for (const a of ALBUM_CATALOG) T.addAlbum(a.id);
+  for (const d of OBJECT_CATALOG) { const prem = (MANIFEST.objects[d.id] || {}).premium; if (d.id !== 'botprinter' && d.id !== 'ball' && (!d.locked || prem) && !d.built) T.addObject(d.id); }
+  dev.all = false;
+  skillsOf().known.clear(); skillsOf().fading.clear();
+  const gb0 = galBuild(); if (!gb0.ok) { m.errors = -1; return m; }
+  const gal = w.gal, gb = gal.brain;
+  gb.skills.known.clear();
+  w.restaurant.paused = !restaurant;                                  // (the restaurant keeps both of them busy for ever when it is open: its own session)
+  if (learned) for (const d of BOOK_CATALOG) { skillsOf().known.add(d.teaches); gb.skills.known.add(d.teaches); }
+  T.settle();
+  for (const x of [b, gb]) { x.unlock(false); x.queue = []; x.step = null; x.pendingActivity = null; x.last = 'wander'; x.using = new Set(); }
+  const brains = { guy: b, gal: gb }, pos = { guy: g.root.position, gal: gal.g.root.position };
+  // ---- watchers
+  const undo = [];
+  const hook = (obj, name, fn) => { const had = Object.prototype.hasOwnProperty.call(obj, name), orig = obj[name]; obj[name] = fn(orig.bind(obj)); undo.push(() => { if (had) obj[name] = orig; else delete obj[name]; }); };
+  for (const [who, x] of Object.entries(brains)) {
+    hook(x, 'takeBook', (orig) => (rec) => { if (rec && rec.def && rec.def.teaches && x.last === 'read' && !x.wantsBook(rec)) m.rereads.push([who, rec.def.id]); return orig(rec); });
+    hook(x, 'ui', (orig) => (msg) => { if (/could not|no room|wondering|stumbled/.test(String(msg))) { m.couldNot[msg] = (m.couldNot[msg] || 0) + 1; (m.couldNotAt ||= []).push([who, +(m.frames / 10).toFixed(0), x.last, +pos[who].x.toFixed(1), +pos[who].z.toFixed(1)]); } return orig(msg); });
+  }
+  hook(w.yard, 'stow', (orig) => (key, ...rest) => { for (const [who, x] of Object.entries(brains)) if (['mow', 'yardtidy'].includes(x.last) && x.otherUses(key)) m.stowedInUse.push([who, key, x.last, x.other.last, [...(x.other.using || [])].join('+'), +m.frames / 10]); return orig(key, ...rest); });
+  // seeded random
+  let rs = (seed * 2654435761) % 4294967296 || 1;
+  const realRandom = Math.random; Math.random = () => { rs = (rs * 1664525 + 1013904223) % 4294967296; return rs / 4294967296; };
+  undo.push(() => { Math.random = realRandom; });
+  const errs0 = errors.length;
+  const dt = 0.1;
+  const walk = { guy: { t0: 0, p0: null, label: '' }, gal: { t0: 0, p0: null, label: '' } };
+  const prevPos = { guy: { x: pos.guy.x, z: pos.guy.z }, gal: { x: pos.gal.x, z: pos.gal.z } };
+  const objPrev = {}; const watched = ['mower', 'lawnchair', 'armchair', 'easel', 'piano', 'drums', 'stool', 'telescope', 'chair', 'builtchair', 'bench', 'basketballhoop', 'soccergoal'];
+  for (const n of watched) if (w.objects[n]) objPrev[n] = { x: w.objects[n].x, z: w.objects[n].z };
+  const lastAct = { guy: b.last, gal: gb.last };
+  let mowing = false;
+  const coverage = () => {
+    const bd = w.doors.backyard.shell.bounds, pts = w.yard.cut().points(), obs = w.obstacles.filter((o) => o.active !== false);
+    let free = 0, cut = 0;
+    for (let z = bd.minZ + 0.5; z <= bd.maxZ - 0.5; z += 0.25) for (let x = bd.minX + 0.5; x <= bd.maxX - 0.5; x += 0.25) {
+      if (obs.some((o) => x > o.x0 - 0.45 && x < o.x1 + 0.45 && z > o.z0 - 0.45 && z < o.z1 + 0.45)) continue;
+      free++; if (pts.some((p) => Math.hypot(p.x - x, p.z - z) < 0.3)) cut++;
+    }
+    return free ? cut / free : 0;
+  };
+  try {
+    let t = 0;
+    while (t < seconds) {
+      step(dt); t += dt; m.frames++;
+      for (const [who, x] of Object.entries(brains)) {
+        const p = pos[who], pp = prevPos[who];
+        const v = Math.hypot(p.x - pp.x, p.z - pp.z) / dt;
+        if (v > 7 && t > 1) m.jumps.push([who, +t.toFixed(0), +v.toFixed(1), x.last]);
+        prevPos[who] = { x: p.x, z: p.z };
+        // walking at something without getting anywhere
+        const s = x.step, wk = walk[who];
+        if (s && s.type === 'walk' && !s.drive) {
+          if (!wk.p0 || wk.s !== s) { wk.p0 = { x: p.x, z: p.z }; wk.t0 = t; wk.s = s; wk.len = 0; wk.w0 = s.waitT || 0; }
+          else {
+            wk.len += v * dt;
+            if (t - wk.t0 > 8) {                                  // a walk that has gone on for 8 s: has it got anywhere?
+              const net = Math.hypot(p.x - wk.p0.x, p.z - wk.p0.z);
+              const waited = (s.waitT || 0) - (wk.w0 || 0) > 4;            // (standing off while the other robot is at the spot is waiting, not being stuck)
+              if (net < 0.3 && !s.push && !waited) m.stuck.push([who, +t.toFixed(0), x.last, +(s.x || 0).toFixed(1), +(s.z || 0).toFixed(1)]);
+              else if (wk.len > 3 && net < 1.0 && !s.push) m.circling.push([who, +t.toFixed(0), x.last, +wk.len.toFixed(1), +net.toFixed(1)]);
+              wk.p0 = { x: p.x, z: p.z }; wk.t0 = t; wk.len = 0; wk.w0 = s.waitT || 0;
+            }
+          }
+        } else wk.p0 = null;
+        if (!s && !x.queue.length) m.idle[who]++;
+        if (x.last !== lastAct[who]) { m.acts[who][x.last] = (m.acts[who][x.last] || 0) + 1; if (x.last in m.together) m.together[x.last]++; if (x.last === 'build') m.built++; lastAct[who] = x.last; }
+        // a push of something the other robot is using
+        if (s && s.push && x.other && x.other.inUse(s.push.obj.name) && !s.drive) m.inUseMoved.push([who, +t.toFixed(0), s.push.obj.name]);
+      }
+      // standing inside each other
+      if (w.roomIdAt(pos.guy.x, pos.guy.z) === w.roomIdAt(pos.gal.x, pos.gal.z)) {
+        const d = Math.hypot(pos.guy.x - pos.gal.x, pos.guy.z - pos.gal.z);
+        if (d < 0.22) { m.overlapFrames++; m.overlapRun += dt; m.overlapMax = Math.max(m.overlapMax, m.overlapRun); if (m.overlapRun < dt * 1.5) (m.overlaps ||= []).push([+t.toFixed(0), b.last, gb.last, +pos.guy.x.toFixed(1), +pos.guy.z.toFixed(1)]); } else m.overlapRun = 0;
+      } else m.overlapRun = 0;
+      // each lawn mowing, judged when the mower is put away
+      const nowMowing = b.last === 'mow' || gb.last === 'mow';
+      if (nowMowing) mowing = true;
+      if (mowing && w.yard.isStowed('mower') && !nowMowing) { m.mows.push(+coverage().toFixed(2)); mowing = false; }
+    }
+    for (const x of Object.values(brains)) m.learnedBooks += x.skills.known.size;
+  } finally { for (const f of undo.reverse()) f(); }
+  m.paid = w.restaurant.stats ? w.restaurant.stats.paid : 0;
+  m.errors = errors.length - errs0;
+  m.errorList = errors.slice(errs0, errs0 + 3);
+  return m;
+};
+
+// The play sessions: judged by what a player would see (see playSession). Same seeds, same play, every time.
+T.sweepPlay = () => {
+  const out = [], base = errors.length;
+  const runs = [
+    { name: 'everything known, 15 minutes (seed 11)', opt: { seed: 11, seconds: 900, learned: true } },
+    { name: 'everything known, 15 minutes (seed 12)', opt: { seed: 12, seconds: 900, learned: true } },
+    { name: 'learning from nothing, 20 minutes', opt: { seed: 13, seconds: 1200, learned: false } },
+    { name: 'a busy restaurant, 8 minutes', opt: { seed: 14, seconds: 480, learned: true, restaurant: true } },
+  ];
+  const total = { together: 0 };
+  try {
+    for (const r of runs) {
+      const m = T.playSession(r.opt), n = r.name;
+      out.push(result(`play (${n}): nobody walks at a wall or stands still on a walk for 8 s`, m.stuck.length === 0, { stuck: m.stuck.slice(0, 4) }));
+      out.push(result(`play (${n}): nobody paces round in circles (a walk of 3 m or more that gets nowhere)`, m.circling.length === 0, { circling: m.circling.slice(0, 4) }));
+      out.push(result(`play (${n}): nobody jumps across the room`, m.jumps.length === 0, { jumps: m.jumps.slice(0, 4) }));
+      out.push(result(`play (${n}): the two never stand inside each other (at most half a second of touching, never more than a second at a time)`, m.overlapFrames <= 5 && m.overlapMax <= 1, { frames: m.overlapFrames, max: +m.overlapMax.toFixed(1), at: (m.overlaps || []).slice(0, 4) }));
+      out.push(result(`play (${n}): no book is read twice, nothing the other is using is pushed or put away`, m.rereads.length === 0 && m.inUseMoved.length === 0 && m.stowedInUse.length === 0, { rereads: m.rereads.slice(0, 3), inUseMoved: m.inUseMoved.slice(0, 3), stowed: m.stowedInUse.slice(0, 3) }));
+      out.push(result(`play (${n}): at most two "could not get there" in the whole session, and no errors`, Object.values(m.couldNot).reduce((a, c) => a + c, 0) <= 2 && m.errors === 0, { couldNot: m.couldNotAt && m.couldNotAt.slice(0, 4), errors: m.errors, list: m.errorList }));
+      if (r.opt.learned && !r.opt.restaurant) out.push(result(`play (${n}): each does a good variety of things (12 kinds or more each)`, Object.keys(m.acts.guy).length >= 12 && Object.keys(m.acts.gal).length >= 12, { guy: Object.keys(m.acts.guy).length, gal: Object.keys(m.acts.gal).length }));
+      if (!r.opt.learned) out.push(result(`play (${n}): they read their way through the shelf (at least 8 skills between them) and never reread`, m.learnedBooks >= 8, { skills: m.learnedBooks }));
+      if (r.opt.restaurant) out.push(result(`play (${n}): they serve customers who pay`, m.paid >= 3, { paid: m.paid }));
+      out.push(result(`play (${n}): every lawn mowed is mostly cut (85% or more of the grass)`, m.mows.every((c) => c >= 0.85), { mows: m.mows }));
+      total.together += m.together.hoopdefend + m.together.goalkeep;
+    }
+    // (playing a sport together is a matter of chance in a session: sweepSports checks it directly; here it is only counted)
+  } finally { galReset(); }
+  out.push(result('play: no errors', errors.length === base, { errors: errors.slice(base), sportsTogether: total.together }));
+  return out;
+};
+
 // ---- 22. The two robots' manners: never inside each other, never moving or putting away what the other is using (brain.js: moveBy, inUse; yardbrain.js: stowAway) ----
 T.sweepBotRules = () => {
   const out = [], base = errors.length, w = W(), b = B(), gal = w.gal;
@@ -3507,6 +3642,17 @@ T.sweepBotRules = () => {
     dr.open = 0; dr.openTo = 0;
     const reachShut = b.doorIn('backyard').filter((x) => x.type === 'plan').map((x) => x.fn()).flat().filter((x) => x.pose === 'reach').length;
     out.push(result('bot rules: through a door that is already open he just walks (no reach for the knob); a shut door is opened first', reachOpen === 0 && reachShut === 1, { reachOpen, reachShut }));
+    // 3c. the other robot is standing where he wants to be: he waits a little way off (no pacing round her), and gets there once she goes
+    stop(); T.removeAll(); T.settle(); T.home(); T.addObject('easel'); T.learn(['easel']); T.settle();
+    const ea = w.objects.easel, sl = ea.local(0, 0.85), spot = { x: ea.x + sl.x, z: ea.z + sl.z };
+    gp.x = spot.x; gp.z = spot.z; gb.queue = [gb.play('idle', 22)]; gb.step = null; gb.last = 'wander'; gb.using = new Set(['easel']);
+    b.choose('paint');
+    let tw = 0, still = 0, near = 0, path = 0, lastp = { x: p.x, z: p.z }; const trail = [];
+    while (tw < 16) { step(0.1); tw += 0.1; const d = Math.hypot(p.x - spot.x, p.z - spot.z); if (tw > 9) { trail.push(d); path += Math.hypot(p.x - lastp.x, p.z - lastp.z); if (d < 1.95) near++; if (Math.hypot(p.x - lastp.x, p.z - lastp.z) < 0.004) still++; } lastp = { x: p.x, z: p.z }; }
+    out.push(result('bot rules: with the other robot standing where he is going, he stops a little way off and waits (he does not keep walking round her)', near > 55 && still > near * 0.6 && path < 1.2, { near, still, pathM: +path.toFixed(2), d: +trail[trail.length - 1].toFixed(2) }));
+    let tg = 0; while (tg < 80 && !(b.pose === 'paintStand')) { step(0.25); tg += 0.25; }
+    out.push(result('bot rules: ...and once she has moved on he gets there and paints', b.pose === 'paintStand', { tg, pose: b.pose }));
+    stop();
     // 4. objectRemoved still drops work on the removed thing (stepUses is shared with it)
     stop(); b.step = { type: 'play', fx: { needs: ['lawnchair'] }, t: 0, dur: 1 }; b.objectRemoved('lawnchair');
     out.push(result('bot rules: removing an object the current step needs still cancels it', b.step === null));
@@ -3569,6 +3715,7 @@ T.runAll = () => {
   report.gal = S(T.sweepGal);
   report.mowing = S(T.sweepMowing);
   report.reading = S(T.sweepReading);
+  report.play = S(T.sweepPlay);
   report.sports = S(T.sweepSports);
   report.botRules = S(T.sweepBotRules);
   report.workstation = S(T.sweepWorkstation);
