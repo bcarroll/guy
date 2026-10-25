@@ -88,6 +88,8 @@ export function buildRoom(scene) {
       get x() { return group.position.x; },
       get z() { return group.position.z; },
       get yaw() { return (this.rot * Math.PI) / 2; },
+      // the bookshelves are where Guy learns and keeps his records: they stay in his own room (they can be moved about in it, never out of it)
+      get mainOnly() { return this.name === 'shelf' || this.kind === 'bookshelf2'; },
       set(nx, nz) {
         group.position.set(nx, 0, nz);
         Object.assign(ob, { x0: nx - this.w / 2, x1: nx + this.w / 2, z0: nz - this.d / 2, z1: nz + this.d / 2 });
@@ -1176,6 +1178,7 @@ export function buildRoom(scene) {
   const fits = (obj, x, z, w = obj.w, d = obj.d) => {
     const x0 = x - w / 2, x1 = x + w / 2, z0 = z - d / 2, z1 = z + d / 2;
     if (!roomBoundsList().some((b) => x0 >= b.minX && x1 <= b.maxX && z0 >= b.minZ && z1 <= b.maxZ)) return false;      // wholly inside one room
+    if (obj.mainOnly && !(x0 >= MAIN_BOUNDS.minX && x1 <= MAIN_BOUNDS.maxX && z0 >= MAIN_BOUNDS.minZ && z1 <= MAIN_BOUNDS.maxZ)) return false;      // (the bookshelves never leave his own room)
     if (doorBlocks(x0, x1, z0, z1)) return false;                       // the strips either side of a door stay clear
     // furniture taller than the lower edge of a window or picture must not be pushed into it
     for (const dc of Object.values(decor)) {
@@ -1185,6 +1188,61 @@ export function buildRoom(scene) {
     }
     return !obstacles.some((o) => o !== obj.obstacle && x1 > o.x0 && x0 < o.x1 && z1 > o.z0 && z0 < o.z1);
   };
+  // ---- Moving things from room to room: only through a door ----
+  // A wall is a line between two floors. A thing may be on one side of it or the other, never across it, except where a door is: there it
+  // may straddle the wall line as long as it is no wider than the door (DOOR.w) along the wall and stays on the floors either side.
+  // `canTransit` says whether a thing may be at (x, z) *while it is being moved*, which includes standing in the doorway; `fits` says where
+  // it may be left. Together with `dragTo` they make a move a path, not a jump: an object dragged at a wall stops at the wall.
+  const canTransit = (obj, x, z, w = obj.w, d = obj.d) => {
+    const x0 = x - w / 2, x1 = x + w / 2, z0 = z - d / 2, z1 = z + d / 2;
+    if (obj.mainOnly && !(x0 >= MAIN_BOUNDS.minX && x1 <= MAIN_BOUNDS.maxX && z0 >= MAIN_BOUNDS.minZ && z1 <= MAIN_BOUNDS.maxZ)) return false;
+    const inRoom = roomBoundsList().some((b) => x0 >= b.minX && x1 <= b.maxX && z0 >= b.minZ && z1 <= b.maxZ);
+    if (!inRoom) {
+      // straddling the wall line of a door: through the doorway only
+      const through = Object.values(doors).some((dr) => {
+        const b = dr.shell.bounds, hw = DOOR.w / 2, wall = dr.wall;
+        if (wall === 'right') return x0 < MAIN_BOUNDS.maxX && x1 > MAIN_BOUNDS.maxX && x0 >= MAIN_BOUNDS.minX && x1 <= b.maxX && z0 >= dr.u - hw && z1 <= dr.u + hw;
+        if (wall === 'front') return z0 < MAIN_BOUNDS.maxZ && z1 > MAIN_BOUNDS.maxZ && z0 >= MAIN_BOUNDS.minZ && z1 <= b.maxZ && x0 >= dr.u - hw && x1 <= dr.u + hw;
+        return z1 > MAIN_BOUNDS.minZ && z0 < MAIN_BOUNDS.minZ && z1 <= MAIN_BOUNDS.maxZ && z0 >= b.minZ && x0 >= dr.u - hw && x1 <= dr.u + hw;      // back
+      });
+      if (!through) return false;
+    }
+    return !obstacles.some((o) => o !== obj.obstacle && o.active !== false && x1 > o.x0 && x0 < o.x1 && z1 > o.z0 && z0 < o.z1);
+  };
+  // Move `obj` towards (nx, nz) as far as it can legally go in a straight line (every 5 cm along the way must be a place it may pass or
+  // rest: `fits`, or the doorway). `ok(x, z)` is an extra test from the caller (not on top of Guy). Returns true if it moved at all.
+  // It remembers the last spot where it could be left (`dragRest`), for `dropObject`.
+  const dragTo = (obj, nx, nz, ok = () => true) => {
+    const legal = (x, z) => (fits(obj, x, z) || canTransit(obj, x, z)) && ok(x, z);
+    const sweep = (tx, tz) => {
+      const dx = tx - obj.x, dz = tz - obj.z, n = Math.max(1, Math.ceil(Math.hypot(dx, dz) / 0.05));
+      let lx = obj.x, lz = obj.z;
+      for (let i = 1; i <= n; i++) {
+        const x = obj.x + (dx * i) / n, z = obj.z + (dz * i) / n;
+        if (!legal(x, z)) break;
+        lx = x; lz = z;
+        if (fits(obj, x, z)) obj.dragRest = { x, z };
+      }
+      return { x: lx, z: lz };
+    };
+    const ox = obj.x, oz = obj.z;
+    let best = sweep(nx, nz);
+    if (Math.hypot(best.x - ox, best.z - oz) < 1e-6) {                  // blocked straight on: slide along whatever is in the way
+      const a = sweep(nx, oz), b = sweep(ox, nz);
+      best = Math.hypot(a.x - ox, a.z - oz) >= Math.hypot(b.x - ox, b.z - oz) ? a : b;
+    }
+    if (Math.hypot(best.x - ox, best.z - oz) < 1e-6) return false;
+    obj.set(best.x, best.z);
+    return true;
+  };
+  const beginDrag = (obj) => { obj.dragRest = fits(obj, obj.x, obj.z) ? { x: obj.x, z: obj.z } : null; };
+  // Let go of an object: if it is standing where nothing may be left (in a doorway), it goes back to where it last could be.
+  const dropObject = (obj) => {
+    if (fits(obj, obj.x, obj.z) || !obj.dragRest) return false;
+    obj.set(obj.dragRest.x, obj.dragRest.z);
+    return true;
+  };
+
 
   // What is in the way of a door at (wall, u)? `fixed` names something that never moves (the bookshelf, heavy furniture), so the
   // door cannot go there; otherwise `hit` lists the pieces that would have to come out of the room.
@@ -1398,7 +1456,7 @@ export function buildRoom(scene) {
       return d;
     },
     // ---- doors and the rooms behind them (see src/rooms.js) ----
-    doors, DOOR, planDoor, doorBlockers, findWallSpot,
+    doors, DOOR, planDoor, doorBlockers, findWallSpot, canTransit, dragTo, beginDrag, dropObject,
     // Put a door for room `def` at (wall, u). The caller has already cleared whatever was in its way.
     addDoor(def, wall, u) {
       if (doors[def.id]) return doors[def.id];

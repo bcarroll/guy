@@ -733,7 +733,7 @@ canvas.addEventListener('pointermove', (e) => {
   if (pending && Math.hypot(e.clientX - pending.x, e.clientY - pending.y) > 8) {
     clearTimeout(pending.timer);
     if (pending.hit.door) { /* a door cannot be dragged: moving the pointer cancels the press */ }
-    else if (!pending.orbit || pending.armed) drag = { ...pending.hit, off: pending.off };   // a held rug follows the pointer; a quick drag on one orbits
+    else if (!pending.orbit || pending.armed) { drag = { ...pending.hit, off: pending.off }; if (drag.obj && !drag.ball) world.beginDrag(drag.obj); }   // a held rug follows the pointer; a quick drag on one orbits
     pending = null;
   }
   if (!drag) {
@@ -769,14 +769,17 @@ canvas.addEventListener('pointermove', (e) => {
   const o = drag.obj;
   const nx = p.x + drag.off.x, nz = p.z + drag.off.z;
   const ox = o.x, oz = o.z;
-  if (canPlace(o, nx, nz)) o.set(nx, nz);
-  else if (canPlace(o, nx, o.z)) o.set(nx, o.z); // slide along obstacles
-  else if (canPlace(o, o.x, nz)) o.set(o.x, nz);
+  // a path, not a jump: it stops at a wall and goes between rooms only through a door; never onto Guy
+  world.dragTo(o, nx, nz, (x, z) => {
+    const gx = THREE.MathUtils.clamp(guy.pos.x, x - o.w / 2, x + o.w / 2), gz = THREE.MathUtils.clamp(guy.pos.z, z - o.d / 2, z + o.d / 2);
+    return Math.hypot(guy.pos.x - gx, guy.pos.z - gz) > 0.35;
+  });
   const moved = Math.hypot(o.x - ox, o.z - oz);
   if (moved > 0.004) sfxDrag(Math.min(1, moved * 25), o.weight);          // scraping along the floor
 });
 
 const endPress = (e) => {
+  if (drag && drag.obj && !drag.ball) world.dropObject(drag.obj);          // let go in a doorway: it goes back to where it could stand
   if (drag && drag.obj && !drag.ball) sfx('place', drag.obj.weight === 'heavy' ? 0.8 : drag.obj.weight === 'medium' ? 0.5 : 0.3);   // set down
   if (pending) {
     clearTimeout(pending.timer);
