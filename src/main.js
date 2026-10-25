@@ -360,7 +360,7 @@ function ray(e) {
 
 function pick(e) {
   ray(e);
-  const targets = Object.values(world.objects).map((o) => o.group);
+  const targets = Object.values(world.objects).filter((o) => !o.stowed).map((o) => o.group);      // (not what is put away in the shed)
   targets.push(world.skillMachine);
   for (const d of Object.values(world.decor)) targets.push(d.group);
   for (const d of Object.values(world.doors)) targets.push(d.group);
@@ -485,7 +485,26 @@ function openAlbumMenu(shelfObj, x, y) {
   list.innerHTML = shelfObj.heldAlbums().map((a) => `<button data-track="${a.def.track}"><span class="ico">${a.def.icon || '💿'}</span><span><b>${a.def.title}</b><small>${a.def.genre}</small></span></button>`).join('');
   placeAlbumMenu(x, y);
 }
+// the shed: long-press it > What's in the shed lists everything that can be put away in it, tap one to have Guy take it out / put it away
+function openShedMenu(x, y) {
+  const items = world.yard.items();
+  albumMenu.querySelector('.title').textContent = '📦 The shed';
+  const row = (attrs, ico, title, note) => `<div class="brow" ${attrs}><span class="ico">${ico}</span><span class="grow"><b>${title}</b><small>${note}</small></span></div>`;
+  albumMenu.querySelector('.list').innerHTML = [
+    items.some((i) => !i.stowed) ? row('data-shed-all="away"', '📥', 'Put everything away', 'Tap to have Guy put it all in the shed') : '',
+    ...items.map((i) => row(`data-shed="${i.key}" data-mode="${i.stowed ? 'out' : 'away'}"`, i.icon, i.label, i.stowed ? 'In the shed: tap to have Guy take it out' : 'Out in the yard: tap to have Guy put it away')),
+  ].join('');
+  placeAlbumMenu(x, y);
+}
+window.__guyOpenShed = () => openShedMenu(200, 100);          // for the QA harness
 albumMenu.addEventListener('click', (e) => {
+  const sh = e.target.closest('[data-shed], [data-shed-all]');
+  if (sh) {
+    albumMenu.hidden = true;
+    const r = sh.dataset.shedAll ? brain.requestShed('away') : brain.requestShed(sh.dataset.mode, sh.dataset.shed);
+    showToast(r.message);
+    return;
+  }
   const rm = e.target.closest('button[data-remove]');
   if (rm) {
     const r = brain.removeBook(rm.dataset.remove);
@@ -582,6 +601,7 @@ function openMenu(hit, x, y) {
   const turnable = hit.decor && !hit.decor.wall && hit.decor.hx !== hit.decor.hz;   // a rectangular rug can be turned; wall pieces and round things cannot
   menu.querySelectorAll('[data-act^="rot"]').forEach((b) => (b.hidden = !!(hit.ball || (hit.decor && !turnable))));
   menu.querySelectorAll('[data-act="interact"]').forEach((b) => (b.hidden = !!hit.decor));
+  menu.querySelectorAll('[data-act="contents"]').forEach((b) => (b.hidden = !(hit.obj && hit.obj.name === 'shed')));
   menu.querySelectorAll('[data-act="hang"]').forEach((b) => (b.hidden = !(hit.obj && hit.obj.name === 'easel' && world.paintings.easelHas())));      // a painting is on the easel
   menu.querySelectorAll('[data-act="remove"]').forEach((b) => (b.hidden = !!(hit.obj && hit.obj.removable === false)));
   // the first button says what the object is for
@@ -632,6 +652,12 @@ menu.addEventListener('click', (e) => {
     const r = brain.interact(t.ball ? 'ball' : t.obj.name);
     showToast(r.message);
     closeMenu();
+    return;
+  }
+  if (act === 'contents') {                             // long-press the shed > What's in the shed
+    const r = menu.getBoundingClientRect();
+    closeMenu();
+    openShedMenu(r.left, r.top);
     return;
   }
   if (act === 'hang') {                                 // long-press the easel > Hang painting: Guy takes it down and decides where it goes

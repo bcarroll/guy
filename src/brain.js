@@ -1765,11 +1765,11 @@ export class Brain {
     if (YARD_ACTS.includes(act)) {                                  // the Backyard: it has to be added and its door not locked; the balls are there with their goal and hoop
       if (!this.yardOpen()) return false;
       if (act === 'yardpoke') return this.pokeKinds().length > 0;
-      if (act === 'mow' && !this.mowRoute({ pushable: true })) return false;               // no clear lawn: not something he sets out to do (he would open the shed for nothing)
+      if (act === 'mow' && !this.mowRoute({ pushable: true, tidied: true })) return false;               // no clear lawn: not something he sets out to do (he would open the shed for nothing)
       if (['goalshot', 'soccertoss'].includes(act) && !this.yardBall('soccer')) return false;
       if (['hoopshoot', 'hoopdribble'].includes(act) && !this.yardBall('basketball')) return false;
     }
-    if (act === 'putback' || act === 'dropball' || act === 'putguitar' || act === 'leave' || act === 'hangpaint' || act === 'putcanvas') return false;
+    if (act === 'putback' || act === 'dropball' || act === 'yardtidy' || act === 'putguitar' || act === 'leave' || act === 'hangpaint' || act === 'putcanvas') return false;
     if (act === 'visit') return this.inMain() && Object.keys(this.w.doors).some((id) => !this.doorLockedFor(id));
     // the Workshop: it has to be added (and its door unlocked), and for building there has to be something to build
     if (['tidytools', 'build'].includes(act)) {
@@ -2031,7 +2031,7 @@ export class Brain {
     if (rm && rm !== 'main' && rm !== 'door' && this.doorLockedFor(rm)) return { ok: false, message: `The ${this.w.doors[rm].name} door is locked. Unlock it first (long-press the door).` };
     if (this.stuckIn() && rm !== this.stuckIn()) return { ok: false, message: this.shutInMessage(this.stuckIn()) };        // shut in: only what is in the room with him
     // told to mow with no clear lawn: say so (he used to say "On it!", open the shed, find no room and quietly give up)
-    if ((name === 'mower' || name === 'shed') && this.obj('mower') && this.obj('shed') && this.yardOpen() && !this.mowRoute({ pushable: true })) return { ok: false, message: 'There is no clear stretch of lawn for the mower. Guy shifts light things (the chair, the bird bath, plants) himself, but not the shed, the goal or the hoop: move those away from the mower, and leave a little room behind it for Guy.' };
+    if ((name === 'mower' || name === 'shed') && this.obj('mower') && this.obj('shed') && this.yardOpen() && !this.mowRoute({ pushable: true, tidied: true })) return { ok: false, message: 'There is no clear stretch of lawn for the mower. Guy puts the yard things away in the shed and shifts light things (plants) himself, but not the shed: move it, or anything else heavy, away from the lawn and leave a little room behind the mower for Guy.' };
     let tries = {
       // with the stereo already playing, an instrument means playing along with it
       piano: k('piano') ? (this.music ? ['jamsit', 'jampiano', 'jam'] : ['sitpiano', 'piano']) : ['plink'],
@@ -2084,6 +2084,22 @@ export class Brain {
     this.readFrom = this.pendingActivity === 'read' && this.obj(name) && this.obj(name).heldBooks ? name : null;       // at the shelf he was pointed at
     this.pendingChair = this.obj(name) && this.obj(name).sit ? name : null;     // sit on the chair he was pointed at
     return { ok: true, message: 'On it!' };
+  }
+
+  // The user picked something from the shed list: Guy takes it out of the shed (mode 'out') or puts it away in it ('away'); no key = all of them.
+  requestShed(mode, key = null) {
+    const y = this.w.yard, shed = this.obj('shed');
+    if (!shed || !y) return { ok: false, message: 'There is no shed.' };
+    if (this.stuckIn() && this.stuckIn() !== 'backyard') return { ok: false, message: this.shutInMessage(this.stuckIn()) };
+    if (!this.yardOpen()) return { ok: false, message: 'The Backyard door is locked. Unlock it first (long-press the door).' };
+    const items = y.items(), keys = (key ? items.filter((i) => i.key === key) : items).filter((i) => (mode === 'out') === i.stowed).map((i) => i.key);
+    if (!keys.length) return { ok: false, message: mode === 'out' ? 'There is nothing in the shed to take out.' : 'Everything is already in the shed.' };
+    this.unlock(false);
+    this.skip();
+    this.yardTask = { mode, keys };
+    this.pendingActivity = 'yardtidy';
+    const names = keys.map((k) => items.find((i) => i.key === k).label.toLowerCase());
+    return { ok: true, message: `Guy will ${mode === 'out' ? 'take out' : 'put away'} ${names.length > 2 ? 'the things' : names.join(' and ')}.` };
   }
 
   // The user picked a book from the shelf list: Guy reads that one next.

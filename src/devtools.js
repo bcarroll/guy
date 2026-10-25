@@ -119,7 +119,7 @@ export const MANIFEST = {
     hoopshoot: { objects: ['basketballhoop'], skills: ['outdoor.basketball'], room: 'backyard', max: 200, touches: ['basketballhoop'] },
     hoopdribble: { objects: ['basketballhoop'], skills: ['outdoor.basketball'], room: 'backyard', max: 200, touches: ['basketballhoop'] },
     // internal recovery activities and aliases: exercised through the interruption sweep, not on their own
-    books: { alias: true }, putback: { internal: true }, putguitar: { internal: true }, dropball: { internal: true }, lighton: { internal: true },
+    books: { alias: true }, putback: { internal: true }, putguitar: { internal: true }, dropball: { internal: true }, lighton: { internal: true }, yardtidy: { internal: true, objects: ['shed', 'lawnchair'], room: 'backyard' },
     hangpaint: { objects: ['easel'], painted: true, max: 220, touches: ['easel'] }, putcanvas: { internal: true },      // hanging a painting (sweepPaintings tests it in depth)
     learn: { internal: true },      // using the Learning Workstation: tested by sweepWorkstation
     buildbot: { internal: true }, bandjam: { internal: true }, bandplay: { internal: true }, orderbuild: { internal: true },      // Guy and GAL: tested by sweepGal
@@ -164,6 +164,7 @@ export const MANIFEST = {
     { id: 'scope-wrong', activity: 'peek', pose: 'scopeWrong', t: 2.8, view: 'side', expect: 'eye at the big lens end, hand on the barrel, other hand on his knee' },
     { id: 'yard-shoot', activity: 'hoopshoot', pose: 'shoot', t: 0.9, view: 'side', expect: 'knees dipped then extended, both hands up at the release with the basketball just leaving them, facing the hoop' },
     { id: 'yard-sit', activity: 'yardsit', pose: 'sitRest', t: 6, view: 'side', expect: 'seated in the lawn chair, back against it, legs clear of the frame' },
+    { id: 'yard-shed-open', activity: 'yardtidy', pose: 'reach', t: 1.3, view: 'side', yard: true, expect: 'standing at the shed door, one hand on the knob, the door swung wide open showing the dark inside; the lawn chair still out on the grass' },
     { id: 'yard-mow', activity: 'mow', pose: 'walk', t: 1, view: 'side', push: true, expect: 'both hands on the mower handle, walking behind it, stripes cut in the grass' },
     { id: 'scope-care', activity: 'scopecare', pose: 'scopeCare', t: 13, view: 'front', expect: 'squatting beside the tripod with a hand on one leg' },
     { id: 'stool-dust', activity: 'dusttop', pose: 'reach', t: 4, view: 'front', dist: 3.6, expect: 'standing ON the foot stool (feet on top of it, not in the floor), right hand wiping along the top of the window frame, the stool not passing through him' },
@@ -1030,7 +1031,7 @@ T.moment = (activity, pose, t = 0, view = 'front', opts = {}) => {
   if (opts.album) b.forceAlbum = (W().objects.shelf.albums[0] || { def: {} }).def.id;
   b.queue = []; b.step = null; b.choose(activity);
   let guard = 0;
-  const ok = () => b.step && b.pose === pose && b.step.t >= t && (!opts.turning || (b.read && b.read.turning && b.read.turnT > 0.8)) && (!opts.push || b.step.push) && (!opts.album || (b.held && b.held.kind === 'album'));
+  const ok = () => b.step && b.pose === pose && b.step.t >= t && (!opts.turning || (b.read && b.read.turning && b.read.turnT > 0.8)) && (!opts.push || b.step.push) && (!opts.yard || (b.inYard() && b.step.t >= t)) && (!opts.album || (b.held && b.held.kind === 'album'));
   while (!ok() && guard++ < 40000) step(1 / 30);
   T.freeze(); T.look(view, opts.dist);                                       // (opts.dist: how far back the camera stands, for a picture of someone up on a stool)
   return { reached: guard < 40000, state: T.state(), hands: T.hands() };
@@ -1313,7 +1314,7 @@ T.sweepMowerShed = () => {
   for (const id of ['shed', 'mower']) T.addObject(id);
   T.settle();
   const reset = () => { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; };
-  const inside = () => { const m = w.objects.mower, s = w.objects.shed; return !!m && !!s && Math.hypot(m.x - s.x, m.z - s.z) < 0.1; };
+  const inside = () => w.yard.isStowed('mower');          // (put away in the shed: hidden)
   const mowOnce = (limit = 420) => {
     reset(); T.home(); T.settle();
     const r = b.interact('mower');
@@ -1333,13 +1334,12 @@ T.sweepMowerShed = () => {
   // 2. the next mow takes it out of the shed (it is not stuck in there) and puts it back again
   const b2 = mowOnce();
   out.push(result('mower shed: told to mow again, he takes it out of the shed, mows, and puts it away again', b2.r.ok && b2.went > 1.0 && inside() && w.objects.shed.openTo === 0, b2));
-  // 3. drag the shed: the mower inside goes with it
+  // 3. drag the shed: the mower in it is still put away, and the next mow starts from the shed's new place
   const sh = w.objects.shed, mw = w.objects.mower;
-  b.mowerSync();                                              // (what every new activity does first; Guy himself is not stepped here: he would go mowing)
   const bd = w.doors.backyard.shell.bounds;
   sh.set(sh.x + (sh.x > (bd.minX + bd.maxX) / 2 ? -1.2 : 1.2), sh.z);
-  mw.update(0.03);
-  out.push(result('mower shed: the shed is dragged to another spot and the mower inside goes with it', inside(), { shed: [sh.x, sh.z], mower: [mw.x, mw.z] }));
+  const c3 = mowOnce();
+  out.push(result('mower shed: the shed is dragged to another spot: the mower is still in it and the next mow starts at its new door', c3.r.ok && c3.went > 0.8 && inside() && w.objects.shed.openTo === 0, c3));
   // 4. cut short mid-mow: the door is shut again (the mower stays on the lawn, nothing is stuck)
   reset(); T.home(); T.settle();
   b.interact('mower');
@@ -1347,9 +1347,110 @@ T.sweepMowerShed = () => {
   b.interact('lawnchair');
   let t5 = 0; while (t5 < 40 && sh.openTo === 1) { step(0.25); t5 += 0.25; }
   const far = Math.hypot(mw.x - sh.x, mw.z - sh.z);
-  out.push(result('mower shed: cut short on the lawn: the door is shut again and the mower is either put away or left clear of the shed', sh.openTo === 0 && (inside() || far > 1.0), { openTo: sh.openTo, t4, far }));
+  out.push(result('mower shed: cut short on the lawn: the door is shut again and the mower is either put away or left clear of the shed', sh.openTo === 0 && (inside() || far > 1.0) && !mw.group.visible === inside(), { openTo: sh.openTo, t4, far, hidden: !mw.group.visible }));
   T.settle(); T.resetRooms(); T.removeAll(); T.settle();
   out.push(result('mower shed: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
+// ---- The shed works like the skill bookshelf: it holds the yard's things (goal, hoop, balls, chair, bird bath, sky switch, mower) ----
+// Put away they are hidden and no longer block anything; an activity that needs one takes it out first; before mowing Guy puts everything
+// (all but the mower) away; the long-press list shows what is inside and takes orders; the contents are saved; a removed shed gives them back.
+T.sweepShed = () => {
+  const out = [], base = errors.length, w = W(), b = B(), y = w.yard;
+  T.settle(); T.resetRooms(); T.removeAll(); T.forget(); skillsOf().fading.clear(); T.settle(); T.home();
+  unlockRoom('backyard'); R().add('backyard');
+  const ids = ['shed', 'mower', 'soccergoal', 'basketballhoop', 'lawnchair', 'birdbath', 'skyswitch'];
+  for (const id of ids) T.addObject(id);
+  T.learn(['outdoor', 'outdoor.soccer', 'outdoor.basketball']); T.settle();
+  const reset = () => { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; b.ballHeld = false; };
+  const keys = () => y.items().map((i) => i.key);
+  const allOut = () => { for (const k of y.stowedKeys()) y.unstow(k); };
+  const until = (cond, limit) => { let t = 0; while (t < limit && !cond()) { step(0.25); t += 0.25; } return t; };
+  const out_ = () => y.items().filter((i) => !i.stowed).map((i) => i.key);
+  // 1. the list: eight things, all out in the yard to begin with
+  out.push(result('shed: it can hold the goal, the hoop, both balls, the chair, the bird bath, the sky switch and the mower', keys().length === 8 && ['soccergoal', 'basketballhoop', 'ball:soccer', 'ball:basketball', 'lawnchair', 'birdbath', 'skyswitch', 'mower'].every((k) => keys().includes(k)), { keys: keys() }));
+  out.push(result('shed: everything starts out in the yard', out_().length === 8, { out: out_() }));
+  // (a mower that stands inside the shed, as in older saves and the first version of the shed, counts as put away)
+  const mw0 = w.objects.mower, mwHome = { x: mw0.x, z: mw0.z };
+  mw0.set(w.objects.shed.x, w.objects.shed.z); step(0.25);
+  out.push(result('shed: a mower standing inside the shed (as older saves have it) is put away in it', y.isStowed('mower') && !mw0.group.visible, { out: out_() }));
+  y.unstow('mower', mwHome);
+  // 2. put away: hidden, not an obstacle, cannot be picked; taken out: back on the grass, solid
+  const ch = w.objects.lawnchair, before = { x: ch.x, z: ch.z };
+  y.stow('lawnchair');
+  out.push(result('shed: a chair put away is hidden and no longer in the way', ch.stowed && !ch.group.visible && !w.obstacles.includes(ch.obstacle), { vis: ch.group.visible }));
+  y.stow('ball:soccer');
+  out.push(result('shed: a ball put away is hidden and stays where it is put (it does not roll about)', !y.balls.soccer.visible && y.balls.soccer.userData.stowed, {}));
+  for (let i = 0; i < 20; i++) step(0.25);
+  y.unstow('lawnchair'); y.unstow('ball:soccer');
+  out.push(result('shed: taken out again the chair is back, solid, and where it stood; the ball is on the grass', !ch.stowed && ch.group.visible && w.obstacles.includes(ch.obstacle) && Math.hypot(ch.x - before.x, ch.z - before.z) < 0.01 && y.balls.soccer.visible && !y.balls.soccer.userData.stowed, { at: [ch.x, ch.z] }));
+  // 3. the contents are saved with the layout and put back after a reload
+  y.stow('birdbath'); y.stow('ball:basketball');
+  const snap = JSON.parse(JSON.stringify(w.layout.snapshot()));
+  y.unstow('birdbath'); y.unstow('ball:basketball');
+  w.layout.apply(snap);
+  for (let i = 0; i < 4; i++) step(0.25);
+  out.push(result('shed: what was put away is saved, and put away again after a reload', snap.stowed.includes('birdbath') && snap.stowed.includes('ball:basketball') && y.isStowed('birdbath') && y.isStowed('ball:basketball'), { saved: snap.stowed, now: y.stowedKeys() }));
+  allOut();
+  // 4. told to sit in a chair that is in the shed: he takes it out first, sits in it, shuts the shed
+  y.stow('lawnchair');
+  reset(); T.home(); T.settle();
+  const r1 = b.interact('lawnchair');
+  const t1 = until(() => !!(b.step && b.step.fx && b.step.fx.chairSit), 200);
+  out.push(result('shed: told to sit in the lawn chair while it is in the shed, he takes it out, and sits in it', r1.ok && !y.isStowed('lawnchair') && ch.group.visible && !!(b.step && b.step.fx && b.step.fx.chairSit), { r1, t1, stowed: y.stowedKeys() }));
+  // 5. soccer with the goal and the ball both in the shed: both come out, then he really kicks
+  reset(); T.home(); T.settle(); allOut(); y.stow('soccergoal'); y.stow('ball:soccer');
+  const sh0 = y.score.shots;
+  const r2 = b.interact('soccergoal');
+  if (b.pendingActivity === 'soccertoss') b.pendingActivity = 'goalshot';            // (a toss counts no shots, and afterwards he is free to do anything: ask for the kicking)
+  const t2 = until(() => y.score.shots > sh0, 400);
+  const goal = w.objects.soccergoal, ball = y.balls.soccer;
+  out.push(result('shed: told to take shots with goal and ball in the shed, he takes both out and kicks at the goal', r2.ok && y.score.shots > sh0 && !y.isStowed('soccergoal') && !y.isStowed('ball:soccer') && goal.group.visible && ball.visible && w.obstacles.includes(goal.obstacle), { r2, t2, shots: y.score.shots - sh0 }));
+  // 6. the long-press list shows what is in the shed and takes orders
+  reset(); T.home(); T.settle(); allOut(); y.stow('lawnchair'); y.stow('ball:soccer');
+  window.__guyOpenShed();
+  const menu = document.getElementById('albummenu');
+  const rows = [...menu.querySelectorAll('.brow[data-shed]')];
+  const rowOf = (k) => rows.find((r) => r.dataset.shed === k);
+  out.push(result('shed: the long-press list has a row for each thing, saying which are inside', !menu.hidden && rows.length === 8 && rowOf('lawnchair') && rowOf('lawnchair').dataset.mode === 'out' && rowOf('birdbath').dataset.mode === 'away' && !!menu.querySelector('[data-shed-all]'), { rows: rows.map((r) => r.dataset.shed + ':' + r.dataset.mode) }));
+  rowOf('lawnchair').click();
+  const t3 = until(() => !y.isStowed('lawnchair') && w.objects.shed.openTo === 0, 200);          // (the last thing he does is shut the door: he may start something else at once, so do not wait for him to be idle)
+  out.push(result('shed: tapping a thing that is in the shed has Guy take it out', !y.isStowed('lawnchair') && w.objects.shed.openTo === 0 && t3 < 200, { t3 }));
+  window.__guyOpenShed();
+  menu.querySelector('[data-shed-all]').click();
+  const t4 = until(() => out_().length === 0 && w.objects.shed.openTo === 0, 600);
+  const away = out_().length === 0 && w.objects.shed.openTo === 0;
+  reset();                                                  // (with the yard tidy he would go and mow on his own: stop him here)
+  out.push(result('shed: "Put everything away" has Guy put all of it in the shed (the mower too) and shut the door', away, { t4, out: out_() }));
+  const none = b.requestShed('away'), out2 = b.requestShed('out', 'lawnchair');
+  out.push(result('shed: told to put away what is already away he says so kindly and does nothing', !none.ok && out2.ok && /already|nothing/i.test(none.message) && !/\b(fail|error|wrong)\b/i.test(none.message), { none }));
+  reset(); T.home(); T.settle(); allOut();
+  // 7. mowing: first everything but the mower goes into the shed; only then does the mower come out
+  y.stow('mower');
+  reset(); T.home(); T.settle();
+  const r3 = b.interact('mower');
+  let cleared = null, after = null, t5 = 0;
+  while (t5 < 900 && !after) {
+    step(0.25); t5 += 0.25;
+    if (cleared === null && !y.isStowed('mower')) cleared = out_().filter((k) => k !== 'mower');         // (what was still out when the mower came out)
+    if (cleared !== null && y.isStowed('mower') && w.objects.shed.openTo === 0) after = out_();           // (the mowing is done: the mower is away and the door shut)
+  }
+  out.push(result('shed: before mowing he puts the goal, hoop, balls, chair, bird bath and sky switch in the shed; only then does the mower come out', r3.ok && cleared !== null && cleared.length === 0, { r3, cleared, t5 }));
+  out.push(result('shed: after mowing everything is in the shed and the door is shut', !!after && after.length === 0, { after }));
+  reset();
+  // 8. with the yard put away, a bird bath order fetches it, and the mow stays possible with the goal and hoop standing in the way
+  reset(); T.home(); T.settle(); allOut(); y.stow('mower');
+  const sh = w.objects.shed, gl = w.objects.soccergoal;
+  const f = sh.local(0, 2.2); gl.set(sh.x + f.x, sh.z + f.z);
+  out.push(result('shed: the goal standing right in front of the shed does not stop him mowing (it goes in the shed first)', b.available('mow') === true && b.interact('mower').ok, { avail: b.available('mow') }));
+  reset(); T.home(); T.settle();
+  // 9. a shed taken out of the yard gives everything back
+  y.stow('lawnchair'); y.stow('ball:basketball'); y.stow('soccergoal');
+  w.removeObject('shed');
+  out.push(result('shed: removing the shed gives back everything that was in it', y.stowedKeys().length === 0 && ch.group.visible && w.obstacles.includes(ch.obstacle) && y.balls.basketball.visible && w.objects.soccergoal.group.visible, { stowed: y.stowedKeys() }));
+  T.settle(); T.resetRooms(); T.removeAll(); T.settle();
+  out.push(result('shed: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
 };
 
@@ -3205,6 +3306,7 @@ T.runAll = () => {
   report.yardOrders = S(T.sweepYardOrders);
   report.yardVoice = S(T.sweepYardVoice);
   report.mowerShed = S(T.sweepMowerShed);
+  report.shed = S(T.sweepShed);
   report.doorMoves = S(T.sweepDoorMoves);
   report.allRooms = S(T.sweepAllRooms);
   report.needs = S(T.sweepNeeds);

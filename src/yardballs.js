@@ -15,6 +15,13 @@ import { makeYardBall, YARD_BALL } from './yardobjects.js';
 const G = 9.8;
 const PAIRS = { soccer: 'soccergoal', basketball: 'basketballhoop' };
 const BOUNCE = { soccer: 0.5, basketball: 0.72 };
+// What the shed can hold: every movable thing in the yard (not the shed itself). A key is an object's name, or 'ball:<kind>' for a ball.
+const STORE = [
+  { key: 'soccergoal', label: 'Soccer goal', icon: '🥅' }, { key: 'basketballhoop', label: 'Basketball hoop', icon: '🏀' },
+  { key: 'ball:soccer', label: 'Soccer ball', icon: '⚽' }, { key: 'ball:basketball', label: 'Basketball', icon: '🏀' },
+  { key: 'lawnchair', label: 'Lawn chair', icon: '🪑' }, { key: 'birdbath', label: 'Bird bath', icon: '🐦' },
+  { key: 'skyswitch', label: 'Sky switch', icon: '🌙' }, { key: 'mower', label: 'Lawn mower', icon: '🚜' },
+];
 
 export function makeYard({ world, room, objects, obstacles }) {
   const balls = {};
@@ -40,6 +47,62 @@ export function makeYard({ world, room, objects, obstacles }) {
     return { x: obj.x, z: obj.z + 1.5, r };
   }
 
+  // ---- the shed: things put away in it are hidden and stop being obstacles; taking one out puts it back on the grass
+  const itemOf = (key) => (key.startsWith('ball:') ? balls[key.slice(5)] : objects[key]) || null;
+  const isStowed = (key) => { const it = itemOf(key); return !!it && (key.startsWith('ball:') ? !!it.userData.stowed : !!it.stowed); };
+  // where `key` would stand if it were taken out now: its old place if that is free, else the nearest free place to the shed door
+  function spotFor(key) {
+    const it = itemOf(key), shed = objects.shed;
+    if (!it || !shed) return null;
+    if (key.startsWith('ball:')) {
+      const kind = key.slice(5), owner = objects[PAIRS[kind]];
+      return clearSpot(kind, owner && !owner.stowed ? owner : shed);
+    }
+    const f = shed.local(0, 1.6), front = { x: shed.x + f.x, z: shed.z + f.z };
+    const home = it.stowHome;
+    if (home && world.fits(it, home.x, home.z)) return { x: home.x, z: home.z };
+    return world.findSpot(it, front, null) || world.findSpot(it, { x: shed.x, z: shed.z }, null);
+  }
+  function stow(key) {
+    const it = itemOf(key);
+    if (!it || !objects.shed || isStowed(key) || key === 'shed') return false;
+    if (key.startsWith('ball:')) {
+      const u = it.userData;
+      u.stowed = true; u.kinematic = true; u.vel.set(0, 0, 0); u.shot = null; u.holder = null; it.visible = false;
+      return true;
+    }
+    if (it.setRunning) it.setRunning(false);
+    it.stowed = true; it.stowHome = { x: it.x, z: it.z, rot: it.rot };
+    it.group.visible = false;
+    const i = obstacles.indexOf(it.obstacle);
+    if (i >= 0) obstacles.splice(i, 1);
+    return true;
+  }
+  function unstow(key, at = null) {
+    const it = itemOf(key);
+    if (!it || !isStowed(key)) return false;
+    if (key.startsWith('ball:')) {
+      const s = at || spotFor(key), u = it.userData;
+      if (!s) return false;
+      it.position.set(s.x, u.r, s.z);
+      u.stowed = false; u.kinematic = false; u.vel.set(0, 0, 0); it.visible = true;
+      return true;
+    }
+    let s = at;
+    if (!s || !world.fits(it, s.x, s.z)) s = spotFor(key);       // (the place it was going to stand has been taken since)
+    if (!s) return false;
+    it.stowed = false;
+    if (!obstacles.includes(it.obstacle)) obstacles.push(it.obstacle);
+    it.set(s.x, s.z);
+    it.group.visible = true;
+    return true;
+  }
+  const items = () => STORE.filter((s) => itemOf(s.key)).map((s) => ({ ...s, stowed: isStowed(s.key) }));
+  const stowedKeys = () => STORE.filter((s) => itemOf(s.key) && isStowed(s.key)).map((s) => s.key);
+  let want = null;                                        // keys a reload says were in the shed (the objects may not be built yet)
+  function setStowed(list) { want = new Set(list); }
+  function releaseAll() { for (const k of stowedKeys()) unstow(k); }
+
   function sync() {
     for (const [kind, name] of Object.entries(PAIRS)) {
       const obj = objects[name];
@@ -54,6 +117,15 @@ export function makeYard({ world, room, objects, obstacles }) {
         balls[kind].geometry.dispose();
         delete balls[kind];
       }
+    }
+    if (objects.shed) {
+      if (want) {                                           // the saved shed contents (once the things are built)
+        for (const k of want) if (itemOf(k)) { stow(k); want.delete(k); }
+        if (!want.size) want = null;
+      }
+      // a mower that stands inside the shed (the way a new yard and older saves have it) is put away in it
+      const m = objects.mower;
+      if (m && !m.stowed && Math.hypot(m.x - objects.shed.x, m.z - objects.shed.z) < 0.4) stow('mower');
     }
   }
 
@@ -77,7 +149,7 @@ export function makeYard({ world, room, objects, obstacles }) {
 
   function step(kind, b, dt) {
     const u = b.userData, v = u.vel, r = u.r, p = b.position;
-    if (u.kinematic) { u.prevY = p.y; return; }
+    if (u.stowed || u.kinematic) { u.prevY = p.y; return; }
     const before = p.clone();
     v.y -= G * dt;
     p.addScaledVector(v, dt);
@@ -103,7 +175,7 @@ export function makeYard({ world, room, objects, obstacles }) {
     // the things in the yard (not its own goal / hoop: those are handled below, and the mower is a wheeled thing it rolls under)
     const own = PAIRS[kind];
     for (const o of Object.values(objects)) {
-      if (o.name === own || o.name === 'soccergoal' || o.name === 'basketballhoop' || o.name === 'mower' || !inYard(o.x, o.z)) continue;
+      if (o.stowed || o.name === own || o.name === 'soccergoal' || o.name === 'basketballhoop' || o.name === 'mower' || !inYard(o.x, o.z)) continue;
       const x0 = o.obstacle.x0 - r, x1 = o.obstacle.x1 + r, z0 = o.obstacle.z0 - r, z1 = o.obstacle.z1 + r;
       if (p.x > x0 && p.x < x1 && p.z > z0 && p.z < z1 && p.y < o.h + r) {
         const dl = p.x - x0, dr = x1 - p.x, dz0 = p.z - z0, dz1 = z1 - p.z, m = Math.min(dl, dr, dz0, dz1);
@@ -113,7 +185,7 @@ export function makeYard({ world, room, objects, obstacles }) {
       }
     }
     // the soccer goal: the net at the back and the sides stop the ball; anything that goes in counts
-    const goal = objects.soccergoal;
+    const goal = objects.soccergoal && !objects.soccergoal.stowed ? objects.soccergoal : null;
     if (goal) {
       const c = Math.cos(goal.yaw), s = Math.sin(goal.yaw);
       const rel = (x, z) => ({ x: (x - goal.x) * c - (z - goal.z) * s, z: (x - goal.x) * s + (z - goal.z) * c });   // goal-local (inverse of local())
@@ -131,7 +203,7 @@ export function makeYard({ world, room, objects, obstacles }) {
       }
     }
     // the hoop: the backboard bounces it, and a ball coming down through the rim is a basket
-    const hoop = objects.basketballhoop;
+    const hoop = objects.basketballhoop && !objects.basketballhoop.stowed ? objects.basketballhoop : null;
     if (hoop && kind === 'basketball') {
       const c = Math.cos(hoop.yaw), s = Math.sin(hoop.yaw);
       const rel = (x, z) => ({ x: (x - hoop.x) * c - (z - hoop.z) * s, z: (x - hoop.x) * s + (z - hoop.z) * c });
@@ -162,7 +234,7 @@ export function makeYard({ world, room, objects, obstacles }) {
     if (p.y <= r + 0.01 && Math.hypot(v.x, v.z) < 0.2) {
       let shut = null;
       for (const o of [objects.soccergoal, objects.basketballhoop]) {
-        const ob = o && o.obstacle;
+        const ob = o && !o.stowed && o.obstacle;
         if (ob && p.x > ob.x0 - r - 0.1 && p.x < ob.x1 + r + 0.1 && p.z > ob.z0 - r - 0.1 && p.z < ob.z1 + r + 0.1) shut = o;
       }
       if (shut) {
@@ -189,6 +261,7 @@ export function makeYard({ world, room, objects, obstacles }) {
 
   return {
     balls, score, launch, roll, update, sync, inYard,
+    STORE, itemOf, isStowed, spotFor, stow, unstow, items, stowedKeys, setStowed, releaseAll,
     setNight(n) { night = !!n; const d = door(); if (d && d.shell.yard) d.shell.yard.sky.set(night); },
     snapNight(n) { night = !!n; const d = door(); if (d && d.shell.yard) d.shell.yard.sky.snap(night); },
     isNight: () => night,
