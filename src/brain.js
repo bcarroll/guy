@@ -2236,7 +2236,8 @@ export class Brain {
     let finished = false;
 
     if (s.type === 'walk') {
-      if (!s.path) {
+      if (s.drive) finished = this.driveStep(s, dt * k);                       // steering the push mower along a path (yardbrain.js mowing)
+      if (!s.path && !s.drive) {
         if (s.anchor) {
           const o = this.obj(s.anchor.name);
           if (!o) { this.queue = []; this.step = null; return; }              // (the thing he was walking to is gone: nothing more to do here)
@@ -2262,7 +2263,7 @@ export class Brain {
           s.path = s.direct ? [{ x: s.x, z: s.z }] : findPath(this.grid, root.position.x, root.position.z, s.x, s.z);
         }
       }
-      if (!finished) {
+      if (!finished && !s.drive) {
         let wp = s.path[0];
         while (s.path.length > 1 && Math.hypot(wp.x - root.position.x, wp.z - root.position.z) < 0.25) { s.path.shift(); wp = s.path[0]; }
         const dx = wp.x - root.position.x, dz = wp.z - root.position.z;
@@ -2592,6 +2593,71 @@ export class Brain {
     k.userData.timer = setTimeout(() => (k.userData.pressed = false), 200);
   }
 
+  // Steering a thing he pushes (the lawn mower) along `s.drive.pts` (a dense polyline of where its middle goes). He stays `DRIVE_BEHIND`
+  // behind it, in the direction it is heading; the heading follows the path with a limited turn rate, and the mower slows down whenever he
+  // would have to hurry to keep up (round a turn he swings the handle and takes a few steps, he does not sprint). Returns true when done.
+  driveStep(s, dt) {
+    const D = s.drive, o = D.obj, root = this.g.root, B = DRIVE_BEHIND;
+    if (!o || !this.obj(o.name)) return true;
+    if (!D.cum) {
+      D.cum = [0];
+      for (let i = 1; i < D.pts.length; i++) D.cum.push(D.cum[i - 1] + Math.hypot(D.pts[i].x - D.pts[i - 1].x, D.pts[i].z - D.pts[i - 1].z));
+      D.at = 0; D.total = D.cum[D.cum.length - 1];
+      D.h = D.h0 !== undefined ? D.h0 : root.rotation.y;
+      o.hauled = true; o.hauledYaw = o.group.rotation.y;
+      s.push = { obj: o, relx: 0, relz: 0, spd: 1.1 };
+    }
+    const at = (d) => {                                              // the point at distance d along the path, and the way it points there
+      d = clamp(d, 0, D.total);
+      let i = 1; while (i < D.cum.length - 1 && D.cum[i] < d) i++;
+      const a = D.pts[i - 1], b = D.pts[i], seg = D.cum[i] - D.cum[i - 1] || 1, f = (d - D.cum[i - 1]) / seg;
+      return { x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f };
+    };
+    const tangent = (d) => {                                          // the way the path points ahead of d (at the very end: the way the last bit points)
+      d = Math.min(d, D.total - 0.3);
+      const a = at(Math.max(0, d)), b = at(Math.max(0, d) + 0.3);
+      return Math.atan2(b.x - a.x, b.z - a.z);
+    };
+    const pose = (d, h) => { const p = at(d); return { p, g: { x: p.x - Math.sin(h) * B, z: p.z - Math.cos(h) * B } }; };
+    const q0 = pose(D.at, D.h), gap = Math.hypot(q0.g.x - root.position.x, q0.g.z - root.position.z);
+    if (gap > 0.15 && !D.hold) { D.hold = true; }
+    if (D.hold) {                                                    // not behind it yet (the walk there came up short): he steps up to it, the mower waits
+      if (gap <= 0.08) D.hold = false;
+      else {
+        const f = Math.min(1, 1.1 * dt / gap);
+        root.position.x += (q0.g.x - root.position.x) * f; root.position.z += (q0.g.z - root.position.z) * f;
+        this.turnTo(D.h, dt, 6); this.moving = true; this.walkPhase += dt * 5;
+                return false;
+      }
+    }
+    const vmax = 1.7 * dt, turn = 1.8 * dt;                       // (at most walking pace for him, and the handle end swings round at 1.8 rad/s)
+    let d = D.at, h = D.h, adv = Math.min(D.speed * dt, D.total - D.at);
+    for (let tries = 0; tries < 4; tries++) {                           // advance, unless he would have to rush to keep up
+      const hh = h + clamp(angDiff(tangent(d + adv), h), -turn, turn), q = pose(d + adv, hh);
+      if (Math.hypot(q.g.x - root.position.x, q.g.z - root.position.z) <= vmax || adv < 1e-4) { D.h = hh; D.at = d + adv; break; }
+      adv *= 0.5;
+      if (tries === 3) { D.h = h + clamp(angDiff(tangent(d), h), -turn, turn); D.at = d; }                // (he only turns this frame)
+    }
+    const q = pose(D.at, D.h), mx = q.p.x, mz = q.p.z, hy = D.h;
+    const stepLen = Math.hypot(q.g.x - root.position.x, q.g.z - root.position.z);
+    root.position.x = q.g.x; root.position.z = q.g.z;
+    root.rotation.y = hy;
+    o.rot = this.w.rotFacing(-Math.sin(hy), -Math.cos(hy));
+    o.set(mx, mz);
+    o.hauledYaw = hy + Math.PI;                                       // (its front is its local -z)
+    o.group.rotation.y = o.hauledYaw;
+    s.push.relx = Math.sin(hy) * B; s.push.relz = Math.cos(hy) * B;
+    if (o.name === 'mower') this.mowTrail(o);
+    this.moving = true; this.walkPhase += Math.max(stepLen, 0.02) * 5.2 * 0.9;
+    if (Math.floor((this.walkPhase - 0.2) / Math.PI) !== Math.floor(this.walkPhase / Math.PI)) sfx('step');
+    if (D.at >= D.total - 1e-3) {
+      o.hauled = false; o.hauledYaw = undefined;
+      s.x = root.position.x; s.z = root.position.z; s.yaw = null;
+      return true;
+    }
+    return false;
+  }
+
   turnTo(yaw, dt, rate) {
     const r = this.g.root;
     const d = angDiff(yaw, r.rotation.y);
@@ -2756,6 +2822,7 @@ function makeHeldBook() {
 // ---- Grid A* around furniture ----
 // A grid covers one room: GUY's own (the default) or an added room (world.frameOf). The grid remembers its frame (blocked.fr), so
 // cellBlocked, lineClear and findPath work on either.
+const DRIVE_BEHIND = 0.8;           // how far behind the lawn mower he stands, middle to middle
 const CELL = 0.2, X0 = -4.6, Z0 = -3.6, NX = 47, NZ = 37, INFLATE = 0.28;
 const MAIN_FRAME = { X0, Z0, NX, NZ };
 
@@ -2854,7 +2921,7 @@ function angDiff(a, b) {
 
 installHobbies(Brain, POSES, { sitLegs, env, smooth, clamp, lerp, rand, pick, makeGrid, cellBlocked, INFLATE });
 installWorkshop(Brain, POSES, { smooth, clamp, lerp, rand, pick });
-installYard(Brain, POSES, { clamp, rand, pick, makeGrid, cellBlocked, INFLATE });
+installYard(Brain, POSES, { clamp, rand, pick, makeGrid, cellBlocked, INFLATE, findPath });
 installRestaurant(Brain, POSES, { smooth, clamp, lerp, rand, pick });
 installApproach(Brain);                                      // stations are used from whichever side is free (approach.js)
 installPaintings(Brain);

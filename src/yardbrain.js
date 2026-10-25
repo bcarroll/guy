@@ -17,7 +17,7 @@ export const YARD_ACTS = ['yardsit', 'birdbath', 'skyswitch', 'mow', 'yardpoke',
 export const YARD_OBJECTS = ['soccergoal', 'basketballhoop', 'lawnchair', 'birdbath', 'skyswitch', 'shed', 'mower'];
 
 export function installYard(Brain, POSES, H) {
-  const { clamp, rand, pick, makeGrid, cellBlocked, INFLATE } = H;
+  const { clamp, rand, pick, makeGrid, cellBlocked, INFLATE, findPath } = H;
 
   Object.assign(Brain.prototype, {
     // ------------------------------------------------------------------ where he is
@@ -249,10 +249,7 @@ export function installYard(Brain, POSES, H) {
       const m = this.obj('mower'), s = this.obj('shed'), park = this.shedPark();
       if (!m || !s || !park) return [];
       const steps = [];
-      if (Math.hypot(m.x - park.x, m.z - park.z) > 0.35) {
-        const to = this.planPushVia(m, park.x, park.z, { fr: this.yardFrame(), bd: this.w.doors[ID].shell.bounds });
-        if (to) steps.push(...to);
-      }
+      if (Math.hypot(m.x - park.x, m.z - park.z) > 0.35) steps.push(this.mowTransport(park, Math.atan2(-park.out.x, -park.out.z)));      // (steered in, handle first out)
       steps.push(this.play('idle', 0.8, { needs: ['shed', 'mower'], at: [0.2, () => {
         const mm = this.obj('mower'), ss = this.obj('shed');
         if (!mm || !ss) return;
@@ -362,9 +359,160 @@ export function installYard(Brain, POSES, H) {
       };
     },
 
+    // ------------------------------------------------------------------ mowing the whole lawn
+    // The mower goes up and down the lawn in lanes one cutting-width apart, turning round at the ends in smooth U-turns while he steers it
+    // from behind (`driveStep` in brain.js): he never walks round it to the other side. The middle lane is cut first, then the ones
+    // above it, then the ones below (so every turn happens with room for him behind the mower, none against the fence). Where a heavy
+    // thing (the shed, the goal, the hoop) cuts a lane, the mower is steered round to the next stretch. The two short strips at the ends of
+    // the lanes are cut last, each from its middle out to the fence.
+    // The heading of the mower now (the angle its front points: 0 is +z, a quarter turn is +x).
+    mowerHeading(m) { return m.group.rotation.y + Math.PI; },
+    // Steps that steer the mower along `pts` (a polyline of where its middle goes), starting in the direction it is pointing now (`h0`).
+    driveSteps(pts, h0) {
+      const m = this.obj('mower');
+      const dense = [pts[0]];
+      for (let i = 1; i < pts.length; i++) {
+        const a = dense[dense.length - 1], b = pts[i], n = Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 0.12);
+        for (let k = 1; k <= n; k++) dense.push({ x: a.x + ((b.x - a.x) * k) / n, z: a.z + ((b.z - a.z) * k) / n });
+      }
+      const B = 0.8, g0 = { x: dense[0].x - Math.sin(h0) * B, z: dense[0].z - Math.cos(h0) * B };
+      return [this.walk(g0.x, g0.z, h0),
+        { type: 'walk', x: g0.x, z: g0.z, yaw: null, drive: { obj: m, pts: dense, speed: 1.1, h0 } }];
+    },
+    // Steer the mower from where it is to `to`, arriving pointing `hTo` (straight in over the last bit). A plan step: looked at when reached.
+    mowTransport(to, hTo) {
+      return {
+        type: 'plan',
+        fn: () => {
+          const m = this.obj('mower');
+          if (!m) { this.queue.length = 0; return []; }
+          const h = this.mowerHeading(m), a = { x: m.x, z: m.z };
+          if (Math.hypot(a.x - to.x, a.z - to.z) < 0.15) return [];
+          const fr = this.yardFrame(), bd = this.w.doors[ID].shell.bounds;
+          const mg = makeGrid(this.w.obstacles, 0.42, 0, m.obstacle, fr);
+          const ahead = (p, d, len) => ({ x: p.x + Math.sin(d) * len, z: p.z + Math.cos(d) * len });
+          const okp = (p) => p.x > bd.minX + 0.5 && p.x < bd.maxX - 0.5 && p.z > bd.minZ + 0.35 && p.z < bd.maxZ - 0.35 && !cellBlocked(mg, p.x, p.z);
+          const sharp = (pts) => {                                         // a turn of more than 110 degrees at a corner: he cannot steer that
+            for (let i = 1; i + 1 < pts.length; i++) {
+              const ux = pts[i].x - pts[i - 1].x, uz = pts[i].z - pts[i - 1].z, vx = pts[i + 1].x - pts[i].x, vz = pts[i + 1].z - pts[i].z, lu = Math.hypot(ux, uz), lv = Math.hypot(vx, vz);
+              if (lu > 0.05 && lv > 0.05 && (ux * vx + uz * vz) / (lu * lv) < -0.35) return true;
+            }
+            return false;
+          };
+          for (const [lead, land] of [[0.6, 0.7], [0.35, 0.4], [0.6, 0.2], [0.2, 0.7], [0.2, 0.2], [0, 0.7], [0, 0.35], [0, 0]]) {      // (a short lead-in and landing when there is little room)
+            const first = lead ? ahead(a, h, lead) : a, appr = land ? ahead(to, hTo, -land) : to;
+            if (!okp(first) || !okp(appr)) continue;
+            const route = findPath(mg, first.x, first.z, appr.x, appr.z, true);
+            if (!route) continue;
+            const pts = [a, ...(lead ? [first] : []), ...route, ...(land ? [appr] : []), to];
+            if (!sharp(pts)) return [this.play('idle', 0.2), ...this.driveSteps(pts, h)];
+          }
+          return this.planPushVia(m, to.x, to.z, { fr, bd }) || [];                // (no clear way to steer it there: shove it, as before)
+        },
+      };
+    },
+    // The legs (each a polyline for the mower's middle, with the way it points at the start) that cover the lawn; null when there is none.
+    mowCoverage() {
+      const m = this.obj('mower');
+      if (!m || !this.w.doors[ID]) return null;
+      const bd = this.w.doors[ID].shell.bounds, fr = this.yardFrame();
+      const mg = makeGrid(this.w.obstacles, 0.42, 0, m.obstacle, fr), gg = makeGrid(this.w.obstacles, INFLATE, 0, m.obstacle, fr);
+      const SW = 0.46, R = SW / 2, BEH = 0.8, STEP = 0.12;
+      const alongX = bd.maxX - bd.minX >= bd.maxZ - bd.minZ;
+      const A0 = alongX ? bd.minX : bd.minZ, A1 = alongX ? bd.maxX : bd.maxZ, C0 = alongX ? bd.minZ : bd.minX, C1 = alongX ? bd.maxZ : bd.maxX;
+      const P = (t, c) => (alongX ? { x: t, z: c } : { x: c, z: t });
+      const hOf = (dir) => (alongX ? (dir > 0 ? Math.PI / 2 : -Math.PI / 2) : (dir > 0 ? 0 : Math.PI));
+      const inB = (p, mx, mz) => p.x > bd.minX + mx && p.x < bd.maxX - mx && p.z > bd.minZ + mz && p.z < bd.maxZ - mz;
+      const okM = (p, heading) => {                                          // the mower here, pointing `heading`: clear, and inside the fence
+        const side = Math.abs(Math.sin(heading)) > 0.5, lx = side ? 0.62 : 0.4, lz = side ? 0.4 : 0.62;
+        return inB(p, lx, lz) && !cellBlocked(mg, p.x, p.z);
+      };
+      const okG = (p, heading) => { const q = { x: p.x - Math.sin(heading) * BEH, z: p.z - Math.cos(heading) * BEH }; return inB(q, 0.5, 0.5) && !cellBlocked(gg, q.x, q.z); };      // (he can stand half a metre in from the fence, no nearer: world.walkable)
+      const ok = (p, heading) => okM(p, heading) && okG(p, heading);
+      const n = Math.floor((C1 - C0 - 0.8) / SW) + 1;
+      if (n < 1) return null;
+      const c0 = C0 + 0.4 + (C1 - C0 - 0.8 - (n - 1) * SW) / 2, lane = (i) => c0 + i * SW;
+      // the stretches of lane i the mower can travel pointing `dir`, in the order they are travelled: [{ a, b }] (from a to b along the lane)
+      const segments = (i, dir) => {
+        const h = hOf(dir), runs = [];
+        let from = null, last = null;
+        for (let t = A0 + 0.5 + BEH; t <= A1 - 0.5 - BEH + 1e-6; t += STEP) {
+          if (ok(P(t, lane(i)), h)) { if (from === null) from = t; last = t; }
+          else if (from !== null) { runs.push([from, last]); from = null; }
+        }
+        if (from !== null) runs.push([from, last]);
+        const segs = runs.filter(([a, b]) => b - a >= 0.5).map(([a, b]) => (dir > 0 ? { a, b } : { a: b, b: a }));
+        return dir > 0 ? segs : segs.reverse();
+      };
+      const line = (c, a, b) => { const k = Math.max(1, Math.ceil(Math.abs(b - a) / STEP)), out = []; for (let j = 0; j <= k; j++) out.push(P(a + ((b - a) * j) / k, c)); return out; };
+      // the lane the first phase starts on: far enough from the near fence that he has room beside the mower at the first turn
+      let k0 = 0;
+      while (k0 < n - 1 && lane(k0) + R - BEH < C0 + 0.5) k0++;
+      const order = []; for (let i = k0; i < n; i++) order.push(i); for (let i = k0 - 1; i >= 0; i--) order.push(i);
+      const legs = [];
+      let leg = null, prev = null;
+      order.forEach((i, oi) => {
+        const dir = oi % 2 ? -1 : 1, segs = segments(i, dir);
+        segs.forEach((sg, si) => {
+          let pts = line(lane(i), sg.a, sg.b), aUsed = sg.a;
+          let joined = false;
+          if (si === 0 && prev && prev.oi === oi - 1 && Math.abs(prev.t - sg.a) < 1.2 && Math.abs(lane(i) - lane(prev.i)) < SW + 0.01) {
+            // a half circle round the end of the lane, from the lane just cut into this one. The two lanes turn at the same place: the
+            // one that goes less far out (a heavy thing in the way of the other) sets it.
+            const tj = prev.dir > 0 ? Math.min(prev.t, sg.a) : Math.max(prev.t, sg.a);
+            const pp = line(lane(prev.i), prev.a, tj), pn = line(lane(i), tj, sg.b);
+            const cs = Math.sign(lane(i) - lane(prev.i)), cm = (lane(i) + lane(prev.i)) / 2, arc = [];
+            let good = Math.abs(tj - prev.a) >= 0.5 && Math.abs(sg.b - tj) >= 0.5;
+            for (let j = 1; j < 12 && good; j++) {
+              const ph = (Math.PI * j) / 12, p = P(tj + prev.dir * R * Math.sin(ph), cm - cs * R * Math.cos(ph));
+              const along = prev.dir * Math.cos(ph), across = cs * Math.sin(ph);          // the way it points here: along the lane, across it, back along it
+              if (!ok(p, alongX ? Math.atan2(along, across) : Math.atan2(across, along))) good = false;
+              arc.push(p);
+            }
+            if (good) { leg.pts.splice(leg.pts.length - prev.n, prev.n, ...pp); pts = pn; aUsed = tj; leg.pts.push(...arc, ...pts); joined = true; }
+          }
+          if (!joined) { leg = { h: hOf(dir), pts }; legs.push(leg); }
+          prev = si === segs.length - 1 ? { oi, i, t: sg.b, a: aUsed, dir, n: pts.length } : null;
+        });
+        if (!segs.length) prev = null;
+      });
+      // the strips at the two ends of the lanes, each from the middle out to the fence (so he always has room behind the mower)
+      const mid = (C0 + C1) / 2;
+      for (const t of [A0 + 0.85, A1 - 0.85]) {
+        for (const dir of [1, -1]) {
+          const h = alongX ? (dir > 0 ? 0 : Math.PI) : (dir > 0 ? Math.PI / 2 : -Math.PI / 2);
+          const to = dir > 0 ? C1 - (alongX ? 0.4 : 0.62) : C0 + (alongX ? 0.4 : 0.62), kk = Math.max(1, Math.ceil(Math.abs(to - mid) / STEP)), clear = [];
+          for (let j = 0; j <= kk; j++) { const p = P(t, mid + ((to - mid) * j) / kk); if (!ok(p, h)) break; clear.push(p); }
+          if (clear.length > 4) legs.push({ h, pts: clear });
+        }
+      }
+      return legs.length ? { legs, alongX, SW } : null;
+    },
+
+    // The whole job: roll the mower out of the shed, cut every lane and strip, then (putMowerAway) steer it back in.
+    mowCover(cov) {
+      const m = this.obj('mower'), park = this.shedPark(), steps = [];
+      const hp = Math.atan2(park.out.x, park.out.z), B = 0.8;
+      steps.push(this.play('idle', 0.05, { at: [0, () => { const c = this.w.yard.cut(); if (c) c.clear(); }] }));
+      steps.push({ type: 'plan', fn: () => {
+        const mm = this.obj('mower');
+        if (!mm || !this.w.yard.isStowed('mower')) return [];                    // already out on the lawn: it is steered from where it stands
+        return [this.walk(park.x - Math.sin(hp) * B, park.z - Math.cos(hp) * B, hp),
+          this.play('idle', 0.4, { at: [0, () => { const m2 = this.obj('mower'); if (m2) { this.w.yard.unstow('mower', park); m2.tether = null; m2.rot = this.w.rotFacing(park.out.x, park.out.z); m2.set(park.x, park.z); m2.group.rotation.y = m2.yaw; sfx('click'); } }] })];
+      } });
+      for (const leg of cov.legs) {
+        steps.push(this.mowTransport(leg.pts[0], leg.h));
+        steps.push({ type: 'plan', fn: () => { const mm = this.obj('mower'); return mm ? this.driveSteps(leg.pts, this.mowerHeading(mm)) : []; } });
+      }
+      void m;
+      return steps;
+    },
+
     mowPlan() {
       const m = this.obj('mower'), shed = this.obj('shed');
       if (!m || !shed) { this.queue.length = 0; return []; }
+      const cov = this.mowCoverage();
+      if (cov) return this.mowCover(cov);
       let route = this.mowRoute();
       if (!route) {                                                         // things in the way: shove the light ones aside first, then mow
         const r2 = this.mowRoute({ pushable: true });
@@ -408,6 +556,8 @@ export function installYard(Brain, POSES, H) {
     yardCleanup() {
       const s = this.obj('shed');
       if (s && s.openTo) { s.setOpen(false); sfx('lid'); }
+      const mw = this.obj('mower');
+      if (mw && mw.hauled) { mw.hauled = false; mw.hauledYaw = undefined; }           // (cut short while steering it)
       this.mowerSync();
     },
 

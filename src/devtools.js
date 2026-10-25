@@ -112,7 +112,7 @@ export const MANIFEST = {
     yardsit: { objects: ['lawnchair'], room: 'backyard', touches: ['lawnchair'] },
     birdbath: { objects: ['birdbath'], room: 'backyard', touches: ['birdbath'] },
     skyswitch: { objects: ['skyswitch'], room: 'backyard', touches: ['skyswitch'] },
-    mow: { objects: ['shed', 'mower'], room: 'backyard', max: 240, touches: ['shed', 'mower'] },
+    mow: { objects: ['shed', 'mower'], room: 'backyard', max: 420, touches: ['shed', 'mower'] },
     yardpoke: { objects: ['soccergoal'], skills: ['outdoor.soccer'], room: 'backyard', touches: ['soccergoal', 'basketballhoop'] },
     goalshot: { objects: ['soccergoal'], skills: ['outdoor.soccer'], room: 'backyard', max: 200, touches: ['soccergoal'] },
     soccertoss: { objects: ['soccergoal'], skills: ['outdoor.soccer'], room: 'backyard', max: 200, touches: ['soccergoal'] },
@@ -1292,7 +1292,7 @@ T.sweepYardVoice = () => {
   let t6 = 0, moved6 = 0;
   try { while (t6 < 500 && moved6 < 0.8) { step(0.25); t6 += 0.25; const mm = w.objects.mower; moved6 = mm && m0 ? Math.hypot(mm.x - m0.x, mm.z - m0.z) : 0; } } finally { b.choose = orig6; }
   const shifted = spots0.filter((s) => Math.hypot(w.objects[s.n].x - s.x, w.objects[s.n].z - s.z) > 0.5).map((s) => s.n);
-  out.push(result('yard voice: long-press Mow the Lawn with light things in the way: he shifts them aside, then mows', r6.ok && shifted.length >= 1 && moved6 >= 0.8 && seen6.includes('mow'), { r6, shifted, moved6, seen: seen6, t6 }));
+  out.push(result('yard voice: long-press Mow the Lawn with light things in the way: he mows, steering round them', r6.ok && moved6 >= 0.8 && seen6.includes('mow'), { r6, shifted, moved6, seen: seen6, t6 }));
   // 3. an order for the yard that he cannot do says why (the door is locked), it does not vanish
   reset(); T.home(); T.settle();
   R().setDoorLocked('backyard', true);
@@ -3280,6 +3280,54 @@ T.sweepPaintings = () => {
   return out;
 };
 
+// ---- 23. Mowing the whole lawn, judged as it is played: the mower covers the lawn in lanes, he stays behind it and steers it round in
+// smooth turns, and it ends up back in the shed (src/yardbrain.js mowCoverage / mowCover, brain.js driveStep) ----
+T.sweepMowing = () => {
+  const out = [], base = errors.length, w = W(), b = B(), g = G();
+  T.settle(); T.resetRooms(); T.removeAll(); T.forget(); skillsOf().fading.clear(); T.settle(); T.home();
+  unlockRoom('backyard'); R().add('backyard');
+  for (const id of ['soccergoal', 'basketballhoop', 'lawnchair', 'shed', 'mower', 'birdbath', 'skyswitch']) T.addObject(id);
+  T.learn(['outdoor']); T.settle();
+  b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander';
+  b.choose('mow');
+  const st = { drive: 0, push: 0, off: 0, maxBeside: 0, maxV: 0, maxTurn: 0, minD: 9, maxD: 0 };
+  let t = 0, last = { x: g.pos.x, z: g.pos.z }, lastYaw = null;
+  while (t < 600 && b.last === 'mow') {
+    step(0.05); t += 0.05;
+    const s = b.step, m = w.objects.mower, v = Math.hypot(g.pos.x - last.x, g.pos.z - last.z) / 0.05;
+    last = { x: g.pos.x, z: g.pos.z };
+    if (s && s.type === 'walk' && s.push && !s.drive) st.push++;
+    if (s && s.drive && m) {
+      st.drive++;
+      st.maxV = Math.max(st.maxV, v);
+      const d = Math.hypot(m.x - g.pos.x, m.z - g.pos.z);
+      st.minD = Math.min(st.minD, d); st.maxD = Math.max(st.maxD, d);
+      const hy = m.group.rotation.y + Math.PI, fx = Math.sin(hy), fz = Math.cos(hy);          // where the mower points
+      const bx = (m.x - g.pos.x) / (d || 1), bz = (m.z - g.pos.z) / (d || 1);                 // from him to the mower
+      st.maxBeside = Math.max(st.maxBeside, Math.acos(Math.max(-1, Math.min(1, fx * bx + fz * bz))));
+      if (lastYaw !== null) { let dy = hy - lastYaw; while (dy > Math.PI) dy -= 2 * Math.PI; while (dy < -Math.PI) dy += 2 * Math.PI; st.maxTurn = Math.max(st.maxTurn, Math.abs(dy) / 0.05); }
+      lastYaw = hy;
+    } else lastYaw = null;
+  }
+  const bd = w.doors.backyard.shell.bounds, pts = w.yard.cut().points(), obs = w.obstacles.filter((o) => o.active !== false);
+  let free = 0, cut = 0;
+  for (let z = bd.minZ + 0.5; z <= bd.maxZ - 0.5; z += 0.25) for (let x = bd.minX + 0.5; x <= bd.maxX - 0.5; x += 0.25) {
+    if (obs.some((o) => x > o.x0 - 0.45 && x < o.x1 + 0.45 && z > o.z0 - 0.45 && z < o.z1 + 0.45)) continue;
+    free++; if (pts.some((p) => Math.hypot(p.x - x, p.z - z) < 0.3)) cut++;
+  }
+  const pct = free ? cut / free : 0;
+  out.push(result('mowing: the whole lawn is cut, not one square (at least 85% of the open grass has a cut patch)', pct >= 0.85, { pct: +pct.toFixed(3), free, cut, patches: pts.length }));
+  out.push(result('mowing: it takes a good few passes: he steers the mower for a long time, in the shed again at the end', st.drive > 400 && w.yard.isStowed('mower') && b.last !== 'mow', { driveFrames: st.drive, inShed: w.yard.isStowed('mower'), t }));
+  out.push(result('mowing: he always stands straight behind the mower (never beside it), a handle\'s length away', st.maxBeside < 0.3 && st.minD > 0.7 && st.maxD < 0.9, { maxBesideRad: +st.maxBeside.toFixed(2), minD: +st.minD.toFixed(2), maxD: +st.maxD.toFixed(2) }));
+  out.push(result('mowing: the mower is never shoved sideways (every move is steered from behind)', st.push === 0, { pushFrames: st.push }));
+  out.push(result('mowing: the turns are smooth: the mower swings round at less than 2.8 rad/s and he never has to run (under 3.4 m/s at game speed)', st.maxTurn < 2.8 && st.maxV < 3.4, { maxTurn: +st.maxTurn.toFixed(2), maxV: +st.maxV.toFixed(2) }));
+  const sh = w.objects.shed;
+  out.push(result('mowing: the shed door is shut again afterwards', !!sh && sh.openTo === 0, { openTo: sh && sh.openTo }));
+  T.resetRooms();
+  out.push(result('mowing: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 // ---- 22. The two robots' manners: never inside each other, never moving or putting away what the other is using (brain.js: moveBy, inUse; yardbrain.js: stowAway) ----
 T.sweepBotRules = () => {
   const out = [], base = errors.length, w = W(), b = B(), gal = w.gal;
@@ -3390,6 +3438,7 @@ T.runAll = () => {
   report.allRooms = S(T.sweepAllRooms);
   report.needs = S(T.sweepNeeds);
   report.gal = S(T.sweepGal);
+  report.mowing = S(T.sweepMowing);
   report.botRules = S(T.sweepBotRules);
   report.workstation = S(T.sweepWorkstation);
   report.paintings = S(T.sweepPaintings);

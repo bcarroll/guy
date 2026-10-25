@@ -36,7 +36,7 @@ export function buildYardShell(g, L, N, height) {
     add(worldPos, yaw) {
       const lp = g.worldToLocal(worldPos.clone());
       let m;
-      if (cuts.length >= 260) { m = cuts.shift(); } else { m = new THREE.Mesh(cutGeo, cutMat); m.rotation.x = -Math.PI / 2; m.receiveShadow = true; cutGroup.add(m); }
+      if (cuts.length >= 900) { m = cuts.shift(); } else { m = new THREE.Mesh(cutGeo, cutMat); m.rotation.x = -Math.PI / 2; m.receiveShadow = true; cutGroup.add(m); }
       m.position.set(lp.x, 0.007, lp.z);
       m.rotation.set(-Math.PI / 2, 0, 0);
       m.rotateZ(yaw - g.rotation.y);
@@ -44,6 +44,7 @@ export function buildYardShell(g, L, N, height) {
     },
     clear() { while (cuts.length) cutGroup.remove(cuts.pop()); },
     count: () => cuts.length,
+    points: () => cuts.map((m) => { const p = g.localToWorld(m.position.clone()); return { x: p.x, z: p.z }; }),                 // where the cut patches are (world)
   };
 
   // the fence: a plank texture on single-sided panels round the three sides (like the walls of the other rooms, the ones that face away
