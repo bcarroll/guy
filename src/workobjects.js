@@ -1,7 +1,7 @@
 // The Workshop's furniture and machines: the workbench, the toolbox, the Wood Factory and the Metal Factory. The two factories do all the
-// building: Guy presses the button, the factory runs, and the finished thing stands on its tray. Built with the same makeObject helper
+// building: GUY presses the button, the factory runs, and the finished thing stands on its tray. Built with the same makeObject helper
 // as the rest of the room (room.js passes it in), and placed in the added room's own frame (room.js, NEW_OBJECTS). Every one has its
-// front on local +z, which is where Guy stands, and a few methods the activities in workbrain.js use: `at(x, y, z)` (an object-local
+// front on local +z, which is where GUY stands, and a few methods the activities in workbrain.js use: `at(x, y, z)` (an object-local
 // point in the world) and the state the models show (the opening lid, the finished thing on the tray ...).
 import * as THREE from 'three';
 
@@ -11,7 +11,7 @@ export function makeWorkshopBuilders({ makeObject, box, mat }) {
   const V = (x, y, z) => new THREE.Vector3(x, y, z);
   const barMat = mat(BAR, { metalness: 0.75, roughness: 0.3 });
   const clearGroup = (grp) => { while (grp.children.length) { const c = grp.children[0]; grp.remove(c); if (c.geometry) c.geometry.dispose(); } };
-  // every object: a world point from an object-local one (x right, y up, z towards Guy)
+  // every object: a world point from an object-local one (x right, y up, z towards GUY)
   const addAt = (o) => { o.at = (x, y, z) => { o.group.updateWorldMatrix(true, false); return o.group.localToWorld(V(x, y, z)); }; return o; };
   // wrap the per-frame update the room already calls on every object
   const onUpdate = (o, fn) => { const base = o.update; o.update = function (dt) { base.call(this, dt); fn(dt); }; };
@@ -73,7 +73,7 @@ export function makeWorkshopBuilders({ makeObject, box, mat }) {
   // ------------------------------------------------------------------------------------------------ toolbox
   const toolbox = (x = 0, z = 0) => {
     const red = mat(RED), steel = mat(STEEL, { metalness: 0.5, roughness: 0.4 }), gold = mat(0xe8c050, { metalness: 0.4 });
-    const B = 0.5;                                                               // the box stands on a little frame, so Guy reaches it without squatting
+    const B = 0.5;                                                               // the box stands on a little frame, so GUY reaches it without squatting
     const o = makeObject('toolbox', x, z, 0.54, 0.34, 0.85, 'medium', (g) => {
       for (const sx of [-0.23, 0.23]) for (const sz of [-0.12, 0.12]) box(0.04, B, 0.04, mat(0x4a4f57), sx, B / 2, sz, g);
       box(0.54, 0.03, 0.32, mat(0x4a4f57), 0, B, 0, g);                          // the shelf the box sits on
@@ -112,7 +112,7 @@ export function makeWorkshopBuilders({ makeObject, box, mat }) {
 
   // ------------------------------------------------------------------------------------------------ the factories
   // What the two have in common: the big red button, a light that goes green while it runs, a gear on the side that turns, and the tray
-  // the finished thing stands on (`showMade(kind)`, `clearMade()`). They stand on a raised plinth so the button and the tray are at Guy's
+  // the finished thing stands on (`showMade(kind)`, `clearMade()`). They stand on a raised plinth so the button and the tray are at GUY's
   // hands. `body` and `extras` are what make one a Wood Factory and the other a Metal Factory.
   const L = 0.22;
   const factory = (name, x, z, body, dressing, gearSpeed, shake) => {

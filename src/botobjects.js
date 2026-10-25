@@ -1,4 +1,4 @@
-// The Build a Bot machine: a 3D printer under a glass hood. Guy presses its button, a print head sweeps over the bed while a glowing
+// The Build a Bot machine: a 3D printer under a glass hood. GUY presses its button, a print head sweeps over the bed while a glowing
 // outline of a robot grows, and then the machine folds itself away into GAL (src/gal.js). It can only be used once.
 // Built with the same makeObject helper as the rest of the room; its front (the button panel) is local +z.
 import * as THREE from 'three';
@@ -60,10 +60,10 @@ export function makeBotBuilders({ makeObject, box, mat }) {
         if (o.running === 0) { beam.visible = false; o.head.position.set(0, 1.78, -0.5); o.light.material.color.set(0x33ff66); }
       }
     });
-    o.buttonPoint = () => o.at(-0.5, 0.52, 0.8);                                      // Guy's finger on the panel
+    o.buttonPoint = () => o.at(-0.5, 0.52, 0.8);                                      // GUY's finger on the panel
     return addAt(o);
   };
-  // The Learning Workstation: a desk with a big screen. Guy taps the screen and a panel lists the books on the shelf; pressing Learn on one
+  // The Learning Workstation: a desk with a big screen. GUY taps the screen and a panel lists the books on the shelf; pressing Learn on one
   // teaches him (or GAL) what is in it at once. Its front (the screen) is local +z.
   const workstation = (x = 0, z = 0) => {
     const steel = mat(0x6d7783, { metalness: 0.6, roughness: 0.35 }), dark = mat(0x262c34, { metalness: 0.3, roughness: 0.5 }), top = mat(0x394553);
@@ -89,7 +89,7 @@ export function makeBotBuilders({ makeObject, box, mat }) {
       o.screenMat.color.set(on ? (Math.floor(o.t * 5) % 2 ? 0x2f9bff : 0x2688e0) : 0x1a6fb0);
       o.lines.forEach((l, i) => { l.visible = on || i < 2; l.scale.x = on ? 0.6 + 0.4 * Math.abs(Math.sin(o.t * 3 + i)) : 1; });
     });
-    o.screenPoint = () => o.at(0.1, 1.0, -0.05);                                       // Guy's finger on the screen
+    o.screenPoint = () => o.at(0.1, 1.0, -0.05);                                       // GUY's finger on the screen
     return addAt(o);
   };
   return { botprinter, workstation };

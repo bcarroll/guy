@@ -1,8 +1,8 @@
 // QA for every character's body (installed onto the harness by devtools.js; NOT imported by the game).
 //
-// Guy, GAL and every customer model are Mixamo rigs driven by the same procedural skeleton code (guy.js). A model whose bones do not
+// GUY, GAL and every customer model are Mixamo rigs driven by the same procedural skeleton code (guy.js). A model whose bones do not
 // map the way the code expects (a different rest pose, a different turn at load time, short arms) shows up as arms stuck in the air,
-// a flat body or a strange walk, and nothing in the activity sweeps notices because the numbers they check are Guy's. These sweeps
+// a flat body or a strange walk, and nothing in the activity sweeps notices because the numbers they check are GUY's. These sweeps
 // load each rig for real, pose it, and measure it:
 //
 //   sweepRigs        every rig, loaded standing in different turns: the pose must not depend on how the figure was turned when its
@@ -23,7 +23,7 @@ const BASE = import.meta.env ? import.meta.env.BASE_URL : './';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
-// every rig that appears in the game: Guy, GAL, and the customer models (added automatically when a customer model is added)
+// every rig that appears in the game: GUY, GAL, and the customer models (added automatically when a customer model is added)
 export const RIGS = () => [
   { id: 'guy', url: `${BASE}models/ybot.fbx`, height: 1.75, opts: {} },
   { id: 'gal', url: `${BASE}models/xbot.fbx`, height: 1.75, opts: {} },
@@ -34,7 +34,7 @@ export function install(T, h) {
   const { result, summarise } = h;
   const frame = 1 / 30;
 
-  // A figure in the scene, turned to `yaw` inside a group turned to `parentYaw`, with its model loaded. Returns the Guy driver.
+  // A figure in the scene, turned to `yaw` inside a group turned to `parentYaw`, with its model loaded. Returns the GUY driver.
   async function figure(rig, yaw = 0, parentYaw = 0, where = [40, 40]) {
     const parent = new THREE.Group();
     parent.rotation.y = parentYaw;
@@ -73,7 +73,7 @@ export function install(T, h) {
   const spread = (a, b) => Math.max(...KEYS.map((k) => a[k].distanceTo(b[k])));
   const finite = (g) => KEYS.every((k) => { const p = at(g, k); return Number.isFinite(p.x + p.y + p.z); });
 
-  // the poses the game uses for a figure standing, walking and sitting (what customers and Guy do all day)
+  // the poses the game uses for a figure standing, walking and sitting (what customers and GUY do all day)
   const POSE = {
     idle: (g, t) => POSES.idle(g, t, 1e9, {}),
     walk: (phase) => (g, t) => POSES.walk(g, t, 1e9, { walkPhase: phase, armRoom: 1 }),

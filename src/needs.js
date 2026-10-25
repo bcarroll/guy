@@ -1,5 +1,5 @@
-// What the house needs built. Guy and GAL only build something in the Workshop when there is a use for it (the owner's rule):
-//   seat    there is a chair for everybody who lives here (Guy, and GAL if she is here)
+// What the house needs built. GUY and GAL only build something in the Workshop when there is a use for it (the owner's rule):
+//   seat    there is a chair for everybody who lives here (GUY, and GAL if she is here)
 //   reach   a foot stool, so a high window can be cleaned right up to the top
 //   books   books are stacked on the floor: another bookshelf
 //   diners  customers cannot find a seat at the restaurant: another table and chairs

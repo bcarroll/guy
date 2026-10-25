@@ -1,6 +1,6 @@
-# Guy's room
+# GUY's room
 
-A Vite + Three.js game: a procedurally animated Mixamo robot ("Guy") lives in a 3D room and uses the objects in it.
+A Vite + Three.js game: a procedurally animated Mixamo robot ("GUY") lives in a 3D room and uses the objects in it.
 `npm install && npm run dev` (port 5173). See `README.md` for controls and the code map.
 
 ## Testing and keeping the test current (important)
@@ -36,10 +36,10 @@ sitting from the front and the side, customers, each room, compared with the app
 
 ## Conventions worth knowing
 
-- Everything Guy does is a queue of steps (`walk`, `walkAt`, `play`, `plan`) built by `activities()` in `src/brain.js`.
-  Objects Guy touches must be looked up at step time (`this.obj(name)`), never cached, because the user can remove, move
+- Everything GUY does is a queue of steps (`walk`, `walkAt`, `play`, `plan`) built by `activities()` in `src/brain.js`.
+  Objects GUY touches must be looked up at step time (`this.obj(name)`), never cached, because the user can remove, move
   and rotate objects at any moment. Steps that depend on an object declare it (`fx.needs`, anchors) so removing it cancels them.
-- Objects move only when Guy pushes them or the user drags them. Nothing resets, not even across reloads: `src/layout.js` saves every
+- Objects move only when GUY pushes them or the user drags them. Nothing resets, not even across reloads: `src/layout.js` saves every
   piece's position, turn and removed state (`guy.layout.v1`) and puts it back on load; `src/update.js` refreshes the page by itself
   when a newer build is deployed. If you add state the user can change, save it (layout, rooms or the catalog's extras) and add
   it to `T.sweepLayout`.

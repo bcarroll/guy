@@ -5,7 +5,7 @@
 // What is saved is a snapshot of the world: it is written a few seconds after anything changes and whenever the tab is hidden or
 // closed. Restoring sets every piece straight to its saved spot (the saved layout was valid as a whole), then checks each piece
 // and moves any that no longer fits (a corrupt save, or a door that now stands where it was) to the nearest free place.
-// Everything else Guy remembers is saved elsewhere: skills (skills.js), the catalog's additions (machine.js), rooms (rooms.js).
+// Everything else GUY remembers is saved elsewhere: skills (skills.js), the catalog's additions (machine.js), rooms (rooms.js).
 const KEY = 'guy.layout.v1';
 const VERSION = 1;
 
@@ -38,7 +38,7 @@ export function initLayout({ world, guy, remove, persist, key = KEY }) {
     const did = { applied: false, removed: [], replaced: [], guyMoved: false };
     if (!data || typeof data !== 'object' || data.v !== VERSION) return did;
     did.applied = true;
-    for (const it of Array.isArray(data.instances) ? data.instances : []) {                  // things Guy built that were in the room
+    for (const it of Array.isArray(data.instances) ? data.instances : []) {                  // things GUY built that were in the room
       if (it && typeof it.name === 'string' && typeof it.kind === 'string' && !world.objects[it.name]) world.addInstance(it.kind, null, it.name, true);
     }
     for (const name of Array.isArray(data.out) ? data.out : []) {
@@ -89,7 +89,7 @@ export function initLayout({ world, guy, remove, persist, key = KEY }) {
     return did;
   }
 
-  // Guy starts in the middle of the floor. If the saved layout has something there, stand him on the nearest free spot.
+  // GUY starts in the middle of the floor. If the saved layout has something there, stand him on the nearest free spot.
   function unstickGuy() {
     if (!guy) return false;
     const clear = (x, z) => !world.obstacles.some((o) => x > o.x0 - 0.45 && x < o.x1 + 0.45 && z > o.z0 - 0.45 && z < o.z1 + 0.45);
@@ -122,7 +122,7 @@ export function initLayout({ world, guy, remove, persist, key = KEY }) {
     return did;
   }
 
-  // Start saving: every few seconds if anything changed (Guy pushes things around too), and the moment the tab is hidden or closed.
+  // Start saving: every few seconds if anything changed (GUY pushes things around too), and the moment the tab is hidden or closed.
   function start() {
     if (!persist) return;
     setInterval(save, 3000);

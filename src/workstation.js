@@ -1,4 +1,4 @@
-// The Learning Workstation's panel: opens when Guy (or GAL) taps the screen (the `learn` activity, brain.js). Lists every book on the
+// The Learning Workstation's panel: opens when GUY (or GAL) taps the screen (the `learn` activity, brain.js). Lists every book on the
 // shelf with the skill it teaches and a Learn button. Learn teaches that robot at once, with no reading; the row then reads "Learned"
 // and its button is disabled. The book is not used up: it stays on the shelf, so the other robot can read it (or learn it here) too.
 import { SKILL_INFO } from './skills.js';

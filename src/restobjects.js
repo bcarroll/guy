@@ -65,7 +65,7 @@ export function makeRestaurantBuilders({ makeObject, box, mat }) {
         const k = on ? ((performance.now() / 1000 * 0.6 + i / 3) % 1) : 0;
         s.position.y = 1.2 + k * 0.5; s.material.opacity = on ? (1 - k) * 0.5 : 0; s.scale.setScalar(0.6 + k);
       });
-      o.lid.visible = !o.stirring; o.stirring = false;                         // the lid comes off while Guy stirs (set every frame by the stir step)
+      o.lid.visible = !o.stirring; o.stirring = false;                         // the lid comes off while GUY stirs (set every frame by the stir step)
       o.lid.position.y = 1.14 + (on ? Math.abs(Math.sin(performance.now() / 70)) * 0.012 : 0);
     });
     o.cook = (secs) => { o.cooking = secs; };
@@ -125,7 +125,7 @@ export function makeRestaurantBuilders({ makeObject, box, mat }) {
     o.ring = 0;
     onUpdate(o, (dt) => { if (o.ring > 0) { o.ring = Math.max(0, o.ring - dt); o.bell.position.y = 0.935 + Math.abs(Math.sin(o.ring * 40)) * 0.01; } });
     o.pay = () => { o.ring = 0.5; };
-    o.buttonPoint = () => o.at(-0.25, 1.03, 0.0);                                // Guy's finger on the till (he stands behind it)
+    o.buttonPoint = () => o.at(-0.25, 1.03, 0.0);                                // GUY's finger on the till (he stands behind it)
     return addAt(o);
   };
 
@@ -148,7 +148,7 @@ export function makeRestaurantBuilders({ makeObject, box, mat }) {
     o.seats.forEach((s) => { s.plate = new THREE.Group(); s.plate.position.set(0, 0.78, s.z > 0 ? 0.24 : -0.24); o.group.add(s.plate); });
     o.setPlate = (i, dish) => fillPlate(o.seats[i].plate, dish);
     o.platePoint = (i) => o.at(0, 0.9, o.seats[i].z > 0 ? 0.24 : -0.24);
-    // where Guy stands to serve a seat (beside the table), and where a customer stands to walk in and out of the seat
+    // where GUY stands to serve a seat (beside the table), and where a customer stands to walk in and out of the seat
     o.serveStand = (i) => ({ x: 0.78, z: o.seats[i].z > 0 ? 0.45 : -0.45 });
     o.approach = (i) => ({ x: 0, z: o.seats[i].z > 0 ? 1.42 : -1.42 });
     o.menuPoint = (i) => o.at(0, 0.82, o.seats[i].z > 0 ? 0.18 : -0.18);

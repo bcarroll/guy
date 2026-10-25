@@ -1,4 +1,4 @@
-// Guy's skills. He learns them by reading the books on the shelf; activities check what he knows before he tries them.
+// GUY's skills. He learns them by reading the books on the shelf; activities check what he knows before he tries them.
 //
 // To add a skill later (e.g. when the user adds an object with its own manual): add a BOOK_DEFS entry and a SKILL_INFO entry,
 // put the book on the shelf with world.objects.shelf.addBook(def), and gate the activity in Brain.available().
@@ -59,7 +59,7 @@ export const BOOK_CATALOG = [
   { id: 'scopecare', title: 'Looking After Your Telescope', teaches: 'telescope.care', color: 0x95a5a6, thick: 0.05, height: 0.3,
     blurb: 'how to look after a telescope', requires: { object: 'telescope' }, desc: 'Wiping the lens, cleaning the tube, checking the tripod.' },
   // The Backyard (a room added from the Rooms tab). "Outdoor Sports" comes with the lawn chair; reading it unlocks the other two
-  // (`unlockedBy`: they cannot go on the shelf until Guy or GAL knows that skill).
+  // (`unlockedBy`: they cannot go on the shelf until GUY or GAL knows that skill).
   { id: 'outdoor', title: 'Outdoor Sports', teaches: 'outdoor', color: 0x3a8a3a, thick: 0.05, height: 0.3, room: 'backyard',
     blurb: 'how to warm up and play outside', desc: 'Warming up, fair play and how to throw and kick. Unlocks the soccer and basketball books.' },
   { id: 'soccer', title: 'Soccer for Robots', teaches: 'outdoor.soccer', color: 0xf2f2f2, thick: 0.055, height: 0.31, room: 'backyard', unlockedBy: 'outdoor',

@@ -46,7 +46,7 @@ function showInstalled() {
   el.id = 'news-toast';
   el.setAttribute('role', 'status');
   const items = (saved.items || []).map((t) => '<li></li>').join('');
-  el.innerHTML = "<b>✨ Guy's room was updated</b>" + (items ? '<ul>' + items + '</ul>' : '<div class="plain">Small fixes and improvements.</div>') + '<button>OK</button>';
+  el.innerHTML = "<b>✨ GUY's room was updated</b>" + (items ? '<ul>' + items + '</ul>' : '<div class="plain">Small fixes and improvements.</div>') + '<button>OK</button>';
   [...el.querySelectorAll('li')].forEach((li, i) => { li.textContent = saved.items[i]; });
   const style = document.createElement('style');
   style.textContent = `
@@ -118,13 +118,13 @@ function onStale(id, source) {
   if (Date.now() < hiddenUntil) return;
   if (refreshedRecently(id)) {                                  // we already refreshed for this build and still got the old one
     pendingId = id;
-    showBar("A new version of Guy's room is ready.");
+    showBar("A new version of GUY's room is ready.");
     return;
   }
   if (source === 'visible' || source === 'preload') { reloadNow(id); return; }
   if (pending) return;
   pendingId = id;
-  showBar("✨ A new version of Guy's room is ready! Refreshing…");
+  showBar("✨ A new version of GUY's room is ready! Refreshing…");
   pending = setTimeout(() => reloadNow(id), api.delayMs);
 }
 
@@ -153,7 +153,7 @@ export function initUpdateCheck() {
     check, apply, showInstalled, newItems, everyMs: CHECK_EVERY_MS, setNews: (n) => { liveNews = n; },
     pending: () => !!pending,
     flush: () => { if (pending) reloadNow(pendingId); },        // refresh now instead of waiting for the bar's countdown
-    show: () => showBar("A new version of Guy's room is ready."),
+    show: () => showBar("A new version of GUY's room is ready."),
     reset: () => {                                              // forget everything: for the QA harness between cases
       clearTimeout(pending); pending = 0; pendingId = null; hiddenUntil = 0;
       if (bar) bar.hidden = true;

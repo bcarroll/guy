@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Guy's Room</title>
+<title>GUY's Room</title>
 <style>
   html, body { margin: 0; height: 100%; background: #111; overflow: hidden; font-family: system-ui, sans-serif; }
   canvas { display: block; }
@@ -164,30 +164,30 @@
 <body>
 <button id="devunlock" title="Development only: add all premium rooms, records and items">🔓 unlock premium</button>
 <div id="build" title="The version of the game running here (the commit it was built from)">build …</div>
-<div id="hud">Guy is <b id="activity">waking up…</b><span id="galline" hidden><br>GAL is <b id="activity2" style="color:#ff7ac0"></b></span><br><small>drag empty space: orbit · drag furniture or the ball: move it · long-press: rotate / remove · tap the wall machine: add things · K: skills · scroll: zoom · F: follow · Space: new activity</small></div>
+<div id="hud">GUY is <b id="activity">waking up…</b><span id="galline" hidden><br>GAL is <b id="activity2" style="color:#ff7ac0"></b></span><br><small>drag empty space: orbit · drag furniture or the ball: move it · long-press: rotate / remove · tap the wall machine: add things · K: skills · scroll: zoom · F: follow · Space: new activity</small></div>
 <button id="lockscreen-btn" class="lockok" title="Screen lock: Off" aria-label="Screen lock: Off">🔓</button>
 <div id="lockscreen-menu" class="lockok" hidden><button data-lock="on">🔒 On: voice only</button><button data-lock="camera">🎥 Camera only</button><button data-lock="off">🔓 Off</button></div>
 <div id="wstation" hidden><div class="box"><header><h2>🖥️ LEARNING WORKSTATION · <span class="who"></span></h2><button class="close" title="Close (Esc)">✕</button></header><div class="hint">Every book on the shelf. Learn teaches at once, no reading; the book stays on the shelf.</div><div class="bar"><button class="all">⚡ Learn all</button></div><div class="rows"></div></div></div>
 <div id="subs" hidden aria-live="polite"></div>
-<form id="cmdbox" hidden><input id="cmd-in" type="text" autocomplete="off" placeholder="Tell Guy what to do…" aria-label="Command for Guy"><select id="cmd-chatter" title="How much they talk" aria-label="How much they talk"><option value="silent">🔇 Subtitles only</option><option value="quiet">🙂 Quiet</option><option value="chatty">💬 Chatty</option></select><button type="submit">Send</button></form>
+<form id="cmdbox" hidden><input id="cmd-in" type="text" autocomplete="off" placeholder="Tell GUY what to do…" aria-label="Command for GUY"><select id="cmd-chatter" title="How much they talk" aria-label="How much they talk"><option value="silent">🔇 Subtitles only</option><option value="quiet">🙂 Quiet</option><option value="chatty">💬 Chatty</option></select><button type="submit">Send</button></form>
 <div id="btns">
   <button id="player-btn" title="Stereo playback controls" hidden>🎵 Stereo</button>
-  <button id="lock-btn" title="Let Guy stop" hidden></button>
-  <select id="speed-sel" title="How fast Guy walks and how quickly he moves on between things" aria-label="Speed">
+  <button id="lock-btn" title="Let GUY stop" hidden></button>
+  <select id="speed-sel" title="How fast GUY walks and how quickly he moves on between things" aria-label="Speed">
     <option value="1">🐢 1× Normal</option><option value="2">🐇 2× Quick</option><option value="3">🏃 3× Fast</option><option value="4">🚀 4× Zoom</option>
   </select>
-  <button id="talk-btn" title="Tell Guy what to do (type a command)">💬 Talk</button>
-  <button id="follow-btn" title="Follow Guy (F)">🎥 Follow</button>
+  <button id="talk-btn" title="Tell GUY what to do (type a command)">💬 Talk</button>
+  <button id="follow-btn" title="Follow GUY (F)">🎥 Follow</button>
   <button id="skip-btn" title="Next activity (Space)">⏭ Next</button>
   <button id="fs-btn" title="Fullscreen">⛶ Full</button>
-  <button id="skills-btn" title="What Guy has learned (K)">📚 Skills</button>
+  <button id="skills-btn" title="What GUY has learned (K)">📚 Skills</button>
 </div>
-<div id="skills" hidden><h3>What Guy has learned</h3><div class="list"></div></div>
+<div id="skills" hidden><h3>What GUY has learned</h3><div class="list"></div></div>
 <div id="toast"></div>
 <div id="machine" hidden>
   <div class="panel">
     <header><h2>⚙️ CATALOG</h2><button class="close" title="Close (Esc)">✕</button></header>
-    <div class="sub">Add objects to the room, books and records to the shelf. Guy learns new things by reading.</div>
+    <div class="sub">Add objects to the room, books and records to the shelf. GUY learns new things by reading.</div>
     <div class="tabs"><button class="tab on" data-tab="objects">Objects</button><button class="tab" data-tab="books">Books</button><button class="tab" data-tab="records">Records</button><button class="tab" data-tab="rooms">Rooms</button></div>
     <div class="chips"></div>
     <div class="body"></div>

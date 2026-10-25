@@ -882,7 +882,7 @@ export function startTrack(id) {
   return () => clearInterval(timer);
 }
 
-// ---- drum kit voices (used by Guy at the kit) ----
+// ---- drum kit voices (used by GUY at the kit) ----
 function snareAt(t, vel = 1) {
   if (!noiseBuf) hat(t, false);
   const s = ctx.createBufferSource();

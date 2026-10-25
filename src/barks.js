@@ -20,7 +20,7 @@ export const BARKS = {
 };
 export const NO_BARK = ['wander', 'books', 'putback', 'putguitar', 'dropball', 'lighton', 'putcanvas', 'hangpaint', 'leave', 'stuck', 'rwait',
   'takeorder', 'cook', 'serve', 'takepay',                     // the restaurant jobs already talk to the customers
-  'buildbot', 'bandjam', 'bandplay', 'orderbuild',             // Guy and GAL's own talk (gal.js)
+  'buildbot', 'bandjam', 'bandplay', 'orderbuild',             // GUY and GAL's own talk (gal.js)
   'stock', 'galread', 'findguy', 'invitedance'];
 const last = {};
 export function barkFor(name) { const l = BARKS[name]; return l ? l[Math.floor(Math.random() * l.length)] : null; }

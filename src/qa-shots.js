@@ -3,8 +3,8 @@
 // Numbers cannot tell that a character looks wrong, that a painting is on the wrong side of a wall, or that a prop floats beside a
 // hand. This takes real pictures of the game, the same way every time, and compares each with the picture that was approved earlier:
 //
-//   T.shotIds()          every picture there is: each visual checkpoint in MANIFEST.visual (Guy at a pose from the front, side ...),
-//                        every character (Guy, GAL, each customer) standing, walking and sitting from the front and the side,
+//   T.shotIds()          every picture there is: each visual checkpoint in MANIFEST.visual (GUY at a pose from the front, side ...),
+//                        every character (GUY, GAL, each customer) standing, walking and sitting from the front and the side,
 //                        customers in the restaurant, and an overview of each room
 //   await T.shot(id)     set the scene up (seeded randomness, a frozen game, a fixed camera), render, return { id, data }
 //   await T.compare(a,b) how different two pictures are (the fraction of pixels that changed noticeably)
@@ -64,7 +64,7 @@ export function install(T, h) {
   }
   async function settleFrames(n = 3) { for (let i = 0; i < n; i++) await raf(); }
   function capture() {
-    // the skeleton eases towards its pose a little every frame, so a picture taken a few frames earlier or later would catch Guy slightly
+    // the skeleton eases towards its pose a little every frame, so a picture taken a few frames earlier or later would catch GUY slightly
     // elsewhere: let it settle all the way (the pose itself is frozen), and let what he holds catch up with his hands
     const g = window.guy;
     if (g && g.loaded) { for (let i = 0; i < 90; i++) g.apply(1 / 30); window.scene.updateMatrixWorld(true); window.brain.safeLate(); }
@@ -76,7 +76,7 @@ export function install(T, h) {
   const SHOTS = [];
   const add = (id, group, setup) => SHOTS.push({ id, group, setup });
 
-  // 1. every visual checkpoint of the manifest (Guy at a pose, from a given side)
+  // 1. every visual checkpoint of the manifest (GUY at a pose, from a given side)
   for (const v of T.MANIFEST.visual) {
     add(`checkpoint-${v.id}`, 'checkpoints', async () => {
       await clean(11);
@@ -94,7 +94,7 @@ export function install(T, h) {
       add(`char-${rig.id}-${pose}-${view}`, 'characters', async () => {
         await clean(21);
         T.freeze();
-        window.guy.root.position.set(-4.2, 0, 3.2); window.guy.root.visible = false;      // Guy is out of the picture
+        window.guy.root.position.set(-4.2, 0, 3.2); window.guy.root.visible = false;      // GUY is out of the picture
         const q = T._qa, g = await q.figure(rig, Math.PI * 0.85, 0, [0.4, 0.2]);
         q.hold(g, pose === 'stand' ? q.POSE.idle : pose === 'walk' ? q.POSE.walk(Math.PI / 2) : q.POSE.sit, 70);
         T.frameAt(0.4, 0.2, Math.PI * 0.85, view, 2.6, 0.9);
@@ -115,7 +115,7 @@ export function install(T, h) {
     for (const state of ['waiting', 'ordered', 'eating', 'paying']) {
       add(`customer-${m.id}-${state}`, 'customers', async () => {
         await clean(31);
-        window.guy.root.visible = false;                                  // Guy is out of the picture
+        window.guy.root.visible = false;                                  // GUY is out of the picture
         T.prep('takeorder');
         const r = window.brain.w.restaurant;
         r.headless = false; r.paused = true; r.clear();

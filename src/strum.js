@@ -1,4 +1,4 @@
-// Guy's guitar songs when he just strums (as opposed to making up riffs, riffs.js). He used to play the same four chords (Am F C G) in the
+// GUY's guitar songs when he just strums (as opposed to making up riffs, riffs.js). He used to play the same four chords (Am F C G) in the
 // same pattern for 26 seconds every time. Now each time he makes up a song: a key, a chord progression, a strumming or picking pattern,
 // a tempo and how long each chord lasts. Chords are built from shapes (major, minor, seventh ...), so every progression works in every key.
 const NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];

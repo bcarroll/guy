@@ -7,7 +7,7 @@
 //   update(dt)   called every frame: eases the sky, adds / removes the balls, steps their physics
 //   score        what the shots did: { goals, baskets, shots } (QA reads it)
 //
-// A ball Guy holds or is handling is `userData.kinematic` (brain.js sets its position every frame); otherwise it flies and rolls here.
+// A ball GUY holds or is handling is `userData.kinematic` (brain.js sets its position every frame); otherwise it flies and rolls here.
 import * as THREE from 'three';
 import { sfx } from './sfx.js';
 import { makeYardBall, YARD_BALL } from './yardobjects.js';
@@ -230,7 +230,7 @@ export function makeYard({ world, room, objects, obstacles }) {
         }
       }
     }
-    // a ball that has come to rest inside the goal's or the hoop's footprint rolls out the front of it (Guy cannot reach in there)
+    // a ball that has come to rest inside the goal's or the hoop's footprint rolls out the front of it (GUY cannot reach in there)
     if (p.y <= r + 0.01 && Math.hypot(v.x, v.z) < 0.2) {
       let shut = null;
       for (const o of [objects.soccergoal, objects.basketballhoop]) {

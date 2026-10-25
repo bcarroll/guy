@@ -35,7 +35,7 @@ import { findBooks, learnBooks } from './learn.js';
 import { nextRiff, keepRiff, riffAt, STEPS as RIFF_STEPS } from './riffs.js';
 import { makeStrum, strumPattern } from './strum.js';
 
-const PLANT_NAMES = ['plant', 'flowerplant', 'tree'];   // objects Guy can tend with the 'plant' activity
+const PLANT_NAMES = ['plant', 'flowerplant', 'tree'];   // objects GUY can tend with the 'plant' activity
 const lerp = THREE.MathUtils.lerp;
 const clamp = THREE.MathUtils.clamp;
 const smooth = (x) => x * x * (3 - 2 * x);
@@ -533,14 +533,14 @@ export const POSES = {
 };
 
 // ---------------------------------------------------------------------------
-// Behaviour: Guy chains activities, each a script of steps.
+// Behaviour: GUY chains activities, each a script of steps.
 // ---------------------------------------------------------------------------
 export class Brain {
   constructor(guy, world, ui, skills) {
     this.g = guy;
     this.w = world;
     this.ui = ui;
-    this.skills = skills;      // what Guy has learned from books
+    this.skills = skills;      // what GUY has learned from books
     this.onLearn = null;       // called with the book def when he learns something
     this.gtr = { held: false, override: null, moved: false, y: 0, fret: 0, n: -1 }; // the guitar, while he handles it
     this.gname = 'guitar';     // which guitar object that is (the acoustic one, or an electric one that was built): see pickGuitar
@@ -569,7 +569,7 @@ export class Brain {
     this.pianoNext = 0;
     this.lastRearrange = -999;
     this.handKey = { L: 50, R: 74 };
-    // A book Guy has taken from the shelf (null if none): the shelf copy is hidden while this one is in his hands.
+    // A book GUY has taken from the shelf (null if none): the shelf copy is hidden while this one is in his hands.
     this.held = null;
     this.readBlend = 0;
     this.read = { open: 0, turning: false, turnT: 0, sheet: null };
@@ -718,7 +718,7 @@ export class Brain {
           type: 'plan',
           fn: () => {
             const b = w.ball.position;
-            // try directions until Guy has somewhere free to stand behind the ball (with room for his legs and arms to swing)
+            // try directions until GUY has somewhere free to stand behind the ball (with room for his legs and arms to swing)
             for (let i = 0; i < 60; i++) {
               const grid = makeGrid(w.obstacles, i < 40 ? 0.55 : INFLATE);
               const dir = new THREE.Vector3(rand(-3.5, 3.5) - b.x, 0, rand(-2, 3) - b.z).normalize();
@@ -791,7 +791,7 @@ export class Brain {
         const secs = 0.6 + list.length * RIFF_STEPS * 2 * 0.3 + 1;
         return [fresh.length ? 'making up a riff on the guitar' : 'playing one of his favourite riffs', ...this.guitarBegin(),
           this.play('guitar', secs, { guitar: true, riff: list, onEnd: () => {
-            if (fresh.some((p) => keepRiff(p.riff))) { this.ui('that one is a keeper!'); if (this.onRiff) this.onRiff("Guy made up a riff he likes! He'll remember it."); }
+            if (fresh.some((p) => keepRiff(p.riff))) { this.ui('that one is a keeper!'); if (this.onRiff) this.onRiff("GUY made up a riff he likes! He'll remember it."); }
           } }),
           ...this.guitarEnd()];
       },
@@ -930,7 +930,7 @@ export class Brain {
     } else {
       out = { R: strum, wR: 1, L: fretPt, wL: 1, stopR: 0 };
     }
-    out.axisZ = new THREE.Vector3(0, 0, 1).applyQuaternion(cur.q); // soundboard normal (points away from Guy)
+    out.axisZ = new THREE.Vector3(0, 0, 1).applyQuaternion(cur.q); // soundboard normal (points away from GUY)
     out.axisX = new THREE.Vector3(1, 0, 0).applyQuaternion(cur.q); // along the neck, towards the headstock
     // strumming fingers hang down over the strings (down the soundboard, tipped a little towards it)
     // fretting hand: wrist under the neck, fingers pointing up, palm towards the back of the neck, thumb behind it
@@ -970,12 +970,12 @@ export class Brain {
   }
 
   // ---- Ball games ----
-  ballStand() { // walk to a free spot next to the ball (on Guy's side if possible), facing it
+  ballStand() { // walk to a free spot next to the ball (on GUY's side if possible), facing it
     return {
       type: 'plan',
       fn: () => {
         const b = this.w.ball.position, g = this.g.pos;
-        const base = Math.atan2(g.x - b.x, g.z - b.z);          // direction from the ball towards Guy
+        const base = Math.atan2(g.x - b.x, g.z - b.z);          // direction from the ball towards GUY
         // his hands go out to the sides while he handles the ball: prefer a spot with a little more room than walking needs
         for (const grid of [makeGrid(this.w.obstacles, 0.62), makeGrid(this.w.obstacles, 0.55)]) {
           for (const turn of [0, 0.8, -0.8, 1.6, -1.6, 2.4, -2.4, Math.PI]) {
@@ -995,7 +995,7 @@ export class Brain {
   // picking the guitar up off its stand or putting it back makes a noise
   setGuitarHeld(held) { this.gtr.held = held; sfx('guitar'); }
 
-  // Where the ball is while Guy handles it, and where his hands go: hands on either side, a hand on top, ...
+  // Where the ball is while GUY handles it, and where his hands go: hands on either side, a hand on top, ...
   computeBall(s) {
     this.ballPos = null;
     this.ballTarget = null;
@@ -1080,7 +1080,7 @@ export class Brain {
     return st;
   }
 
-  // ---- Moving furniture: Guy walks behind an object and pushes it along a collision-free route ----
+  // ---- Moving furniture: GUY walks behind an object and pushes it along a collision-free route ----
   // Returns walk/push steps, or null if the object can't be taken there.
   // `room`: { fr, bd } (the grid frame and the floor bounds of an added room, e.g. the Backyard) when the pushing is done there; null is his own room.
   planPush(obj, tx, tz, from = null, room = null) {
@@ -1110,7 +1110,7 @@ export class Brain {
       const S2 = { x: B.x - d.x * off, z: B.z - d.z * off };
       const bd = room && room.bd;
       const inRoom = room ? (q) => q.x >= bd.minX + 0.6 && q.x <= bd.maxX - 0.6 && q.z >= bd.minZ + 0.6 && q.z <= bd.maxZ - 0.6   // (nor against a fence)
-        : (q) => Math.abs(q.x) <= 4.5 && q.z >= -3.5 && q.z <= 3.6; // Guy can't stand in the wall
+        : (q) => Math.abs(q.x) <= 4.5 && q.z >= -3.5 && q.z <= 3.6; // GUY can't stand in the wall
       if (!inRoom(S) || !inRoom(S2) || cellBlocked(guyGrid, S.x, S.z) || cellBlocked(guyGrid, S2.x, S2.z) || !lineClear(guyGrid, S, S2)) return null;
       const yaw = Math.atan2(d.x, d.z);
       steps.push(this.walk(S.x, S.z, yaw));
@@ -1119,7 +1119,7 @@ export class Brain {
     return steps;
   }
 
-  // planPush, and if Guy has no room to get behind the object (it is jammed against something), slide it out sideways first.
+  // planPush, and if GUY has no room to get behind the object (it is jammed against something), slide it out sideways first.
   planPushVia(obj, tx, tz, room = null) {
     const direct = this.planPush(obj, tx, tz, null, room);
     if (direct) return direct;
@@ -1148,7 +1148,7 @@ export class Brain {
     };
   }
 
-  // The bench waits behind the gap Guy steps into, 1.65 m from the piano's centre.
+  // The bench waits behind the gap GUY steps into, 1.65 m from the piano's centre.
   benchWait() { const p = this.obj('piano'), l = p.local(0, 1.65); return { x: p.x + l.x, z: p.z + l.z }; }
 
   // Standing at the piano: if the bench is in the way, push it back first.
@@ -1166,7 +1166,7 @@ export class Brain {
     };
   }
 
-  // The bench's long side must run along the piano's keyboard; if the user turned the piano, Guy turns the bench.
+  // The bench's long side must run along the piano's keyboard; if the user turned the piano, GUY turns the bench.
   orientBench() {
     return {
       type: 'plan',
@@ -1218,13 +1218,13 @@ export class Brain {
     return b.localToWorld(new THREE.Vector3(0.0, 0.2, 0.11));
   }
 
-  lampSwitch() { // the switch on the lamp stem, on the side Guy is standing
+  lampSwitch() { // the switch on the lamp stem, on the side GUY is standing
     const l = this.obj('lamp'), g = this.g.pos;
     const dx = g.x - l.x, dz = g.z - l.z, len = Math.hypot(dx, dz) || 1;
     return new THREE.Vector3(l.x + (dx / len) * 0.04, 1.05, l.z + (dz / len) * 0.04);
   }
 
-  plantLeaf(name = 'plant') { // a leaf (or bloom, or branch) near the top of the plant, on the side Guy stands
+  plantLeaf(name = 'plant') { // a leaf (or bloom, or branch) near the top of the plant, on the side GUY stands
     const p = this.obj(name), g = this.g.pos;
     const [out, y] = { plant: [0.1, 0.78], flowerplant: [0.12, 0.74], tree: [0.4, 1.25] }[name] || [0.1, 0.78];
     const dx = g.x - p.x, dz = g.z - p.z, len = Math.hypot(dx, dz) || 1;
@@ -1379,7 +1379,7 @@ export class Brain {
     };
   }
 
-  // "Remove" on a book in the shelf list: it goes back to the catalog and nothing else changes (Guy keeps what he learned).
+  // "Remove" on a book in the shelf list: it goes back to the catalog and nothing else changes (GUY keeps what he learned).
   removeBook(id) { return this.forgetBook(id, true); }
 
   // "Forget" on a book in the shelf list: it goes back to the catalog and what it taught starts to fade.
@@ -1387,20 +1387,20 @@ export class Brain {
     const shelf = this.obj('shelf');
     const rec = shelf && shelf.books.find((b) => b.def.id === id);
     if (!rec) return { ok: false, message: "That book isn't on the shelf." };
-    if (this.held === rec) return { ok: false, message: 'Guy has that book in his hands right now.' };
+    if (this.held === rec) return { ok: false, message: 'GUY has that book in his hands right now.' };
     if (this.forceBook === rec) this.forceBook = null;
     const def = rec.def;
     shelf.removeBook(rec);
-    if (keepSkill) return { ok: true, message: `"${def.title}" is back in the Catalog. Guy keeps everything he learned from it.` };
+    if (keepSkill) return { ok: true, message: `"${def.title}" is back in the Catalog. GUY keeps everything he learned from it.` };
     const fading = this.skills.forget(def.teaches);
-    return { ok: true, message: fading ? `"${def.title}" is back in the Catalog. Guy will gradually forget ${def.blurb}.` : `"${def.title}" is back in the Catalog.` };
+    return { ok: true, message: fading ? `"${def.title}" is back in the Catalog. GUY will gradually forget ${def.blurb}.` : `"${def.title}" is back in the Catalog.` };
   }
 
   // An order to use the Learning Workstation: learn the books a query points at (or all of them) at once, without the panel. Returns { ok, message }.
   learnOrder(query) {
     if (!this.obj('workstation')) return { ok: false, message: 'There is no workstation in the room.' };
     if (this.stuckIn()) return { ok: false, message: this.shutInMessage(this.stuckIn()) };
-    const recs = findBooks(this.w, query), who = this.isGal ? 'GAL' : 'Guy';
+    const recs = findBooks(this.w, query), who = this.isGal ? 'GAL' : 'GUY';
     if (!recs.length) return { ok: false, message: query && query !== 'all' ? `There is no book about ${query} on the shelf.` : 'There are no books on the shelf.' };
     if (recs.every((r) => this.skills.has(r.def.teaches))) return { ok: false, message: query && query !== 'all' ? `${who} already knows that.` : `${who} already knows everything on the shelf.` };
     this.unlock(false); this.skip(true);
@@ -1420,7 +1420,7 @@ export class Brain {
   }
 
   rearrangeSteps() {
-    // heavy things stay put; the bench only moves when Guy wants to sit at the piano
+    // heavy things stay put; the bench only moves when GUY wants to sit at the piano
     const movers = Object.values(this.w.objects).filter((o) => o.weight !== 'heavy' && o.name !== 'bench' && this.w.roomIdAt(o.x, o.z) === 'main');      // (rearranging is for his own room: nothing is shoved through a wall)
     const weights = { plant: 1, lamp: 1, armchair: 1, table: 0.4, drums: 0.3 };
     for (let tries = 0; tries < 12; tries++) {
@@ -1436,7 +1436,7 @@ export class Brain {
     return ['wandering', this.walk(p.x, p.z), this.play('idle', 2)];
   }
 
-  // A random place where `obj` fits with room to walk around it and nothing Guy needs gets blocked.
+  // A random place where `obj` fits with room to walk around it and nothing GUY needs gets blocked.
   freeObjectSpot(obj) {
     const w = this.w;
     const anchors = [['piano', 0, 0.8], ['piano', 0, 0.95], ['table', 0, 0.55], ['lamp', 0.55, 0], ['shelf', -0.7, 0], ['drums', 0.55, 1.15], ['easel', 0, 0.8]]
@@ -1597,7 +1597,7 @@ export class Brain {
 
   musicOn(track = 'default', byUser = false) {
     if (this.music) return;
-    this.userMusic = byUser;   // true when the user started it from the playback controls: Guy leaves it alone
+    this.userMusic = byUser;   // true when the user started it from the playback controls: GUY leaves it alone
     const playable = TRACKS[track] && TRACKS[track].step ? track : 'default';
     this.track = playable;
     this.beatLen = 60 / TRACKS[playable].bpm;
@@ -1633,7 +1633,7 @@ export class Brain {
 
   // Called every frame: when a track has had its minute, play the next one on the same record.
   autoAdvance() {
-    if (this.isGal) return;                           // the stereo is shared: Guy's brain moves it on
+    if (this.isGal) return;                           // the stereo is shared: GUY's brain moves it on
     if (!this.music || this.track === 'default' || this.time - this.trackSince < this.trackFor) return;
     const next = this.nextOnAlbum(this.track);
     if (next) this.changeTrack(next);
@@ -1723,7 +1723,7 @@ export class Brain {
   }
   availableIn(act) {
     if (act === 'learn') return !!this.obj('workstation') && this.inMain();         // the Learning Workstation (only when somebody asks: it has no weight)
-    if (this.galBlocks && this.galBlocks(act)) return false;                // (GAL does not do some things; Guy needs GAL for others)
+    if (this.galBlocks && this.galBlocks(act)) return false;                // (GAL does not do some things; GUY needs GAL for others)
     if (this.busyElsewhere(this.exclusiveFor(act))) return false;           // the other robot is using it
     const need = {
       piano: ['piano'], sitpiano: ['piano', 'bench'], plink: ['piano'], jam: ['piano', 'table'], jampiano: ['piano', 'table'],
@@ -1826,7 +1826,7 @@ export class Brain {
   // Is he in his own room (not in an added room or its doorway)?
   inMain() { return this.w.inMain(this.g.root.position.x, this.g.root.position.z); }
 
-  // The user asked Guy to go through a door (or, from inside, to come back). Returns { ok, message }.
+  // The user asked GUY to go through a door (or, from inside, to come back). Returns { ok, message }.
   visitRoom(id) {
     const d = this.w.doors[id];
     if (!d) return { ok: false, message: "There isn't a door like that." };
@@ -1837,7 +1837,7 @@ export class Brain {
     this.skip();
     this.visitId = id;
     this.pendingActivity = inside ? 'leave' : 'visit';
-    return { ok: true, message: inside ? 'Guy is coming back.' : `Guy is going into the ${d.name}.` };
+    return { ok: true, message: inside ? 'GUY is coming back.' : `GUY is going into the ${d.name}.` };
   }
 
   // ---- Lock in: keep using one object until the user says stop ----
@@ -1857,7 +1857,7 @@ export class Brain {
     return list.filter((a) => this.available(a));
   }
 
-  // The user asked Guy to lock in on `name`. Returns { ok, message }.
+  // The user asked GUY to lock in on `name`. Returns { ok, message }.
   lockOn(name) {
     const had = this.lock;
     this.lock = null;
@@ -1865,7 +1865,7 @@ export class Brain {
     if (!r.ok) { this.lock = had; return r; }
     this.lock = { name };
     if (this.onLock) this.onLock(this.lock);
-    return { ok: true, message: 'Guy will keep going until you tell him to stop.' };
+    return { ok: true, message: 'GUY will keep going until you tell him to stop.' };
   }
 
   // Let him go. `stop`: wrap up what he is doing now (the user told him to stop); otherwise he just finishes it.
@@ -1877,7 +1877,7 @@ export class Brain {
     return true;
   }
 
-  // The user removed `name`: drop whatever Guy was doing with it.
+  // The user removed `name`: drop whatever GUY was doing with it.
   objectRemoved(name) {
     if (this.lock && this.lock.name === name) this.unlock(false);
     if (name === 'table') { this.musicOff(); this.albumOnTable = false; }
@@ -1903,12 +1903,12 @@ export class Brain {
       peek: 1.3, stargaze: 1.6, darkstargaze: 1.3, scopecare: 0.6, dust: 0.9, dusttop: 1.0,
       yardsit: 0.9, birdbath: 0.7, skyswitch: 0.6, mow: 0.5, yardpoke: 1.1, goalshot: 1.4, soccertoss: 0.8, hoopshoot: 1.4, hoopdribble: 0.9,
     };
-    if (this.extraWeights) Object.assign(weights, this.extraWeights());      // working with GAL, or (for GAL) inviting Guy
+    if (this.extraWeights) Object.assign(weights, this.extraWeights());      // working with GAL, or (for GAL) inviting GUY
     // a skill that is being forgotten is used less and less
     for (const k of Object.keys(weights)) { const st = Math.min(1, ...this.skillNeeds(k).map((id) => this.skills.strength(id) || 1)); if (st < 1) weights[k] *= st; }
     // the music is on: he is in the mood to join in
     if (this.music) for (const k of ['dance', 'dancemoves', 'ballroom', 'jam', 'jampiano', 'jamsit', 'jamguitar', 'jamdrums']) weights[k] *= 2.5;
-    // Activities that share a theme: Guy gets bored of doing the same kind of thing back to back
+    // Activities that share a theme: GUY gets bored of doing the same kind of thing back to back
     const tags = {
       piano: ['piano'], sitpiano: ['piano'], jam: ['piano', 'stereo'], jampiano: ['piano', 'stereo'], jamsit: ['piano', 'stereo'],
       dance: ['stereo'], dancemoves: ['stereo'], ballroom: ['stereo'], lamp: ['fidget'], mood: ['fidget'], plant: ['fidget'], rearrange: ['fidget'], plink: ['piano'],
@@ -2024,14 +2024,14 @@ export class Brain {
     return false;
   }
 
-  // The user asked Guy to use something right now. Returns { ok, message }.
+  // The user asked GUY to use something right now. Returns { ok, message }.
   interact(name) {
     const k = (id) => this.skills.has(id);
     const there = this.obj(name), rm = there && this.w.roomIdAt(there.x, there.z);
     if (rm && rm !== 'main' && rm !== 'door' && this.doorLockedFor(rm)) return { ok: false, message: `The ${this.w.doors[rm].name} door is locked. Unlock it first (long-press the door).` };
     if (this.stuckIn() && rm !== this.stuckIn()) return { ok: false, message: this.shutInMessage(this.stuckIn()) };        // shut in: only what is in the room with him
     // told to mow with no clear lawn: say so (he used to say "On it!", open the shed, find no room and quietly give up)
-    if ((name === 'mower' || name === 'shed') && this.obj('mower') && this.obj('shed') && this.yardOpen() && !this.mowRoute({ pushable: true, tidied: true })) return { ok: false, message: 'There is no clear stretch of lawn for the mower. Guy puts the yard things away in the shed and shifts light things (plants) himself, but not the shed: move it, or anything else heavy, away from the lawn and leave a little room behind the mower for Guy.' };
+    if ((name === 'mower' || name === 'shed') && this.obj('mower') && this.obj('shed') && this.yardOpen() && !this.mowRoute({ pushable: true, tidied: true })) return { ok: false, message: 'There is no clear stretch of lawn for the mower. GUY puts the yard things away in the shed and shifts light things (plants) himself, but not the shed: move it, or anything else heavy, away from the lawn and leave a little room behind the mower for GUY.' };
     let tries = {
       // with the stereo already playing, an instrument means playing along with it
       piano: k('piano') ? (this.music ? ['jamsit', 'jampiano', 'jam'] : ['sitpiano', 'piano']) : ['plink'],
@@ -2061,21 +2061,21 @@ export class Brain {
     if (wmsg) { this.forceLine = null; return { ok: false, message: wmsg }; }
     // told to use the goal or the hoop before reading that sport's book: say so (otherwise all he would do is poke the ball about with his foot)
     const sport = { soccergoal: ['outdoor.soccer', 'Soccer for Robots'], basketballhoop: ['outdoor.basketball', 'Basketball for Robots'] }[name];
-    if (sport && !k(sport[0])) return { ok: false, message: `Guy doesn't know how to play that yet. ${k('outdoor') ? '' : 'He has to read "Outdoor Sports" first. '}Add "${sport[1]}" to the shelf and he'll read it.` };
+    if (sport && !k(sport[0])) return { ok: false, message: `GUY doesn't know how to play that yet. ${k('outdoor') ? '' : 'He has to read "Outdoor Sports" first. '}Add "${sport[1]}" to the shelf and he'll read it.` };
     if (this.obj(name) && this.obj(name).kind === 'footstool') {
-      if (!k('decorate')) return { ok: false, message: 'Guy does not know about looking after the room yet. Add the book "Home Decorating for Robots" to the shelf and he will read it.' };
+      if (!k('decorate')) return { ok: false, message: 'GUY does not know about looking after the room yet. Add the book "Home Decorating for Robots" to the shelf and he will read it.' };
       if (!this.stoolJob()) return { ok: false, message: 'There is no window top to clean right now.' };
     }
-    if (name === 'table' && !k('stereo') && !this.music) return { ok: false, message: "Guy doesn't know how to use the stereo yet. Maybe there's a manual on the shelf." };
-    if (this.obj(name) && this.obj(name).guitar && !k('guitar')) return { ok: false, message: "Guy hasn't learned the guitar yet. Add \"Guitar for Beginners\" to the shelf and he'll read it." };
+    if (name === 'table' && !k('stereo') && !this.music) return { ok: false, message: "GUY doesn't know how to use the stereo yet. Maybe there's a manual on the shelf." };
+    if (this.obj(name) && this.obj(name).guitar && !k('guitar')) return { ok: false, message: "GUY hasn't learned the guitar yet. Add \"Guitar for Beginners\" to the shelf and he'll read it." };
     if ((name === 'drums' || name === 'easel') && !this.standOk(name)) {
-      return { ok: false, message: name === 'drums' ? "Guy can't get to the drum stool where the kit is. Move it away from the wall." : "Guy can't get in front of the easel where it is. Move it away from the wall." };
+      return { ok: false, message: name === 'drums' ? "GUY can't get to the drum stool where the kit is. Move it away from the wall." : "GUY can't get in front of the easel where it is. Move it away from the wall." };
     }
     if (REST_OBJECTS.includes(name) || (this.obj(name) && this.obj(name).seats)) tries = this.restTries(name);
     if (this.obj(name) && this.obj(name).heldBooks && !this.obj(name).heldBooks().some((b) => b.mesh.visible)) return { ok: false, message: 'There are no books on that bookshelf right now.' };
     if (this.obj(name) && this.obj(name).heldBooks && !tries) tries = ['read'];                // a bookshelf built as a clone of the skill one: read what stands on it
     const act = (tries || []).filter((a) => this.available(a));
-    if (!act.length) { this.forceLine = null; return { ok: false, message: "Guy can't do anything with that right now." }; }
+    if (!act.length) { this.forceLine = null; return { ok: false, message: "GUY can't do anything with that right now." }; }
     if (name === 'workstation') this.learnPlan = null;                  // (the panel, not an order)
     if (this.lock && this.lock.name !== name) this.unlock(false);     // told to do something else: the lock is over
     this.skip();                                   // stands up, switches the stereo off, etc. first
@@ -2086,7 +2086,7 @@ export class Brain {
     return { ok: true, message: 'On it!' };
   }
 
-  // The user picked something from the shed list: Guy takes it out of the shed (mode 'out') or puts it away in it ('away'); no key = all of them.
+  // The user picked something from the shed list: GUY takes it out of the shed (mode 'out') or puts it away in it ('away'); no key = all of them.
   requestShed(mode, key = null) {
     const y = this.w.yard, shed = this.obj('shed');
     if (!shed || !y) return { ok: false, message: 'There is no shed.' };
@@ -2099,10 +2099,10 @@ export class Brain {
     this.yardTask = { mode, keys };
     this.pendingActivity = 'yardtidy';
     const names = keys.map((k) => items.find((i) => i.key === k).label.toLowerCase());
-    return { ok: true, message: `Guy will ${mode === 'out' ? 'take out' : 'put away'} ${names.length > 2 ? 'the things' : names.join(' and ')}.` };
+    return { ok: true, message: `GUY will ${mode === 'out' ? 'take out' : 'put away'} ${names.length > 2 ? 'the things' : names.join(' and ')}.` };
   }
 
-  // The user picked a book from the shelf list: Guy reads that one next.
+  // The user picked a book from the shelf list: GUY reads that one next.
   requestRead(id) {
     const shelf = this.obj('shelf');
     const book = shelf && shelf.books.find((b) => b.def.id === id && b.mesh.visible);
@@ -2112,10 +2112,10 @@ export class Brain {
     this.skip();
     this.forceBook = book;
     this.pendingActivity = 'read';
-    return { ok: true, message: `Guy will read "${book.def.title}".` };
+    return { ok: true, message: `GUY will read "${book.def.title}".` };
   }
 
-  // Cut the current activity short. Nothing gets reset: Guy stands up if he was seated, and if the stereo is
+  // Cut the current activity short. Nothing gets reset: GUY stands up if he was seated, and if the stereo is
   // still playing he walks over and switches it off himself.
   skip(keepMusic = false) {
     const s = this.step;
@@ -2144,7 +2144,7 @@ export class Brain {
   // The animation loop must never die: if anything goes wrong mid-activity (an object removed from under him, say),
   // drop the activity, tidy up, and carry on.
   safeUpdate(dt) {
-    try { this.update(dt); this.faults = 0; } catch (err) { console.error('Guy stumbled:', err, err && err.stack && err.stack.split('\n')[1]); this.recover(); }
+    try { this.update(dt); this.faults = 0; } catch (err) { console.error('GUY stumbled:', err, err && err.stack && err.stack.split('\n')[1]); this.recover(); }
   }
 
   safeLate() {
@@ -2175,7 +2175,7 @@ export class Brain {
       if (this.w.restaurant) this.w.restaurant.update(dt);      // customers arrive, order, eat and pay (customers.js)
       if (this.w.gal) this.w.gal.update(dt);                    // GAL, the second robot (gal.js)
     }
-    if (this.w.paintings) this.w.paintings.update(dt);        // Guy's paintings: saved when they change, and put away ones filed in the Catalog
+    if (this.w.paintings) this.w.paintings.update(dt);        // GUY's paintings: saved when they change, and put away ones filed in the Catalog
     this.skills.tick(dt);                 // skills whose book was forgotten fade away
     this.autoAdvance();
     const g = this.g;
@@ -2202,7 +2202,7 @@ export class Brain {
     }
     const s = this.step;
     if (this.checkMoved(s)) return;       // the user dragged or turned something he was using: he lets go
-    // Whatever Guy is pushing or sitting on doesn't block him while he's doing it.
+    // Whatever GUY is pushing or sitting on doesn't block him while he's doing it.
     for (const o of this.w.obstacles) o.active = true;
     if (this.selfOb) this.selfOb.active = false;             // the other robot is in his way; he is not
     if (s.push) s.push.obj.obstacle.active = false;
@@ -2225,7 +2225,7 @@ export class Brain {
           if (s.anchor.yaw !== null) s.yaw = s.anchor.yaw + o.yaw;
         }
         if (s.push) {
-          // only push if Guy is actually standing where he can reach the object
+          // only push if GUY is actually standing where he can reach the object
           const { obj, relx, relz } = s.push;
           if (Math.hypot(obj.x - root.position.x - relx, obj.z - root.position.z - relz) > 0.4) { this.queue.length = 0; s.path = []; finished = true; }
         }
@@ -2356,7 +2356,7 @@ export class Brain {
     this.read = { open, turning: tn.start !== null, turnT, sheet };
   }
 
-  // World points the arms aim at: the book's slot on the shelf, Guy's side (carrying), and each edge of the open book.
+  // World points the arms aim at: the book's slot on the shelf, GUY's side (carrying), and each edge of the open book.
   bookTargets(s) {
     const g = this.g, root = g.root;
     const t = { shelf: new THREE.Vector3(), carry: root.localToWorld(new THREE.Vector3(-0.2, 0.85, 0.1)) };
@@ -2498,7 +2498,7 @@ export class Brain {
   }
 
   // Sitting down: from the gap in front of the bench, lower back onto the seat, scoot the bench in towards the
-  // keys (it moves because Guy shuffles it), and reverse all of that when standing up.
+  // keys (it moves because GUY shuffles it), and reverse all of that when standing up.
   updateSit(s) {
     const root = this.g.root, p = this.obj('piano'), bench = this.obj('bench');
     const sm = (x) => smooth(clamp(x, 0, 1));
@@ -2659,8 +2659,8 @@ function paperTexture() {
   return t;
 }
 
-// The book as Guy holds it: a ~17 x 24 cm hardback that can open on a spine hinge and flip a page.
-// Spine at x = 0 (the +x side is Guy's left while reading); pages extend towards -x. userData.setOpen(0..1), setSheet(angle|null).
+// The book as GUY holds it: a ~17 x 24 cm hardback that can open on a spine hinge and flip a page.
+// Spine at x = 0 (the +x side is GUY's left while reading); pages extend towards -x. userData.setOpen(0..1), setSheet(angle|null).
 function makeHeldBook() {
   const W = 0.17, H = 0.24;
   const coverMat = new THREE.MeshStandardMaterial({ color: 0x884444, roughness: 0.7 });
@@ -2719,7 +2719,7 @@ function makeHeldBook() {
 }
 
 // ---- Grid A* around furniture ----
-// A grid covers one room: Guy's own (the default) or an added room (world.frameOf). The grid remembers its frame (blocked.fr), so
+// A grid covers one room: GUY's own (the default) or an added room (world.frameOf). The grid remembers its frame (blocked.fr), so
 // cellBlocked, lineClear and findPath work on either.
 const CELL = 0.2, X0 = -4.6, Z0 = -3.6, NX = 47, NZ = 37, INFLATE = 0.28;
 const MAIN_FRAME = { X0, Z0, NX, NZ };

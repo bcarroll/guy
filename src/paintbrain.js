@@ -1,4 +1,4 @@
-// Guy hanging his paintings (the long-press menu of the easel: "Hang painting"). Installed onto Brain at the bottom of brain.js.
+// GUY hanging his paintings (the long-press menu of the easel: "Hang painting"). Installed onto Brain at the bottom of brain.js.
 // The pictures, the walls and the choosing are in paintings.js (`world.paintings`); this is his side of it: lifting the canvas off the
 // easel, carrying it (shown in his hand, `this.carry === 'canvas'`), walking to the wall (through a door if it is in another room) and
 // hanging it. If he is cut short he takes it back to the easel, so the painting is never lost.
@@ -33,14 +33,14 @@ export function installPaintings(Brain) {
     hangPainting() {
       const P = this.w.paintings;
       if (!P) return { ok: false, message: 'Paintings are not available here.' };
-      if (this.paintingNow()) return { ok: false, message: 'Guy is still painting. Wait until he has finished.' };
+      if (this.paintingNow()) return { ok: false, message: 'GUY is still painting. Wait until he has finished.' };
       if (this.stuckIn()) return { ok: false, message: this.shutInMessage(this.stuckIn()) };
       const why = P.refusal();
       if (why) return { ok: false, message: why };
       this.unlock(false);
       this.skip();
       this.pendingActivity = 'hangpaint';
-      return { ok: true, message: 'Guy will hang the painting.' };
+      return { ok: true, message: 'GUY will hang the painting.' };
     },
 
     // Where his hand goes on the easel's canvas, and on the wall where the painting will hang.
@@ -85,14 +85,14 @@ export function installPaintings(Brain) {
       const P = this.w.paintings;
       sfx(rec && rec.room ? 'chime' : 'place');
       if (!this.onBuilt) return;
-      if (!rec || !rec.room) this.onBuilt('Guy found no bare wall, so the painting is in the Catalog.');
-      else this.onBuilt(`Guy hung a painting in ${P.roomName(rec.room)}.${replaced ? ' The oldest one is in the Catalog.' : ''}`);
+      if (!rec || !rec.room) this.onBuilt('GUY found no bare wall, so the painting is in the Catalog.');
+      else this.onBuilt(`GUY hung a painting in ${P.roomName(rec.room)}.${replaced ? ' The oldest one is in the Catalog.' : ''}`);
     },
 
     paintActivities() {
       const w = this.w;
       return {
-        // take the painting off the easel and hang it where Guy decides
+        // take the painting off the easel and hang it where GUY decides
         hangpaint: () => {
           const P = w.paintings, plan = P && this.obj('easel') && P.easelHas() ? P.plan() : null;
           if (!plan) return ['looking for a bare wall', this.play('idle', 1)];
@@ -109,7 +109,7 @@ export function installPaintings(Brain) {
         // he was cut short with the canvas in his hands: back to the easel with it (with no easel it goes to the Catalog)
         putcanvas: () => {
           const P = w.paintings, e = this.obj('easel');
-          if (!e || P.easelHas()) return ['putting the painting away', this.play('idle', 0.6, { at: [0.2, () => { P.stash(); this.carry = null; sfx('place', 0.3); if (this.onBuilt) this.onBuilt('Guy put the painting in the Catalog.'); }] })];
+          if (!e || P.easelHas()) return ['putting the painting away', this.play('idle', 0.6, { at: [0.2, () => { P.stash(); this.carry = null; sfx('place', 0.3); if (this.onBuilt) this.onBuilt('GUY put the painting in the Catalog.'); }] })];
           return ['putting the painting back on the easel',
             this.walkAt('easel', 0, 0.78),
             this.walkAt('easel', 0, 0.59, Math.PI, true),

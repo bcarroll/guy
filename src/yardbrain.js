@@ -1,4 +1,4 @@
-// Guy (and GAL) in the Backyard: going out through the door, sitting in the lawn chair, the bird bath, switching between day and night,
+// GUY (and GAL) in the Backyard: going out through the door, sitting in the lawn chair, the bird bath, switching between day and night,
 // playing with the soccer ball and the basketball, and mowing the lawn. Installed onto Brain at the bottom of brain.js (like the
 // Workshop). The objects and the ball physics are in yardobjects.js and yardballs.js.
 //
@@ -55,7 +55,7 @@ export function installYard(Brain, POSES, H) {
           const b = this.yardBall(kind);
           if (!b) { this.queue.length = 0; return []; }
           const p = b.position, g = this.g.pos, bd = this.w.doors[ID].shell.bounds;
-          let base = Math.atan2(g.x - p.x, g.z - p.z);                        // from the ball towards Guy
+          let base = Math.atan2(g.x - p.x, g.z - p.z);                        // from the ball towards GUY
           let turns = [0, 0.8, -0.8, 1.6, -1.6, 2.4, -2.4, Math.PI];
           if (at) { const t = at(); if (t) { base = Math.atan2(p.x - t.x, p.z - t.z); turns = [0, 0.3, -0.3, 0.6, -0.6]; } }
           const fr = this.yardFrame();
@@ -108,7 +108,7 @@ export function installYard(Brain, POSES, H) {
 
     // ------------------------------------------------------------------ the shed holds the yard's things
     // Everything movable in the yard (the goal, the hoop, both balls, the chair, the bird bath, the sky switch, the mower) can be put away
-    // in the shed (world.yard.stow / unstow hide it and take it out of the way). Before mowing Guy puts everything but the mower away; an
+    // in the shed (world.yard.stow / unstow hide it and take it out of the way). Before mowing GUY puts everything but the mower away; an
     // activity that needs something takes it out first, and leaves it out afterwards (like a book he has read: it stays where he used it).
     // Where something is, as a point on the grass.
     yardItemAt(key) {
@@ -242,7 +242,7 @@ export function installYard(Brain, POSES, H) {
       for (const depth of [1.5, 2.0]) for (const lat of [0, 0.6, -0.6, 1.2, -1.2]) out.push({ x: s.x + p.out.x * depth + side.x * lat, z: s.z + p.out.z * depth + side.z * lat });
       return out;
     },
-    // The steps that put the mower away when the lawn is done: push it to the shed door, then in (the door is open), and Guy shuts the door
+    // The steps that put the mower away when the lawn is done: push it to the shed door, then in (the door is open), and GUY shuts the door
     // after it. Whatever is in the way of the push (it never is, normally) is skipped: the mower is simply put in.
     putMowerAway() {
       const m = this.obj('mower'), s = this.obj('shed'), park = this.shedPark();
@@ -266,7 +266,7 @@ export function installYard(Brain, POSES, H) {
     // mowRoute() gives the loop he would push the mower round from where it stands now: { pts, dd } (the four corners, the direction of each leg), or null
     // when there is no clear stretch of lawn (things too close to the mower, or it is jammed against a fence). Asked before he is sent
     // (so an order he cannot carry out says so, instead of him opening the shed and giving up) and again when the plan is made.
-    // `pushable`: count the things Guy can shove aside (the lawn chair, the bird bath, a plant...) as not in the way; the route then lists
+    // `pushable`: count the things GUY can shove aside (the lawn chair, the bird bath, a plant...) as not in the way; the route then lists
     // them in `blockers`. The shed, the goal and the hoop are heavy: only the user can move those.
     mowRoute({ pushable = false, tidied = false } = {}) {
       const m = this.obj('mower'), shed = this.obj('shed');
@@ -277,7 +277,7 @@ export function installYard(Brain, POSES, H) {
       const away = tidied ? this.w.yard.STORE.map((it) => this.obj(it.key)).filter((o) => o && o.name !== 'mower').map((o) => o.obstacle) : [];
       const grid = makeGrid(movers.length || away.length ? this.w.obstacles.filter((o) => !away.includes(o) && !movers.some((mo) => mo.obstacle === o)) : this.w.obstacles, 0.5, 0, m.obstacle, fr);
       const BEHIND = 0.95;
-      const clearLine = (a, b, off) => {                                    // the mower's line a-b, and Guy's line behind it
+      const clearLine = (a, b, off) => {                                    // the mower's line a-b, and GUY's line behind it
         const n = Math.max(2, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 0.2));
         for (let i = 0; i <= n; i++) {
           const x = a.x + ((b.x - a.x) * i) / n, z = a.z + ((b.z - a.z) * i) / n;
@@ -309,13 +309,13 @@ export function installYard(Brain, POSES, H) {
       return route;
     },
 
-    // What in the yard Guy can shove out of the way: everything that is not heavy, except the mower itself and the sky switch (a post
+    // What in the yard GUY can shove out of the way: everything that is not heavy, except the mower itself and the sky switch (a post
     // by the fence, not furniture).
     yardMovers(tidied = false) {
       return Object.values(this.w.objects).filter((o) => !o.stowed && o.weight !== 'heavy' && o.name !== 'mower' && o.name !== 'skyswitch' && o.obstacle && this.w.roomIdAt(o.x, o.z) === ID
         && !(tidied && this.w.yard.STORE.some((it) => it.key === o.name)));
     },
-    // Points along a route where the mower and then Guy (behind it) pass.
+    // Points along a route where the mower and then GUY (behind it) pass.
     mowCorridor(route) {
       const out = [];
       for (let i = 0; i < 4; i++) {

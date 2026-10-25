@@ -105,13 +105,13 @@ scene.add(guy.root);
 
 const label = document.getElementById('activity');
 const params = new URLSearchParams(location.search);
-// what Guy has learned persists between visits; ?skills=all|none|stereo,piano overrides it (for testing)
+// what GUY has learned persists between visits; ?skills=all|none|stereo,piano overrides it (for testing)
 const skills = new Skills(params.get('skills'));
 const brain = new Brain(guy, world, (t) => (label.textContent = t), skills);
-// the Restaurant's customers (they only come once the room is added, stocked, and Guy has read "Restaurant Basics")
+// the Restaurant's customers (they only come once the room is added, stocked, and GUY has read "Restaurant Basics")
 world.restaurant = new Restaurant(world, { skillOk: () => skills.has('restaurant') || !!(world.gal && world.gal.skills && world.gal.skills.has('restaurant')), guyAt: () => guy.root.position });
-// GAL, the second robot: built by Guy at the Build a Bot machine (gal.js). Her model loads at the start; she is saved unless ?fresh
-// Speech (tts.js: offline robot voices + subtitles; voice.js: commands). Guy and GAL speak only in an interaction or to each other.
+// GAL, the second robot: built by GUY at the Build a Bot machine (gal.js). Her model loads at the start; she is saved unless ?fresh
+// Speech (tts.js: offline robot voices + subtitles; voice.js: commands). GUY and GAL speak only in an interaction or to each other.
 const tts = initTTS({ subs: document.getElementById('subs'), persist: !params.has('fresh') });
 const galLine = document.getElementById('galline'), galLabel = document.getElementById('activity2');
 world.gal = new Gal(world, {
@@ -121,7 +121,7 @@ world.gal = new Gal(world, {
   speak: (who, text, kind) => tts.say(who, text, kind), onWorkstation: (b) => workstation.open(b), onStart: (n) => voice.bark('gal', n),
 });
 world.gal.preload();
-// Guy's paintings: hung on the walls of any room, the rest kept in the Catalog (they are saved unless ?fresh)
+// GUY's paintings: hung on the walls of any room, the rest kept in the Catalog (they are saved unless ?fresh)
 world.paintings = new Paintings(world, { persist: !params.has('fresh') });
 
 // ---- skills panel + "learned something" toast ----
@@ -145,12 +145,12 @@ function showToast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove('show'), 6000);
 }
-brain.onLearn = (def) => { showToast(`Guy learned ${def.blurb}!`); sfx('chime'); if (machineUI.isOpen()) machineUI.refresh(); };
+brain.onLearn = (def) => { showToast(`GUY learned ${def.blurb}!`); sfx('chime'); if (machineUI.isOpen()) machineUI.refresh(); };
 brain.onRiff = (msg) => { showToast(msg); sfx('chime'); };
 brain.onBuilt = (msg) => { showToast(msg); machineUI.refresh(); };           // something finished in the Workshop: it is in storage now
 riffConfig.persist = !params.has('fresh');           // ?fresh keeps the riffs he makes up in memory only
 
-// ---- speed: how fast Guy walks and how short his pauses are between interactions (the dropdown beside Follow) ----
+// ---- speed: how fast GUY walks and how short his pauses are between interactions (the dropdown beside Follow) ----
 const speedSel = document.getElementById('speed-sel');
 {
   let saved = 1;
@@ -164,13 +164,13 @@ const speedSel = document.getElementById('speed-sel');
   });
 }
 
-// ---- Lock in: the chip shows while Guy is locked on an object; tap it to let him go ----
+// ---- Lock in: the chip shows while GUY is locked on an object; tap it to let him go ----
 const lockBtn = document.getElementById('lock-btn');
 brain.onLock = (L) => {
   lockBtn.hidden = !L;
   if (L) lockBtn.textContent = `🔒 Locked on ${L.name.replace(/\d+$/, '')} · tap to stop`;
 };
-lockBtn.addEventListener('click', () => { brain.unlock(true); showToast('Guy is free to do what he likes.'); });
+lockBtn.addEventListener('click', () => { brain.unlock(true); showToast('GUY is free to do what he likes.'); });
 
 // ---- the Catalog on the wall: tap it for the catalog of objects and books ----
 // Rooms the user adds from the Catalog: a door on a wall, and a room behind it. Frame the camera round all of them.
@@ -188,7 +188,7 @@ world.rooms = rooms;
 rooms.onChange(() => world.paintings.sync());        // a room taken away: the paintings on its walls go to the Catalog
 const machineUI = initMachine({
   world, guy, persist: !params.has('fresh'), rooms, paintings: world.paintings,
-  knows: (id) => skills.has(id) || !!(world.gal && world.gal.skills && world.gal.skills.has(id)),       // Guy or GAL
+  knows: (id) => skills.has(id) || !!(world.gal && world.gal.skills && world.gal.skills.has(id)),       // GUY or GAL
   notify: (msg) => { showToast(msg); renderSkills(); sfx('pop'); },
   remove: (id) => removeById(id),
 });
@@ -218,8 +218,8 @@ layout.restore();
 rooms.restore();
 machineUI.restoreExtras();         // the rooms are back, so what belongs to them (the Workshop's furniture) can be added now ...
 layout.restore();                  // ... and put where it was left
-world.paintings.restore();         // then Guy's paintings, on the walls of the rooms that are back
-world.gal.restore();               // and GAL, if Guy built her on an earlier visit
+world.paintings.restore();         // then GUY's paintings, on the walls of the rooms that are back
+world.gal.restore();               // and GAL, if GUY built her on an earlier visit
 layout.start();
 initUpdateCheck();
 // The build this page is running, in the top-left corner: the short commit id (the first seven characters of the id). Checking
@@ -244,7 +244,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Space') { e.preventDefault(); nextActivity(); }
 });
 // There is no "click to start" screen. Browsers keep the sound off until the page has been touched once, so the first real tap, drag
-// or key press anywhere starts the audio quietly; until then Guy carries on in silence. Fullscreen on phones is the Full button.
+// or key press anywhere starts the audio quietly; until then GUY carries on in silence. Fullscreen on phones is the Full button.
 // (?nostart is still accepted so old test URLs work; it no longer does anything.)
 // The speaker in the top corner is always there: red (and pulsing) while the sound has not started, red while it is muted, and
 // faint while it is on. Tapping it starts the sound, and once it is running it is the mute button (M does the same).
@@ -259,7 +259,7 @@ const syncSoundIcon = () => {
   const label = { off: 'Sound is off. Tap to turn it on.', muted: 'Sound is muted. Tap to turn it back on.', on: 'Sound is on. Tap to mute.' }[state];
   soundBtn.title = label; soundBtn.setAttribute('aria-label', label);
 };
-const setSoundMuted = (m) => {                    // mutes everything: the music and Guy's instruments (the master volume) and the sound effects
+const setSoundMuted = (m) => {                    // mutes everything: the music and GUY's instruments (the master volume) and the sound effects
   soundMuted = !!m;
   const { master } = audio();
   if (master) master.gain.value = soundMuted ? 0 : 0.5;
@@ -314,12 +314,12 @@ function collideBall(b, v, r) {
   }
 }
 
-// Ball physics: friction, wall bounces, and Guy nudging it when he walks into it
+// Ball physics: friction, wall bounces, and GUY nudging it when he walks into it
 const tmp = new THREE.Vector3();
 function updateBall(dt) {
   const b = world.ball, v = b.userData.vel, r = b.userData.r;
   if (world.ballGone) return;
-  if (b.userData.kinematic) return; // Guy is handling it
+  if (b.userData.kinematic) return; // GUY is handling it
   if (drag && drag.ball) { v.set(0, 0, 0); return; } // held by the user
   b.position.addScaledVector(v, dt);
   v.y -= 9.8 * dt;
@@ -343,7 +343,7 @@ function updateBall(dt) {
 }
 
 // ---- Mouse/touch: drag an object to move it, long-press it for a menu (rotate / remove) ----
-// The user can move heavy things Guy can't.
+// The user can move heavy things GUY can't.
 const raycaster = new THREE.Raycaster();
 const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const ndc = new THREE.Vector2();
@@ -390,7 +390,7 @@ function planeAt(e, plane) {
 // Take something out of the room (the context menu and the Catalog both come through here).
 function removeById(id) {
   if (id === 'ball') { world.removeBall(); brain.ballRemoved && brain.ballRemoved(); }
-  else if (world.objects[id] && world.objects[id].kind) { world.storeInstance(id); brain.objectRemoved(id); machineUI.save(); machineUI.refresh(); }     // something Guy built goes back into storage
+  else if (world.objects[id] && world.objects[id].kind) { world.storeInstance(id); brain.objectRemoved(id); machineUI.save(); machineUI.refresh(); }     // something GUY built goes back into storage
   else { world.removeObject(id); brain.objectRemoved(id); }
 }
 
@@ -400,7 +400,7 @@ function floorAt(e, y = 0) {
   return raycaster.ray.intersectPlane(floorPlane, hitPoint) ? hitPoint : null;
 }
 
-// Can `obj` stand at (x, z)? Inside the room, clear of other furniture and of Guy.
+// Can `obj` stand at (x, z)? Inside the room, clear of other furniture and of GUY.
 function canPlace(obj, x, z, w = obj.w, d = obj.d) {
   if (!world.fits(obj, x, z, w, d)) return false;
   const gx = THREE.MathUtils.clamp(guy.pos.x, x - w / 2, x + w / 2), gz = THREE.MathUtils.clamp(guy.pos.z, z - d / 2, z + d / 2);
@@ -425,7 +425,7 @@ function showPlayer() {
   player.hidden = false;
   renderPlayer();
   clearInterval(playerTimer);
-  playerTimer = setInterval(renderPlayer, 500);   // Guy can start or stop the music too
+  playerTimer = setInterval(renderPlayer, 500);   // GUY can start or stop the music too
 }
 function hidePlayer() { player.hidden = true; clearInterval(playerTimer); }
 // the playback controls live on a button beside Follow, shown while there is a stereo in the room
@@ -467,15 +467,15 @@ function placeAlbumMenu(x, y) {
   albumMenu.style.top = Math.max(8, Math.min(y, innerHeight - albumMenu.offsetHeight - 8)) + 'px';      // always fully on screen: a long list scrolls inside
   albumMenu.scrollTop = 0;
 }
-// the lower shelves hold the books: long-press them to see which ones Guy has read
+// the lower shelves hold the books: long-press them to see which ones GUY has read
 function openBookMenu(shelfObj, x, y) {
   albumMenu.querySelector('.title').textContent = '📚 Books on the shelf';
   albumMenu.querySelector('.list').innerHTML = shelfObj.heldBooks().filter((b) => b.mesh.visible).map((b) => {
     const read = skills.has(b.def.teaches);
     const st = skills.strength(b.def.teaches);
     const fading = read && st < 1;
-    const note = fading ? `Forgetting… ${Math.round(st * 100)}% of ${b.def.blurb} left` : read ? 'Read — Guy knows ' + b.def.blurb : 'Not read yet — tap to have Guy read it';
-    return `<div class="brow ${read ? 'done' : ''}" ${read ? '' : `data-book="${b.def.id}"`}><span class="ico">${fading ? '🌫️' : read ? '✅' : '📕'}</span><span class="grow"><b>${b.def.title}</b><small>${note}</small></span><button class="remove" data-remove="${b.def.id}" title="Take the book off the shelf. It goes back to the Catalog and Guy keeps what he learned">Remove</button><button class="forget" data-forget="${b.def.id}" title="Take the book off the shelf; Guy gradually forgets what it taught">Forget</button></div>`;
+    const note = fading ? `Forgetting… ${Math.round(st * 100)}% of ${b.def.blurb} left` : read ? 'Read — GUY knows ' + b.def.blurb : 'Not read yet — tap to have GUY read it';
+    return `<div class="brow ${read ? 'done' : ''}" ${read ? '' : `data-book="${b.def.id}"`}><span class="ico">${fading ? '🌫️' : read ? '✅' : '📕'}</span><span class="grow"><b>${b.def.title}</b><small>${note}</small></span><button class="remove" data-remove="${b.def.id}" title="Take the book off the shelf. It goes back to the Catalog and GUY keeps what he learned">Remove</button><button class="forget" data-forget="${b.def.id}" title="Take the book off the shelf; GUY gradually forgets what it taught">Forget</button></div>`;
   }).join('');
   placeAlbumMenu(x, y);
 }
@@ -485,14 +485,14 @@ function openAlbumMenu(shelfObj, x, y) {
   list.innerHTML = shelfObj.heldAlbums().map((a) => `<button data-track="${a.def.track}"><span class="ico">${a.def.icon || '💿'}</span><span><b>${a.def.title}</b><small>${a.def.genre}</small></span></button>`).join('');
   placeAlbumMenu(x, y);
 }
-// the shed: long-press it > What's in the shed lists everything that can be put away in it, tap one to have Guy take it out / put it away
+// the shed: long-press it > What's in the shed lists everything that can be put away in it, tap one to have GUY take it out / put it away
 function openShedMenu(x, y) {
   const items = world.yard.items();
   albumMenu.querySelector('.title').textContent = '📦 The shed';
   const row = (attrs, ico, title, note) => `<div class="brow" ${attrs}><span class="ico">${ico}</span><span class="grow"><b>${title}</b><small>${note}</small></span></div>`;
   albumMenu.querySelector('.list').innerHTML = [
-    items.some((i) => !i.stowed) ? row('data-shed-all="away"', '📥', 'Put everything away', 'Tap to have Guy put it all in the shed') : '',
-    ...items.map((i) => row(`data-shed="${i.key}" data-mode="${i.stowed ? 'out' : 'away'}"`, i.icon, i.label, i.stowed ? 'In the shed: tap to have Guy take it out' : 'Out in the yard: tap to have Guy put it away')),
+    items.some((i) => !i.stowed) ? row('data-shed-all="away"', '📥', 'Put everything away', 'Tap to have GUY put it all in the shed') : '',
+    ...items.map((i) => row(`data-shed="${i.key}" data-mode="${i.stowed ? 'out' : 'away'}"`, i.icon, i.label, i.stowed ? 'In the shed: tap to have GUY take it out' : 'Out in the yard: tap to have GUY put it away')),
   ].join('');
   placeAlbumMenu(x, y);
 }
@@ -567,8 +567,8 @@ function interactLabel(name) {
   }
 }
 
-// What the door menu's first button does. It goes to the room on the far side of the face that was pressed (`side`: 'main' is the face in Guy's
-// own room, 'room' the face inside the room behind it). If Guy is already there it offers the way the other direction instead, so the button
+// What the door menu's first button does. It goes to the room on the far side of the face that was pressed (`side`: 'main' is the face in GUY's
+// own room, 'room' the face inside the room behind it). If GUY is already there it offers the way the other direction instead, so the button
 // always does something. Either way it is brain.visitRoom: he goes in when he is outside and comes back when he is inside.
 function doorChoice(door, side) {
   const p = brain.g.root.position, inRoom = world.roomIdAt(p.x, p.z) === door.id;
@@ -576,9 +576,9 @@ function doorChoice(door, side) {
   let target = side === 'room' ? 'main' : door.id;
   const already = target === guyAt;
   if (already) target = target === door.id ? 'main' : door.id;
-  const name = (t) => (t === 'main' ? "Guy's room" : `the ${door.name}`);
-  const label = target === door.id ? `🚪 Go into the ${door.name}` : side === 'main' ? '🚪 Come back' : "🚪 Go into Guy's room";
-  return { side, target, already, label, note: already ? `Guy is already in ${name(guyAt)}` : '' };
+  const name = (t) => (t === 'main' ? "GUY's room" : `the ${door.name}`);
+  const label = target === door.id ? `🚪 Go into the ${door.name}` : side === 'main' ? '🚪 Come back' : "🚪 Go into GUY's room";
+  return { side, target, already, label, note: already ? `GUY is already in ${name(guyAt)}` : '' };
 }
 
 function openMenu(hit, x, y) {
@@ -643,7 +643,7 @@ menu.addEventListener('click', (e) => {
     if (act === 'lock') {
       const now = !world.isDoorLocked(t.door.id);
       rooms.setDoorLocked(t.door.id, now);
-      showToast(now ? `The ${t.door.name} door is locked: Guy and GAL will stay out.` : `The ${t.door.name} door is unlocked.`);
+      showToast(now ? `The ${t.door.name} door is locked: GUY and GAL will stay out.` : `The ${t.door.name} door is unlocked.`);
     }
     closeMenu();
     return;
@@ -660,14 +660,14 @@ menu.addEventListener('click', (e) => {
     openShedMenu(r.left, r.top);
     return;
   }
-  if (act === 'hang') {                                 // long-press the easel > Hang painting: Guy takes it down and decides where it goes
+  if (act === 'hang') {                                 // long-press the easel > Hang painting: GUY takes it down and decides where it goes
     showToast(brain.hangPainting().message);
     closeMenu();
     return;
   }
   if (act === 'lock') {
     const oname = t.ball ? 'ball' : t.obj.name;
-    if (brain.lock && brain.lock.name === oname) { brain.unlock(true); showToast('Guy is free to do what he likes.'); }
+    if (brain.lock && brain.lock.name === oname) { brain.unlock(true); showToast('GUY is free to do what he likes.'); }
     else showToast(brain.lockOn(oname).message);
     closeMenu();
     return;
@@ -704,10 +704,10 @@ window.__screenLock = screenLock;
 // The Learning Workstation's panel opens for whichever robot tapped the screen
 const workstation = initWorkstation({ world, toast: showToast });
 brain.onWorkstation = (b) => workstation.open(b);
-brain.onLearnMany = (defs) => { showToast(`Guy learned ${defs.length} skills!`); sfx('chime'); if (machineUI.isOpen()) machineUI.refresh(); };
+brain.onLearnMany = (defs) => { showToast(`GUY learned ${defs.length} skills!`); sfx('chime'); if (machineUI.isOpen()) machineUI.refresh(); };
 window.__workstation = workstation;
 
-// Typed commands (the same path the microphone will use): the 💬 button opens a box; Enter sends it to Guy.
+// Typed commands (the same path the microphone will use): the 💬 button opens a box; Enter sends it to GUY.
 const voice = createVoice({ world, brain, screen: screenLock, say: (who, text, kind) => tts.say(who, text, kind), speaking: () => tts.speaking, toast: showToast });
 brain.onStart = (n) => voice.bark('guy', n);
 const cmdBox = document.getElementById('cmdbox'), cmdIn = document.getElementById('cmd-in');
@@ -795,7 +795,7 @@ canvas.addEventListener('pointermove', (e) => {
   const o = drag.obj;
   const nx = p.x + drag.off.x, nz = p.z + drag.off.z;
   const ox = o.x, oz = o.z;
-  // a path, not a jump: it stops at a wall and goes between rooms only through a door; never onto Guy
+  // a path, not a jump: it stops at a wall and goes between rooms only through a door; never onto GUY
   world.dragTo(o, nx, nz, (x, z) => {
     const gx = THREE.MathUtils.clamp(guy.pos.x, x - o.w / 2, x + o.w / 2), gz = THREE.MathUtils.clamp(guy.pos.z, z - o.d / 2, z + o.d / 2);
     return Math.hypot(guy.pos.x - gx, guy.pos.z - gz) > 0.35;

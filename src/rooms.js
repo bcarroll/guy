@@ -1,4 +1,4 @@
-// Extra rooms the user can add from the Catalog's Rooms tab. Adding one puts a door on a wall of Guy's room (clearing the
+// Extra rooms the user can add from the Catalog's Rooms tab. Adding one puts a door on a wall of GUY's room (clearing the
 // wall of whatever is in the way) and builds the room behind it.
 //
 // A room is "added" once the user adds it, and "unlocked" when it is free or paid for. Things that belong to a room (catalog
@@ -7,14 +7,14 @@ import { OBJECT_CATALOG } from './machine.js';
 import { dev } from './devunlock.js';
 
 export const ROOM_CATALOG = [
-  // `size` ({ w: depth away from the door, d: width along the wall }) is optional: left out, a room is as big as Guy's room.
+  // `size` ({ w: depth away from the door, d: width along the wall }) is optional: left out, a room is as big as GUY's room.
   { id: 'workshop', name: 'Workshop', icon: '🛠️', unlocked: true, doorWalls: ['right', 'front', 'back'],
     desc: 'A place to build things. Adds a door to your room.',
     look: { frame: 0x6b4a2b, door: 0xb5532f, panel: 0xc9683f, floor: 0x8c9096, wall: 0xb4b8bd } },
   // The Restaurant: a kitchen, a cash register and dining tables, with an elevator the customers arrive in. A premium room: listed
   // as locked in the Rooms tab (`premium: true`) until it is unlocked (`setUnlocked`; there is no way to pay yet).
   { id: 'restaurant', name: 'Restaurant', icon: '🍽️', unlocked: false, premium: true, doorWalls: ['front', 'back', 'right'], elevator: true,
-    desc: 'A kitchen and dining room. Customers arrive by elevator and Guy cooks and serves.',
+    desc: 'A kitchen and dining room. Customers arrive by elevator and GUY cooks and serves.',
     look: { frame: 0x6b4a2b, door: 0x2f6f8f, panel: 0x3d86a8, floor: 0xb98a55, wall: 0xeadbc0 } },
   // The Backyard: an open-air room (grass, a fence, no ceiling) with a goal, a hoop, a lawn chair, a bird bath and a switch for day and night.
   { id: 'backyard', name: 'Backyard', icon: '🌳', unlocked: true, outdoor: true, doorWalls: ['right', 'front', 'back'],

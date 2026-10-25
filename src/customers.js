@@ -1,17 +1,17 @@
 // The Restaurant's customers: who arrives (by the elevator), where they sit, what they order, how long they wait, and when they
 // pay and leave. The logic here does not depend on how they look: a customer is a record that moves along paths, and a figure
-// (a Mixamo model from customermodels.js, driven like Guy) is drawn on top of it. `headless` skips the figures, for the QA sweeps.
+// (a Mixamo model from customermodels.js, driven like GUY) is drawn on top of it. `headless` skips the figures, for the QA sweeps.
 //
 // A customer goes through these states:
 //   ride     in the elevator, waiting for the doors to open
 //   exit     walking out of the elevator
 //   walk     walking to a free seat (path of points; then `next` is the state it goes to)
 //   sitdown  easing into the seat            seated  looking at the menu   waiting  hand up: wants to order
-//   ordered  has ordered (the dish is shown)  cooking  Guy is at the stove   cooked  the plate waits on the counter (Guy serves it)
-//   eating   eating the dish at the table      standup  getting up            paying  at the register, waiting for Guy
+//   ordered  has ordered (the dish is shown)  cooking  GUY is at the stove   cooked  the plate waits on the counter (GUY serves it)
+//   eating   eating the dish at the table      standup  getting up            paying  at the register, waiting for GUY
 //   leave    walking back to the elevator    enter    stepping in            ridden  inside, doors closing, then gone
-// Guy does the work (src/restbrain.js): take the order, cook, serve, take the payment. Nobody is ever paid or served by magic: if
-// Guy is busy somewhere else the customers wait, and give up (politely, without paying) if they wait too long to be asked or cooked for.
+// GUY does the work (src/restbrain.js): take the order, cook, serve, take the payment. Nobody is ever paid or served by magic: if
+// GUY is busy somewhere else the customers wait, and give up (politely, without paying) if they wait too long to be asked or cooked for.
 import * as THREE from 'three';
 import { Guy, Q } from './guy.js';
 import { sfx } from './sfx.js';
@@ -35,8 +35,8 @@ const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const SHIRTS = [0xe57373, 0x64b5f6, 0x81c784, 0xffd54f, 0xba68c8, 0xff8a65, 0x4db6ac];
 
 export class Restaurant {
-  // opts.skillOk(): whether Guy has learned the restaurant skill (customers only come when he can serve them)
-  // opts.guyAt(): where Guy is (customers wait a moment instead of walking into him)
+  // opts.skillOk(): whether GUY has learned the restaurant skill (customers only come when he can serve them)
+  // opts.guyAt(): where GUY is (customers wait a moment instead of walking into him)
   // opts.headless: no figures are drawn
   constructor(world, opts = {}) {
     this.w = world;
@@ -58,13 +58,13 @@ export class Restaurant {
 
   // ---------------------------------------------------------------- the room
   obj(n) { return this.w.objects[n]; }
-  tables() { return Object.values(this.w.objects).filter((o) => o.seats); }          // the two it comes with and any that Guy builds
+  tables() { return Object.values(this.w.objects).filter((o) => o.seats); }          // the two it comes with and any that GUY builds
   seatCount() { return this.tables().reduce((n, t) => n + t.seats.length, 0); }
   maxCustomers() { return Math.max(MAX_CUSTOMERS, this.seatCount() - 1); }           // more tables, more customers
-  // customers keep arriving while it is full (the owner's rule: then Guy or GAL builds another table); counted from the last table added
+  // customers keep arriving while it is full (the owner's rule: then GUY or GAL builds another table); counted from the last table added
   needsSeats() { return this.turnedAway >= 3 && this.tables().length < 4 && this.isOpen(); }
   roomOn() { return !!this.w.doors[ID]; }
-  // Can customers come? The room is there (and its door is not locked: a locked restaurant is closed) with its kitchen, a till and a table, and Guy knows how to run it.
+  // Can customers come? The room is there (and its door is not locked: a locked restaurant is closed) with its kitchen, a till and a table, and GUY knows how to run it.
   isOpen() {
     return this.roomOn() && !this.w.doors[ID].locked && !!this.obj('stove') && !!this.obj('kitchencounter') && !!this.obj('register') && this.tables().length > 0 && this.skillOk();
   }
@@ -79,9 +79,9 @@ export class Restaurant {
     return k.slots.findIndex((s, i) => !s.children.length && !this.list.some((c) => c.slot === i && ['cooking', 'cooked'].includes(c.state)));
   }
 
-  // ---------------------------------------------------------------- what Guy can do now
+  // ---------------------------------------------------------------- what GUY can do now
   alive(c) { return this.list.includes(c) && c.state !== 'gone'; }
-  // the customers Guy could do something for, by job
+  // the customers GUY could do something for, by job
   find(job) {
     const free = (c) => !c.claim;
     switch (job) {
@@ -166,9 +166,9 @@ export class Restaurant {
     return { x: r.x + l.x, z: r.z + l.z, yaw: r.yaw - Math.PI / 2 };
   }
 
-  // Guy has asked what they would like
+  // GUY has asked what they would like
   takeOrder(c) { if (c.state === 'waiting') { c.state = 'ordered'; c.wait = 0; this.setBubble(c, DISHES[c.dish].icon); sfx('pop'); } }
-  // Guy is cooking their dish
+  // GUY is cooking their dish
   startCooking(c) { if (this.alive(c) && c.state === 'ordered') { c.state = 'cooking'; c.slot = this.slotFree(); this.setBubble(c, '👨‍🍳'); } }
   cooked(c, slot) { if (this.alive(c)) { c.state = 'cooked'; c.slot = slot; this.setBubble(c, '⏳'); } }
   // the plate is on their table
@@ -176,7 +176,7 @@ export class Restaurant {
     if (!this.alive(c)) return;
     c.state = 'eating'; c.slot = null; c.timer = rand(10, 14); c.wait = 0; this.setBubble(c, ''); this.nServed++;
   }
-  // Guy took the payment
+  // GUY took the payment
   collect(c) {
     if (!this.alive(c) || c.state !== 'paying') return 0;
     const price = DISHES[c.dish].price;
@@ -288,7 +288,7 @@ export class Restaurant {
         }
         break;
       }
-      case 'paying': {                 // at the till: waiting for Guy
+      case 'paying': {                 // at the till: waiting for GUY
         const p = this.paySpot();
         if (p) { c.yaw += clamp(angDiff(p.yaw, c.yaw), -5 * dt, 5 * dt); }
         else { this.leaveNow(c); break; }
@@ -329,7 +329,7 @@ export class Restaurant {
     if (d < 0.1) { c.path.shift(); if (!c.path.length) this.arrive(c); return; }
     const want = Math.atan2(dx, dz), diff = angDiff(want, c.yaw);
     c.yaw += clamp(diff, -6 * dt, 6 * dt);
-    // wait a moment for Guy to get out of the way
+    // wait a moment for GUY to get out of the way
     if (c.blocked < 4) {
       const fx = c.x + Math.sin(c.yaw) * 0.5, fz = c.z + Math.cos(c.yaw) * 0.5, gp = this.guyAt();
       const others = this.list.filter((o) => o !== c && !['ride', 'ridden', 'gone'].includes(o.state) && (!o.moving || o.id < c.id));       // an older customer, or one standing still, has the right of way

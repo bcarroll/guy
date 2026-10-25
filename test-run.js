@@ -1,4 +1,4 @@
-// run-tests.js — Headless QA runner for Guy's room using Puppeteer
+// run-tests.js — Headless QA runner for GUY's room using Puppeteer
 // Runs the full test-guy-game skill against the Vite dev server.
 //
 // Usage:
@@ -43,7 +43,7 @@ function flatten(list, prefix = '') {
 
 // ---- main ---------------------------------------------------------------
 async function run() {
-  console.log(bold('\n═══════════════ Guy\'s Room – Headless QA Runner ═══════════════\n'));
+  console.log(bold('\n═══════════════ GUY\'s Room – Headless QA Runner ═══════════════\n'));
   console.log(`  Iterations : ${iterations}`);
   console.log(`  Sweep flag : --sweep ${sweepFlag}`);
   console.log(`  Browser    : Chromium (headless)\n`);

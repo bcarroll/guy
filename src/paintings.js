@@ -1,10 +1,10 @@
-// Guy's paintings. A painting he has made stays on the easel until the user says "Hang painting" (long-press the easel); then Guy takes
+// GUY's paintings. A painting he has made stays on the easel until the user says "Hang painting" (long-press the easel); then GUY takes
 // it down, carries it to a wall of his choosing in any room he can reach, and hangs it (src/paintbrain.js has his side of it).
 //
 // - At most 3 of his paintings on any one wall. He spreads them out: the wall with the fewest paintings first, his own room before
 //   the others, and the gap between neighbours as wide as it can be.
 // - If every wall is full he takes down his oldest painting and hangs the new one in its place. The old one is not thrown away:
-//   it goes into the Catalog (Objects > Guy's paintings) as a thumbnail, and the user can hang it again from there.
+//   it goes into the Catalog (Objects > GUY's paintings) as a thumbnail, and the user can hang it again from there.
 // - Everything is saved (`guy.paintings.v1`): the pictures (small JPEGs), where each one hangs, and what is on the easel.
 //
 // A hung painting is an ordinary wall piece (world.decor), so the user can drag it along its wall or put it away like any picture;
@@ -22,7 +22,7 @@ export class Paintings {
     this.items = [];             // { id, img (a data URL), room ('main' | a room id | null = in the Catalog), wall, u, v, t }
     this.seq = 0;
     this.decor = {};             // id -> the wall piece of a hung painting
-    this.carried = null;         // the canvas Guy carries between the easel and the wall
+    this.carried = null;         // the canvas GUY carries between the easel and the wall
     this.easelImg = null;        // the saved picture on the easel
     this.easelVer = -1;
     this.easelDirty = false;
@@ -63,7 +63,7 @@ export class Paintings {
   jpeg(canvas) { try { return canvas.toDataURL('image/jpeg', 0.82); } catch { return null; } }
 
   // ------------------------------------------------------------------ the easel
-  // Guy lifts the painting off the easel: the easel is blank again and he carries a copy. `prop` (his hand's canvas) shows it.
+  // GUY lifts the painting off the easel: the easel is blank again and he carries a copy. `prop` (his hand's canvas) shows it.
   takeFromEasel(prop) {
     const e = this.easel();
     if (!e || !e.painted) return false;
@@ -116,7 +116,7 @@ export class Paintings {
     }
     return null;
   }
-  // Guy decides: { room, wall, u, v, stand, replace } or null. `replace` is the id of the painting to take down when every wall is full.
+  // GUY decides: { room, wall, u, v, stand, replace } or null. `replace` is the id of the painting to take down when every wall is full.
   plan({ noReplace = false } = {}) {
     const w = this.w;
     const cands = [];
@@ -143,9 +143,9 @@ export class Paintings {
   // Why he cannot hang the painting on the easel right now (a kind message), or null.
   refusal() {
     if (!this.easel()) return 'There is no easel to take a painting from.';
-    if (!this.easelHas()) return 'There is no painting on the easel yet. Guy paints when he has the book for it.';
-    if (this.items.length >= MAX_ALL) return 'Guy already has plenty of paintings. Take a few out of the Catalog first.';
-    if (!this.plan()) return 'There is no bare bit of wall for Guy to hang it on right now.';
+    if (!this.easelHas()) return 'There is no painting on the easel yet. GUY paints when he has the book for it.';
+    if (this.items.length >= MAX_ALL) return 'GUY already has plenty of paintings. Take a few out of the Catalog first.';
+    if (!this.plan()) return 'There is no bare bit of wall for GUY to hang it on right now.';
     return null;
   }
 
@@ -160,7 +160,7 @@ export class Paintings {
     this.decor[rec.id] = d;
     return d;
   }
-  // Hang what Guy is carrying at the planned spot (replacing the oldest painting when told to). Returns the new record.
+  // Hang what GUY is carrying at the planned spot (replacing the oldest painting when told to). Returns the new record.
   hang(plan) {
     const c = this.carried;
     if (!c || !plan) return null;

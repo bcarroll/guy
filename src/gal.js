@@ -1,14 +1,14 @@
-// GAL: the second robot, built from the Mixamo X Bot model ("Genetically Alternate Layout"). Guy builds her at the Build a Bot machine
+// GAL: the second robot, built from the Mixamo X Bot model ("Genetically Alternate Layout"). GUY builds her at the Build a Bot machine
 // (a super premium, one-use printer that folds itself into her). From then on she is an autonomous humanoid robot: she runs her own
-// Brain (GalBrain, below), chooses what to do herself like Guy does, has her own skills and must read books to gain them, and can be
-// asked by Guy to do things (go and read the drumming books, and find him when she is done so that they can jam).
+// Brain (GalBrain, below), chooses what to do herself like GUY does, has her own skills and must read books to gain them, and can be
+// asked by GUY to do things (go and read the drumming books, and find him when she is done so that they can jam).
 //
 // Two robots share one room, so a few rules keep them apart: each is an obstacle for the other's pathing (`world.charObs`), only one can
 // use the piano, drums, guitar, easel or telescope at a time (`using` / `exclusiveFor` in brain.js), and the stereo is shared (GalBrain
-// reads and writes Guy's music state, so what one switches on the other hears and can join in).
+// reads and writes GUY's music state, so what one switches on the other hears and can join in).
 //
 // This file has three parts: GalBrain (her brain), Gal (the manager: building her, her model, saving, how the two of them talk) and
-// the Guy-side activities (`installGalGuy`): building her, and asking her for things.
+// the GUY-side activities (`installGalGuy`): building her, and asking her for things.
 import * as THREE from 'three';
 import { Guy } from './guy.js';
 import { Brain, POSES, basePose } from './brain.js';
@@ -18,7 +18,7 @@ import { RECIPES } from './workshop.js';
 
 const KEY = 'guy.gal.v1';
 const SKILL_KEYS = { known: 'guy.gal.skills.v1', fade: 'guy.gal.fade.v1' };
-const COLORS = { body: 0xd8438a, joints: 0x2a2030 };       // GAL is pink; Guy is gold
+const COLORS = { body: 0xd8438a, joints: 0x2a2030 };       // GAL is pink; GUY is gold
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -36,13 +36,13 @@ export class GalBrain extends Brain {
   constructor(guy, world, ui, skills, leader) {
     super(guy, world, ui, skills);
     this.isGal = true;
-    this.leader = leader;               // Guy's brain
+    this.leader = leader;               // GUY's brain
     this.other = leader;
     leader.other = this;
     this.using = new Set();
-    this.orders = [];                   // things Guy has asked her to do, in order: { kind: 'read', book } | { kind: 'find' }
+    this.orders = [];                   // things GUY has asked her to do, in order: { kind: 'read', book } | { kind: 'find' }
     this.curOrder = null;
-    // the stereo is shared: she reads and writes Guy's music state
+    // the stereo is shared: she reads and writes GUY's music state
     for (const k of ['music', 'musicT0', 'beatLen', 'track', 'albumOnTable', 'userMusic', 'trackSince', 'trackFor', 'lastTrackOf', 'lastAlbumId']) {
       Object.defineProperty(this, k, { get: () => leader[k], set: (v) => { leader[k] = v; }, configurable: true });
     }
@@ -57,20 +57,20 @@ export class GalBrain extends Brain {
 
   extraWeights() { return { invitedance: 1.3 }; }
 
-  // the next thing Guy asked her to do, as an activity name
+  // the next thing GUY asked her to do, as an activity name
   nextOrder() {
     while (this.orders.length) {
       if (this.stuckIn()) return null;                                       // shut in a locked room: she cannot go anywhere for him
       const o = this.orders[0];
       if (o.kind === 'read') {
-        if (this.busyElsewhere(['shelf'])) return null;                    // Guy is at the bookshelf: she waits her turn (and does something else meanwhile)
+        if (this.busyElsewhere(['shelf'])) return null;                    // GUY is at the bookshelf: she waits her turn (and does something else meanwhile)
         const on = this.obj('shelf') && this.obj('shelf').books.find((b) => b.def.id === o.book);
         if (!on || this.skills.has(on.def.teaches)) { this.orders.shift(); continue; }          // already learned, or the book is not on the shelf any more
-        if (!on.mesh.visible) return null;                                                      // Guy has it in his hands just now: she waits for it
+        if (!on.mesh.visible) return null;                                                      // GUY has it in his hands just now: she waits for it
         return 'galread';
       }
       const gp = this.leader.g.root.position, gr = this.w.roomIdAt(gp.x, gp.z);
-      if (gr !== 'main' && gr !== 'door' && this.doorLockedFor(gr)) return null;              // Guy is behind a locked door: she waits out here
+      if (gr !== 'main' && gr !== 'door' && this.doorLockedFor(gr)) return null;              // GUY is behind a locked door: she waits out here
       return 'findguy';
     }
     return null;
@@ -103,7 +103,7 @@ export class GalBrain extends Brain {
         const [, ...steps] = acts.read();
         return [`going to read "${rec.def.title}" for GUY`, ...(this.inMain() ? [] : acts.leave().slice(1)), ...steps];
       },
-      // an order: go and find Guy, wave, and say she is ready
+      // an order: go and find GUY, wave, and say she is ready
       findguy: () => {
         this.orders.shift();
         const steps = [];
@@ -121,7 +121,7 @@ export class GalBrain extends Brain {
         steps.push(this.play('wave', 2.8, { at: [1.0, () => w.gal.arrived(this)] }));
         return ['going to find GUY', ...steps];
       },
-      // her own idea: switch the stereo on, go and ask Guy to dance, and dance with him
+      // her own idea: switch the stereo on, go and ask GUY to dance, and dance with him
       invitedance: () => {
         const steps = [this.walkAt('table', 0, 0.55, Math.PI),
           this.play('reach', 1.8, { at: [0.9, () => { this.musicOn(); w.gal.partyMusic = true; }], needs: ['table'], target: () => this.stereoButton() }),
@@ -149,12 +149,12 @@ export class Gal {
   constructor(world, opts) {
     this.w = world;
     this.opts = opts;
-    this.audience = null;               // set while GAL has been handed a request by Guy and answers the user herself (voice.js)
+    this.audience = null;               // set while GAL has been handed a request by GUY and answers the user herself (voice.js)
     this.guyBrain = opts.guyBrain;
     this.present = false;
     this.brain = null; this.g = null;
     this.emerge = null;
-    this.duo = null;                  // a jam Guy asked her to prepare for
+    this.duo = null;                  // a jam GUY asked her to prepare for
     this.partyMusic = false;
     this.ready = null;                // a promise: her model is loaded
     this.obs = {};
@@ -191,13 +191,13 @@ export class Gal {
     this.obs.guy = mk('guy'); this.obs.gal = mk('gal');
     guy.selfOb = this.obs.guy; this.brain.selfOb = this.obs.gal;
     this.present = true;
-    console.info(`GAL appeared: ${emerging ? 'built by Guy at the machine' : 'restored from saved state'} (guy.gal.v1=${(() => { try { return localStorage.getItem(KEY); } catch { return 'n/a'; } })()})`);
+    console.info(`GAL appeared: ${emerging ? 'built by GUY at the machine' : 'restored from saved state'} (guy.gal.v1=${(() => { try { return localStorage.getItem(KEY); } catch { return 'n/a'; } })()})`);
     this.emerge = emerging ? { t: 0, dur: 4.5 } : null;
     this.save();
     return true;
   }
 
-  // Guy has used the Build a Bot machine: it folds itself into GAL (the machine goes for good)
+  // GUY has used the Build a Bot machine: it folds itself into GAL (the machine goes for good)
   build(machine) {
     if (this.present || !machine) return false;
     const x = machine.x, z = machine.z;
@@ -234,7 +234,7 @@ export class Gal {
     this.save();
   }
 
-  // ---------------------------------------------------------------- every frame (called from Guy's brain)
+  // ---------------------------------------------------------------- every frame (called from GUY's brain)
   update(dt) {
     if (!this.present || !this.g.loaded) return;
     const b = this.brain, g = this.g;
@@ -268,7 +268,7 @@ export class Gal {
   // ---------------------------------------------------------------- how they talk
   canInvite() { return this.present && !this.emerge && !this.duo && !this.guyBrain.lock && this.guyBrain.inMain() && this.brain.inMain(); }
 
-  // Guy asks GAL to build something the house needs and he cannot make himself (he has not read the book): she goes and does it
+  // GUY asks GAL to build something the house needs and he cannot make himself (he has not read the book): she goes and does it
   orderBuild(id) {
     const r = RECIPES[id];
     if (!this.present || !r || this.brain.forceRecipe) return false;
@@ -279,7 +279,7 @@ export class Gal {
     return true;
   }
 
-  // GAL asks Guy to do something (he finishes the step he is on, then does it)
+  // GAL asks GUY to do something (he finishes the step he is on, then does it)
   askGuy(act) {
     const g = this.guyBrain;
     this.say(`GAL asks GUY: ${act}`);
@@ -288,7 +288,7 @@ export class Gal {
     g.pendingActivity = act;
     return true;
   }
-  // GAL says she has finished what Guy asked: he comes to jam
+  // GAL says she has finished what GUY asked: he comes to jam
   arrived(brain) {
     if (!this.duo || this.duo.phase !== 'waiting') return;
     this.duo.phase = 'ready';
@@ -296,7 +296,7 @@ export class Gal {
   }
 
   // ---------------------------------------------------------------- jamming together
-  // What the two of them could play now: GAL's instrument (the one she will need books for, if she lacks them) and Guy's.
+  // What the two of them could play now: GAL's instrument (the one she will need books for, if she lacks them) and GUY's.
   planDuo() {
     const g = this.guyBrain, l = this.brain, w = this.w;
     if (!this.present || this.emerge || !this.canInvite() || !g.obj('table')) return null;
@@ -309,7 +309,7 @@ export class Gal {
       for (const [guyInst, U] of Object.entries(BAND)) {
         if (guyInst === galInst || !U.objects.every((n) => g.obj(n))) continue;
         if (guyInst === 'drums' && !g.standOk('drums')) continue;
-        if (!have(g, U.skills)) continue;                                                         // Guy can play his part now
+        if (!have(g, U.skills)) continue;                                                         // GUY can play his part now
         // the books she still has to read (all unread books of the family, in the order of the list), if the one she needs is on the shelf
         const books = sh ? sh.books.filter((b) => b.mesh.visible && G.family.includes(b.def.teaches) && !l.skills.has(b.def.teaches)) : [];
         const needed = G.skills.filter((s) => !l.skills.has(s));
@@ -321,7 +321,7 @@ export class Gal {
     return options.length ? pick(options) : null;
   }
 
-  // Guy tells her the plan. If she has to learn first she is sent to read; either way she comes to find him when she is ready.
+  // GUY tells her the plan. If she has to learn first she is sent to read; either way she comes to find him when she is ready.
   startDuo(plan) {
     if (this.duo) return false;
     this.duo = { ...plan, phase: 'waiting', t: 0 };
@@ -337,7 +337,7 @@ export class Gal {
   // Spoken lines between the two of them (and to the user): the speaker is voice.js; silent in the tests unless one is attached
   talk(who, text, kind = 'peer') { if (this.opts.speak) this.opts.speak(who, text, kind); }
 
-  // every frame: when she says she is ready Guy stops what he is doing and they play together
+  // every frame: when she says she is ready GUY stops what he is doing and they play together
   updateDuo(dt) {
     const d = this.duo;
     if (!d) return;
@@ -350,7 +350,7 @@ export class Gal {
       d.musicWasOn = !!g.music;
       g.skip(true); g.pendingActivity = 'bandplay';
     } else if (d.phase === 'playing') {
-      // Guy's part has started the music: now she plays hers
+      // GUY's part has started the music: now she plays hers
       if (g.music && !d.galStarted && l.available(d.galAct) && !l.step?.fx?.dance) {
         d.galStarted = true; l.skip(true); l.pendingActivity = d.galAct;
         this.say(`GAL and GUY jam: ${d.guyInst} + ${d.galInst}`);
@@ -363,7 +363,7 @@ export class Gal {
   }
 }
 
-// ================================================================================================================ Guy's side
+// ================================================================================================================ GUY's side
 export function installGalGuy(Brain) {
   Object.assign(Brain.prototype, {
     // the activities only he has: building her, and asking her to jam

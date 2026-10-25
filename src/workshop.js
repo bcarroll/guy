@@ -1,4 +1,4 @@
-// What Guy (and GAL) can build in the Workshop, and the numbers behind it. Data only: the objects are in workobjects.js, what they do
+// What GUY (and GAL) can build in the Workshop, and the numbers behind it. Data only: the objects are in workobjects.js, what they do
 // in workbrain.js, when something is worth building in needs.js, and where finished things are counted (storage) in room.js
 // (`world.stock.items`).
 //
@@ -15,7 +15,7 @@ export const STORAGE_CAP = 99;
 // the object that makes each line
 export const FACTORY = { wood: 'woodfactory', metal: 'metalfactory' };
 
-// `cap`: how many of a thing Guy will have made at most (standing in a room or in storage). He builds up to it and then stops
+// `cap`: how many of a thing GUY will have made at most (standing in a room or in storage). He builds up to it and then stops
 // making that one, so the Workshop does not fill with things nobody needs; take one away (the user can delete it) and he may make another.
 export const RECIPES = {
   footstool: { name: 'Wooden Foot Stool', icon: '🪜', skill: 'workshop', line: 'wood', run: 3.4, object: 'footstool', cap: 1, serves: 'reach' },

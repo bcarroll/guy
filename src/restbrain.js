@@ -1,8 +1,8 @@
-// Guy in the Restaurant: taking orders, cooking at the stove, carrying the plates to the tables and taking the payment at the
+// GUY in the Restaurant: taking orders, cooking at the stove, carrying the plates to the tables and taking the payment at the
 // register. Installed onto Brain at the bottom of brain.js (like the Workshop). The customers and their moods are in customers.js
 // (`world.restaurant`); the furniture is in restobjects.js.
 //
-// Running the restaurant is Guy's default, not a rule: it is a set of ordinary activities with a high weight while somebody is
+// Running the restaurant is GUY's default, not a rule: it is a set of ordinary activities with a high weight while somebody is
 // waiting. If he is busy somewhere else the customers wait, and give up politely if it takes too long. Later a second robot can do
 // the same jobs through the same activities (see the plan, "Build a Bot").
 //
@@ -64,9 +64,9 @@ export function installRestaurant(Brain, POSES, H) {
     // Why he cannot do what the user asked with a restaurant object (a kind message), or null if he can.
     restRefusal(name) {
       if (!REST_OBJECTS.includes(name) && !(this.obj(name) && this.obj(name).seats)) return null;
-      if (!this.skills.has('restaurant')) return `Guy doesn't know how to run a restaurant yet. Add the book "Restaurant Basics" to the shelf and he'll read it.`;
+      if (!this.skills.has('restaurant')) return `GUY doesn't know how to run a restaurant yet. Add the book "Restaurant Basics" to the shelf and he'll read it.`;
       const r = this.w.restaurant;
-      if (this.doorLockedFor(ID)) return 'The restaurant door is locked. Unlock it (long-press the door) and Guy can go in.';
+      if (this.doorLockedFor(ID)) return 'The restaurant door is locked. Unlock it (long-press the door) and GUY can go in.';
       if (!r || !r.isOpen()) return 'The restaurant needs a stove, a kitchen counter, a cash register and a table before it can open.';
       return null;
     },

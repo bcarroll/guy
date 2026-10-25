@@ -1,4 +1,4 @@
-// Guy's guitar riffs: he makes them up from a scale, judges them, and remembers the good ones between visits.
+// GUY's guitar riffs: he makes them up from a scale, judges them, and remembers the good ones between visits.
 //
 // A riff is two bars of eighth notes: 16 steps, each a MIDI note or 0 (a rest), in a key (`root`, `mode`). It is played as single
 // plucked notes over a bass note on each bar (see computeGuitar in brain.js). `invent()` makes a riff the way a player noodles:

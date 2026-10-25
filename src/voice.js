@@ -1,4 +1,4 @@
-// Voice and typed commands. The user talks only to Guy; if Guy is busy (or is asked to) he hands the request to GAL, who then answers
+// Voice and typed commands. The user talks only to GUY; if GUY is busy (or is asked to) he hands the request to GAL, who then answers
 // the user herself and takes the user's orders until what she was asked to do is finished (an audience, see Gal.audience).
 // The parser is rules only (no network): normalise the sentence, match it against a small table, run it through the same entry
 // points the menus use (interact, requestRead, visitRoom, lockOn), and speak the answer. English only.
@@ -72,7 +72,7 @@ export function parse(text, ctx = {}) {
   return { type: 'unknown' };
 }
 
-// Guy is too busy to do something new: working, serving, painting, locked in on something, shut in, or away from the room
+// GUY is too busy to do something new: working, serving, painting, locked in on something, shut in, or away from the room
 const BUSY = ['build', 'tidytools', 'takeorder', 'cook', 'serve', 'takepay', 'rwait', 'paint', 'portrait', 'mixpaint', 'putcanvas', 'hangpaint', 'buildbot', 'orderbuild', 'bandplay', 'bandjam'];
 // `here`: the thing he was asked to use is in the room he is standing in, so being away from his own room does not count as busy
 export const guyBusy = (b, here = false) => !!(b.lock || b.stuckIn() || (!here && !b.inMain()) || (b.restStays && b.restStays()) || (b.step || b.queue.length) && BUSY.includes(b.last));
@@ -85,7 +85,7 @@ export function createVoice({ world, brain, say = () => {}, speaking = null, scr
   const speak = (who, text, kind = 'reply') => { lines.push({ who, text }); say(who, text, kind); };
   const fix = (m, who) => String(m || '').replace(/\bGuy\b/g, who === 'gal' ? 'GAL' : 'I').replace(/^I is /, 'I am ').replace(/^I will /, 'I will ').replace(/I's /g, 'my ');
 
-  // GAL's audience with the user: starts when Guy hands her a request, ends when what she was asked to do is over (or never, while locked in)
+  // GAL's audience with the user: starts when GUY hands her a request, ends when what she was asked to do is over (or never, while locked in)
   function audienceOn() {
     const g = gal(), a = g && g.audience;
     if (!a) return false;
@@ -169,7 +169,7 @@ export function createVoice({ world, brain, say = () => {}, speaking = null, scr
     }
     const r = doIt(brain, req);
     if (r.ok) { speak('guy', pick(OK)); return res(true); }
-    // Guy cannot (no skill, no book, locked door...): GAL might be able to
+    // GUY cannot (no skill, no book, locked door...): GAL might be able to
     if (galOk() && req.type !== 'visit' && req.type !== 'comeback') {
       const r2 = doIt(gal().brain, req);
       if (r2.ok) { speak('guy', 'I cannot do that yet. GAL will get right on that.'); startAudience(); speak('gal', pick(GAL_OK)); return res(true); }

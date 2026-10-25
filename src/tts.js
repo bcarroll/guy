@@ -1,6 +1,6 @@
 // Offline robot voices. No network and no browser voices: the small eSpeak-based mespeak engine (loaded the first time somebody
 // speaks, a separate chunk) renders each line to a WAV in the browser, and the line plays through the game's own AudioContext
-// (so the music can duck and the sound can be muted with the rest). Guy is lower and slower, GAL higher and brighter.
+// (so the music can duck and the sound can be muted with the rest). GUY is lower and slower, GAL higher and brighter.
 // Subtitles show whatever is said, with or without sound. Settings: guy.voice.v1 (not read or written with ?fresh).
 import { audio } from './audio.js';
 
@@ -79,7 +79,7 @@ export function initVoice({ subs, onSpeakStart = () => {}, onSpeakEnd = () => {}
     }
     busy = false;
   }
-  // kind: 'reply' (to the user), 'peer' (Guy and GAL to each other), 'bark' (a remark while starting something)
+  // kind: 'reply' (to the user), 'peer' (GUY and GAL to each other), 'bark' (a remark while starting something)
   function say(who, text, kind = 'reply') {
     if (kind === 'bark' && st.chatter !== 'chatty') return false;
     log.push({ who, text, kind, t: Date.now() }); if (log.length > 60) log.shift();

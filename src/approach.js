@@ -1,5 +1,5 @@
 // Using an object from whichever side is free. A station (the toolbox, the Wood Factory, the stove ...) used to be approached only
-// from its front; turned to face a wall, or pushed against one, Guy walked into the wall. Now `stand` looks at the four sides in
+// from its front; turned to face a wall, or pushed against one, GUY walked into the wall. Now `stand` looks at the four sides in
 // turn (front first), keeps those that are free floor and near enough to the thing he has to reach, and walks to the first one. He
 // remembers the side (`sideOf`) so the hands that work (the spoon ...) are turned to match. Objects that only work one
 // way round (the drum kit, the easel) do not use `stand` and are unchanged.

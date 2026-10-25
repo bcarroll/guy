@@ -1,4 +1,4 @@
-// Guy's behaviour with the drum kit, the easel and the telescope. Installed onto Brain / POSES at the bottom of brain.js.
+// GUY's behaviour with the drum kit, the easel and the telescope. Installed onto Brain / POSES at the bottom of brain.js.
 import * as THREE from 'three';
 import { Q } from './guy.js';
 import { drumHit, TRACKS } from './audio.js';
@@ -199,7 +199,7 @@ export function installHobbies(Brain, POSES, H) {
     },
 
     stickDir(hand) {
-      const sgn = hand === 'L' ? 1 : -1;      // Guy's left is +x in his own frame
+      const sgn = hand === 'L' ? 1 : -1;      // GUY's left is +x in his own frame
       return this.fwdVec().multiplyScalar(Math.cos(0.3)).addScaledVector(UPV, -Math.sin(0.3)).addScaledVector(this.leftVec(), -sgn * 0.12).normalize();
     },
 

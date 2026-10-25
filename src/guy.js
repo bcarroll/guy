@@ -22,8 +22,8 @@ const BONES = [
 ];
 
 /**
- * Guy: loads the Mixamo Y Bot and drives its skeleton procedurally.
- * Every bone gets a target rotation expressed in the *model's* frame (x = Guy's left, y = up, z = forward),
+ * GUY: loads the Mixamo Y Bot and drives its skeleton procedurally.
+ * Every bone gets a target rotation expressed in the *model's* frame (x = GUY's left, y = up, z = forward),
  * which is converted into each bone's local space using its rest-pose parent orientation.
  */
 export class Guy {
@@ -43,7 +43,7 @@ export class Guy {
   }
 
   // opts.keep: keep the model's own materials and textures (the customers); opts.height: how tall he or she is, in metres;
-  // opts.colors: { body, joints } for the robot (Guy is gold; GAL is another colour).
+  // opts.colors: { body, joints } for the robot (GUY is gold; GAL is another colour).
   async load(url, opts = {}) {
     const loader = new FBXLoader();
     // single-file builds embed the model as base64 in window.__YBOT_B64
@@ -70,7 +70,7 @@ export class Guy {
         if (opts.keep) {                      // a customer: its own textures (any NaN colour is made white so the texture shows)
           for (const m of Array.isArray(o.material) ? o.material : [o.material]) if (m && m.color && Number.isNaN(m.color.r)) m.color.set(0xffffff);
         } else {
-          // The FBX materials load with NaN colours, so give Guy his own.
+          // The FBX materials load with NaN colours, so give GUY his own.
           o.material = o.name.includes('Joints')
             ? new THREE.MeshStandardMaterial({ color: (opts.colors && opts.colors.joints) || 0x23262d, roughness: 0.5, metalness: 0.4 })
             : new THREE.MeshStandardMaterial({ color: (opts.colors && opts.colors.body) || 0xf1c232, roughness: 0.35, metalness: 0.15 });
@@ -114,7 +114,7 @@ export class Guy {
     }
     this.hipsRest.copy(this.bones.Hips.position);
 
-    // Foot clearance at rest so we can plant Guy's lowest foot on the floor every frame.
+    // Foot clearance at rest so we can plant GUY's lowest foot on the floor every frame.
     this.root.updateMatrixWorld(true);
     this.restFootY = this._lowestFootY();
 

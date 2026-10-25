@@ -1,7 +1,7 @@
 // The Backyard: the open-air room's shell (grass, fence, the artificial sun and moon lights, the night tint) and its objects: soccer goal,
 // basketball hoop, lawn chair, bird bath, sky switch, shed and push lawn mower. Built with the same makeObject helper as the rest of the
 // game (room.js passes it in) and placed in the added room's own frame (room.js, NEW_OBJECTS). Every object has its front on local +z,
-// which is where Guy stands. `at(x, y, z)` turns an object-local point into a world one (like the Workshop's objects).
+// which is where GUY stands. `at(x, y, z)` turns an object-local point into a world one (like the Workshop's objects).
 //
 // Day and night: the room has no real extra lights (cheap on phones). The "sun lamp" and "moon lamp" are two glowing fixtures on a gantry
 // at the far fence; the active one is lit, the grass and fence change colour, and a see-through blue sheet over the yard darkens
@@ -293,7 +293,7 @@ export function makeYardBuilders({ makeObject, box, mat }) {
     return o;
   };
 
-  // ---- push lawn mower: faces local -z, the handle comes back towards +z where Guy stands and pushes
+  // ---- push lawn mower: faces local -z, the handle comes back towards +z where GUY stands and pushes
   const mower = (x = 0, z = 0) => {
     const red = mat(0xc0392b, { roughness: 0.5 }), dark = mat(0x2b2f35, { roughness: 0.6 }), steel = mat(0xaeb6bf, { metalness: 0.6, roughness: 0.35 });
     let blade, bagLid;

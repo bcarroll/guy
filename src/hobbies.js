@@ -1,4 +1,4 @@
-// Helpers for the drum kit, easel and telescope: drum patterns, painting plans and the props Guy holds.
+// Helpers for the drum kit, easel and telescope: drum patterns, painting plans and the props GUY holds.
 import * as THREE from 'three';
 
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -160,7 +160,7 @@ export function polyPoint(pts, f) {
 export const mixColors = mixHex;
 
 // ---------------------------------------------------------------------------------------------------------------
-// Props held in Guy's hands (positioned from the hand bones every frame by Brain.late)
+// Props held in GUY's hands (positioned from the hand bones every frame by Brain.late)
 // ---------------------------------------------------------------------------------------------------------------
 export function makeStick() {
   const g = new THREE.Group();

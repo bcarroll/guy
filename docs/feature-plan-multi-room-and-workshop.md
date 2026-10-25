@@ -10,18 +10,18 @@
 **Phase 1 to 4 (rooms, gating, doors, the room behind the door) are built, with their QA sweeps.** Differences from the plan below:
 - Rooms are saved in their own key, `guy.rooms.v1`, so `guy.room.v1` is untouched and no migration was needed.
 - The Workshop is an empty grey room for now (floor, three walls, ceiling). Pegboard, lights and objects come with the later phases.
-- Guy can now go through the door (long-press it): straight-line walking through the doorway and round the empty room, an opening door and a real doorway in the wall. Full pathing across rooms (the grid) is still only his own room.
+- GUY can now go through the door (long-press it): straight-line walking through the doorway and round the empty room, an opening door and a real doorway in the wall. Full pathing across rooms (the grid) is still only his own room.
 - The door is closed (no opening animation yet) and has a sign on both faces, because the right and front walls are not drawn from the default camera.
 - The saved door is placed again at the start of a visit, before the Catalog's extras. Core wall pieces the user removed come back on a new visit (existing behaviour), so anything in the door's way is taken out again.
 - Sweeps added: `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves` (in `runAll`). `sweepMachine` now counts only listed objects.
 
 > **Update:** the saw and sawhorse, rubber mallet, sander, metal cutter, welder and hammer & anvil have been removed. The Wood Factory and the Metal Factory now make every finished object on their own (press the button, wait, take it off the tray), which leaves more room in the Workshop. The tool-by-tool design below is kept as history.
 
-**The Workshop wood line (built):** workbench, toolbox, Wood Factory, saw and sawhorse, rubber mallet and block, sander (section 9), the three books (Workshop Basics, Wood & Metal Basics, Furniture for Robots; the old `woodwork` entry is gone), materials and storage (`world.stock`, saved with the layout), and Guy building a wooden foot stool, wooden shelves and a wooden chair himself: planks from the factory, sawn, tapped together with the mallet, sanded, finished (`build`, `workbrain.js`, `sweepWorkshop`). Built things wait in storage and are added from the Catalog's "Built by Guy" cards as real objects of their own (a built chair is a chair he can sit on). Objects now live in added rooms (placement, a pathing grid per room, a clear strip inside the door, saving). Differences from the plan: the saw, mallet and sander are stations (a sawhorse, an assembly block, a belt sander) because a hand tool cannot stand alone in a room; storage is the Catalog's count, not a physical shelf yet; the toolbox is on a little frame so he can reach it standing up; every recipe's numbers are in `workshop.js`. **Not built yet:** the metal line (factory, cutter, welder, hammer, the metal book and builds), the picnic and kitchen tables, the nightstand build, a physical storage shelf, and Guy building a chair or a bookshelf on his own initiative and recycling spare chairs (section 17.3, 17.4).
+**The Workshop wood line (built):** workbench, toolbox, Wood Factory, saw and sawhorse, rubber mallet and block, sander (section 9), the three books (Workshop Basics, Wood & Metal Basics, Furniture for Robots; the old `woodwork` entry is gone), materials and storage (`world.stock`, saved with the layout), and GUY building a wooden foot stool, wooden shelves and a wooden chair himself: planks from the factory, sawn, tapped together with the mallet, sanded, finished (`build`, `workbrain.js`, `sweepWorkshop`). Built things wait in storage and are added from the Catalog's "Built by GUY" cards as real objects of their own (a built chair is a chair he can sit on). Objects now live in added rooms (placement, a pathing grid per room, a clear strip inside the door, saving). Differences from the plan: the saw, mallet and sander are stations (a sawhorse, an assembly block, a belt sander) because a hand tool cannot stand alone in a room; storage is the Catalog's count, not a physical shelf yet; the toolbox is on a little frame so he can reach it standing up; every recipe's numbers are in `workshop.js`. **Not built yet:** the metal line (factory, cutter, welder, hammer, the metal book and builds), the picnic and kitchen tables, the nightstand build, a physical storage shelf, and GUY building a chair or a bookshelf on his own initiative and recycling spare chairs (section 17.3, 17.4).
 
-**Round two (section 17):** rooms are now as big as Guy's room, and the speed dropdown, Lock in and guitar riffs are built. Going through doors, Guy building chairs and a second bookshelf, and the shelf overflow fix are planned in section 17.
+**Round two (section 17):** rooms are now as big as GUY's room, and the speed dropdown, Lock in and guitar riffs are built. Going through doors, GUY building chairs and a second bookshelf, and the shelf overflow fix are planned in section 17.
 
-**Also built:** saving every object's position, turn and removed state (`src/layout.js`, `guy.layout.v1`, `sweepLayout`) and an automatic refresh when a newer build is deployed (`src/update.js`, `sweepUpdate`). This changes the plan's section 9A: built copies, when they exist, must be part of the layout snapshot (one entry per copy), and the saved layout restores before the Catalog's extras are counted. The easel painting, the lamp and Guy's own position are not saved yet.
+**Also built:** saving every object's position, turn and removed state (`src/layout.js`, `guy.layout.v1`, `sweepLayout`) and an automatic refresh when a newer build is deployed (`src/update.js`, `sweepUpdate`). This changes the plan's section 9A: built copies, when they exist, must be part of the layout snapshot (one entry per copy), and the saved layout restores before the Catalog's extras are counted. The easel painting, the lamp and GUY's own position are not saved yet.
 
 ---
 
@@ -29,10 +29,10 @@
 
 Five connected changes:
 
-1. **Rooms in the skill machine.** The Catalog can add additional rooms. Each added room puts a door in a wall of the room Guy is already in.
+1. **Rooms in the skill machine.** The Catalog can add additional rooms. Each added room puts a door in a wall of the room GUY is already in.
 2. **Door placement.** The door goes on a wall. If an object is in the way, it is moved off the wall first.
 3. **Premium gating.** Items that belong to a locked (premium) room are not listed in the Catalog at all until that room is unlocked. Then they appear.
-4. **The Workshop.** The first additional room. Guy can walk through the door and use what is in it.
+4. **The Workshop.** The first additional room. GUY can walk through the door and use what is in it.
 5. **Workshop objects and books.** A workbench, a toolbox, a metal line (factory, welder, cutter, hammer), a wood line (factory, saw, mallet, sander), and three books.
 
 A future room, the **Restaurant**, is noted in section 12 but not planned in detail.
@@ -54,11 +54,11 @@ All references are to the code as it stands today.
 | Premium albums | `src/machine.js:78`, `src/albums.js` | `premium` albums show in a "Premium · coming soon" group with a 🔒. |
 | Books | `src/skills.js:9-50` | `BOOK_CATALOG` with `start`, `requires.object`, `locked`. `woodwork` ("Woodworking for Robots") is already a locked book that needs a `workbench`. |
 | Persistence | `src/machine.js:58` | Key `guy.room.v1`. `restoreExtras()` restores additions on load. |
-| Pathfinding | `src/brain.js:932`, `:2186` | Guy's reachable area is hard-coded to the one room (`|x| <= 4.5`, `z` in [-3.5, 3.6]). The grid is built from the single room's walls. |
+| Pathfinding | `src/brain.js:932`, `:2186` | GUY's reachable area is hard-coded to the one room (`|x| <= 4.5`, `z` in [-3.5, 3.6]). The grid is built from the single room's walls. |
 | Camera | `src/main.js:67-87` | `fitRoom()` frames one fixed box (x ±5, z ±4). A second room must be added to this framing. |
 | Test harness | `src/devtools.js:32-90` | `MANIFEST` lists objects, books, albums and activities. `T.coverage()` must report `complete: true`. |
 
-**Design rules that apply** (from project memory): no magic movement (objects only move when Guy pushes them or the user drags them); heavy objects stay where they are, moved only by the user; the bookshelf and the Catalog can never be removed; Guy's hands use IK.
+**Design rules that apply** (from project memory): no magic movement (objects only move when GUY pushes them or the user drags them); heavy objects stay where they are, moved only by the user; the bookshelf and the Catalog can never be removed; GUY's hands use IK.
 
 These rules conflict with some parts of the request. Section 3 lists the conflicts as decisions.
 
@@ -87,10 +87,10 @@ These are the points where the request and the current design rules disagree, or
 
 5. **What the materials are.** "Can't build a metal object without metal" implies a stock of pieces that factories produce and builds consume.
    - *Proposed default:* a per-material stock on the workbench, shown as a count (for example "Wood pieces: 3"). The factory adds to it, the saw and cutter turn it into usable parts, and builds take them. The stock is saved with the room state.
-   - *Question:* should pieces be physical objects Guy carries and sets down, or an invisible count?
+   - *Question:* should pieces be physical objects GUY carries and sets down, or an invisible count?
 
 6. **What gets built.** The request names the tools but not the finished objects.
-   - *Needed from you:* a list of the things Guy can build (a shelf, a stool, a metal stand, etc.), each with the materials and tools it needs. Until then the plan builds the tools and the stock, with one example build per material to test the chain.
+   - *Needed from you:* a list of the things GUY can build (a shelf, a stool, a metal stand, etc.), each with the materials and tools it needs. Until then the plan builds the tools and the stock, with one example build per material to test the chain.
 
 7. **Shelf and Catalog on the wall.** If the right wall is ever blocked, the next choice is the back or front wall. The shelf and Catalog cannot move, so the plan never places a door over them.
 
@@ -104,7 +104,7 @@ A single source of truth for rooms, in a new `src/rooms.js` (no code yet):
 
 ```javascript
 export const ROOM_CATALOG = [
-  { id: 'main', name: "Guy's Room", core: true },
+  { id: 'main', name: "GUY's Room", core: true },
   { id: 'workshop', name: 'Workshop', added: false, unlocked: true,
     style: 'concrete', w: 8, d: 6, h: 3.2,
     doorWall: 'right' },   // on the main room, the wall the door is placed on
@@ -143,7 +143,7 @@ export const ROOM_CATALOG = [
 
 1. Candidate walls, in order: **right** (x = +5), **front** (z = +4), **back** (z = -4). The left wall is excluded because of the Catalog.
 2. For each candidate wall, slide a door-sized window along the wall in 0.1 m steps.
-3. A position is **clear** when no fixed piece (shelf, Catalog, heavy furniture) overlaps the window. The window also needs a walkable strip in front of it so Guy can reach the door.
+3. A position is **clear** when no fixed piece (shelf, Catalog, heavy furniture) overlaps the window. The window also needs a walkable strip in front of it so GUY can reach the door.
 4. Movable pieces that overlap are listed as **displaceable**.
 5. Choose the position with the fewest displaceable pieces, then the one nearest the middle of the wall.
 
@@ -156,7 +156,7 @@ export const ROOM_CATALOG = [
 ### 5.4 Door visual
 
 - A door frame and a door leaf on the wall. Open by default, with a brief opening animation the first time the room is added.
-- The door is a wall piece in the decor sense: it is not an obstacle for pathing once Guy can pass through it.
+- The door is a wall piece in the decor sense: it is not an obstacle for pathing once GUY can pass through it.
 
 ---
 
@@ -179,12 +179,12 @@ This is the largest technical part. Today the whole game assumes one room.
 
 - Each room is its own `THREE.Group` with its own walls, floor, ceiling and objects, placed in world space beside the main room.
 - The Workshop sits beyond the door wall. With the door on the right wall, the Workshop is at x from +5 to about +13.
-- Each room has its own `obstacles`, `decor`, `objects`, `removed` and `ROOM`-like dimensions. Nothing is shared between rooms except Guy and the light switch rules.
+- Each room has its own `obstacles`, `decor`, `objects`, `removed` and `ROOM`-like dimensions. Nothing is shared between rooms except GUY and the light switch rules.
 
-### 7.2 Guy's movement
+### 7.2 GUY's movement
 
-- The walkable area becomes the union of the rooms Guy can reach. The reachable test (`brain.js:932`) and the grid (`brain.js:2186`) are built from every added room, with the door cells open.
-- A **room transition** step: when Guy's path crosses the door, a short step plays (a pause on the threshold, then on). The door is not an obstacle for the path, but it is not walked through without the transition.
+- The walkable area becomes the union of the rooms GUY can reach. The reachable test (`brain.js:932`) and the grid (`brain.js:2186`) are built from every added room, with the door cells open.
+- A **room transition** step: when GUY's path crosses the door, a short step plays (a pause on the threshold, then on). The door is not an obstacle for the path, but it is not walked through without the transition.
 - Objects in another room are looked up with `this.obj(name)` at step time (project rule). The activity only runs when the room holding the object is added.
 
 ### 7.3 Camera and lighting
@@ -213,7 +213,7 @@ This is the largest technical part. Today the whole game assumes one room.
 - Toolbox beside the workbench.
 - Metal line on one side: metal factory, welder, metal cutter, metal hammer.
 - Wood line on the other side: wood factory, saw, rubber mallet, sander.
-- Clear walking paths between them, so Guy's pathing has room.
+- Clear walking paths between them, so GUY's pathing has room.
 
 ### 8.3 Workshop catalog category
 
@@ -226,30 +226,30 @@ Add a new category `workshop` to `OBJECT_CATEGORIES` with sub-headings:
 
 ## 9. Workshop Objects
 
-Each object lists its category, room, weight (project rule), what Guy does with it, and what it needs. Sizes are approximate.
+Each object lists its category, room, weight (project rule), what GUY does with it, and what it needs. Sizes are approximate.
 
 ### 9.1 Workbench
 
 - **Catalog:** `workbench`, cat `workshop`, sub "Workbench & storage", `room: 'workshop'`, weight `heavy`.
 - **Size:** about 1.6 m x 0.7 m x 0.9 m.
 - **Look:** wooden top with grain, four legs, a tool rack on the back, a vise on one end.
-- **Use:** Guy works here on projects. He can't build without it. He can only put materials on it when it is in the room.
+- **Use:** GUY works here on projects. He can't build without it. He can only put materials on it when it is in the room.
 - **Books:** the "Workshop Basics" book (section 10) teaches the workbench.
 - **Note:** replaces the existing locked `workbench` entry (decision 4).
 
 ### 9.2 Toolbox
 
-- **Catalog:** `toolbox`, cat `workshop`, sub "Workbench & storage", `room: 'workshop'`, weight `medium` (Guy can push it).
+- **Catalog:** `toolbox`, cat `workshop`, sub "Workbench & storage", `room: 'workshop'`, weight `medium` (GUY can push it).
 - **Size:** about 0.5 m x 0.3 m x 0.35 m.
 - **Look:** a red box with a hinged lid, a handle on top and a metal latch.
-- **Use:** Guy takes a tool from the toolbox before he uses it and puts it back after. A tool is only in use while he holds it. The toolbox sits on the floor or on the workbench.
+- **Use:** GUY takes a tool from the toolbox before he uses it and puts it back after. A tool is only in use while he holds it. The toolbox sits on the floor or on the workbench.
 - **Needs:** the workbench is in the room (for a sensible place to work), but the toolbox works without it.
 
 ### 9.3 Metal line
 
 | Object | Weight | Role | Needs | Notes |
 |---|---|---|---|---|
-| **Metal Factory** | heavy | Spits out metal pieces onto a tray, for Guy to collect. Works like the Wood Factory (9.4). | Power (the room lights) | Without it there is no metal, and no metal build can start. |
+| **Metal Factory** | heavy | Spits out metal pieces onto a tray, for GUY to collect. Works like the Wood Factory (9.4). | Power (the room lights) | Without it there is no metal, and no metal build can start. |
 | **Welder** | medium | Joins metal pieces into a new metal object. | Metal pieces, the Welder's stand area, the metal hammer optional | Sparks and a glow when welding. |
 | **Metal Cutter** | medium | Cuts metal pieces to length. | Metal pieces | Only cuts metal, never wood. |
 | **Metal Hammer** | light (a hand tool) | Shapes and pounds metal pieces. | A metal piece on the workbench | Keeps the workbench in use while shaping. |
@@ -308,7 +308,7 @@ Each build has a time, a list of tools in order, and a stock check. A build with
 
 ### 9.6 Tool-use rule
 
-Each tool is a short activity Guy performs at its place in the room (the workbench, the factory, the saw). Each activity:
+Each tool is a short activity GUY performs at its place in the room (the workbench, the factory, the saw). Each activity:
 - looks up the object at step time (`this.obj(name)`), so removing it cancels the activity cleanly (project rule), and
 - declares its needs (`fx.needs`), so a missing tool or stock cancels the step.
 
@@ -322,7 +322,7 @@ Built objects and materials go into one inventory system. This is the direction 
 - The inventory holds **counts per type**, not one entry per object. Example: "Nightstand: 3 in storage, 1 in the room".
 - A build reproduces the existing object by reusing its original builder (for the nightstand, the same function that makes the room's nightstand). The copy matches the original exactly: size, colour, weight and behaviour.
 - A built object starts in **storage**. It is not placed in the room automatically.
-- **Removing** an object from the room (by the user, or by Guy) returns one copy to storage. It is not deleted.
+- **Removing** an object from the room (by the user, or by GUY) returns one copy to storage. It is not deleted.
 - **Adding** from the Catalog takes one copy from storage and places it, like any other room object. With no copies in storage, nothing happens and the Catalog says so.
 - **Materials** (wood pieces, metal pieces) are stock in the same inventory. This settles decision 5: stock is counted, not carried piece by piece.
 - Stock is saved with the room state (`guy.room.v2`).
@@ -381,11 +381,11 @@ Each phase can be tested on its own. No phase needs the Restaurant.
 
 ## 12. Restaurant (first version built)
 
-**Built:** the Restaurant room with an elevator on its far wall, a stove, kitchen counter, cash register and two dining tables; customers (3D models from `public/models/customers/`, listed in `src/customermodels.js`) arrive by the elevator, sit, order, eat, pay and leave; Guy takes orders, cooks, serves and takes payment (`src/restbrain.js`); coins are saved with the layout. Guy runs it for now (GAL does not exist yet) and, as below, that is a default, not a rule. Details and tests: `assets.md` ("The Restaurant"). It is a premium room: shown locked in the Rooms tab until unlocked (no payment flow yet). Not built yet: the payment flow, GAL, clearing and washing plates, more customer packs, optimised models for the large packs.
+**Built:** the Restaurant room with an elevator on its far wall, a stove, kitchen counter, cash register and two dining tables; customers (3D models from `public/models/customers/`, listed in `src/customermodels.js`) arrive by the elevator, sit, order, eat, pay and leave; GUY takes orders, cooks, serves and takes payment (`src/restbrain.js`); coins are saved with the layout. GUY runs it for now (GAL does not exist yet) and, as below, that is a default, not a rule. Details and tests: `assets.md` ("The Restaurant"). It is a premium room: shown locked in the Rooms tab until unlocked (no payment flow yet). Not built yet: the payment flow, GAL, clearing and washing plates, more customer packs, optimised models for the large packs.
 
 The original notes:
 
-- Guy cooks, serves food to customers and handles payment.
+- GUY cooks, serves food to customers and handles payment.
 - New 3D model characters enter the restaurant through an **elevator on the Restaurant's wall**.
 - **Staffing (not a rule):** GAL (X Bot) normally tends the customers. GUY helps when he is free and chooses to. He may be busy, for example in the middle of a jam session, and not want to cook, so GAL may have to run the restaurant alone.
 - Not planned in detail. It will reuse the room model (section 4), premium gating (section 6) and door placement (section 5), plus new character models and a payment flow that needs its own design.
@@ -404,7 +404,7 @@ Per `CLAUDE.md`, the same change must update the QA skill. The full per-feature 
   - Adding the Workshop puts exactly one door on an allowed wall, and nothing fixed is moved.
   - Displaced pieces appear in `world.removed` and can be put back.
   - A room-gated item is not listed while its room is locked, and is listed after unlocking.
-  - Guy walks through the door and the transition plays.
+  - GUY walks through the door and the transition plays.
   - The material stock drops by the right amount for each build, and a build with too little stock does not start.
   - Removing a tool or a factory mid-activity cancels the activity cleanly.
 - Run `T.coverage()` (must report `complete: true`) and `T.runAll()` (must come back clean) in the browser with `?nostart&fresh&skills=none`.
@@ -445,9 +445,9 @@ Every check runs twice: once on the desktop preset and once on the mobile preset
 
 | Check | Where | Pass means |
 |---|---|---|
-| Guy walks through the door, and the transition step plays | sweep `sweepDoors` | he crosses the threshold, the step completes, no exceptions |
+| GUY walks through the door, and the transition step plays | sweep `sweepDoors` | he crosses the threshold, the step completes, no exceptions |
 | An activity in the Workshop cannot start while the Workshop is not added | sweep `sweepWorkshop` | the activity is not offered |
-| Guy's path avoids furniture on both sides of the door | sweep `sweepDoors` (random layouts, several runs) | a path is found, or Guy says he cannot get through |
+| GUY's path avoids furniture on both sides of the door | sweep `sweepDoors` (random layouts, several runs) | a path is found, or GUY says he cannot get through |
 | Camera frames both rooms once the Workshop is added | visual + manual (desktop and 375 x 812) | the whole room and the Workshop are in view |
 | Workshop lighting is cooler and the main room's lighting is unchanged | visual (`T.moment` in each room) | the two rooms look distinct; main room unchanged |
 | Walls, floor and pegboard match the layout in section 8 | visual | screenshot check against section 8 |
@@ -456,8 +456,8 @@ Every check runs twice: once on the desktop preset and once on the mobile preset
 
 | Object | Sweep | Checks |
 |---|---|---|
-| Workbench | `sweepObjects` (Workshop group) | heavy: never pushed by Guy; Guy works at it; removing it cancels its activities |
-| Toolbox | `sweepObjects` | medium: Guy pushes it; he takes a tool out and puts it back; tool is not in his hand afterwards |
+| Workbench | `sweepObjects` (Workshop group) | heavy: never pushed by GUY; GUY works at it; removing it cancels its activities |
+| Toolbox | `sweepObjects` | medium: GUY pushes it; he takes a tool out and puts it back; tool is not in his hand afterwards |
 | Metal Factory | `sweepObjects` | heavy; spits a metal piece into storage on its activity; stops when removed |
 | Welder | `sweepBuilds` | glow on the welding point, not sparks; he holds the parts still while welding |
 | Metal Cutter | `sweepBuilds` | only cuts metal (a wood piece in the stock is refused) |
@@ -568,11 +568,11 @@ The owner asked for judgement on every open question, with the plan kept friendl
 2. **The Workshop.** Free to add, and unlocked by default. The premium mechanism is built for later rooms (such as the Restaurant).
 3. **Room-gated items.** Hidden until their room is added and unlocked. A child never sees a locked item they cannot use yet.
 4. **The `woodwork` book.** Retired. Its place is taken by **Furniture for Robots** (the advanced wood book), so there is one name for it.
-5. **Materials.** Counted stock in the inventory (section 9A). Guy never carries pieces one by one.
+5. **Materials.** Counted stock in the inventory (section 9A). GUY never carries pieces one by one.
 6. **Metal books.** One advanced metal book for now, **Metal Fabrication for Robots**. Chapters or whole books can be added later.
 7. **Free Nightstand and Wooden Chair.** They stay single and free, exactly as they are today. Built copies are counted stock in storage. That keeps the room's starting furniture simple.
 8. **Storage.** A physical shelf in the Workshop, labelled "Storage", with a count on it. Kids can see their stock, and the Catalog shows the same count. On a phone, the shelf draws at most a dozen stacked copies. Beyond that it shows only the number, which keeps the scene fast.
-9. **Cap on copies in the room.** At most **20 copies of any one built type** and **60 built objects in total** at once. The room's space still applies too. When a cap is reached, Guy says something friendly such as "The room is full of bicycles! Put some back in storage to make space." Nothing is ever deleted.
+9. **Cap on copies in the room.** At most **20 copies of any one built type** and **60 built objects in total** at once. The room's space still applies too. When a cap is reached, GUY says something friendly such as "The room is full of bicycles! Put some back in storage to make space." Nothing is ever deleted.
 
 ---
 
@@ -609,23 +609,23 @@ New requests, with what is built, what is planned, and what each planned part wa
 
 | Request | Status |
 |---|---|
-| Every room the same depth. The Workshop was shallower than Guy's room | **Built.** A room is as big as Guy's room (10 wide x 8 deep) whichever wall its door is on, unless its catalog entry gives a `size`. Checked by `sweepDoors` for all three walls. |
-| Speed control dropdown (speeds up Guy's movements between interactions) | **Built.** 1x to 4x beside Follow. It scales walking, turning, pushing and the idle pauses. The interactions themselves keep their pace. Remembered between visits. `sweepSpeed`. |
-| A long-press option to lock Guy into an interaction until told to stop | **Built.** "Lock in" on the long-press menu (and "Unlock"), a "Locked on ..." chip, and Next also lets go. He cycles through everything he can do with that object. `sweepLock`. |
+| Every room the same depth. The Workshop was shallower than GUY's room | **Built.** A room is as big as GUY's room (10 wide x 8 deep) whichever wall its door is on, unless its catalog entry gives a `size`. Checked by `sweepDoors` for all three walls. |
+| Speed control dropdown (speeds up GUY's movements between interactions) | **Built.** 1x to 4x beside Follow. It scales walking, turning, pushing and the idle pauses. The interactions themselves keep their pace. Remembered between visits. `sweepSpeed`. |
+| A long-press option to lock GUY into an interaction until told to stop | **Built.** "Lock in" on the long-press menu (and "Unlock"), a "Locked on ..." chip, and Next also lets go. He cycles through everything he can do with that object. `sweepLock`. |
 | Locked on the guitar: play everything he knows, then make up riffs and remember the good ones | **Built.** The `riff` activity: single-note riffs over a bass note, judged on range, steps, a repeating phrase, density and coming home; the best 8 are kept between visits (`guy.riffs.v1`) and replayed. `sweepRiffs`. |
 
 ### 17.2 Long-press a door to open it and go in (built, first version)
 
-**Built:** doors are pickable; long-press > "Go into the Workshop" (or "Come back"); a real doorway in the wall; the leaf swings open and shut; Guy walks to the door, reaches for the knob, goes in, looks round three spots and comes back out and shuts it (`visit`, `leave`, `sweepVisit`). Walking through the doorway and round the room is in straight lines, which is fine while the Workshop is empty. **Still planned** (below): grid pathing across rooms once the Workshop holds objects.
+**Built:** doors are pickable; long-press > "Go into the Workshop" (or "Come back"); a real doorway in the wall; the leaf swings open and shut; GUY walks to the door, reaches for the knob, goes in, looks round three spots and comes back out and shuts it (`visit`, `leave`, `sweepVisit`). Walking through the doorway and round the room is in straight lines, which is fine while the Workshop is empty. **Still planned** (below): grid pathing across rooms once the Workshop holds objects.
 
-- **Pick target:** doors join `pick()` in `main.js`, so a long press on one opens a menu: "🚪 Go in" (from Guy's room) or "🚪 Come back" (from the Workshop).
-- **Opening:** the door leaf swings open in about a second and closes about three seconds after Guy has passed, if nobody is near. The doorway needs a real opening in the wall (today the wall is one plane, so the door is painted on it).
+- **Pick target:** doors join `pick()` in `main.js`, so a long press on one opens a menu: "🚪 Go in" (from GUY's room) or "🚪 Come back" (from the Workshop).
+- **Opening:** the door leaf swings open in about a second and closes about three seconds after GUY has passed, if nobody is near. The doorway needs a real opening in the wall (today the wall is one plane, so the door is painted on it).
 - **Walking:** `Go in` is a queued walk to the threshold, the door opening, then a walk to the middle of the room. It needs the pathing grid and the "can he stand here" limits (`brain.js`, `main.js`) to cover every added room, with the door cells open only while the door is open.
 - **Waits for:** phase 5 (pathing across the door). Do it with the Workshop shell, before any object is moved into the Workshop.
 
-### 17.3 Guy being creative (built: see the end of this section)
+### 17.3 GUY being creative (built: see the end of this section)
 
-**Built (round three):** what Guy and GAL build is driven by what the house needs (`src/needs.js`): a chair for each of them, a foot stool when a window top is out of reach, a second bookshelf when books are stacked on the floor, another table when the restaurant is full, an electric guitar when both workshop lines are there. The product is carried out flat-packed and put together where it is wanted (it grows into place); the foot stool is lifted and carried to a window and stood on to clean the top (`dusttop`); a bookshelf Guy builds takes the stacked books and is read from like the first; the metal line (Metal Factory, Metal Cutter, Welder, Hammer & Anvil, the book "Metal Fabrication for Robots") makes metal chairs and tables; Guy tells GAL to build what he cannot (`orderbuild`); the wooden chairs are listed in the Catalog only once Guy or GAL has read "Furniture for Robots". Not built: recycling spare chairs, the picnic and kitchen tables, a metal-framed window and the plant hanger, records stacked on the floor (they overlap on the shelf and never touch the floor) and a physical storage shelf.
+**Built (round three):** what GUY and GAL build is driven by what the house needs (`src/needs.js`): a chair for each of them, a foot stool when a window top is out of reach, a second bookshelf when books are stacked on the floor, another table when the restaurant is full, an electric guitar when both workshop lines are there. The product is carried out flat-packed and put together where it is wanted (it grows into place); the foot stool is lifted and carried to a window and stood on to clean the top (`dusttop`); a bookshelf GUY builds takes the stacked books and is read from like the first; the metal line (Metal Factory, Metal Cutter, Welder, Hammer & Anvil, the book "Metal Fabrication for Robots") makes metal chairs and tables; GUY tells GAL to build what he cannot (`orderbuild`); the wooden chairs are listed in the Catalog only once GUY or GAL has read "Furniture for Robots". Not built: recycling spare chairs, the picnic and kitchen tables, a metal-framed window and the plant hanger, records stacked on the floor (they overlap on the shelf and never touch the floor) and a physical storage shelf.
 
 
 - **No chair, but wood to work with:** when no chair can be sat on and the wood line is there (Workshop added, workbench, saw, mallet, sander, wood in stock) a new activity `buildchair` has him go to the Workshop, build a chair (saw, mallet, sander, as in section 9.5), carry it to the door and into his room, put it on a free spot clear of the usual standing places, and sit on it. The carry needs a "carrying furniture" pose (both hands under the seat) and the chair must change rooms.
@@ -633,22 +633,22 @@ New requests, with what is built, what is planned, and what each planned part wa
 - **Both are optional choices** in his normal activity mix, with low weights and the usual "not the same thing twice" rule, and each can be a Lock in target for the Workshop.
 - **Waits for:** rooms with their own objects (object lookups must find the object in the room he is in), the Workshop objects (section 9), the inventory (9A), the build recipes, and pushing or carrying furniture across a door.
 
-### 17.4 Books overflow, and Guy builds another bookshelf (stack built; the second shelf is planned)
+### 17.4 Books overflow, and GUY builds another bookshelf (stack built; the second shelf is planned)
 
-**Built:** the shelf holds 16 books; the rest lie flat on the floor in a stack beside it (spine to the room, each resting on the one below, an obstacle, moves with the shelf). Guy takes the top book, squatting to it, and puts it back on top. The long-press book list scrolls instead of running off the screen. `sweepShelf`. **Still planned:** Guy building another bookshelf in the Workshop, pushing it in and moving the stacked books onto it.
+**Built:** the shelf holds 16 books; the rest lie flat on the floor in a stack beside it (spine to the room, each resting on the one below, an obstacle, moves with the shelf). GUY takes the top book, squatting to it, and puts it back on top. The long-press book list scrolls instead of running off the screen. `sweepShelf`. **Still planned:** GUY building another bookshelf in the Workshop, pushing it in and moving the stacked books onto it.
 
 - **Found while planning:** the shelf has no capacity. `addBook` in `room.js` keeps taking the next slot (rows 3 and 2, 0.2 m apart along the shelf). With all 19 unlocked books on the shelf, the last three (`stars`, `darksky`, `scopecare`) already stick out past the end of the shelf (z up to 1.1 m; the shelf ends at 0.9 m). This is a bug today, independent of the new request.
 - **Capacity:** the shelf holds 17 books on its two reachable rows. Past that a book goes into a **stack on the floor beside the shelf** (up to a few books high), still counted as "on the shelf" for the Catalog.
-- **Guy's response:** with wood in stock he builds a second bookshelf in the Workshop, pushes it through the door to stand next to the first (the new shelf is a normal shelf object, heavy once placed, so Guy only moves it while it is new: a build state), then picks up the stacked books one at a time and puts them on its empty shelves. The new shelf is removable (the first one never is).
-- **Without wood or a Workshop:** the stack stays, and Guy still reads books from it (he picks from the top of the stack).
+- **GUY's response:** with wood in stock he builds a second bookshelf in the Workshop, pushes it through the door to stand next to the first (the new shelf is a normal shelf object, heavy once placed, so GUY only moves it while it is new: a build state), then picks up the stacked books one at a time and puts them on its empty shelves. The new shelf is removable (the first one never is).
+- **Without wood or a Workshop:** the stack stays, and GUY still reads books from it (he picks from the top of the stack).
 - **Waits for:** the stack mechanic (a new object, with a fix for the capacity bug), 17.3's carrying and door work, and the wooden shelves build (section 9.5).
 
 ### 17.5 Order of work
 
-1. Pathing across the door and the opening door (17.2), with a Workshop that Guy can walk into.
+1. Pathing across the door and the opening door (17.2), with a Workshop that GUY can walk into.
 2. The shelf capacity fix and the floor stack (17.4, first half). This one stands alone and fixes a bug.
 3. The Workshop objects, materials and inventory (sections 9 and 9A), then the builds.
-4. Carrying furniture, then `buildchair`, recycling, and Guy building the second bookshelf.
+4. Carrying furniture, then `buildchair`, recycling, and GUY building the second bookshelf.
 
 ### 17.6 Testing
 
@@ -658,16 +658,16 @@ Each built item has its sweep in section 13A. The planned items add: a door long
 
 ## 18. The Build a Bot Machine and GAL (first version built)
 
-**Built (see assets.md, "GAL and the Build a Bot machine"):** the premium one-use machine (Robots category), Guy building her, GAL as an autonomous second robot with her own brain and skills (she must read books), the two sharing the room and the stereo, Guy asking her to read the drumming books and find him before they jam, and her own invitation to dance. Not built: the piano invitation, a menu and skills panel for her, more orders. **Autonomy (from the owner):** GAL is an autonomous humanoid robot. If she is in the environment she is free to do whatever she wants; Guy can also instruct her to use her abilities (this answers open question 7). The rest of this section is the original description.
+**Built (see assets.md, "GAL and the Build a Bot machine"):** the premium one-use machine (Robots category), GUY building her, GAL as an autonomous second robot with her own brain and skills (she must read books), the two sharing the room and the stereo, GUY asking her to read the drumming books and find him before they jam, and her own invitation to dance. Not built: the piano invitation, a menu and skills panel for her, more orders. **Autonomy (from the owner):** GAL is an autonomous humanoid robot. If she is in the environment she is free to do whatever she wants; GUY can also instruct her to use her abilities (this answers open question 7). The rest of this section is the original description.
 
 Recorded from the owner's description.
 
 **The machine.** A 3D printer, a super premium object (it is unlocked through the same premium mechanism as later rooms, not for free). It can be used once: it prints a female robot, X Bot, by morphing itself into her, using itself as the material. After that it is gone (or is the same object as X Bot; to be decided).
 
-**X Bot.** A second robot character, a female version of Guy, built from the Mixamo `X Bot` model (`models/mixamo/X Bot.fbx`). Rules from the description:
-- X Bot is controlled only by Guy. The user does not command her directly.
-- Guy tells her what to do. Example: Guy wants to play guitar, so he tells X Bot to play drums.
-- So X Bot needs her own activity queue (a second brain on the same world), taking orders from Guy's choices. Her orders can be any activity she can do, and she does what she is told.
+**X Bot.** A second robot character, a female version of GUY, built from the Mixamo `X Bot` model (`models/mixamo/X Bot.fbx`). Rules from the description:
+- X Bot is controlled only by GUY. The user does not command her directly.
+- GUY tells her what to do. Example: GUY wants to play guitar, so he tells X Bot to play drums.
+- So X Bot needs her own activity queue (a second brain on the same world), taking orders from GUY's choices. Her orders can be any activity she can do, and she does what she is told.
 
 **X Bot's unprompted prompts.** X Bot also engages with GUY on her own, for example:
 - she turns on the stereo and asks GUY to dance;
@@ -677,33 +677,33 @@ Recorded from the owner's description.
 
 **Two characters.** GUY is the main character, built from the Mixamo Y Bot model (GUY = Genetically Universal Ybot). X Bot is the second character. "Y Bot" is the model's name, not a second character.
 
-**GAL and books (from the owner).** Learning from books applies to GAL as well. She has her own skill set (her own `Skills` instance, forgetting included) and must read a book to gain an ability, especially an advanced one. She reads from the same bookshelf. What follows for the design: her activities are gated by `skillNeeds` against her skills; Guy cannot order her to do something she has not learned (he picks only from what she can do, or the order is refused kindly); she shows up in the skills panel as a second set; her skills are saved with her. Reading would reuse the `read` activity and the book steps, run by her own brain.
+**GAL and books (from the owner).** Learning from books applies to GAL as well. She has her own skill set (her own `Skills` instance, forgetting included) and must read a book to gain an ability, especially an advanced one. She reads from the same bookshelf. What follows for the design: her activities are gated by `skillNeeds` against her skills; GUY cannot order her to do something she has not learned (he picks only from what she can do, or the order is refused kindly); she shows up in the skills panel as a second set; her skills are saved with her. Reading would reuse the `read` activity and the book steps, run by her own brain.
 
 **Open questions for the owner**
 1. Is the machine consumed when it prints X Bot, or does it stay as something else?
 2. What does the premium unlock cost, and is it a one-off unlock or paid per machine?
-3. How does the user give Guy an order for X Bot, or does Guy decide everything himself?
-4. ~~Can X Bot learn skills of her own?~~ **Answered:** yes. GAL learns from books like Guy does: she must read a book to gain the abilities of an advanced skill. Her skills are her own, not Guy's (see "GAL and books" below).
+3. How does the user give GUY an order for X Bot, or does GUY decide everything himself?
+4. ~~Can X Bot learn skills of her own?~~ **Answered:** yes. GAL learns from books like GUY does: she must read a book to gain the abilities of an advanced skill. Her skills are her own, not GUY's (see "GAL and books" below).
 5. Does X Bot persist between visits (the saved layout)?
 6. Y Bot's prompts: are they in speech bubbles, gestures only, or both?
 7. X Bot is told what to do by GUY, but she also starts things on her own (the prompts above). Does she act on her own at any time, or only when GUY is near and free to respond?
 
-**Testing.** To be written when planned: a second character needs its own sweep (its own activities, no interference with Guy's paths), the order-taking path, and the unprompted prompts.
+**Testing.** To be written when planned: a second character needs its own sweep (its own activities, no interference with GUY's paths), the order-taking path, and the unprompted prompts.
 
-## 19. Guy Hangs His Paintings on Walls (built)
+## 19. GUY Hangs His Paintings on Walls (built)
 
-**Built** as described below (`src/paintings.js`, `src/paintbrain.js`, `sweepPaintings`): the Hang painting menu item on the easel, Guy choosing the wall (his own room's two visible walls and the three walls of every added room), three per wall, the oldest replaced when every wall is full, stored paintings with thumbnails in the Catalog, and saving (`guy.paintings.v1`, which also saves the picture on the easel). The easel painting is no longer in the "not saved" list.
+**Built** as described below (`src/paintings.js`, `src/paintbrain.js`, `sweepPaintings`): the Hang painting menu item on the easel, GUY choosing the wall (his own room's two visible walls and the three walls of every added room), three per wall, the oldest replaced when every wall is full, stored paintings with thumbnails in the Catalog, and saving (`guy.paintings.v1`, which also saves the picture on the easel). The easel painting is no longer in the "not saved" list.
 
-Guy leaves each painting on the easel when he finishes it, as now. If the user likes a painting, they can have Guy hang it on a wall.
+GUY leaves each painting on the easel when he finishes it, as now. If the user likes a painting, they can have GUY hang it on a wall.
 
-- **The menu.** When the easel has a painting on it, its long-press menu shows **Hang painting**. Guy never hangs one by himself, and there is no "proud" roll.
-- **Taking it down.** Guy lifts the canvas off the easel with both hands (IK, like the shelf books), carrying it in front of him. The easel is blank afterwards.
-- **Guy chooses where.** The user does not pick the spot. Guy looks at every wall of every room he can reach (his own room, and added rooms through their doors) and picks a free spot, then walks there and hangs it. It becomes a wall picture in `world.decor`, so the user can still drag it along the wall or put it away.
+- **The menu.** When the easel has a painting on it, its long-press menu shows **Hang painting**. GUY never hangs one by himself, and there is no "proud" roll.
+- **Taking it down.** GUY lifts the canvas off the easel with both hands (IK, like the shelf books), carrying it in front of him. The easel is blank afterwards.
+- **GUY chooses where.** The user does not pick the spot. GUY looks at every wall of every room he can reach (his own room, and added rooms through their doors) and picks a free spot, then walks there and hangs it. It becomes a wall picture in `world.decor`, so the user can still drag it along the wall or put it away.
 - **Free spot.** A spot that does not overlap a window, door, sconce or another picture, and is not behind a tall object.
-- **Limit.** At most **3 of Guy's paintings per wall**.
-- **No room anywhere.** If every wall already has 3, Guy picks one of his existing paintings (the oldest) and replaces it with the new one. The painting he takes down is not thrown away: it goes into the skill machine (the Catalog) as an item the user can put back, like any removed object. Nothing is ever deleted.
+- **Limit.** At most **3 of GUY's paintings per wall**.
+- **No room anywhere.** If every wall already has 3, GUY picks one of his existing paintings (the oldest) and replaces it with the new one. The painting he takes down is not thrown away: it goes into the skill machine (the Catalog) as an item the user can put back, like any removed object. Nothing is ever deleted.
 - **Saved.** Each hung painting, and each stored one, is saved (wall, position along it, and the picture) so they survive a reload. This needs the easel painting itself to be saved first (it is not yet, see "Build status").
-- **Testing.** A sweep that paints and hangs until a wall has 3, checks Guy spreads them over other walls and rooms before replacing, checks that with every wall full the oldest is replaced and the old one appears in the Catalog, checks windows and doors are not covered, and checks removal and reload.
+- **Testing.** A sweep that paints and hangs until a wall has 3, checks GUY spreads them over other walls and rooms before replacing, checks that with every wall full the oldest is replaced and the old one appears in the Catalog, checks windows and doors are not covered, and checks removal and reload.
 
 **Thumbnails (decided).** The Catalog shows each stored painting as a thumbnail of the actual picture, not a generic icon.
 

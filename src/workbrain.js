@@ -1,4 +1,4 @@
-// Guy in the Workshop: going in and out through the door, tidying the toolbox, and building things. Installed onto Brain / POSES at the
+// GUY in the Workshop: going in and out through the door, tidying the toolbox, and building things. Installed onto Brain / POSES at the
 // bottom of brain.js (like the hobbies). The objects are in workobjects.js; the recipes and numbers in workshop.js.
 //
 // What he builds is real, and the factories do all of it: he walks up to the Wood Factory (or the Metal Factory), presses the big
@@ -24,7 +24,7 @@ export function installWorkshop(Brain, POSES, H) {
     initWork() {
       this.carry = null;                  // what he is carrying: 'flat' | 'mflat' (a finished thing, flat-packed) | 'bars' (the metal hardware of a guitar) | null
       this.carryN = 0;
-      this.forceRecipe = null;            // a recipe he was told to build (the user, or Guy telling GAL)
+      this.forceRecipe = null;            // a recipe he was told to build (the user, or GUY telling GAL)
       this.forceLine = null;              // the factory he was pointed at ('wood' | 'metal'): he builds something that factory makes
       this.toolInUse = null;              // the object whose tool is in his hand
       this.onBuilt = null;                // called with a message when he finishes something
@@ -68,7 +68,7 @@ export function installWorkshop(Brain, POSES, H) {
       const exits = this.exitsOf(here);
       return exits.length && exits.every((d) => d.locked) ? here : null;
     },
-    shutInMessage(room) { return `${this.isGal ? 'GAL' : 'Guy'} is shut in the ${this.w.doors[room].name}: the door is locked. Unlock it (long-press the door) to let ${this.isGal ? 'her' : 'him'} out.`; },
+    shutInMessage(room) { return `${this.isGal ? 'GAL' : 'GUY'} is shut in the ${this.w.doors[room].name}: the door is locked. Unlock it (long-press the door) to let ${this.isGal ? 'her' : 'him'} out.`; },
     doorIn(id) {
       const w = this.w, out = this.doorStand(id), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false);
       // (the locked doors are kept out of every choice, but one can be locked while he is on his way: he gives up there, never walks into it)
@@ -131,7 +131,7 @@ export function installWorkshop(Brain, POSES, H) {
       sfx('chime');
       if (this.onBuilt) this.onBuilt(placed ? `${this.who()} built a ${r.name}! It is in the Workshop.` : `${this.who()} built a ${r.name}! There is no room in the Workshop, so it is in storage.`);
     },
-    who() { return this.isGal ? 'GAL' : 'Guy'; },
+    who() { return this.isGal ? 'GAL' : 'GUY'; },
 
     // ------------------------------------------------------------------ the foot stool: carried to a window and stood on to clean the top
     // The high windows (their top is out of reach from the floor) and the stool: what he could do now, or null.
@@ -236,18 +236,18 @@ export function installWorkshop(Brain, POSES, H) {
       const k = (id) => this.skills.has(id);
       const need = { workbench: 'workshop', toolbox: 'workshop', woodfactory: 'workshop', metalfactory: 'workshop.metal' }[name];
       if (!need) return null;
-      if (!k(need)) return `Guy doesn't know how to use that yet. Add the book "${need === 'workshop' ? 'Workshop Basics' : 'Metal Fabrication for Robots'}" to the shelf and he'll read it.`;
+      if (!k(need)) return `GUY doesn't know how to use that yet. Add the book "${need === 'workshop' ? 'Workshop Basics' : 'Metal Fabrication for Robots'}" to the shelf and he'll read it.`;
       if (['workbench', 'woodfactory', 'metalfactory'].includes(name) && !this.pickRecipe()) return this.cannotBuild();
       return null;
     },
     // why he does not build anything now (a kind message): nothing is needed, or he lacks a book or a factory
     cannotBuild() {
       const w = this.w, line = this.buildLine();
-      if (!w.objects.woodfactory && !w.objects.metalfactory) return 'Guy needs a Wood Factory or a Metal Factory first.';
-      if (!wants(this).length) return 'There is nothing the house needs right now, so Guy has nothing to build.';
-      if (line === 'wood') return 'Guy needs a book, and the Wood Factory, to build what the house needs.';
-      if (line === 'metal') return 'Guy needs a book, and the Metal Factory, to build what the house needs.';
-      return 'Guy needs a book and the right factory in the Workshop to build what the house needs.';
+      if (!w.objects.woodfactory && !w.objects.metalfactory) return 'GUY needs a Wood Factory or a Metal Factory first.';
+      if (!wants(this).length) return 'There is nothing the house needs right now, so GUY has nothing to build.';
+      if (line === 'wood') return 'GUY needs a book, and the Wood Factory, to build what the house needs.';
+      if (line === 'metal') return 'GUY needs a book, and the Metal Factory, to build what the house needs.';
+      return 'GUY needs a book and the right factory in the Workshop to build what the house needs.';
     },
     // the factory he was pointed at, or is locked on ('wood' | 'metal'), or null for any
     buildLine() { return this.forceLine || (this.lock && { woodfactory: 'wood', metalfactory: 'metal' }[this.lock.name]) || null; },
