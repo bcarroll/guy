@@ -1415,6 +1415,7 @@ T.sweepDoorMoves = () => {
   const sx = shelf.x, sz = shelf.z; w.beginDrag(shelf);
   w.dragTo(shelf, sx + 20, sz); w.dragTo(shelf, sx, sz + 20); w.dragTo(shelf, sx - 20, sz); w.dragTo(shelf, sx, sz - 20); w.dropObject(shelf);
   out.push(result('doormoves: dragged hard in every direction the bookshelf stays in Guy\'s room', room(shelf) === 'main', { room: room(shelf) }));
+  shelf.set(sx, sz);                                             // (back where it stood: other sweeps expect the bookshelf there)
   // 7. nothing in the game moves a thing through a wall: Guy rearranges only his own room's things
   T.settle(); T.resetRooms(); T.removeAll(); T.settle();
   out.push(result('doormoves: no errors', errors.length === base, { errors: errors.slice(base) }));
