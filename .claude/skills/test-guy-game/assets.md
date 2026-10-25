@@ -134,7 +134,7 @@ playback panel or the top-shelf record list; GUY then joins in without touching 
 
 ## Activities (`activities()` in `src/brain.js`)
 
-wander, stretch, wave, yardsit, birdbath, skyswitch, mow, yardpoke, goalshot, soccertoss, hoopshoot, hoopdribble (Backyard), stereoon, stereooff (menu only), piano, sitpiano, plink, jam, jampiano, jamsit, dance, lamp, mood, plant, read (alias `books`),
+wander, stretch, wave, yardsit, birdbath, skyswitch, mow, yardpoke, goalshot, soccertoss, hoopshoot, hoopdribble, hoopdefend, goalkeep (Backyard: the last two are the other robot joining a game, only when invited), stereoon, stereooff (menu only), piano, sitpiano, plink, jam, jampiano, jamsit, dance, lamp, mood, plant, read (alias `books`),
 rearrange, ball, dribble, toss, guitar, riff (makes up riffs on the guitar, see below), jamguitar, bang, drums, drumsolo, jamdrums, scribble, paint, mixpaint, portrait, peek,
 stargaze, darkstargaze, scopecare, dancemoves, ballroom, dust (needs `decorate` and a wall piece with clear floor in front); tidytools, dusttop, build (the Workshop, see below); takeorder, cook, serve, takepay (the Restaurant, see below; internal: rwait); hangpaint (from the easel's long-press menu, see GUY's paintings below; internal: putcanvas); internal: stuck (shut in a locked room), putback, putguitar, dropball, lighton, visit and leave (through the door of an added room and back: tested by `T.sweepVisit`).
 Needs and allowed arm contacts are in `MANIFEST.activities`.
@@ -144,6 +144,10 @@ Needs and allowed arm contacts are in `MANIFEST.activities`.
 | id | run | look for |
 |---|---|---|
 | yard-shoot | `hoopshoot`, pose `shoot`, t 1.2, side | knees dipped then extended, both hands up at the release, ball leaving them, facing the hoop |
+| yard-defend | `hoopdefend`, pose `defend`, t 1.2, front | knees bent, both arms spread wide and up with open hands, facing the camera |
+| yard-block | `hoopdefend`, pose `block`, t 0.5, front (dist 4) | off the floor, both arms straight up, legs tucked a little |
+| yard-keeper | `goalkeep`, pose `keeper`, t 1.2, front (dist 4) | wide low crouch in the goal mouth, arms out low, open hands, leaning forward |
+| yard-dive | `goalkeep`, pose `dive`, t 0.5, front (dist 4) | lunging sideways at full stretch, both arms reaching the same way, body tilted |
 | yard-sit | `yardsit`, pose `sitRest`, t 6, side | seated in the lawn chair, legs clear of the frame |
 | yard-shed-open | `yardtidy`, pose `reach`, t 1.3, side (in the yard) | at the shed door, hand on the knob, door swung wide open showing the dark inside |
 | yard-mow | `mow`, pose `walk`, t 1, side | both hands on the mower handle, walking behind it, stripes cut |
@@ -281,6 +285,8 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 - **Speed** (the dropdown beside Follow, `#speed-sel`, 1x / 2x / 3x / 4x, remembered in `guy.speed.v1`, always 1x under `?fresh`): scales his walking (and turning and pushing furniture) and the idle pauses between interactions (`brain.speed`). The interactions themselves (playing, reading, painting, waving ...) run at normal speed. Tested by `T.sweepLock` and `T.sweepSpeed`.
 
 ## Regression watch (bugs found and fixed; make sure they stay fixed)
+
+- **Playing together** (feature): GAL and GUY now join each other's basketball and soccer. Whoever starts `hoopshoot` / `hoopdribble` / `goalshot` / `soccertoss` may invite the other (half the time, and only when she is doing something she can drop and knows the sport's book): she runs `hoopdefend` (stands between the shooter and the hoop, `defend` pose, jumps to `block` as he lets go; a block sends the shot astray) or `goalkeep` (ready `keeper` stance in front of the goal, `dive` for the kick; a save sends it wide). The shooter waits at his ball (`waitPartner`) until she is out and ready, never longer than half a minute. The two guard activities are never chosen on their own (`available` needs a shooter) and with nobody to play against they run a short solo practice (how the QA sees the `block` and `dive` poses). Covered by `T.sweepSports` (she joins, gets into the stance and jumps / dives, stands between him and the hoop or in front of the goal and never inside him, and the other way round).
 
 - **"GUY can't do anything with that" when told to mow (shed/mower) or to use the workstation** (found by hand): the mow gate still asked for the old rectangular loop, which needs room behind the mower and fails with the mower near a fence or a robot standing on the lawn; the workstation order needed GUY to be in his own room. Now the gate is `mowCoverage({ tidied: true })` (robots are not obstacles; a mower jammed in a corner is still refused kindly), the workstation can be ordered from any room (he walks back first), the other robot is asked to leave the yard while he mows and the mower waits a few seconds if she is in its way, and a refusal says why (`whyNot`, or that the other robot is using it). Covered by the first two checks of `T.sweepMowing`.
 

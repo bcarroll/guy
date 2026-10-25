@@ -15,7 +15,7 @@ export const BARKS = {
   rearrange: ['This could be arranged better.'], stereoon: ['Some music.'], stereooff: ['That is enough music.'],
   tidytools: ['Tidying the tools.'], build: ['I am building something.'],
   yardsit: ['Some fresh air.', 'Time to sit in the sun.'], birdbath: ['Let me see the bird bath.'], skyswitch: ['Let me change the sky.'], mow: ['The lawn needs mowing.'],
-  yardpoke: ['A kick about, perhaps.'], goalshot: ['Shots at the goal.'], soccertoss: ['A little ball handling.'], hoopshoot: ['Let me shoot some hoops.'], hoopdribble: ['Dribbling.'],
+  yardpoke: ['A kick about, perhaps.'], goalshot: ['Shots at the goal.'], soccertoss: ['A little ball handling.'], hoopshoot: ['Let me shoot some hoops.'], hoopdribble: ['Dribbling.'], hoopdefend: ['I will play defence.'], goalkeep: ['I will keep goal.'],
   visit: ['Let me have a look in there.'], learn: ['Off to the workstation.'],
 };
 export const NO_BARK = ['wander', 'books', 'putback', 'putguitar', 'dropball', 'lighton', 'putcanvas', 'hangpaint', 'leave', 'stuck', 'rwait',

@@ -13,7 +13,7 @@ import { sfx } from './sfx.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const ID = 'backyard';
-export const YARD_ACTS = ['yardsit', 'birdbath', 'skyswitch', 'mow', 'yardpoke', 'goalshot', 'soccertoss', 'hoopshoot', 'hoopdribble', 'yardtidy'];
+export const YARD_ACTS = ['yardsit', 'birdbath', 'skyswitch', 'mow', 'yardpoke', 'goalshot', 'soccertoss', 'hoopshoot', 'hoopdribble', 'yardtidy', 'hoopdefend', 'goalkeep'];
 export const YARD_OBJECTS = ['soccergoal', 'basketballhoop', 'lawnchair', 'birdbath', 'skyswitch', 'shed', 'mower'];
 
 export function installYard(Brain, POSES, H) {
@@ -81,20 +81,22 @@ export function installYard(Brain, POSES, H) {
     // ------------------------------------------------------------------ soccer
     // one kick at the goal: stand behind the ball in line with the goal, swing, launch it at the goal mouth (some go wide)
     goalKick(good = 0.7) {
-      return [this.yardBallStand('soccer', () => (this.obj('soccergoal') ? this.obj('soccergoal').at(0, 0, 0.35) : null)),
+      return [this.yardBallStand('soccer', () => (this.obj('soccergoal') ? this.obj('soccergoal').at(0, 0, 0.35) : null)), this.waitPartner('soccer', 0),
         {
           type: 'plan',
           fn: () => {
             const goal = this.obj('soccergoal'), ball = this.yardBall('soccer');
             if (!goal || !ball) { this.queue.length = 0; return []; }
             const before = this.w.yard.score.goals;
-            const side = Math.random() < good ? rand(-0.8, 0.8) : (Math.random() < 0.5 ? -1 : 1) * rand(1.4, 2.0);   // a miss goes wide of the post
+            const keeper = !!this.guard('soccer');
+            let side = Math.random() < good * (keeper ? 0.85 : 1) ? rand(-0.8, 0.8) : (Math.random() < 0.5 ? -1 : 1) * rand(1.4, 2.0);   // a miss goes wide of the post
             const aim = () => goal.at(side, rand(0.2, 0.75), 0.0);
             return [this.play('kick', 1.2, {
               needs: ['soccergoal'],
               at: [0.5, () => {
                 const b = this.yardBall('soccer'), gl = this.obj('soccergoal');
                 if (!b || !gl) return;
+                if (this.keepShot(side)) side = Math.sign(side || 1) * 1.8;                // the keeper gets a hand to it: it goes wide
                 const t = aim(), d = Math.hypot(t.x - b.position.x, t.z - b.position.z);
                 this.w.yard.score.shots++;
                 this.w.yard.launch('soccer', t, clamp(d / 6.5, 0.4, 0.95));
@@ -577,6 +579,101 @@ export function installYard(Brain, POSES, H) {
       this.mowerSync();
     },
 
+    // ------------------------------------------------------------------ playing together
+    // Sometimes the other robot joins in a game: against a basketball shooter she (or he) plays defence, in front of a soccer goal she
+    // keeps goal. Whoever starts a shot-taking activity may invite the other (`inviteSportPartner`): she then runs `hoopdefend` or
+    // `goalkeep`, shuffling about between the shooter and the hoop or standing in the goal mouth, and reacts to each shot (jumping to
+    // block it, diving for it). A good defence makes shots miss more often; the shooter does not need her.
+    // Is he taking shots at that sport's goal right now?
+    sportPlaying(kind) {
+      const acts = kind === 'basketball' ? ['hoopshoot', 'hoopdribble'] : ['goalshot', 'soccertoss'];
+      return acts.includes(this.last) && !!(this.step || this.queue.length) && this.inYard();
+    },
+    // A plan step at the start of a sport activity: now and then the other robot is called over to play against him.
+    inviteSportPartner(kind) {
+      return {
+        type: 'plan',
+        fn: () => {
+          const o = this.other, act = kind === 'basketball' ? 'hoopdefend' : 'goalkeep';
+          if (!o || o.lock || o.stuckIn() || o.pendingActivity || Math.random() > 0.5) return [];
+          if (!['wander', 'stretch', 'wave', 'sit', 'slouch', 'yardsit', 'birdbath', 'skyswitch', 'yardpoke', 'plant', 'lamp', 'mood', 'dance', 'dancemoves', 'read'].includes(o.last)) return [];
+          if (!o.available(act)) return [];
+          o.skip(true); o.pendingActivity = act;
+          return [];
+        },
+      };
+    },
+    // Wait (at most about half a minute) until the invited robot is out in the yard and in her ready stance.
+    waitPartner(kind, n) {
+      return {
+        type: 'plan',
+        fn: () => {
+          const o = this.other, act = kind === 'basketball' ? 'hoopdefend' : 'goalkeep';
+          if (!o || (n === 0 && o.last !== act)) return [];                       // (nobody was invited)
+          const ready = o && o.last === act && o.inYard() && ['defend', 'keeper'].includes(o.pose);
+          if (!o || o.last !== act && n > 3 || n >= 45 || (ready && n >= 1)) return [];
+          return [this.play('idle', 0.6), this.waitPartner(kind, n + 1)];
+        },
+      };
+    },
+    // The other robot, when she is playing defence / keeping goal against him now (null otherwise).
+    guard(kind) {
+      const o = this.other;
+      return o && o.last === (kind === 'basketball' ? 'hoopdefend' : 'goalkeep') && o.step && o.inYard() ? o : null;
+    },
+    // Where to stand, and the way to face: between the shooter and the hoop, or in front of the goal.
+    guardSpot(kind, shooter) {
+      const hoop = this.obj(kind === 'basketball' ? 'basketballhoop' : 'soccergoal');
+      if (!hoop) return null;
+      const bd = this.w.doors[ID].shell.bounds, fr = this.yardFrame(), grid = makeGrid(this.w.obstacles.filter((o) => !o.char), 0.4, 0, null, fr);
+      const S = shooter || { x: bd.minX + (bd.maxX - bd.minX) * 0.4, z: (bd.minZ + bd.maxZ) / 2 };
+      const fits = (p) => p.x > bd.minX + 0.55 && p.x < bd.maxX - 0.55 && p.z > bd.minZ + 0.55 && p.z < bd.maxZ - 0.55 && !cellBlocked(grid, p.x, p.z);
+      const cands = [];
+      if (kind === 'basketball') {
+        const H = { x: hoop.x, z: hoop.z }, d = Math.hypot(H.x - S.x, H.z - S.z) || 1, u = { x: (H.x - S.x) / d, z: (H.z - S.z) / d };
+        for (const k of [0.95, 1.25, 0.7, 1.6]) for (const lat of [0, 0.35, -0.35]) cands.push({ x: S.x + u.x * k - u.z * lat, z: S.z + u.z * k + u.x * lat });
+      } else {
+        const front = hoop.at(0, 0, 1.0), side = [0, 0.25, -0.25];
+        const fx = front.x - hoop.x, fz = front.z - hoop.z, fl = Math.hypot(fx, fz) || 1;
+        for (const k of [1.0, 1.3, 0.8]) for (const lat of side) cands.push({ x: hoop.x + (fx / fl) * k - (fz / fl) * lat, z: hoop.z + (fz / fl) * k + (fx / fl) * lat });
+      }
+      const p = cands.find(fits);
+      return p ? { x: p.x, z: p.z, yaw: Math.atan2(S.x - p.x, S.z - p.z) } : null;
+    },
+    // The steps of playing defence / keeping goal: stand ready, stay between the shooter and the goal, until the game is over.
+    sportGuard(kind, n = 0) {
+      const lead = this.other, playing = !!(lead && lead.sportPlaying(kind));
+      if (n >= 14 || (n >= 2 && !playing)) return [this.play('idle', 0.4)];
+      const spot = this.guardSpot(kind, playing ? { x: lead.g.root.position.x, z: lead.g.root.position.z } : null);
+      if (!spot) { this.queue.length = 0; return []; }
+      const need = [kind === 'basketball' ? 'basketballhoop' : 'soccergoal'];
+      // (with nobody to play against, the second go is a practice jump / dive: how the QA run sees those poses)
+      const practice = !playing && n === 1 ? [this.play(kind === 'basketball' ? 'block' : 'dive', 1.3, { needs: need, dive: 1 })] : [];
+      return [{ ...this.walk(spot.x, spot.z, spot.yaw), direct: false },
+        this.play(kind === 'basketball' ? 'defend' : 'keeper', rand(1.8, 2.8), { needs: need }), ...practice,
+        { type: 'plan', fn: () => this.sportGuard(kind, n + 1) }];
+    },
+    // The shooter lets go of a basketball shot: the defender may jump for it. Returns true when it is blocked (the shot goes astray).
+    defendShot() {
+      const d = this.guard('basketball');
+      if (!d) return false;
+      const jump = Math.random() < 0.75, blocked = jump && Math.random() < 0.35;
+      if (jump) d.interject(d.play('block', 1.1, { needs: ['basketballhoop'] }));
+      return blocked;
+    },
+    // A kick at the goal: the keeper dives one way. `side` is where the shot goes (left or right of the middle, in goal units); returns
+    // true when she saves it.
+    keepShot(side) {
+      const k = this.guard('soccer'), goal = this.obj('soccergoal');
+      if (!k || !goal) return false;
+      const kp = k.g.root.position, aim = goal.at(side, 0.3, 0.1), kf = k.g.root.rotation.y;
+      const lat = (aim.x - kp.x) * Math.cos(kf) - (aim.z - kp.z) * Math.sin(kf);          // + = to her left
+      const right = Math.random() < 0.6;                                                    // she guesses the side right six times in ten
+      const dir = right ? Math.sign(lat || 1) : -Math.sign(lat || 1);
+      k.interject(k.play('dive', 1.2, { dive: dir, needs: ['soccergoal'] }));
+      return right && Math.abs(side) < 1.0 && Math.random() < 0.75;
+    },
+
     // ------------------------------------------------------------------ the activities
     yardActivities() {
       const w = this.w;
@@ -636,19 +733,22 @@ export function installYard(Brain, POSES, H) {
           return this.yardTrip(t.mode === 'out' ? 'taking things out of the shed' : 'putting things away in the shed',
             [t.mode === 'out' ? this.fetchOut(t.keys || []) : this.tidyYard(t.keys, { mower: true })]);
         },
-        goalshot: () => this.yardTrip('taking shots at the goal', [this.fetchOut(['soccergoal', 'ball:soccer']), ...this.goalKick(0.55), ...this.goalKick(0.7), ...this.goalKick(0.85)]),
-        soccertoss: () => this.yardTrip('tossing the soccer ball up and catching it', [this.fetchOut(['soccergoal', 'ball:soccer']), this.yardBallStand('soccer'),
+        goalshot: () => this.yardTrip('taking shots at the goal', [this.fetchOut(['soccergoal', 'ball:soccer']), this.inviteSportPartner('soccer'), ...this.goalKick(0.55), ...this.goalKick(0.7), ...this.goalKick(0.85)]),
+        soccertoss: () => this.yardTrip('tossing the soccer ball up and catching it', [this.fetchOut(['soccergoal', 'ball:soccer']), this.inviteSportPartner('soccer'), this.yardBallStand('soccer'), this.waitPartner('soccer', 0),
           this.pickupBall('soccer', ['soccergoal']), this.play('toss', 6.85, { ball: true, ballKind: 'soccer', needs: ['soccergoal'] }), this.putdownBall('soccer', ['soccergoal'])]),
-        hoopdribble: () => this.yardTrip('dribbling the basketball', [this.fetchOut(['basketballhoop', 'ball:basketball']), this.yardBallStand('basketball'),
+        hoopdribble: () => this.yardTrip('dribbling the basketball', [this.fetchOut(['basketballhoop', 'ball:basketball']), this.inviteSportPartner('basketball'), this.yardBallStand('basketball'), this.waitPartner('basketball', 0),
           this.pickupBall('basketball', ['basketballhoop']), this.play('dribble', 9, { ball: true, ballKind: 'basketball', needs: ['basketballhoop'] }), this.putdownBall('basketball', ['basketballhoop'])]),
-        hoopshoot: () => this.yardTrip('shooting hoops', [this.fetchOut(['basketballhoop', 'ball:basketball']), ...this.hoopShot(0.55), ...this.hoopShot(0.65), ...this.hoopShot(0.75)]),
+        // playing with the other robot: she defends the hoop or keeps goal while he takes his shots (started by his invitation)
+        hoopdefend: () => this.yardTrip('defending the hoop', [{ type: 'plan', fn: () => this.sportGuard('basketball') }]),
+        goalkeep: () => this.yardTrip('keeping goal', [{ type: 'plan', fn: () => this.sportGuard('soccer') }]),
+        hoopshoot: () => this.yardTrip('shooting hoops', [this.fetchOut(['basketballhoop', 'ball:basketball']), this.inviteSportPartner('basketball'), ...this.hoopShot(0.55), ...this.hoopShot(0.65), ...this.hoopShot(0.75)]),
       };
     },
 
     // pick the ball up on the far side of it from the hoop and shoot (the ball goes up to the rim; some miss)
     hoopShot(good) {
       const rim = () => (this.obj('basketballhoop') ? this.obj('basketballhoop').rimPoint() : null);
-      return [this.yardBallStand('basketball', rim),
+      return [this.yardBallStand('basketball', rim), this.waitPartner('basketball', 0),
         this.pickupBall('basketball', ['basketballhoop']),
         {
           type: 'plan',
@@ -656,7 +756,7 @@ export function installYard(Brain, POSES, H) {
             const hoop = this.obj('basketballhoop');
             if (!hoop || !this.yardBall('basketball')) { this.queue.length = 0; return []; }
             const before = this.w.yard.score.baskets;
-            const miss = Math.random() > good, off = miss ? (Math.random() < 0.5 ? -1 : 1) * rand(0.2, 0.5) : rand(-0.05, 0.05);
+            const miss = Math.random() > good * (this.guard('basketball') ? 0.8 : 1), off = miss ? (Math.random() < 0.5 ? -1 : 1) * rand(0.2, 0.5) : rand(-0.05, 0.05);
             const lat = rand(-1, 1) > 0 ? 1 : -1;
             return [this.play('shoot', 2.7, {
               ball: true, ballKind: 'basketball', needs: ['basketballhoop'],
@@ -664,7 +764,8 @@ export function installYard(Brain, POSES, H) {
                 const b = this.yardBall('basketball'), h = this.obj('basketballhoop');
                 if (!b || !h) return;
                 const t = h.rimPoint(), d = Math.hypot(t.x - b.position.x, t.z - b.position.z);
-                const sideways = V(-(t.z - b.position.z), 0, t.x - b.position.x).normalize().multiplyScalar(off * lat);
+                const blocked = this.defendShot();                                          // she jumps for it: sometimes the shot is blocked
+                const sideways = V(-(t.z - b.position.z), 0, t.x - b.position.x).normalize().multiplyScalar(blocked ? 0.9 * lat : off * lat);
                 this.w.yard.score.shots++;
                 this.w.yard.launch('basketball', t.clone().add(sideways), clamp(0.95 + d * 0.1, 1.0, 1.6));
                 this.ballHeld = false;

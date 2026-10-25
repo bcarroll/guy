@@ -118,6 +118,9 @@ export const MANIFEST = {
     soccertoss: { objects: ['soccergoal'], skills: ['outdoor.soccer'], room: 'backyard', max: 200, touches: ['soccergoal'] },
     hoopshoot: { objects: ['basketballhoop'], skills: ['outdoor.basketball'], room: 'backyard', max: 200, touches: ['basketballhoop'] },
     hoopdribble: { objects: ['basketballhoop'], skills: ['outdoor.basketball'], room: 'backyard', max: 200, touches: ['basketballhoop'] },
+    // the other robot joining in: defence against a shooter, goalkeeper (invited by whoever shoots; alone they run a short practice)
+    hoopdefend: { objects: ['basketballhoop'], skills: ['outdoor.basketball'], room: 'backyard', max: 200, touches: ['basketballhoop'] },
+    goalkeep: { objects: ['soccergoal'], skills: ['outdoor.soccer'], room: 'backyard', max: 200, touches: ['soccergoal'] },
     // internal recovery activities and aliases: exercised through the interruption sweep, not on their own
     books: { alias: true }, putback: { internal: true }, putguitar: { internal: true }, dropball: { internal: true }, lighton: { internal: true }, yardtidy: { internal: true, objects: ['shed', 'lawnchair'], room: 'backyard' },
     hangpaint: { objects: ['easel'], painted: true, max: 220, touches: ['easel'] }, putcanvas: { internal: true },      // hanging a painting (sweepPaintings tests it in depth)
@@ -163,6 +166,10 @@ export const MANIFEST = {
     { id: 'scope-aim', activity: 'stargaze', pose: 'scopeAim', t: 2.2, view: 'top', expect: 'one hand on top of the barrel while the tube swings round' },
     { id: 'scope-wrong', activity: 'peek', pose: 'scopeWrong', t: 2.8, view: 'side', expect: 'eye at the big lens end, hand on the barrel, other hand on his knee' },
     { id: 'yard-shoot', activity: 'hoopshoot', pose: 'shoot', t: 0.9, view: 'side', expect: 'knees dipped then extended, both hands up at the release with the basketball just leaving them, facing the hoop' },
+    { id: 'yard-defend', activity: 'hoopdefend', pose: 'defend', t: 1.2, view: 'front', yard: true, expect: 'knees bent, both arms spread wide and up with open hands, weight on the balls of the feet, facing the camera (the shooter)' },
+    { id: 'yard-block', activity: 'hoopdefend', pose: 'block', t: 0.5, view: 'front', yard: true, dist: 4, expect: 'off the floor, both arms straight up, legs tucked a little, no limb inside the body' },
+    { id: 'yard-keeper', activity: 'goalkeep', pose: 'keeper', t: 1.2, view: 'front', yard: true, dist: 4, expect: 'wide low crouch, arms out low with open hands, knees apart, leaning forward' },
+    { id: 'yard-dive', activity: 'goalkeep', pose: 'dive', t: 0.5, view: 'front', yard: true, dist: 4, expect: 'lunging sideways at full stretch, both arms reaching the same way, body tilted, the near hand at the end of the reach' },
     { id: 'yard-sit', activity: 'yardsit', pose: 'sitRest', t: 6, view: 'side', expect: 'seated in the lawn chair, back against it, legs clear of the frame' },
     { id: 'yard-shed-open', activity: 'yardtidy', pose: 'reach', t: 1.3, view: 'side', yard: true, expect: 'standing at the shed door, one hand on the knob, the door swung wide open showing the dark inside; the lawn chair still out on the grass' },
     { id: 'yard-mow', activity: 'mow', pose: 'walk', t: 1, view: 'side', push: true, expect: 'both hands on the mower handle, walking behind it, stripes cut in the grass' },
@@ -3387,6 +3394,69 @@ T.sweepReading = () => {
   return out;
 };
 
+// ---- 25. Playing together: GAL joins GUY's basketball (defence) and soccer (goalkeeper), and the other way round (yardbrain.js) ----
+T.sweepSports = () => {
+  const out = [], base = errors.length, w = W(), b = B(), g = G();
+  galReset();
+  try {
+    unlockRoom('backyard'); R().add('backyard');
+    for (const id of ['soccergoal', 'basketballhoop']) T.addObject(id);
+    T.learn(['outdoor', 'outdoor.soccer', 'outdoor.basketball']); T.settle();
+    out.push(result('sports: GAL is built', galBuild().ok));
+    const gal = w.gal, gb = gal.brain;
+    for (const id of ['outdoor', 'outdoor.soccer', 'outdoor.basketball']) gb.skills.known.add(id);
+    const stopAll = () => { for (const x of [b, gb]) { x.unlock(false); x.queue = []; x.step = null; x.pendingActivity = null; x.last = 'wander'; x.using = new Set(); } };
+    const play = (shooter, other, act, partnerPose, maxGames, kind) => {
+      const seen = { poses: new Set(), joined: 0, games: 0, near: 0, between: 0, frames: 0, minD: 9, errs: errors.length };
+      const hoop = w.objects[kind === 'basketball' ? 'basketballhoop' : 'soccergoal'];
+      for (let game = 0; game < maxGames && !seen.poses.has(partnerPose.second); game++) {
+        stopAll();
+        for (const [k, id, d] of [['soccer', 'soccergoal', 2.6], ['basketball', 'basketballhoop', 1.6]]) {            // (each ball back in its place in front of its goal)
+          const o = w.objects[id], ball = w.yard.balls[k]; if (!o || !ball) continue;
+          const p = o.at(0, 0, d); ball.position.set(p.x, ball.userData.r || 0.12, p.z); ball.userData.vel.set(0, 0, 0); ball.userData.kinematic = false;
+        }
+        T.settle(); shooter.choose(act); seen.games++;
+        let t = 0, joinedThis = false; const tl = []; let tprev = '';
+        while (t < 150 && shooter.last === act && (shooter.step || shooter.queue.length)) {
+          step(0.1); t += 0.1;
+          { const k = shooter.last + ':' + (shooter.step ? shooter.step.type + (shooter.step.pose || '') : '-') + ' q' + shooter.queue.length + (shooter.inYard() ? 'Y' : 'n') + ' b' + (shooter.stuckIn() || ''); if (k !== tprev) { tl.push(t.toFixed(1) + ' ' + k); tprev = k; } }
+          if (other.last === (kind === 'basketball' ? 'hoopdefend' : 'goalkeep')) { joinedThis = true; if (other.step) seen.poses.add(other.pose); }
+          if (other.pose === partnerPose.first && other.step && hoop) {
+            seen.frames++;
+            const sp = shooter.g.root.position, op = other.g.root.position, d = Math.hypot(sp.x - op.x, sp.z - op.z);
+            seen.minD = Math.min(seen.minD, d);
+            if (kind === 'basketball') {                      // between him and the hoop: close to the line from the shooter to the hoop, and nearer the hoop than he is
+              const hx = hoop.x - sp.x, hz = hoop.z - sp.z, hl = Math.hypot(hx, hz) || 1, along = ((op.x - sp.x) * hx + (op.z - sp.z) * hz) / hl, off = Math.abs(((op.x - sp.x) * hz - (op.z - sp.z) * hx) / hl);
+              if (along > 0.3 && off < 0.8 && d < 2.2) seen.between++;
+            } else if (Math.hypot(op.x - hoop.x, op.z - hoop.z) < 2.0) seen.between++;
+          }
+        }
+        if (joinedThis) seen.joined++;
+        if (t < 12) (seen.short ||= []).push(tl.slice(0, 12));
+        (seen.log ||= []).push([joinedThis ? 1 : 0, +t.toFixed(0), other.last, shooter.last, !!shooter.step, shooter.queue.length, shooter.inYard()]);
+      }
+      seen.errs = errors.length - seen.errs;
+      return seen;
+    };
+    // 1. GUY shoots hoops, GAL (invited now and then) plays defence
+    const bb = play(b, gb, 'hoopshoot', { first: 'defend', second: 'block' }, 14, 'basketball');
+    out.push(result('sports: GUY shooting hoops, GAL sometimes joins and plays defence (she gets into the defending stance and jumps to block)', bb.joined >= 1 && bb.poses.has('defend') && bb.poses.has('block') && bb.errs === 0, { joined: bb.joined, games: bb.games, poses: [...bb.poses], errs: bb.errs, short: bb.short && bb.short.slice(0, 2) }));
+    out.push(result('sports: while defending she stands between the shooter and the hoop, near him but never inside him', bb.frames > 20 && bb.between >= bb.frames * 0.6 && bb.minD > 0.4, { frames: bb.frames, between: bb.between, minD: +bb.minD.toFixed(2) }));
+    // 2. GUY kicks at the goal, GAL keeps goal
+    const sc = play(b, gb, 'goalshot', { first: 'keeper', second: 'dive' }, 14, 'soccer');
+    out.push(result('sports: GUY kicking at the goal, GAL sometimes keeps goal (ready stance, then dives for the shot)', sc.joined >= 1 && sc.poses.has('keeper') && sc.poses.has('dive') && sc.errs === 0, { joined: sc.joined, games: sc.games, poses: [...sc.poses], errs: sc.errs }));
+    out.push(result('sports: the keeper stands in front of the goal, not inside the shooter', sc.frames > 20 && sc.between >= sc.frames * 0.8 && sc.minD > 0.4, { frames: sc.frames, between: sc.between, minD: +sc.minD.toFixed(2) }));
+    // 3. the other way round: GAL shoots and GUY joins
+    const rv = play(gb, b, 'hoopshoot', { first: 'defend', second: 'block' }, 14, 'basketball');
+    out.push(result('sports: GAL shooting hoops, GUY sometimes joins her and plays defence', rv.joined >= 1 && rv.poses.has('defend') && rv.errs === 0, { joined: rv.joined, games: rv.games, poses: [...rv.poses], errs: rv.errs }));
+    // 4. games alone are untouched: nobody else around means nobody is invited, and the guard activities are never chosen on their own
+    stopAll(); w.gal.remove(); T.settle();
+    out.push(result('sports: with nobody to play against the guard activities are not available', !b.available('hoopdefend') && !b.available('goalkeep')));
+  } finally { galReset(); }
+  out.push(result('sports: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 // ---- 22. The two robots' manners: never inside each other, never moving or putting away what the other is using (brain.js: moveBy, inUse; yardbrain.js: stowAway) ----
 T.sweepBotRules = () => {
   const out = [], base = errors.length, w = W(), b = B(), gal = w.gal;
@@ -3499,6 +3569,7 @@ T.runAll = () => {
   report.gal = S(T.sweepGal);
   report.mowing = S(T.sweepMowing);
   report.reading = S(T.sweepReading);
+  report.sports = S(T.sweepSports);
   report.botRules = S(T.sweepBotRules);
   report.workstation = S(T.sweepWorkstation);
   report.paintings = S(T.sweepPaintings);

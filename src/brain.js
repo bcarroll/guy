@@ -513,6 +513,73 @@ export const POSES = {
     g.set('Spine1', Q('x', 0.05 * dip - 0.06 * smooth(clamp((t - 1.0) / 0.3, 0, 1))));
   },
 
+  // ---- Sports with a partner (yardbrain.js): the one defending the hoop, and the goalkeeper ----
+  // Defending: knees bent, both arms spread wide and up with the hands open, shuffling from side to side on the balls of the feet.
+  defend(g, t, dur) {
+    const e = env(t, dur, 0.35), sh = Math.sin(t * 4.2);
+    g.set('RightArm', Q('z', lerp(ARM_DOWN, -0.25, e), 'y', 0.5 * e));
+    g.set('LeftArm', Q('z', lerp(-ARM_DOWN, 0.25, e), 'y', -0.5 * e));
+    g.set('RightForeArm', Q('z', -0.85 * e));
+    g.set('LeftForeArm', Q('z', 0.85 * e));
+    g.curl('Right', 0.05); g.curl('Left', 0.05);
+    for (const side of ['Left', 'Right']) {
+      g.set(`${side}UpLeg`, Q('x', -0.42 * e));
+      g.set(`${side}Leg`, Q('x', 0.8 * e));
+      g.set(`${side}Foot`, Q('x', -0.35 * e));
+    }
+    g.set('Spine1', Q('x', 0.12 * e, 'z', sh * 0.05 * e));
+    g.set('Head', Q('x', -0.08 * e));
+    g.hipsOffset.y = -0.11 * e + Math.abs(sh) * 0.02 * e;
+    g.hipsOffset.x = sh * 0.07 * e;
+  },
+  // Blocking a shot: up on the toes and off the floor, both arms straight up.
+  block(g, t, dur) {
+    const e = smooth(clamp(t / 0.3, 0, 1)) * (1 - smooth(clamp((t - dur + 0.35) / 0.35, 0, 1)));
+    const air = Math.sin(clamp((t - 0.15) / Math.max(0.2, dur - 0.5), 0, 1) * Math.PI);
+    g.set('RightArm', Q('z', lerp(ARM_DOWN, -1.3, e), 'y', 0.15 * e));
+    g.set('LeftArm', Q('z', lerp(-ARM_DOWN, 1.3, e), 'y', -0.15 * e));
+    g.curl('Right', 0.02); g.curl('Left', 0.02);
+    for (const side of ['Left', 'Right']) {
+      g.set(`${side}UpLeg`, Q('x', -0.3 * air));
+      g.set(`${side}Leg`, Q('x', 0.6 * air));
+      g.set(`${side}Foot`, Q('x', 0.5 * air));
+    }
+    g.set('Spine1', Q('x', -0.1 * e));
+    g.hipsOffset.y = 0.2 * air - 0.05 * (1 - e) * (1 - air);
+  },
+  // Goalkeeper's ready stance: a wide crouch, arms out low with the hands open, weight swaying from foot to foot.
+  keeper(g, t, dur) {
+    const e = env(t, dur, 0.4), sh = Math.sin(t * 2.6);
+    g.set('RightArm', Q('z', lerp(ARM_DOWN, 0.55, e), 'y', 0.25 * e));
+    g.set('LeftArm', Q('z', lerp(-ARM_DOWN, -0.55, e), 'y', -0.25 * e));
+    g.set('RightForeArm', Q('z', -0.3 * e));
+    g.set('LeftForeArm', Q('z', 0.3 * e));
+    g.curl('Right', 0.05); g.curl('Left', 0.05);
+    g.set('RightUpLeg', Q('x', -0.55 * e, 'z', 0.18 * e));
+    g.set('LeftUpLeg', Q('x', -0.55 * e, 'z', -0.18 * e));
+    for (const side of ['Left', 'Right']) { g.set(`${side}Leg`, Q('x', 0.95 * e)); g.set(`${side}Foot`, Q('x', -0.4 * e)); }
+    g.set('Spine1', Q('x', 0.22 * e, 'z', sh * 0.06 * e));
+    g.set('Head', Q('x', -0.2 * e));
+    g.hipsOffset.y = -0.17 * e;
+    g.hipsOffset.x = sh * 0.09 * e;
+  },
+  // A dive for the ball to one side (ctx.dive: +1 his left, -1 his right): a lunge across with both arms stretched out that way.
+  dive(g, t, dur, ctx) {
+    const d = ctx && ctx.dive ? Math.sign(ctx.dive) : 1;
+    const out = smooth(clamp(t / 0.35, 0, 1)), back = smooth(clamp((t - dur + 0.45) / 0.45, 0, 1)), e = out * (1 - back);
+    g.set('Hips', Q('z', -0.55 * d * e));
+    g.set('Spine1', Q('z', -0.35 * d * e, 'x', 0.1 * e));
+    // both arms reach over to the side he dives to
+    g.set('RightArm', Q('z', lerp(ARM_DOWN, d > 0 ? -1.3 : 0.1, e)));
+    g.set('LeftArm', Q('z', lerp(-ARM_DOWN, d > 0 ? -0.1 : 1.3, e)));
+    g.curl('Right', 0.03); g.curl('Left', 0.03);
+    g.set(d > 0 ? 'LeftUpLeg' : 'RightUpLeg', Q('z', -0.6 * d * e, 'x', -0.3 * e));
+    g.set(d > 0 ? 'RightUpLeg' : 'LeftUpLeg', Q('z', -0.2 * d * e));
+    g.hipsOffset.x = 0.55 * d * e;
+    g.hipsOffset.y = -0.22 * e + 0.12 * Math.sin(clamp(t / dur, 0, 1) * Math.PI);
+  },
+
+
   // Playing piano while dancing along to the stereo: hands keep playing, body grooves on the beat.
   pianoGroove(g, t, dur, ctx) {
     POSES.piano(g, t, dur, ctx);
@@ -1754,6 +1821,7 @@ export class Brain {
       tidytools: ['workshop'],
       takeorder: ['restaurant'], cook: ['restaurant'], serve: ['restaurant'], takepay: ['restaurant'], rwait: ['restaurant'],
       goalshot: ['outdoor.soccer'], soccertoss: ['outdoor.soccer'], hoopshoot: ['outdoor.basketball'], hoopdribble: ['outdoor.basketball'],
+      hoopdefend: ['outdoor.basketball'], goalkeep: ['outdoor.soccer'],
     }[act] || [];
   }
 
@@ -1777,7 +1845,7 @@ export class Brain {
       peek: ['telescope'], stargaze: ['telescope'], darkstargaze: ['telescope'], scopecare: ['telescope'], lighton: ['lamp'],
       tidytools: ['toolbox'],
       yardsit: ['lawnchair'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], mow: ['mower', 'shed'],
-      goalshot: ['soccergoal'], soccertoss: ['soccergoal'], hoopshoot: ['basketballhoop'], hoopdribble: ['basketballhoop'],
+      goalshot: ['soccergoal'], soccertoss: ['soccergoal'], hoopshoot: ['basketballhoop'], hoopdribble: ['basketballhoop'], hoopdefend: ['basketballhoop'], goalkeep: ['soccergoal'],
     }[act] || [];
     const skill = this.skillNeeds(act);
     // with the music already on he doesn't need to know how to work the stereo to join in
@@ -1814,6 +1882,10 @@ export class Brain {
       if (act === 'mow' && !this.mowCoverage({ tidied: true }) && !this.mowRoute({ pushable: true, tidied: true })) return false;               // no clear lawn: not something he sets out to do (he would open the shed for nothing)
       if (['goalshot', 'soccertoss'].includes(act) && !this.yardBall('soccer')) return false;
       if (['hoopshoot', 'hoopdribble'].includes(act) && !this.yardBall('basketball')) return false;
+      if (act === 'hoopdefend' || act === 'goalkeep') {                      // only against a shooter, and only when asked to join in (they are never chosen on their own)
+        const kind = act === 'hoopdefend' ? 'basketball' : 'soccer';
+        if (!this.other || !this.other.sportPlaying(kind)) return false;
+      }
     }
     if (act === 'putback' || act === 'dropball' || act === 'yardtidy' || act === 'putguitar' || act === 'leave' || act === 'hangpaint' || act === 'putcanvas') return false;
     if (act === 'visit') return this.inMain() && Object.keys(this.w.doors).some((id) => !this.doorLockedFor(id));
@@ -2387,6 +2459,7 @@ export class Brain {
       tgt: this.bookTargets(s), readW: this.readBlend, read: this.read, ball: ballState, guitar: guitarState, hob: hobState,
       walkPhase: this.walkPhase, beat, hit: this.hit, sway: this.sway, music: !!this.music,
       carry: !!s.push, strain: s.push && s.push.obj.weight === 'medium' ? 1 : 0,
+      dive: s.type === 'play' && s.fx && s.fx.dive || 0,
     };
 
     this.lastCtx = ctx;   // read by the QA pose-sanity sweep (src/devtools.js)
@@ -2711,6 +2784,9 @@ export class Brain {
     }
     return false;
   }
+
+  // Do this next, before the rest of the queue: the step he is on is dropped (the other robot reacting to a shot).
+  interject(step) { this.queue.unshift(step); this.step = null; }
 
   turnTo(yaw, dt, rate) {
     const r = this.g.root;
