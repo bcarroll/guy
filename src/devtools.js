@@ -3181,6 +3181,13 @@ T.sweepPaintings = () => {
     if (takeBtn) takeBtn.click();
     out.push(result('paintings: "Take down" in the Catalog takes a painting off its wall into storage (still listed)', P.hung().length === hung0 - 1 && P.items.length === total0 && allFit(), { hung0, now: P.hung().length }));
     openObjects('all');
+    const delBtn = [...machine().querySelectorAll('.card')].filter((c) => c.querySelector('img.thumb') && /Hang it/.test(c.textContent)).map((c) => [...c.querySelectorAll('.act.rm')].find((b) => /Destroy/.test(b.textContent)))[0];
+    const total1 = P.items.length, realConfirm = window.confirm;
+    window.confirm = () => false; if (delBtn) delBtn.click();
+    const keptOnNo = P.items.length === total1;
+    window.confirm = () => true; if (delBtn) delBtn.click(); window.confirm = realConfirm;
+    out.push(result('paintings: "Destroy" in the Catalog asks first, then removes the painting from the inventory for good', !!delBtn && keptOnNo && P.items.length === total1 - 1 && allFit(), { total1, now: P.items.length }));
+    openObjects('all');
     const hangBtn = [...machine().querySelectorAll('.card')].filter((c) => c.querySelector('img.thumb') && /Hang it/.test(c.textContent)).map((c) => c.querySelector('.act'))[0];
     const stored0 = P.stored().length;
     if (hangBtn) hangBtn.click();

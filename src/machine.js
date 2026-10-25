@@ -216,13 +216,14 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
 
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-  function card({ icon, name, desc, status, label, action, note, danger }) {
+  function card({ icon, name, desc, status, label, action, note, danger, extra }) {
     const btn = action !== undefined
       ? `<button class="act${danger ? ' rm' : ''}" data-action="${action}">${label}</button>`
       : `<span class="badge ${status}">${label}</span>`;
+    const btn2 = extra ? ` <button class="act rm" data-action="${extra.action}">${extra.label}</button>` : '';
     return `<div class="card ${status}"><div class="icon">${icon}</div>
       <div class="info"><div class="title">${esc(name)}</div><div class="desc">${esc(desc)}</div>${note ? `<div class="note">${esc(note)}</div>` : ''}</div>
-      <div class="side">${btn}</div></div>`;
+      <div class="side">${btn}${btn2}</div></div>`;
   }
 
   function render() {
@@ -284,12 +285,14 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
         const sorted = pics.slice().sort((a, b) => a.t - b.t);
         groups[`🖼️ GUY's paintings · ${paintings.hung().length} hung, ${paintings.stored().length} in the Catalog`] = sorted.map((r) => {
           const base = { icon: r.img ? `<img class="thumb" alt="" src="${esc(r.img)}">` : '🖼️', name: `Painting ${sorted.indexOf(r) + 1}`, status: r.room ? 'inroom' : 'available' };
+          const destroy = handlers.push(() => { if (window.confirm('Destroy this painting for good? It cannot be brought back.')) { paintings.destroy(r.id); notify('The painting was destroyed.'); render(); } }) - 1;
+          const extra = { label: 'Destroy', action: destroy };
           if (r.room) {
             const i = handlers.push(() => { paintings.takeDown(r.id); notify('Took the painting down. It is in the Catalog.'); render(); }) - 1;
-            return card({ ...base, desc: `Hanging in ${paintings.roomName(r.room)}.`, label: 'Take down', action: i, danger: true });
+            return card({ ...base, desc: `Hanging in ${paintings.roomName(r.room)}.`, label: 'Take down', action: i, danger: true, extra });
           }
           const i = handlers.push(() => { notify(paintings.hangStored(r.id)); render(); }) - 1;
-          return card({ ...base, desc: 'Waiting in the Catalog.', label: 'Hang it', action: i, note: 'Hangs on a free wall.' });
+          return card({ ...base, desc: 'Waiting in the Catalog.', label: 'Hang it', action: i, note: 'Hangs on a free wall.', extra });
         });
       }
       delete groups['In the room']; delete groups['Add to the room']; delete groups['Premium · coming soon'];

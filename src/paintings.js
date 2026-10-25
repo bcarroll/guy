@@ -199,6 +199,15 @@ export class Paintings {
     this.changed();
     return true;
   }
+  // Throw a painting away for good, hung or stored: it leaves the wall and the Catalog, and is not kept in the save.
+  destroy(id) {
+    const rec = this.get(id);
+    if (!rec) return false;
+    if (rec.room) this.takeDown(id);
+    this.items = this.items.filter((r) => r.id !== id);
+    this.changed();
+    return true;
+  }
   // From the Catalog: hang a stored painting straight away on a free wall (it never replaces another one). Returns a message.
   hangStored(id) {
     const rec = this.get(id);
