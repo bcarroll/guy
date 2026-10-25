@@ -804,6 +804,7 @@ T.sweepHolding = () => {
     const cur = b.held && b.held.def.id;
     if (stuck) b.albumOnTable = true;
     const target = shelfBooks().find((x) => x.def.id !== cur);
+    skillsOf().known.delete(target.def.teaches); skillsOf().fading.delete(target.def.teaches);          // (a book he already knows is not read again: this is one he has not read)
     const base = errors.length;
     b.requestRead(target.def.id);
     const wrong = []; let readTarget = false, e = 0;
@@ -3288,6 +3289,22 @@ T.sweepMowing = () => {
   unlockRoom('backyard'); R().add('backyard');
   for (const id of ['soccergoal', 'basketballhoop', 'lawnchair', 'shed', 'mower', 'birdbath', 'skyswitch']) T.addObject(id);
   T.learn(['outdoor']); T.settle();
+  // told to mow with the mower standing hard against the fence (where no rectangular loop would fit behind it): the order is taken
+  { const mw = w.objects.mower; if (mw) mw.set(10, -2.5);
+    b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null;
+    const r0 = b.interact('shed'), why = b.whyNot('mow');
+    out.push(result('mowing: told to mow (from the shed) with the mower standing against the fence, he takes the order (no refusal)', r0.ok && b.available('mow'), { r0, why }));
+    b.queue = []; b.step = null; b.pendingActivity = null; b.unlock(false); b.last = 'wander'; if (mw) mw.set(9.2, 0.8); T.settle(); }
+  // told to use the workstation while out in the yard (it stands in his own room): the order is taken, he walks back and opens it
+  { const wasDev = dev.all; dev.all = true; w.addNew('workstation', null); dev.all = wasDev;
+    b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.choose('yardsit');
+    let ty = 0; while (ty < 90 && !b.inYard()) { step(0.25); ty += 0.25; }
+    const inYard = b.inYard(); let opened = false; const was = b.onWorkstation; b.onWorkstation = () => { opened = true; };
+    const r1 = b.interact('workstation'); let tw = 0; while (tw < 90 && !opened) { step(0.25); tw += 0.25; }
+    b.onWorkstation = was;
+    out.push(result('mowing: told to use the workstation from out in the yard, he takes the order, walks back and opens it', inYard && r1.ok && opened, { inYard, r1, opened, tw }));
+    if (w.objects.workstation) { w.removeObject('workstation'); b.objectRemoved('workstation'); }
+    b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; T.home(); T.settle(); }
   b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander';
   b.choose('mow');
   const st = { drive: 0, push: 0, off: 0, maxBeside: 0, maxV: 0, maxTurn: 0, minD: 9, maxD: 0 };

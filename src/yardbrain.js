@@ -273,7 +273,8 @@ export function installYard(Brain, POSES, H) {
       // `tidied`: the yard's things will be put away in the shed before the mowing, so they are not in the way
       const movers = pushable ? this.yardMovers(tidied) : [];
       const away = tidied ? this.w.yard.STORE.map((it) => this.obj(it.key)).filter((o) => o && o.name !== 'mower').map((o) => o.obstacle) : [];
-      const grid = makeGrid(movers.length || away.length ? this.w.obstacles.filter((o) => !away.includes(o) && !movers.some((mo) => mo.obstacle === o)) : this.w.obstacles, 0.5, 0, m.obstacle, fr);
+      const still = this.w.obstacles.filter((o) => !o.char);                // (the robots walk about: where one stands now is no reason not to mow)
+      const grid = makeGrid(movers.length || away.length ? still.filter((o) => !away.includes(o) && !movers.some((mo) => mo.obstacle === o)) : still, 0.5, 0, m.obstacle, fr);
       const BEHIND = 0.95;
       const clearLine = (a, b, off) => {                                    // the mower's line a-b, and GUY's line behind it
         const n = Math.max(2, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 0.2));
@@ -389,7 +390,7 @@ export function installYard(Brain, POSES, H) {
           const h = this.mowerHeading(m), a = { x: m.x, z: m.z };
           if (Math.hypot(a.x - to.x, a.z - to.z) < 0.15) return [];
           const fr = this.yardFrame(), bd = this.w.doors[ID].shell.bounds;
-          const mg = makeGrid(this.w.obstacles, 0.42, 0, m.obstacle, fr);
+          const mg = makeGrid(this.w.obstacles.filter((o) => !o.char), 0.42, 0, m.obstacle, fr);
           const ahead = (p, d, len) => ({ x: p.x + Math.sin(d) * len, z: p.z + Math.cos(d) * len });
           const okp = (p) => p.x > bd.minX + 0.5 && p.x < bd.maxX - 0.5 && p.z > bd.minZ + 0.35 && p.z < bd.maxZ - 0.35 && !cellBlocked(mg, p.x, p.z);
           const sharp = (pts) => {                                         // a turn of more than 110 degrees at a corner: he cannot steer that
@@ -412,11 +413,21 @@ export function installYard(Brain, POSES, H) {
       };
     },
     // The legs (each a polyline for the mower's middle, with the way it points at the start) that cover the lawn; null when there is none.
-    mowCoverage() {
+    // `tidied`: the yard's things will have been put away in the shed first, so they are not in the way.
+    mowCoverage({ tidied = false } = {}) {
       const m = this.obj('mower');
       if (!m || !this.w.doors[ID]) return null;
       const bd = this.w.doors[ID].shell.bounds, fr = this.yardFrame();
-      const mg = makeGrid(this.w.obstacles, 0.42, 0, m.obstacle, fr), gg = makeGrid(this.w.obstacles, INFLATE, 0, m.obstacle, fr);
+      const away = tidied ? this.w.yard.STORE.map((it) => this.obj(it.key)).filter((o) => o && o.name !== 'mower').map((o) => o.obstacle) : [];
+      // a mower left jammed in a corner or against the fence cannot be got hold of: he needs room behind it, pointing some way
+      if (!this.mowerInShed()) {
+        const gg0 = makeGrid(this.w.obstacles.filter((o) => !o.char && !away.includes(o)), INFLATE, 0, m.obstacle, fr);
+        const free = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => { const q = { x: m.x - dx * 0.8, z: m.z - dz * 0.8 }; return q.x > bd.minX + 0.5 && q.x < bd.maxX - 0.5 && q.z > bd.minZ + 0.5 && q.z < bd.maxZ - 0.5 && !cellBlocked(gg0, q.x, q.z); });
+        const inside = m.x > bd.minX + 0.5 && m.x < bd.maxX - 0.5 && m.z > bd.minZ + 0.35 && m.z < bd.maxZ - 0.35;
+        if (!free || !inside) return null;
+      }
+      const still = this.w.obstacles.filter((o) => !o.char && !away.includes(o));        // (not the robots: they walk about, and the other one is sent out of the yard first)
+      const mg = makeGrid(still, 0.42, 0, m.obstacle, fr), gg = makeGrid(still, INFLATE, 0, m.obstacle, fr);
       const SW = 0.46, R = SW / 2, BEH = 0.8, STEP = 0.12;
       const alongX = bd.maxX - bd.minX >= bd.maxZ - bd.minZ;
       const A0 = alongX ? bd.minX : bd.minZ, A1 = alongX ? bd.maxX : bd.maxZ, C0 = alongX ? bd.minZ : bd.minX, C1 = alongX ? bd.maxZ : bd.maxX;
@@ -494,6 +505,11 @@ export function installYard(Brain, POSES, H) {
       const m = this.obj('mower'), park = this.shedPark(), steps = [];
       const hp = Math.atan2(park.out.x, park.out.z), B = 0.8;
       steps.push(this.play('idle', 0.05, { at: [0, () => { const c = this.w.yard.cut(); if (c) c.clear(); }] }));
+      steps.push({ type: 'plan', fn: () => {                              // the other robot is out on the lawn: it is asked to come in while the mowing goes on
+        const o = this.other;
+        if (o && o.inYard() && !o.lock && !o.stuckIn()) { o.pendingActivity = 'leave'; o.skip(true); }
+        return [];
+      } });
       steps.push({ type: 'plan', fn: () => {
         const mm = this.obj('mower');
         if (!mm || !this.w.yard.isStowed('mower')) return [];                    // already out on the lawn: it is steered from where it stands

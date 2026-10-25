@@ -1724,6 +1724,25 @@ export class Brain {
     return !cellBlocked(makeGrid(this.w.obstacles, 0.05, 0, o.obstacle), x, z);       // not inside another object (furniture merely nearby is fine: he walks round it)
   }
 
+  // Why `act` cannot be done now, in a few words (for the message when an order is refused); null when it is not clear.
+  whyNot(act) {
+    const shut = this.stuckIn();
+    if (shut) return `he is shut in the ${this.w.doors[shut].name}`;
+    const skill = this.skillNeeds(act).find((k) => !this.skills.has(k));
+    if (skill) return `he has not learned "${skill}" yet (read its book)`;
+    if (this.busyElsewhere(this.exclusiveFor(act))) return 'the other robot is using it';
+    if (YARD_ACTS.includes(act)) {
+      if (!this.w.doors.backyard) return 'there is no Backyard';
+      if (!this.yardOpen()) return 'the Backyard door is locked';
+      if (act === 'mow') {
+        if (!this.obj('mower') || !this.obj('shed')) return 'the lawn mower and the shed both have to be in the yard';
+        if (!this.mowCoverage({ tidied: true }) && !this.mowRoute({ pushable: true, tidied: true })) return 'there is no clear stretch of lawn';
+      }
+    }
+    if (act === 'learn' && !this.obj('workstation')) return 'there is no workstation';
+    return `(${act} is not possible just now)`;
+  }
+
   // Activities need their objects (removing one takes the activity away) and the skills he has learned.
   // The skills an activity depends on.
   skillNeeds(act) {
@@ -1747,7 +1766,7 @@ export class Brain {
     return this.availableIn(act);
   }
   availableIn(act) {
-    if (act === 'learn') return !!this.obj('workstation') && this.inMain();         // the Learning Workstation (only when somebody asks: it has no weight)
+    if (act === 'learn') return !!this.obj('workstation');                      // the Learning Workstation (only when somebody asks: it has no weight; from another room he walks back to it first)
     if (this.galBlocks && this.galBlocks(act)) return false;                // (GAL does not do some things; GUY needs GAL for others)
     if (this.busyElsewhere(this.exclusiveFor(act))) return false;           // the other robot is using it
     const need = {
@@ -1792,7 +1811,7 @@ export class Brain {
       if (act !== 'mow' && this.otherUses('mower')) return false;      // the lawn is being mowed: the yard's things are in the shed until it is done
       if (act === 'mow' && this.w.yard.STORE.some((it) => it.key !== 'mower' && this.otherUses(it.key))) return false;     // the other robot is sitting in the lawn chair, say: not for him to put away
       if (act === 'yardpoke') return this.pokeKinds().length > 0;
-      if (act === 'mow' && !this.mowRoute({ pushable: true, tidied: true })) return false;               // no clear lawn: not something he sets out to do (he would open the shed for nothing)
+      if (act === 'mow' && !this.mowCoverage({ tidied: true }) && !this.mowRoute({ pushable: true, tidied: true })) return false;               // no clear lawn: not something he sets out to do (he would open the shed for nothing)
       if (['goalshot', 'soccertoss'].includes(act) && !this.yardBall('soccer')) return false;
       if (['hoopshoot', 'hoopdribble'].includes(act) && !this.yardBall('basketball')) return false;
     }
@@ -2072,7 +2091,7 @@ export class Brain {
     if (this.stuckIn() && rm !== this.stuckIn()) return { ok: false, message: this.shutInMessage(this.stuckIn()) };        // shut in: only what is in the room with him
     // told to mow with no clear lawn: say so (he used to say "On it!", open the shed, find no room and quietly give up)
     if ((name === 'mower' || name === 'shed') && this.w.yard && this.w.yard.STORE.some((it) => it.key !== 'mower' && this.otherUses(it.key))) return { ok: false, message: 'The other robot is using something on the lawn. Wait until it is done.' };
-    if ((name === 'mower' || name === 'shed') && this.obj('mower') && this.obj('shed') && this.yardOpen() && !this.mowRoute({ pushable: true, tidied: true })) return { ok: false, message: 'There is no clear stretch of lawn for the mower. GUY puts the yard things away in the shed and shifts light things (plants) himself, but not the shed: move it, or anything else heavy, away from the lawn and leave a little room behind the mower for GUY.' };
+    if ((name === 'mower' || name === 'shed') && this.obj('mower') && this.obj('shed') && this.yardOpen() && !this.mowCoverage({ tidied: true }) && !this.mowRoute({ pushable: true, tidied: true })) return { ok: false, message: 'There is no clear stretch of lawn for the mower. GUY puts the yard things away in the shed and shifts light things (plants) himself, but not the shed: move it, or anything else heavy, away from the lawn and leave a little room behind the mower for GUY.' };
     let tries = {
       // with the stereo already playing, an instrument means playing along with it
       piano: k('piano') ? (this.music ? ['jamsit', 'jampiano', 'jam'] : ['sitpiano', 'piano']) : ['plink'],
@@ -2117,7 +2136,13 @@ export class Brain {
     if (this.obj(name) && this.obj(name).heldBooks && this.obj(name).heldBooks().some((b) => b.mesh.visible) && !this.readableBooks(name).length) return { ok: false, message: `${this.isGal ? 'GAL' : 'GUY'} has already read everything on ${name === 'shelf' ? 'the shelf' : 'that bookshelf'}. A book he has put back in the Catalog is forgotten, and he reads it again when it is back.` };
     if (this.obj(name) && this.obj(name).heldBooks && !tries) tries = ['read'];                // a bookshelf built as a clone of the skill one: read what stands on it
     const act = (tries || []).filter((a) => this.available(a));
-    if (!act.length) { this.forceLine = null; return { ok: false, message: "GUY can't do anything with that right now." }; }
+    if (!act.length) {
+      this.forceLine = null;
+      const busy = (tries || []).some((a) => this.busyElsewhere(this.exclusiveFor(a)));
+      if (busy) return { ok: false, message: `${this.isGal ? 'GUY' : 'GAL'} is using that right now. Try again in a moment.` };
+      const why = (tries || []).map((a) => this.whyNot(a)).filter(Boolean)[0];
+      return { ok: false, message: `${this.isGal ? 'GAL' : 'GUY'} can't do anything with that right now${why ? `: ${why}` : ''}.` };
+    }
     if (name === 'workstation') this.learnPlan = null;                  // (the panel, not an order)
     if (this.lock && this.lock.name !== name) this.unlock(false);     // told to do something else: the lock is over
     this.skip();                                   // stands up, switches the stereo off, etc. first
@@ -2655,12 +2680,17 @@ export class Brain {
       }
     }
     const vmax = 1.7 * dt, turn = 1.8 * dt;                       // (at most walking pace for him, and the handle end swings round at 1.8 rad/s)
-    let d = D.at, h = D.h, adv = Math.min(D.speed * dt, D.total - D.at);
+    let d = D.at, h = D.h, adv = Math.min(D.speed * dt, D.total - D.at); const d0 = D.at;
     for (let tries = 0; tries < 4; tries++) {                           // advance, unless he would have to rush to keep up
       const hh = h + clamp(angDiff(tangent(d + adv), h), -turn, turn), q = pose(d + adv, hh);
       if (Math.hypot(q.g.x - root.position.x, q.g.z - root.position.z) <= vmax || adv < 1e-4) { D.h = hh; D.at = d + adv; break; }
       adv *= 0.5;
       if (tries === 3) { D.h = h + clamp(angDiff(tangent(d), h), -turn, turn); D.at = d; }                // (he only turns this frame)
+    }
+    const oth = this.other && this.other.g.root.position;                      // the other robot in the way of the mower or of him: wait (a few seconds at most)
+    if (oth && this.other.hereId() === this.hereId()) {
+      const ahead = pose(Math.min(D.at + 0.5, D.total), D.h);
+      if ((Math.hypot(oth.x - ahead.p.x, oth.z - ahead.p.z) < 0.75 || Math.hypot(oth.x - ahead.g.x, oth.z - ahead.g.z) < 0.55) && (D.wait = (D.wait || 0) + dt) < 6) { this.moving = false; D.at = d0; return false; }
     }
     const q = pose(D.at, D.h), mx = q.p.x, mz = q.p.z, hy = D.h;
     const stepLen = Math.hypot(q.g.x - root.position.x, q.g.z - root.position.z);
