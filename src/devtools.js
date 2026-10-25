@@ -3328,6 +3328,48 @@ T.sweepMowing = () => {
   return out;
 };
 
+// ---- 24. Reading: nothing is read twice, and a shelf with no room in front of it is not walked at (brain.js wantsBook / bookStandOk) ----
+T.sweepReading = () => {
+  const out = [], base = errors.length, w = W(), b = B();
+  T.settle(); T.resetRooms(); T.removeAll(); T.forget(); skillsOf().fading.clear(); T.settle(); T.home();
+  const sh = w.objects.shelf, home = { x: sh.x, z: sh.z, rot: sh.rot };
+  try {
+    const recs = () => sh.books.filter((r) => r.mesh.visible);
+    const ids = recs().map((r) => r.def.teaches);
+    out.push(result('reading: with nothing learned yet every book on the shelf is worth reading', b.readableBooks().length === recs().length && recs().length >= 2, { n: b.readableBooks().length }));
+    // 1. a book already read is not read again
+    const first = recs()[0];
+    skillsOf().learn(first.def.teaches);
+    const left = b.readableBooks();
+    out.push(result('reading: a book he has already read is not on his list any more', !left.some((r) => r === first) && left.length === recs().length - 1));
+    const rq = b.requestRead(first.def.id);
+    out.push(result('reading: told to read a book he knows, he says so and does not go', !rq.ok && /already knows/.test(rq.message) && b.pendingActivity !== 'read', { rq }));
+    // 2. ...until it is marked forgotten
+    skillsOf().forget(first.def.teaches);
+    out.push(result('reading: a book put back in the Catalog (its skill is fading) is worth reading again', b.readableBooks().some((r) => r === first)));
+    skillsOf().fading.clear();
+    // 3. everything read: he does not choose to read, and an order to use the shelf says why
+    for (const t of ids) skillsOf().learn(t);
+    out.push(result('reading: with everything on the shelf read he does not set out to read', !b.available('read') && b.readableBooks().length === 0));
+    b.queue = []; b.step = null; b.pendingActivity = null;
+    const ord = b.interact('shelf');
+    out.push(result('reading: told to use the shelf when he has read it all, he says so', !ord.ok && /already read everything/.test(ord.message), { ord }));
+    const steps = b.readSteps();
+    out.push(result('reading: even if asked for a read there is nothing to pick up (no book is taken)', steps.length === 2 && !steps.some((x) => x.type === 'play' && x.pose === 'grab'), { n: steps.length }));
+    // 4. the order GAL was given for a book she has read is dropped
+    const gal = w.gal;
+    skillsOf().fading.clear(); T.forget();
+    // 5. a shelf in a corner: nobody can stand in front of it, so nobody walks at it
+    sh.rot = 0; sh.set(-4.3, -3.2);
+    out.push(result('reading: a shelf pushed into a corner has no standing room: its books are not on the list and he does not set out to read', b.readableBooks().length === 0 && !b.available('read') && recs().every((r) => !b.bookStandOk(r))));
+    sh.rot = home.rot; sh.set(home.x, home.z);
+    out.push(result('reading: back by the wall he can read again', b.readableBooks().length > 0 && recs().every((r) => b.bookStandOk(r))));
+    void gal;
+  } finally { sh.rot = home.rot; sh.set(home.x, home.z); T.forget(); skillsOf().fading.clear(); }
+  out.push(result('reading: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 // ---- 22. The two robots' manners: never inside each other, never moving or putting away what the other is using (brain.js: moveBy, inUse; yardbrain.js: stowAway) ----
 T.sweepBotRules = () => {
   const out = [], base = errors.length, w = W(), b = B(), gal = w.gal;
@@ -3439,6 +3481,7 @@ T.runAll = () => {
   report.needs = S(T.sweepNeeds);
   report.gal = S(T.sweepGal);
   report.mowing = S(T.sweepMowing);
+  report.reading = S(T.sweepReading);
   report.botRules = S(T.sweepBotRules);
   report.workstation = S(T.sweepWorkstation);
   report.paintings = S(T.sweepPaintings);

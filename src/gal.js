@@ -65,7 +65,7 @@ export class GalBrain extends Brain {
       if (o.kind === 'read') {
         if (this.busyElsewhere(['shelf'])) return null;                    // GUY is at the bookshelf: she waits her turn (and does something else meanwhile)
         const on = this.obj('shelf') && this.obj('shelf').books.find((b) => b.def.id === o.book);
-        if (!on || this.skills.has(on.def.teaches)) { this.orders.shift(); continue; }          // already learned, or the book is not on the shelf any more
+        if (!on || !this.wantsBook(on)) { this.orders.shift(); continue; }          // already learned, or the book is not on the shelf any more
         if (!on.mesh.visible) return null;                                                      // GUY has it in his hands just now: she waits for it
         return 'galread';
       }

@@ -282,6 +282,8 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 
 ## Regression watch (bugs found and fixed; make sure they stay fixed)
 
+- **Bots read books they already knew; bots walked at a wall trying to reach a shelf in a corner** (found by hand): `readSteps` fell back to any book when none was unread, and nothing checked there was room to stand in front of the shelf. Now only books whose skill is unknown or fading (marked forgotten) are read (`wantsBook`), `available('read')` is false when there are none, a shelf with no standing room (`bookStandOk`) is skipped, and an anchored walk whose target is not `world.walkable` drops the activity at once instead of pushing at the wall. Covered by `T.sweepReading`.
+
 - **Mowing cut one square, then the mower was pushed to the shed from the side; turns were walk-round-and-restart** (found by hand): the mower now goes up and down the whole lawn in lanes with half-circle U-turns, GUY steering it from behind (a `drive` step: he stays 0.8 m straight behind it, the heading follows the path at a limited turn rate, the mower slows so he never has to run), and is steered back into the shed the same way. A pushed (not steered) move is only the last resort. Covered by `T.sweepMowing` (coverage, behind-it, no side pushes, smooth turns, back in the shed). GUY must also stay on `world.walkable` (half a metre in from the fence): when he was a few centimetres outside it the next walk teleported him into the house.
 
 - **Both robots stopped and stuck an arm out before walking through a door that was already open** (found by hand): `doorIn` and the `visit` activity now reach for the knob only when `isDoorOpen` is false. Covered by `T.sweepBotRules`.

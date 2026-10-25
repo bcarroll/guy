@@ -1314,14 +1314,35 @@ export class Brain {
   // often he reads at the shelf) falls gradually back to normal.
   readSpeed() { return 1 + 1.5 * this.skills.strength('speedreading'); }
 
+  // A book is worth reading when what it teaches is not known yet, or is being forgotten (its book was put back in the Catalog): a book
+  // already read is never read again.
+  wantsBook(rec) { return !this.skills.has(rec.def.teaches) || this.skills.fading.has(rec.def.teaches); }
+  // The books on the skill shelf (or on a bookshelf built as a clone of it) he could pick up now and that are worth reading.
+  readableBooks(name = null) {
+    const o = this.obj(name || 'shelf');
+    const all = o ? (o.heldBooks ? o.heldBooks() : o.books || []) : [];
+    const top = o && o.stackTop ? o.stackTop() : null;
+    return all.filter((b) => b.mesh.visible && (!b.stack || b === top) && this.wantsBook(b) && this.bookStandOk(b));
+  }
+  // Can he stand where he takes `rec` down from its shelf? A shelf pushed into a corner or against a wall has no room in front of it: he
+  // would walk at the wall for ever.
+  bookStandOk(rec) {
+    const host = this.obj(this.hostName(rec));
+    if (!host) return false;
+    const l = host.local(rec.stack ? -0.5 : -0.62, rec.z), x = host.x + l.x, z = host.z + l.z;
+    if (!this.w.walkable(x, z) || !this.onFloor(x, z, 0.15, 0.1)) return false;
+    return !cellBlocked(makeGrid(this.w.obstacles, 0.05, 0, host.obstacle), x, z);
+  }
+
   readSteps(only = null) {
     const shelf = this.obj('shelf');
     const top = shelf.stackTop ? shelf.stackTop() : null;           // from the stack beside the shelf he can only take the top book
     const from = this.readFrom; this.readFrom = null;               // told to read at one particular bookshelf (the skill one or a built clone)
     const there = from && this.obj(from) && this.obj(from).heldBooks ? this.obj(from).heldBooks() : null;
     const books = only ? [only] : (there || shelf.books).filter((b) => b.mesh.visible && (!b.stack || b === top));
-    const unread = books.filter((b) => !this.skills.has(b.def.teaches));
-    const book = pick(unread.length ? unread : books); // he is curious about the books he has not read yet
+    const unread = books.filter((b) => this.wantsBook(b));
+    if (!unread.length) return [`nothing new to read`, this.play('idle', 0.6)];      // (he has read everything on it: nothing is read twice)
+    const book = pick(unread);
     const speed = this.readSpeed();
     const need = 8 / speed;                              // seconds with the pages open before it sinks in
     const atShelf = Math.random() < this.skills.strength('speedreading');   // a speed reader stays at the shelf
@@ -1783,7 +1804,7 @@ export class Brain {
       if (act === 'build') return !!this.pickRecipe();
     }
     if (REST_JOBS.includes(act) || act === 'rwait') return this.restAvailable(act);
-    if (act === 'read' && !this.obj('shelf').books.some((b) => b.mesh.visible)) return false;
+    if (act === 'read' && !this.readableBooks().length && !Object.values(this.w.objects).some((o) => o.heldBooks && this.readableBooks(o.name).length)) return false;      // nothing on any shelf he has not read (or is forgetting)
     if (act === 'rearrange' && !Object.values(this.w.objects).some((o) => o.weight !== 'heavy' && o.name !== 'bench')) return false;
     return need.every((n) => this.obj(n));
   }
@@ -1912,7 +1933,7 @@ export class Brain {
     const acts = this.activities();
     // He is keen to read while there is still something to learn
     const shelf = this.obj('shelf');
-    const unread = shelf ? shelf.books.filter((b) => b.mesh.visible && !this.skills.has(b.def.teaches)).length : 0;
+    const unread = shelf ? shelf.books.filter((b) => b.mesh.visible && this.wantsBook(b)).length : 0;
     const weights = {
       wander: 3, sit: 0.7, sitguitar: 1.1, slouch: 0.5, dancemoves: 1.5, ballroom: 1.5, piano: 1, sitpiano: 1.2, plink: 1.4, dance: 1.8, jam: 0.9, jampiano: 0.5, jamsit: 0.9, lamp: 1.2, mood: 1.1,
       read: 1.8 + unread * 1.8, stretch: 1.3, wave: 0.7, ball: 2, dribble: 1.1, toss: 1.1, rearrange: 0.7, guitar: 1.6, riff: 1.0, plant: 0.6, jamguitar: 1.5, visit: 0.4,
@@ -2093,6 +2114,7 @@ export class Brain {
     }
     if (REST_OBJECTS.includes(name) || (this.obj(name) && this.obj(name).seats)) tries = this.restTries(name);
     if (this.obj(name) && this.obj(name).heldBooks && !this.obj(name).heldBooks().some((b) => b.mesh.visible)) return { ok: false, message: 'There are no books on that bookshelf right now.' };
+    if (this.obj(name) && this.obj(name).heldBooks && this.obj(name).heldBooks().some((b) => b.mesh.visible) && !this.readableBooks(name).length) return { ok: false, message: `${this.isGal ? 'GAL' : 'GUY'} has already read everything on ${name === 'shelf' ? 'the shelf' : 'that bookshelf'}. A book he has put back in the Catalog is forgotten, and he reads it again when it is back.` };
     if (this.obj(name) && this.obj(name).heldBooks && !tries) tries = ['read'];                // a bookshelf built as a clone of the skill one: read what stands on it
     const act = (tries || []).filter((a) => this.available(a));
     if (!act.length) { this.forceLine = null; return { ok: false, message: "GUY can't do anything with that right now." }; }
@@ -2127,6 +2149,7 @@ export class Brain {
     const shelf = this.obj('shelf');
     const book = shelf && shelf.books.find((b) => b.def.id === id && b.mesh.visible);
     if (!book) return { ok: false, message: "That book isn't on the shelf any more." };
+    if (!this.wantsBook(book)) return { ok: false, message: `${this.isGal ? 'GAL' : 'GUY'} already knows ${book.def.blurb}.` };
     if (this.stuckIn()) return { ok: false, message: this.shutInMessage(this.stuckIn()) };
     this.unlock(false);                            // asked for something specific: the lock is over
     this.skip();
@@ -2243,6 +2266,7 @@ export class Brain {
           if (!o) { this.queue = []; this.step = null; return; }              // (the thing he was walking to is gone: nothing more to do here)
           const l = o.local(s.anchor.dx, s.anchor.dz);
           s.x = o.x + l.x; s.z = o.z + l.z;
+          if (!this.w.walkable(s.x, s.z)) { this.queue.length = 0; this.step = null; this.ui(`no room to stand at the ${o.name} where it is`); return; }      // (against a wall or in a corner: not for walking at)
           if (s.anchor.yaw !== null) s.yaw = s.anchor.yaw + o.yaw;
         }
         if (s.push) {
