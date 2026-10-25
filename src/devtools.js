@@ -1353,6 +1353,79 @@ T.sweepMowerShed = () => {
   return out;
 };
 
+// Things move between rooms only through a door: dragged at a wall they stop at the wall; through the doorway they pass if they are no
+// wider than the door; let go in the doorway they go back; the bookshelves never leave his own room. (`world.dragTo` is the drag itself.)
+T.sweepDoorMoves = () => {
+  const out = [], base = errors.length, w = W(), b = B();
+  T.settle(); T.resetRooms(); T.removeAll(); T.forget(); skillsOf().fading.clear(); T.settle(); T.home();
+  unlockRoom('workshop'); R().add('workshop');
+  T.addObject('lamp'); T.addObject('piano');
+  T.settle();
+  const dr = w.doors.workshop, bd = dr.shell.bounds;
+  // a point `n` metres into the room from the wall line (negative: on Guy's side) and `l` along the wall from the middle of the door
+  const P = dr.wall === 'right' ? bd.minX : dr.wall === 'front' ? bd.minZ : bd.maxZ;
+  const at = (n, l) => (dr.wall === 'right' ? { x: P + n, z: dr.u + l } : dr.wall === 'front' ? { x: dr.u + l, z: P + n } : { x: dr.u + l, z: P - n });
+  const lamp = w.objects.lamp, piano = w.objects.piano;
+  const start0 = [lamp, piano].map((o) => o && ({ x: o.x, z: o.z, rot: o.rot }));          // (where the Catalog put them: they go back there, or the sweeps that follow find them elsewhere)
+  if (!lamp || !piano) return [result('doormoves: the lamp and the piano could be added', false, { lamp: !!lamp, piano: !!piano })];
+  const room = (o) => w.roomIdAt(o.x, o.z);
+  const put = (o, q) => { o.set(q.x, q.z); w.beginDrag(o); };
+  const sideL = dr.u > 0 ? -2 : 2;
+  // 1. dragged straight at a wall (not at the door) it stops at the wall: no jumping into the next room
+  let q = at(-1.6, sideL); put(lamp, q);
+  w.dragTo(lamp, at(2.4, sideL).x, at(2.4, sideL).z);
+  out.push(result('doormoves: dragged straight at the wall away from the door, it stops at the wall (still in Guy\'s room, nothing across it)', room(lamp) === 'main' && w.fits(lamp, lamp.x, lamp.z), { room: room(lamp), at: [lamp.x, lamp.z] }));
+  // 2. dragged at the door in one jump it goes through and ends in the room
+  q = at(-1.6, 0); put(lamp, q);
+  const goal = at(2.4, 0);
+  w.dragTo(lamp, goal.x, goal.z);
+  w.dropObject(lamp);
+  out.push(result('doormoves: dragged at the door it goes through the doorway and stands in the Workshop', room(lamp) === 'workshop' && w.fits(lamp, lamp.x, lamp.z), { room: room(lamp), at: [lamp.x, lamp.z] }));
+  // 3. and the same in small pointer steps, and back out again
+  q = at(-1.6, 0); put(lamp, q);
+  for (let i = 1; i <= 40; i++) { const f = i / 40, pt = at(-1.6 + 4.0 * f, 0); w.dragTo(lamp, pt.x, pt.z); }
+  w.dropObject(lamp);
+  const inWork = room(lamp) === 'workshop';
+  w.beginDrag(lamp);
+  for (let i = 1; i <= 40; i++) { const f = i / 40, pt = at(2.4 - 4.0 * f, 0); w.dragTo(lamp, pt.x, pt.z); }
+  w.dropObject(lamp);
+  out.push(result('doormoves: in small steps too, in through the door and out again', inWork && room(lamp) === 'main' && w.fits(lamp, lamp.x, lamp.z), { inWork, room: room(lamp) }));
+  // 4. a thing wider than the door cannot be taken through it (it stops at the wall); turned, it can
+  lamp.set(at(-1.6, sideL).x, at(-1.6, sideL).z);                  // (out of the way)
+  const wide = (o) => (dr.wall === 'right' ? o.d : o.w);
+  let turns = 0; while (wide(piano) <= DOOR_W() && turns < 4) { piano.rotate(1); turns++; }
+  const canWide = wide(piano) > DOOR_W();
+  put(piano, at(-2.4, 0));
+  w.dragTo(piano, at(2.6, 0).x, at(2.6, 0).z); w.dropObject(piano);
+  const stoppedWide = room(piano) === 'main';
+  while (wide(piano) > DOOR_W() && turns < 8) { piano.rotate(1); turns++; }
+  const narrowOk = wide(piano) <= DOOR_W();
+  put(piano, at(-2.4, 0));
+  w.dragTo(piano, at(2.6, 0).x, at(2.6, 0).z); w.dropObject(piano);
+  out.push(result('doormoves: the piano wider than the door stops at the wall; turned to fit the door it goes through', canWide && stoppedWide && narrowOk && room(piano) === 'workshop', { canWide, stoppedWide, narrowOk, room: room(piano), w: piano.w, d: piano.d }));
+  // 5. let go in the doorway: it goes back to the last place it could stand
+  put(lamp, at(-1.6, 0));
+  w.dragTo(lamp, at(0, 0).x, at(0, 0).z);                       // (on the wall line: in the doorway)
+  const inDoor = !w.fits(lamp, lamp.x, lamp.z);
+  w.dropObject(lamp);
+  out.push(result('doormoves: let go in the doorway it is put back where it could stand', inDoor && w.fits(lamp, lamp.x, lamp.z), { inDoor, at: [lamp.x, lamp.z] }));
+  // 6. the bookshelf never leaves Guy's room, not even through the door
+  piano.set(at(-2.4, sideL).x, at(-2.4, sideL).z);              // (the piano out of the Workshop, so the lamp has free floor to be tried on)
+  piano.rot = 0; piano.set(piano.x, piano.z);                    // (turned the way it was: a piano left turned breaks the sweeps that follow)
+  const shelf = w.objects.shelf, g0 = at(0, 0), mid = at(1.8, 0);
+  out.push(result('doormoves: the bookshelf may not stand in the Workshop (a lamp may), nor pass the doorway', !!shelf && shelf.mainOnly && !w.fits(shelf, mid.x, mid.z) && w.fits(lamp, mid.x, mid.z) && !w.canTransit(shelf, g0.x, g0.z) && w.canTransit(lamp, g0.x, g0.z), { mainOnly: shelf && shelf.mainOnly }));
+  const sx = shelf.x, sz = shelf.z; w.beginDrag(shelf);
+  w.dragTo(shelf, sx + 20, sz); w.dragTo(shelf, sx, sz + 20); w.dragTo(shelf, sx - 20, sz); w.dragTo(shelf, sx, sz - 20); w.dropObject(shelf);
+  out.push(result('doormoves: dragged hard in every direction the bookshelf stays in Guy\'s room', room(shelf) === 'main', { room: room(shelf) }));
+  shelf.set(sx, sz);                                             // (back where it stood: other sweeps expect the bookshelf there)
+  [lamp, piano].forEach((o, i) => { o.rot = start0[i].rot; o.set(start0[i].x, start0[i].z); });
+  // 7. nothing in the game moves a thing through a wall: Guy rearranges only his own room's things
+  T.settle(); T.resetRooms(); T.removeAll(); T.settle();
+  out.push(result('doormoves: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+const DOOR_W = () => W().DOOR.w;
+
 // Every skill works in every room: an object dragged into another room is used there (he goes out and in through the doors), the
 // free activities happen in whichever room he is in, and a two-thing activity needs both things in the same room.
 T.sweepAllRooms = () => {
@@ -3079,7 +3152,7 @@ T.sweepPaintings = () => {
 T.runAll = () => {
   const report = { coverage: T.coverage() };
   // each sweep starts with no added room: the Workshop (and what it made) is taken away again after any sweep that added it
-  const S = (fn) => { const r = summarise(fn()); T.resetRooms(); return r; };
+  const S = (fn) => { let r; try { r = summarise(fn()); } catch (e) { r = summarise([result('sweep crashed: ' + e.message, false, { stack: String(e.stack).slice(0, 400) })]); } T.resetRooms(); return r; };
   report.objects = S(T.sweepObjects);
   report.activities = S(T.sweepActivities);
   report.poses = S(T.sweepPoses);
@@ -3117,6 +3190,7 @@ T.runAll = () => {
   report.yardOrders = S(T.sweepYardOrders);
   report.yardVoice = S(T.sweepYardVoice);
   report.mowerShed = S(T.sweepMowerShed);
+  report.doorMoves = S(T.sweepDoorMoves);
   report.allRooms = S(T.sweepAllRooms);
   report.needs = S(T.sweepNeeds);
   report.gal = S(T.sweepGal);

@@ -1419,11 +1419,12 @@ export class Brain {
 
   rearrangeSteps() {
     // heavy things stay put; the bench only moves when Guy wants to sit at the piano
-    const movers = Object.values(this.w.objects).filter((o) => o.weight !== 'heavy' && o.name !== 'bench');
+    const movers = Object.values(this.w.objects).filter((o) => o.weight !== 'heavy' && o.name !== 'bench' && this.w.roomIdAt(o.x, o.z) === 'main');      // (rearranging is for his own room: nothing is shoved through a wall)
     const weights = { plant: 1, lamp: 1, armchair: 1, table: 0.4, drums: 0.3 };
     for (let tries = 0; tries < 12; tries++) {
       let r = Math.random() * movers.reduce((t, o) => t + (weights[o.name] ?? 1), 0);
       const obj = movers.find((o) => (r -= weights[o.name] ?? 1) <= 0) || movers[0];
+      if (!obj) break;                                                       // (nothing in his own room to move)
       const spot = this.freeObjectSpot(obj);
       if (!spot) continue;
       const steps = this.planPushVia(obj, spot.x, spot.z);
