@@ -2821,8 +2821,9 @@ export class Brain {
 
   makeRoomFor(s) {
     if (typeof s.x !== 'number' || !Number.isFinite(s.x)) return false;
-    const me = this.g.root.position, need = [s.anchor && s.anchor.name, ...((this.queue[0] && this.queue[0].fx && this.queue[0].fx.needs) || [])].filter(Boolean);
-    const list = [...this.blockersAt(me.x, me.z, need, 0.6), ...this.blockersAt(s.x, s.z, need, 1.3)].filter((o, i, a) => a.indexOf(o) === i);
+    if (this.held || this.ballHeld || this.gtr.held) return false;                          // (carrying something: not in the middle of reading, playing or a game)
+    const me = this.g.root.position, need = [s.anchor && s.anchor.name, ...this.queue.flatMap((q) => [q.anchor && q.anchor.name, ...((q.fx && q.fx.needs) || [])]), ...(this.music ? ['table', 'stereo'] : [])].filter(Boolean);       // (and whatever the rest of the plan still uses)
+    const list = [...this.blockersAt(me.x, me.z, need, 0.6), ...this.blockersAt(s.x, s.z, need, 0.8)].filter((o, i, a) => a.indexOf(o) === i);
     const rid = this.w.roomIdAt(s.x, s.z), room = rid !== 'main' && rid !== 'door' && this.w.doors[rid] ? { fr: this.w.frameOf(rid), bd: this.w.doors[rid].shell.bounds } : null;
     const steps = [], moved = [];
     for (const o of list.slice(0, 2)) {
@@ -2859,9 +2860,23 @@ export class Brain {
       if (o.active === false) continue;
       const m = 0.2;
       if (p.x > o.x0 - m && p.x < o.x1 + m && p.z > o.z0 - m && p.z < o.z1 + m) {         // already that close (e.g. an object was dropped beside him): let him walk out or along it, never further in
-        const far = (x, z) => Math.max(o.x0 - x, 0, x - o.x1, o.z0 - z, 0, z - o.z1), keep = Math.min(far(p.x, p.z), 0.08, this.step && this.step.type === 'walk' && this.step.x !== undefined ? (this.stepClear(far, p) || 1) : 1);      // (as close as the straight way to where he is going, no closer)
-        if (keep > 0 && !o.char && far(nx, nz) < keep) {
-          if (far(nx, p.z) >= keep) nz = p.z; else if (far(p.x, nz) >= keep) nx = p.x; else { nx = p.x; nz = p.z; }
+        const far = (x, z) => Math.max(o.x0 - x, 0, x - o.x1, o.z0 - z, 0, z - o.z1), keep = Math.min(far(p.x, p.z), 0.01, this.step && this.step.type === 'walk' && this.step.x !== undefined ? Math.min(far(this.step.x, this.step.z), this.stepClear(far, p) || 1) : 1);      // (as close as the straight way to where he is going, no closer)
+        if (keep > 0 && !o.char && !(this.step && (this.step.push || this.step.drive)) && far(nx, nz) < keep) {
+          // (not into it: along it, whichever way gets him nearer to where he is going)
+          const sp = Math.hypot(nx - p.x, nz - p.z), st = this.step, gx = st && typeof st.x === 'number' ? st.x : nx, gz = st && typeof st.z === 'number' ? st.z : nz;
+          let best = null, bd = Infinity, btag = null;
+          for (const [cx, cz] of [[nx, p.z], [p.x, nz], [p.x, p.z + sp], [p.x, p.z - sp], [p.x + sp, p.z], [p.x - sp, p.z]]) {
+            if (far(cx, cz) < keep) continue;
+            const tag = Math.sign(cx - p.x) + ',' + Math.sign(cz - p.z), d = Math.hypot(gx - cx, gz - cz) - (st && st.slide === tag ? 0.05 : 0);       // (keeps going the way he started round it)
+            if (d < bd) { bd = d; best = [cx, cz]; btag = tag; }
+          }
+          if (best) { nx = best[0]; nz = best[1]; if (st) st.slide = btag; } else { nx = p.x; nz = p.z; }
+        }
+        // walking close along it with his goal elsewhere: drift away from it, so his arms swing clear (not for pushing, driving, or the other robot)
+        const stp = this.step;
+        if (!o.char && stp && stp.type === 'walk' && !stp.push && !stp.drive && !stp.direct && typeof stp.x === 'number' && far(stp.x, stp.z) > 0.2 && far(p.x, p.z) < 0.12 && far(p.x, p.z) > 0) {
+          const cx = clamp(p.x, o.x0, o.x1), cz = clamp(p.z, o.z0, o.z1), dd = Math.hypot(p.x - cx, p.z - cz), sp2 = Math.hypot(nx - p.x, nz - p.z);
+          if (dd > 1e-6) { nx += ((p.x - cx) / dd) * sp2 * 0.5; nz += ((p.z - cz) / dd) * sp2 * 0.5; }
         }
         continue;
       }

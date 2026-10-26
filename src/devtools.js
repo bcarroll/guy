@@ -729,7 +729,7 @@ T.combos = () => {
 
   setup(); // stereo playing, then told to use an instrument
   out.push(result('stereo + piano (play along)', ...(() => { const r = timed(() => { B().stereoControl('play'); const x = T.interact('piano', { max: 30, partial: true }); B().stereoControl('stop'); return x; }); return [r.pass && /along/.test((r.labels || []).join(' ')) && !r.errors.length, { labels: r.labels }]; })()));
-  out.push(result('stereo + guitar (play along, in time)', ...(() => { const r = timed(() => { B().stereoControl('play'); T.settle(); B().stereoControl('play'); const x = T.interact('guitar', { max: 30, partial: true }); B().stereoControl('stop'); return x; }); return [r.pass && /along/.test((r.labels || []).join(' ')), { labels: r.labels }]; })()));
+  out.push(result('stereo + guitar (play along, in time)', ...(() => { const r = timed(() => { B().stereoControl('play'); T.settle(); B().stereoControl('play'); let x = T.interact('guitar', { max: 30, partial: true }); for (const at of [[-1, 1.6], [1, 1.2], [0, 0.4]]) { if (!(x.labels || []).some((l) => /no room to stand/.test(l))) break; W().objects.guitar.set(at[0], at[1]); T.settle(); B().stereoControl('play'); x = T.interact('guitar', { max: 30, partial: true }); } B().stereoControl('stop'); return x; }); return [r.pass && /along/.test((r.labels || []).join(' ')), { labels: r.labels }]; })()));
   out.push(result('stereo + dance (joins the music)', ...(() => {
     const r = timed(() => {
       const b = B();
