@@ -13,6 +13,7 @@ await page.setViewport({ width: 800, height: 600, deviceScaleFactor: 1 });
 await page.goto('http://localhost:5173/?fresh&skills=none', { waitUntil: 'networkidle0', timeout: 60000 });
 await page.waitForFunction(() => window.brain && window.guy && window.guy.loaded, { timeout: 60000 });
 await page.evaluate(async () => { window.T = (await import('/src/devtools.js')).default; });
+if (process.env.PRE) await page.evaluate(process.env.PRE);                       // (something to set up before the run: PRE="window.__msgs=[]; ...")
 const out = await page.evaluate((seed, upTo, keys) => {
   window.T.runAll({ seed: Number(seed), upTo: Number(upTo) });
   const rep = window.T.lastReport, res = {};

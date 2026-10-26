@@ -595,10 +595,11 @@ export function installYard(Brain, POSES, H) {
         type: 'plan',
         fn: () => {
           const o = this.other, act = kind === 'basketball' ? 'hoopdefend' : 'goalkeep';
-          if (!o || o.lock || o.stuckIn() || o.pendingActivity || Math.random() > (this.inviteChance ?? 0.5)) return [];      // (half the time; the QA run sets inviteChance to 1)
-          if (!['wander', 'stretch', 'wave', 'sit', 'slouch', 'yardsit', 'birdbath', 'skyswitch', 'yardpoke', 'plant', 'lamp', 'mood', 'dance', 'dancemoves', 'read', 'hoopdribble', 'soccertoss', 'hoopshoot', 'goalshot'].includes(o.last)) return [];      // (a game of her own, on her own, is dropped to play with him)
+          if (!o || o.lock || o.stuckIn() || o.pendingActivity || o.inviting || Math.random() > (this.inviteChance ?? 0.5)) return [];      // (half the time; the QA run sets inviteChance to 1)
+          if (!['wander', 'stretch', 'wave', 'sit', 'slouch', 'yardsit', 'birdbath', 'skyswitch', 'yardpoke', 'plant', 'lamp', 'mood', 'dance', 'dancemoves', 'read'].includes(o.last)) return [];      // (not one in a game of her own, or the two would keep calling each other off their games)
           if (!o.available(act)) return [];
           o.skip(true); o.pendingActivity = act;
+          this.inviting = true;                                                  // (until he starts something else: he is the one who asked, nobody asks him)
           return [];
         },
       };
@@ -611,7 +612,7 @@ export function installYard(Brain, POSES, H) {
           const o = this.other, act = kind === 'basketball' ? 'hoopdefend' : 'goalkeep';
           if (!o || (n === 0 && o.last !== act)) return [];                       // (nobody was invited)
           const ready = o && o.last === act && o.inYard() && ['defend', 'keeper'].includes(o.pose);
-          if (!o || o.last !== act && n > 3 || n >= 45 || (ready && n >= 1)) return [];
+          if (!o || o.last !== act && n > 3 || n >= 27 || (ready && n >= 1)) return [];                    // (at most about a quarter of a minute)
           return [this.play('idle', 0.6), this.waitPartner(kind, n + 1)];
         },
       };

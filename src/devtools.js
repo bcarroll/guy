@@ -867,8 +867,10 @@ T.sweepWalls = () => {
         const ok = b.standOk(name);
         let sat = false, t = 0, gaveUp = null;
         if (reply.ok) {
-          while (t < 40 && !sat) { step(0.1); t += 0.1; if (b.pose === seat || (name === 'easel' && b.pose.startsWith('paint'))) sat = true; }
-          out.push(result(`wall: ${name} against the ${wall} wall, turned ${r}: he uses it promptly`, ok && sat && t < 15 && errors.length === base, { ok, sat, seconds: +t.toFixed(1) }));
+          const trail2 = []; let nl2 = 0;
+          while (t < 40 && !sat) { step(0.1); t += 0.1; if (b.pose === seat || (name === 'easel' && b.pose.startsWith('paint'))) sat = true; if (t >= nl2) { nl2 += 4; const st = b.step; trail2.push([+t.toFixed(0), b.last, b.pose, +G().pos.x.toFixed(2), +G().pos.z.toFixed(2), st ? st.type + (st.anchor ? ':' + st.anchor.name : '') + (st.x !== undefined ? '->' + (+st.x).toFixed(2) + ',' + (+st.z).toFixed(2) : '') : '-', b.queue.length, b.blockedBy]); } }
+          if (!sat) window.__wallTrail2 = trail2;
+          out.push(result(`wall: ${name} against the ${wall} wall, turned ${r}: he uses it promptly`, ok && sat && t < 15 && errors.length === base, { ok, sat, seconds: +t.toFixed(1), trail: sat ? undefined : window.__wallTrail2, drums: name === 'drums' ? [o.x, o.z, o.rot] : undefined }));
         } else {
           // he declines; forcing the activity anyway must be dropped quickly
           b.queue = []; b.step = null; b.pendingActivity = null; b.choose(act);
@@ -3469,6 +3471,24 @@ T.sweepSports = () => {
     // 3. the other way round: GAL shoots and GUY joins
     const rv = play(gb, b, 'hoopshoot', { first: 'defend', second: 'block' }, 14, 'basketball');
     out.push(result('sports: GAL shooting hoops, GUY sometimes joins her and plays defence', rv.joined >= 1 && rv.poses.has('defend') && rv.errs === 0, { joined: rv.joined, games: rv.games, poses: [...rv.poses], errs: rv.errs }));
+    // 3b. a long afternoon of games with an invitation every time: they keep playing (shots are taken), nobody freezes, nobody guards for ever
+    stopAll(); T.settle();
+    const sports = ['hoopshoot', 'hoopdribble', 'goalshot', 'soccertoss'], pickGame = (x) => { x.queue = []; x.step = null; x.pendingActivity = null; x.using = new Set(); x.choose(sports[Math.floor(Math.random() * 4)]); };
+    const shots0 = w.yard.score.shots, frozen = [], secs = { guard: 0, game: 0, all: 0 };
+    pickGame(b); pickGame(gb);
+    let tl = 0;
+    while (tl < 420) {
+      step(0.25); tl += 0.25;
+      for (const [who, x] of [['GUY', b], ['GAL', gb]]) {
+        const st = x.step; secs.all += 0.25;
+        if (['hoopdefend', 'goalkeep'].includes(x.last)) secs.guard += 0.25; else if (sports.includes(x.last)) secs.game += 0.25;
+        if (st && st.type === 'play' && st.t > st.dur + 3) frozen.push([who, +tl.toFixed(0), x.last, st.pose]);
+        if (st && st.type === 'walk' && !st.drive && st.t > 40) frozen.push([who, +tl.toFixed(0), x.last, 'walk']);
+      }
+      if (!sports.includes(b.last) && !['hoopdefend', 'goalkeep'].includes(b.last) && !sports.includes(gb.last) && !['hoopdefend', 'goalkeep'].includes(gb.last)) pickGame(Math.random() < 0.5 ? b : gb);       // (both have gone off to do something else: back to a game)
+    }
+    const taken = w.yard.score.shots - shots0;
+    out.push(result('sports: over 7 minutes of games with an invitation every time they keep playing (at least 4 shots), nobody freezes, and defending does not take over (under 60% of the time)', taken >= 4 && frozen.length === 0 && secs.guard < secs.all * 0.6, { shots: taken, frozen: frozen.slice(0, 4), guardPct: +(100 * secs.guard / secs.all).toFixed(0), gamePct: +(100 * secs.game / secs.all).toFixed(0) }));
     // 4. games alone are untouched: nobody else around means nobody is invited, and the guard activities are never chosen on their own
     stopAll(); w.gal.remove(); T.settle();
     out.push(result('sports: with nobody to play against the guard activities are not available', !b.available('hoopdefend') && !b.available('goalkeep')));
@@ -3673,6 +3693,7 @@ T.sweepBotRules = () => {
     gp.x = -3; gp.z = 2; gb.queue = [gb.play('idle', 120)]; gb.step = null; gb.using = new Set();           // (she moves on, and stays away)
     let tg = 0; while (tg < 80 && !(b.pose === 'paintStand')) { step(0.25); tg += 0.25; }
     out.push(result('bot rules: ...and once she has moved on he gets there and paints', b.pose === 'paintStand', { tg, pose: b.pose }));
+    stop();
     stop();
     // 4. objectRemoved still drops work on the removed thing (stepUses is shared with it)
     stop(); b.step = { type: 'play', fx: { needs: ['lawnchair'] }, t: 0, dur: 1 }; b.objectRemoved('lawnchair');

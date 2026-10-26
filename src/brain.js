@@ -1788,7 +1788,11 @@ export class Brain {
     if (!o || !own) return true;
     const l = o.local(own[0], own[1]), x = o.x + l.x, z = o.z + l.z;
     if (!this.onFloor(x, z, 0.1, 0)) return false;
-    return !cellBlocked(makeGrid(this.w.obstacles, 0.05, 0, o.obstacle), x, z);       // not inside another object (furniture merely nearby is fine: he walks round it)
+    if (cellBlocked(makeGrid(this.w.obstacles, 0.05, 0, o.obstacle), x, z)) return false;       // not inside another object (furniture merely nearby is fine: he walks round it)
+    // and a way there: a stool behind a bench that is wedged against the wall cannot be reached (the kit has to be moved, or the bench)
+    const g = this.g.root.position, from = this.inMain() ? { x: g.x, z: g.z } : { x: 0, z: 2 };
+    const grid = makeGrid(this.w.obstacles.filter((ob) => !ob.char), INFLATE, 0, o.obstacle);
+    return !cellBlocked(grid, x, z) && !!findPath(grid, from.x, from.z, x, z, true);
   }
 
   // Why `act` cannot be done now, in a few words (for the message when an order is refused); null when it is not clear.
@@ -2023,6 +2027,7 @@ export class Brain {
 
   choose(force) {
     this.activeChair = force ? this.pendingChair || null : null; this.pendingChair = null;
+    this.inviting = false;                                         // (an invitation to play a game lasts as long as the activity it was made in)
     const acts = this.activities();
     // He is keen to read while there is still something to learn
     const shelf = this.obj('shelf');
@@ -2416,7 +2421,8 @@ export class Brain {
           let rem = Math.hypot(wp.x - root.position.x, wp.z - root.position.z);
           for (let k = 1; k < s.path.length; k++) rem += Math.hypot(s.path[k].x - s.path[k - 1].x, s.path[k].z - s.path[k - 1].z);
           if (s.rem === undefined || rem < s.rem - 0.2) { s.rem = rem; s.remT = 0; }
-          else if ((s.remT += dt) > 5) {
+          else if ((s.remT += dt) > 3 && !s.roomTried && !s.push && !s.drive && !s.direct && this.makeRoomFor(s)) return;      // stuck: small furniture in the way is moved first
+          else if (s.remT > 5) {
             finished = true;
             if (finalDist > (s.tol || 0)) { this.queue.length = 0; this.ui('could not get there'); }       // (a station's stand spot pressed against something a few centimetres short is close enough: s.tol)
           }
@@ -2795,6 +2801,38 @@ export class Brain {
     return false;
   }
 
+  // The small movable furniture (nothing wider than a metre, never heavy, not in use) within `M` metres of (x, z), nearest first. `except`: names it
+  // must not be (what he is about to use there).
+  blockersAt(x, z, except = [], M = 0.8) {
+    const room = this.w.roomIdAt(x, z);
+    const far = (o) => Math.max(o.obstacle.x0 - x, 0, x - o.obstacle.x1, o.obstacle.z0 - z, 0, z - o.obstacle.z1);
+    return Object.values(this.w.objects)
+      .filter((o) => o.obstacle && o.obstacle.active !== false && !o.obstacle.char && o.weight !== 'heavy' && Math.max(o.w, o.d) <= 1.0 && !o.mainOnly && !o.stowed && !o.hauled
+        && !except.includes(o.name) && !this.otherUses(o.name) && !this.inUse(o.name) && this.w.roomIdAt(o.x, o.z) === room && far(o) < M)
+      .sort((a, b) => far(a) - far(b));
+  }
+  // He has been trying to get to a spot and cannot (a bench or a plant is in the way): the small furniture beside him or beside the spot is pushed to
+  // a free place first (at most two pieces, at least a metre from the spot), then he tries again. Returns true when that is what he does now.
+  makeRoomFor(s) {
+    if (typeof s.x !== 'number' || !Number.isFinite(s.x)) return false;
+    const me = this.g.root.position, need = [s.anchor && s.anchor.name, ...((this.queue[0] && this.queue[0].fx && this.queue[0].fx.needs) || [])].filter(Boolean);
+    const list = [...this.blockersAt(me.x, me.z, need, 0.6), ...this.blockersAt(s.x, s.z, need, 1.3)].filter((o, i, a) => a.indexOf(o) === i);
+    const rid = this.w.roomIdAt(s.x, s.z), room = rid !== 'main' && rid !== 'door' && this.w.doors[rid] ? { fr: this.w.frameOf(rid), bd: this.w.doors[rid].shell.bounds } : null;
+    const steps = [], moved = [];
+    for (const o of list.slice(0, 2)) {
+      const to = this.w.findSpot(o, { x: o.x, z: o.z }, { x: s.x, z: s.z });
+      const plan = to && this.planPushVia(o, to.x, to.z, room);
+      if (plan) { steps.push(...plan); moved.push(o.name); }
+    }
+    s.roomTried = true;                                                  // (once: if that did not help he gives up as before)
+    if (!steps.length) return false;
+    for (const st of steps) st.roomTried = true;                           // (the walks that go with the pushing are not made room for again)
+    this.ui(`moving the ${moved.join(' and the ')} out of the way`);
+    this.queue.unshift(...steps, { type: 'walk', x: s.x, z: s.z, yaw: s.yaw, anchor: s.anchor, direct: s.direct, tol: s.tol, roomTried: true });
+    this.step = null;
+    return true;
+  }
+
   // Do this next, before the rest of the queue: the step he is on is dropped (the other robot reacting to a shot).
   interject(step) { this.queue.unshift(step); this.step = null; }
 
@@ -2814,7 +2852,9 @@ export class Brain {
     for (const o of this.w.obstacles) {
       if (o.active === false) continue;
       const m = 0.2;
-      if (p.x > o.x0 - m && p.x < o.x1 + m && p.z > o.z0 - m && p.z < o.z1 + m) continue; // already overlapping (e.g. an object was dropped on him): let him walk out
+      if (p.x > o.x0 - m && p.x < o.x1 + m && p.z > o.z0 - m && p.z < o.z1 + m) {         // already that close (e.g. an object was dropped beside him): let him walk out or along it
+        continue;
+      }
       if (nx > o.x0 - m && nx < o.x1 + m && nz > o.z0 - m && nz < o.z1 + m) {
         // slide along whichever axis is still free
         if (!(p.x > o.x0 - m && p.x < o.x1 + m && nz > o.z0 - m && nz < o.z1 + m)) nx = p.x + dx, nz = p.z;
