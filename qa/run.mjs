@@ -23,6 +23,8 @@ const OUT = path.join(ROOT, 'qa', 'out'), BASE = path.join(ROOT, 'qa', 'baseline
 const arg = (name, dflt = null) => { const a = process.argv.slice(2).find((x) => x === `--${name}` || x.startsWith(`--${name}=`)); return a === undefined ? dflt : a.includes('=') ? a.split('=').slice(1).join('=') : true; };
 const ONLY = new Set(String(arg('only', 'sweeps,rigs,customers,audio,guitar,shots')).split(','));
 const REPEAT = Math.max(1, Number(arg('repeat', 1)));
+const UPTO = Math.max(0, Number(arg('upto', 0)));                // stop the sweeps after this one (to replay a failure quickly: --seed=42 --upto=6)
+const SEED0 = Math.max(1, Number(arg('seed', 1)));            // the first seed: run i of the sweeps uses seed SEED0 + i (npm test -- --repeat=3 --seed=10 plays seeds 10, 11, 12)
 const FILTER = arg('filter', null), APPROVE = arg('approve', false), STRICT = !!arg('strict', false);
 const PORT = Number(arg('port', 5199));
 const TOLERANCE = 0.004;                              // the fraction of a picture that may change before it counts as different
@@ -93,22 +95,25 @@ async function main() {
       const runs = [];
       for (let i = 0; i < REPEAT; i++) {
         if (i) await open();
-        const r = await safe(() => page.evaluate(() => {
-          const rep = window.T.runAll(), out = {};
+        const r = await safe(() => page.evaluate((seed, upTo) => {
+          const rep = window.T.runAll({ seed, upTo }), out = {};
+          let no = 0;
           for (const [k, v] of Object.entries(rep)) {
             if (k === 'coverage') continue;
             if (k === 'errorsLogged') { out.errorsLogged = v; continue; }
-            out[k] = { total: v.total, failed: v.failed.map((f) => ({ name: f.name, notes: JSON.stringify(f).slice(0, 400) })) };
+            no++;
+            out[k] = { no, total: v.total, failed: v.failed.map((f) => ({ name: f.name, notes: JSON.stringify(f).slice(0, 1200) })) };
           }
           return out;
-        }));
+        }, SEED0 + i, UPTO));
         runs.push(r);
         const bad = Object.entries(r).filter(([k, v]) => v && v.failed && v.failed.length).length;
         console.log(`  run ${i + 1}/${REPEAT}: ${Object.keys(r).length - 1} sweeps, ${bad ? red(bad + ' with failures') : green('all pass')}, errors logged ${r.errorsLogged}`);
       }
       const seen = new Map();
-      runs.forEach((r) => { for (const [k, v] of Object.entries(r)) if (v && v.failed) for (const f of v.failed) { const key = `${k}: ${f.name}`; const e = seen.get(key) || { n: 0, notes: f.notes }; e.n++; seen.set(key, e); } });
-      for (const [key, e] of seen) add('sweeps', key, e.n === REPEAT ? 'fail' : 'flaky', `${e.n} of ${REPEAT} runs: ${e.notes}`);
+      runs.forEach((r, ri) => { for (const [k, v] of Object.entries(r)) if (v && v.failed) for (const f of v.failed) { const key = `${k}: ${f.name}`; const e = seen.get(key) || { n: 0, notes: f.notes, seeds: [], no: v.no }; e.n++; e.seeds.push(SEED0 + ri); seen.set(key, e); } });
+      // (a failure comes with its seed and its place in the list: T.runSweep('sweepName', seed, place) plays it again exactly)
+      for (const [key, e] of seen) add('sweeps', key, e.n === REPEAT ? 'fail' : 'flaky', `${e.n} of ${REPEAT} runs (seeds ${e.seeds.join(',')}, sweep no. ${e.no}): ${e.notes}`);
       const total = Object.values(runs[0]).reduce((n, v) => n + (v && v.total ? v.total : 0), 0);
       if (!seen.size) add('sweeps', `all ${total} checks in every sweep (${REPEAT} run${REPEAT > 1 ? 's' : ''})`, 'pass');
       if (runs.some((r) => r.errorsLogged)) add('sweeps', 'no errors logged during the sweeps', 'fail', `errors logged: ${runs.map((r) => r.errorsLogged).join(', ')}`);

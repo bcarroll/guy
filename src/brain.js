@@ -1685,7 +1685,7 @@ export class Brain {
     return clk && this.other.time - clk.seen < 0.5 ? { bl: clk.bl, beat: (this.other.time - clk.t0) / clk.bl } : null;
   }
 
-  currentBeat() { return this.music ? (performance.now() / 1000 - this.musicT0) / this.beatLen : this.time / BEAT; }
+  currentBeat() { return this.music ? (nowSec() - this.musicT0) / this.beatLen : this.time / BEAT; }
 
   musicOn(track = 'default', byUser = false) {
     if (this.music) return;
@@ -1694,7 +1694,7 @@ export class Brain {
     this.track = playable;
     this.beatLen = 60 / TRACKS[playable].bpm;
     this.music = playable === 'default' ? startBeat() : startTrack(playable);
-    this.musicT0 = performance.now() / 1000 + 0.05;
+    this.musicT0 = nowSec() + 0.05;
     this.trackSince = this.time;                                                       // a record moves on to its next track after a minute or so
     this.trackFor = playable === 'default' ? Infinity : trackSeconds(TRACKS[playable]);
     const rec = this.albumOf(playable);
@@ -1920,7 +1920,9 @@ export class Brain {
     if (WORK_ACTS.includes(act)) return ['workshop'];                      // one at a time in the Workshop (the stations and the bench are shared)
     return [];
   }
-  busyElsewhere(names) { const o = this.other; return !!o && names.some((n) => o.using && o.using.has(n)); }
+  busyElsewhere(names) { const o = this.other; return !!o && names.some((n) => (o.using && o.using.has(n)) || o.pushing(n)); }
+  // Is he pushing `name` along now, or about to (a leg of a push is still in his queue)?
+  pushing(name) { const st = (x) => x && x.push && x.push.obj && x.push.obj.name === name; return st(this.step) || this.queue.some(st); }
 
   ballRemoved() {
     if (this.lock && this.lock.name === 'ball') this.unlock(false);
@@ -2446,7 +2448,7 @@ export class Brain {
     const t = s.type === 'play' ? s.t : this.poseT;
     if (poseName === 'robot') g.sharp = 22;
 
-    const beat = this.music ? (performance.now() / 1000 - this.musicT0) / this.beatLen : this.time / BEAT;
+    const beat = this.music ? (nowSec() - this.musicT0) / this.beatLen : this.time / BEAT;
     const rd = s.type === 'play' && s.fx.reading;
     this.readBlend = rd ? readWeight(s.t, s.dur, rd.delay, rd.lead) : 0;
     this.updateReading(s);
@@ -2675,7 +2677,7 @@ export class Brain {
     let beat;
     if (s.fx.sync) {
       // locked to the stereo: generate bars a little ahead of the beat
-      beat = this.music && s.t >= (s.fx.startAt ?? 0) ? (performance.now() / 1000 - this.musicT0) / this.beatLen : -1;
+      beat = this.music && s.t >= (s.fx.startAt ?? 0) ? (nowSec() - this.musicT0) / this.beatLen : -1;
       if (beat >= 0) {
         s.q ??= [];
         s.bar ??= Math.floor(beat / 4) + 1;
@@ -2960,6 +2962,9 @@ function makeHeldBook() {
 // ---- Grid A* around furniture ----
 // A grid covers one room: GUY's own (the default) or an added room (world.frameOf). The grid remembers its frame (blocked.fr), so
 // cellBlocked, lineClear and findPath work on either.
+// The clock the music's beat is counted on: the real one, until the page has been fast-forwarded with window.sim (the QA runs): then a clock
+// that only sim moves, so a minute of music is a minute of simulated play however fast or slow the machine runs it.
+const nowSec = () => (window.__simNow !== undefined ? window.__simNow : performance.now() / 1000);
 const DRIVE_BEHIND = 0.8;           // how far behind the lawn mower he stands, middle to middle
 const CELL = 0.2, X0 = -4.6, Z0 = -3.6, NX = 47, NZ = 37, INFLATE = 0.28;
 const MAIN_FRAME = { X0, Z0, NX, NZ };

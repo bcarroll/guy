@@ -828,7 +828,9 @@ window.__ui = { controlsEnabled: () => controls.enabled, pick, floorAt, get pend
 
 // Debug helper: fast-forward the simulation without rendering (window.sim(seconds)).
 window.sim = (sec, dt = 1 / 30) => {
+  if (window.__simNow === undefined) window.__simNow = performance.now() / 1000;      // (the music's clock now follows simulated time: see nowSec in brain.js)
   for (let t = 0; t < sec; t += dt) {
+    window.__simNow += dt;
     brain.safeUpdate(dt); guy.apply(dt); brain.safeLate(); world.lamp.tick(brain.currentBeat()); updateBall(dt); for (const o of Object.values(world.objects)) o.update(dt); world.yard.update(dt);
   }
   if (follow) { controls.target.copy(guy.pos).setY(1.1); controls.update(); }

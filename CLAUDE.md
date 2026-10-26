@@ -30,7 +30,7 @@ sitting from the front and the side, customers, each room, compared with the app
   `customermodels.js` automatically) and pictures; a new pose or visual behaviour needs a `MANIFEST.visual` checkpoint; a new sound needs
   an entry in `SPEC` in `src/qa-audio.js` (a sound without one fails). Numbers alone passed while every customer had arms stuck in the air.
 - **Look at the pictures before approving them** (`qa/index.html`, then `npm test -- --approve=new`). An approved wrong picture is worse than none.
-- Never rerun a failing test until it passes. A failure that comes and goes is a bug that comes and goes: use `npm test -- --repeat=3`
+- Never rerun a failing test until it passes. A failure that comes and goes is a bug that comes and goes: use `npm test -- --repeat=3` (every run is seeded and a FLAKY line names its seeds: replay it, do not guess)
   to see it as FLAKY and find the cause.
 - When a bug is found by hand, add the test that would have caught it, and make sure it fails without the fix.
 

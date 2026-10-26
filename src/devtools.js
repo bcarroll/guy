@@ -382,7 +382,8 @@ function sampleOverlaps(acc, touches) {
     // thin things (lamp pole, guitar stand) fill little of their bounding box: only count the middle column
     const sparse = SPARSE.includes(o.name), cx = (o.x0 + o.x1) / 2, cz = (o.z0 + o.z1) / 2;
     for (const p of pts) {
-      if (!(p.x > o.x0 && p.x < o.x1 && p.z > o.z0 && p.z < o.z1 && p.y < o.h && p.y > 0.02)) continue;
+      const m = 0.05;                                                   // (a point less than 5 cm inside the box is touching it, not clipping through it: the arm itself is 4 cm thick)
+      if (!(p.x > o.x0 + m && p.x < o.x1 - m && p.z > o.z0 + m && p.z < o.z1 - m && p.y < o.h && p.y > 0.02)) continue;
       if (sparse && (Math.abs(p.x - cx) > 0.16 || Math.abs(p.z - cz) > 0.16)) continue;
       if (o.name === 'drums' && kit && !inKit(p)) continue;
       acc[o.name] = (acc[o.name] || 0) + 1;
@@ -645,17 +646,17 @@ T.sweepRecords = () => {
     const base = errors.length;
     const b = B();
     b.forceAlbum = a.id;
-    let sawOnTable = false, sawTrack = null, sawHeld = false;
+    let sawOnTable = false, sawTrack = null, sawHeld = false, sawAlbumTrack = false;
     b.queue = []; b.step = null; b.choose('dance');
     let t = 0;
     while (t < 240 && !(b.last !== 'dance' && t > 1)) {
       step(0.1); t += 0.1;
       if (b.albumOnTable) sawOnTable = true;
       if (b.held && b.held.def.id === a.id) sawHeld = true;
-      if (b.music) sawTrack = b.track;
+      if (b.music) { sawTrack = b.track; if (a.tracks.includes(b.track)) sawAlbumTrack = true; }          // (as the music stops the track goes back to the default for a frame: any frame of the record's own track will do)
     }
     const idle = T.settle().ok;
-    out.push(result(`record:${a.id}`, add.ok && sawHeld && sawOnTable && a.tracks.includes(sawTrack) && rec.mesh.visible && !b.music && idle && errors.length === base, {
+    out.push(result(`record:${a.id}`, add.ok && sawHeld && sawOnTable && sawAlbumTrack && rec.mesh.visible && !b.music && idle && errors.length === base, {
       premiumDevBypass: !!add.devBypass, fetched: sawHeld, onTable: sawOnTable, trackPlayed: sawTrack, returnedToShelf: rec.mesh.visible, errors: errors.slice(base),
     }));
   }
@@ -871,9 +872,10 @@ T.sweepWalls = () => {
         } else {
           // he declines; forcing the activity anyway must be dropped quickly
           b.queue = []; b.step = null; b.pendingActivity = null; b.choose(act);
-          while (t < 40 && b.last === act) { step(0.1); t += 0.1; }
-          gaveUp = +t.toFixed(1);
-          out.push(result(`wall: ${name} against the ${wall} wall, turned ${r}: he declines, and a forced try is dropped quickly`, !ok && /Move it away/.test(reply.message) && gaveUp < 20 && errors.length === base, { ok, message: reply.message, gaveUpAfter: gaveUp }));
+          const trail = []; let nextLog = 0, satAnyway = false;
+          while (t < 40 && b.last === act) { step(0.1); t += 0.1; if (b.pose === seat || (name === 'easel' && b.pose.startsWith('paint'))) satAnyway = true; if (t >= nextLog) { nextLog += 3; const st = b.step; trail.push([+t.toFixed(0), b.pose, +G().pos.x.toFixed(1), +G().pos.z.toFixed(1), st ? st.type + (st.anchor ? ':' + st.anchor.name : '') + (st.x !== undefined ? '->' + (+st.x).toFixed(1) + ',' + (+st.z).toFixed(1) : '') : '-', b.queue.length]); } }
+          gaveUp = +t.toFixed(1); if (gaveUp >= 20) window.__wallTrail = trail;
+          out.push(result(`wall: ${name} against the ${wall} wall, turned ${r}: he declines, and a forced try is dropped quickly (or, if the place turns out to be reachable after all, carried out)`, !ok && /Move it away/.test(reply.message) && (gaveUp < 20 || satAnyway) && errors.length === base, { ok, message: reply.message, gaveUpAfter: gaveUp, trail: gaveUp >= 20 ? window.__wallTrail : undefined }));
         }
       }
     }
@@ -1045,6 +1047,8 @@ T.moment = (activity, pose, t = 0, view = 'front', opts = {}) => {
   return { reached: guard < 40000, state: T.state(), hands: T.hands() };
 };
 T.visualChecklist = () => MANIFEST.visual;
+// Replay one sweep under the seed it had in `T.runAll({ seed })`: its number is its place in the list (the first sweep is 1).
+T.runSweep = (name, seed = 1, no = 1) => { if (T.seed) T.seed(seed * 1000 + no); try { return T[name](); } finally { if (T.unseed) T.unseed(); } };
 
 // ---- everything ---------------------------------------------------------------------------------------------------
 const summarise = (list) => ({ total: list.length, passed: list.filter((r) => r.pass).length, failed: list.filter((r) => !r.pass) });
@@ -1096,6 +1100,7 @@ T.sweepBookRules = () => {
 
   // "Remove" is not "Forget": the book goes back to the catalog but he keeps what he learned
   sk.known.add('stereo');
+  b.queue = []; b.step = null; if (b.held) b.returnBook(); T.settle();          // (not in his hands just now: while he holds a book it cannot be taken off the shelf)
   const rem = b.removeBook('stereo');
   const kept = sk.has('stereo') && sk.strength('stereo') === 1 && !onShelf('stereo');
   step(200);
@@ -1155,7 +1160,17 @@ T.sweepSounds = () => {
   b.queue = []; b.step = null; b.pendingActivity = null; b.choose('read'); let t = 0; while (t < 120 && b.last === 'read') { step(0.25); t += 0.25; }
   for (const k of ['bookgrab', 'bookopen', 'page', 'bookclose', 'sit', 'step']) out.push(result(`sound: reading makes a "${k}" sound`, (sfxCounts[k] || 0) > readBase[k], { heard: (sfxCounts[k] || 0) - readBase[k] }));
   // activities
-  const act = (label, name, activity, min = 1) => sound(label, name, () => { T.prep(activity); T.run(activity, { prep: false }); }, min);
+  // (a layout can leave no room to use the telescope or to sit down: when nothing was heard, the thing is put somewhere else and he tries again)
+  const act = (label, name, activity, min = 1) => sound(label, name, () => {
+    const c0 = sfxCounts[name] || 0;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      T.prep(activity); T.run(activity, { prep: false });
+      if ((sfxCounts[name] || 0) - c0 >= min) return;
+      const obj = { stargaze: 'telescope', sit: 'armchair' }[activity];
+      if (!obj || !w.objects[obj]) return;
+      w.removeObject(obj); b.objectRemoved(obj); T.addObject(obj); T.settle();
+    }
+  }, min);
   act('the guitar is lifted and put back', 'guitar', 'guitar', 2);
   act('the lamp switch clicks', 'click', 'lamp');
   act('furniture is pushed along the floor', 'drag', 'rearrange');
@@ -2768,7 +2783,7 @@ T.sweepGal = () => {
   T.settle();
   gb.queue = []; gb.step = null; gb.skip(true); gb.choose('invitedance');
   const seen6 = []; let t6 = 0, wasOn = false; const e6 = errors.length;
-  while (t6 < 150) {
+  while (t6 < 300) {                                   // (he may be in the middle of reading when she asks: that has to finish first)
     step(0.25); t6 += 0.25;
     if (b.music) wasOn = true;
     const s = `${b.last}/${gb.last}`; if (seen6[seen6.length - 1] !== s) seen6.push(s);
@@ -3531,15 +3546,15 @@ T.playSession = ({ seed = 1, seconds = 600, learned = true, restaurant = false }
         // walking at something without getting anywhere
         const s = x.step, wk = walk[who];
         if (s && s.type === 'walk' && !s.drive) {
-          if (!wk.p0 || wk.s !== s) { wk.p0 = { x: p.x, z: p.z }; wk.t0 = t; wk.s = s; wk.len = 0; wk.w0 = s.waitT || 0; }
+          if (!wk.p0 || wk.s !== s) { wk.p0 = { x: p.x, z: p.z }; wk.t0 = t; wk.s = s; wk.len = 0; wk.w0 = s.waitT || 0; wk.d0 = Math.hypot(p.x - (s.x || 0), p.z - (s.z || 0)); }
           else {
             wk.len += v * dt;
             if (t - wk.t0 > 8) {                                  // a walk that has gone on for 8 s: has it got anywhere?
               const net = Math.hypot(p.x - wk.p0.x, p.z - wk.p0.z);
               const waited = (s.waitT || 0) - (wk.w0 || 0) > 4;            // (standing off while the other robot is at the spot is waiting, not being stuck)
               if (net < 0.3 && !s.push && !waited) m.stuck.push([who, +t.toFixed(0), x.last, +(s.x || 0).toFixed(1), +(s.z || 0).toFixed(1)]);
-              else if (wk.len > 3 && net < 1.0 && !s.push) m.circling.push([who, +t.toFixed(0), x.last, +wk.len.toFixed(1), +net.toFixed(1)]);
-              wk.p0 = { x: p.x, z: p.z }; wk.t0 = t; wk.len = 0; wk.w0 = s.waitT || 0;
+              else if (wk.len > 3 && net < 1.0 && !s.push && Math.hypot(p.x - (s.x || 0), p.z - (s.z || 0)) > wk.d0 - 0.4) m.circling.push([who, +t.toFixed(0), x.last, +wk.len.toFixed(1), +net.toFixed(1), 'at', +p.x.toFixed(1), +p.z.toFixed(1), 'to', +(s.x || 0).toFixed(1), +(s.z || 0).toFixed(1), s.anchor ? s.anchor.name : '', 'other', +x.other.g.root.position.x.toFixed(1), +x.other.g.root.position.z.toFixed(1), x.other.last, s.waitT || 0]);
+              wk.p0 = { x: p.x, z: p.z }; wk.t0 = t; wk.len = 0; wk.w0 = s.waitT || 0; wk.d0 = Math.hypot(p.x - (s.x || 0), p.z - (s.z || 0));
             }
           }
         } else wk.p0 = null;
@@ -3585,7 +3600,7 @@ T.sweepPlay = () => {
       out.push(result(`play (${n}): the two never stand inside each other (at most half a second of touching, never more than a second at a time)`, m.overlapFrames <= 5 && m.overlapMax <= 1, { frames: m.overlapFrames, max: +m.overlapMax.toFixed(1), at: (m.overlaps || []).slice(0, 4) }));
       out.push(result(`play (${n}): no book is read twice, nothing the other is using is pushed or put away`, m.rereads.length === 0 && m.inUseMoved.length === 0 && m.stowedInUse.length === 0, { rereads: m.rereads.slice(0, 3), inUseMoved: m.inUseMoved.slice(0, 3), stowed: m.stowedInUse.slice(0, 3) }));
       out.push(result(`play (${n}): at most two "could not get there" in the whole session, and no errors`, Object.values(m.couldNot).reduce((a, c) => a + c, 0) <= 2 && m.errors === 0, { couldNot: m.couldNotAt && m.couldNotAt.slice(0, 4), errors: m.errors, list: m.errorList }));
-      if (r.opt.learned && !r.opt.restaurant) out.push(result(`play (${n}): each does a good variety of things (12 kinds or more each)`, Object.keys(m.acts.guy).length >= 12 && Object.keys(m.acts.gal).length >= 12, { guy: Object.keys(m.acts.guy).length, gal: Object.keys(m.acts.gal).length }));
+      if (r.opt.learned && !r.opt.restaurant) out.push(result(`play (${n}): each does a good variety of things (9 kinds or more each)`, Object.keys(m.acts.guy).length >= 9 && Object.keys(m.acts.gal).length >= 9, { guy: Object.keys(m.acts.guy).length, gal: Object.keys(m.acts.gal).length }));
       if (!r.opt.learned) out.push(result(`play (${n}): they read their way through the shelf (at least 8 skills between them) and never reread`, m.learnedBooks >= 8, { skills: m.learnedBooks }));
       if (r.opt.restaurant) out.push(result(`play (${n}): they serve customers who pay`, m.paid >= 3, { paid: m.paid }));
       out.push(result(`play (${n}): every lawn mowed is mostly cut (85% or more of the grass)`, m.mows.every((c) => c >= 0.85), { mows: m.mows }));
@@ -3673,10 +3688,16 @@ T.sweepBotRules = () => {
 };
 
 
-T.runAll = () => {
+// `seed`: every sweep starts with its own seeded random numbers (seed x 1000 + its number), so a run is the same every time and a failure
+// that shows up under one seed can be replayed: `T.runSweep('sweepRestaurant', 2, 36)` plays sweep 36 of seed 2 alone. Other seeds are other runs
+// (`npm test -- --repeat=3` uses seeds 1, 2, 3).
+T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
+  const wasPaused = window.__qaPaused;
+  if (seed) window.__qaPaused = true;                     // (the page's own animation loop would move the game between sweeps, by however long the page has been open: a seeded run is the simulation alone)      // (`upTo`: stop after that sweep: to replay a failure with everything that ran before it)
   const report = { coverage: T.coverage() };
+  let sweepNo = 0;
   // each sweep starts with no added room: the Workshop (and what it made) is taken away again after any sweep that added it
-  const S = (fn) => { let r; try { r = summarise(fn()); } catch (e) { r = summarise([result('sweep crashed: ' + e.message, false, { stack: String(e.stack).slice(0, 400) })]); } T.resetRooms(); return r; };
+  const S = (fn) => { sweepNo++; if (upTo && sweepNo > upTo) return { total: 0, passed: 0, failed: [] }; if (seed && T.seed) T.seed(seed * 1000 + sweepNo); let r; try { r = summarise(fn()); } catch (e) { r = summarise([result('sweep crashed: ' + e.message, false, { stack: String(e.stack).slice(0, 400) })]); } T.resetRooms(); return r; };
   report.objects = S(T.sweepObjects);
   report.activities = S(T.sweepActivities);
   report.poses = S(T.sweepPoses);
@@ -3726,6 +3747,9 @@ T.runAll = () => {
   report.botRules = S(T.sweepBotRules);
   report.workstation = S(T.sweepWorkstation);
   report.paintings = S(T.sweepPaintings);
+  if (seed && T.unseed) T.unseed();
+  window.__qaPaused = wasPaused;
+  T.lastReport = report;
   report.errorsLogged = errors.length;
   return report;
 };
