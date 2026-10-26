@@ -2813,6 +2813,12 @@ export class Brain {
   }
   // He has been trying to get to a spot and cannot (a bench or a plant is in the way): the small furniture beside him or beside the spot is pushed to
   // a free place first (at most two pieces, at least a metre from the spot), then he tries again. Returns true when that is what he does now.
+  // How close the straight line from where he is to the place he is walking to passes to a box (0 when it goes through it).
+  stepClear(far, p) {
+    const st = this.step;
+    return Math.min(...[0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1].map((t) => far(p.x + (st.x - p.x) * t, p.z + (st.z - p.z) * t)));
+  }
+
   makeRoomFor(s) {
     if (typeof s.x !== 'number' || !Number.isFinite(s.x)) return false;
     const me = this.g.root.position, need = [s.anchor && s.anchor.name, ...((this.queue[0] && this.queue[0].fx && this.queue[0].fx.needs) || [])].filter(Boolean);
@@ -2852,7 +2858,11 @@ export class Brain {
     for (const o of this.w.obstacles) {
       if (o.active === false) continue;
       const m = 0.2;
-      if (p.x > o.x0 - m && p.x < o.x1 + m && p.z > o.z0 - m && p.z < o.z1 + m) {         // already that close (e.g. an object was dropped beside him): let him walk out or along it
+      if (p.x > o.x0 - m && p.x < o.x1 + m && p.z > o.z0 - m && p.z < o.z1 + m) {         // already that close (e.g. an object was dropped beside him): let him walk out or along it, never further in
+        const far = (x, z) => Math.max(o.x0 - x, 0, x - o.x1, o.z0 - z, 0, z - o.z1), keep = Math.min(far(p.x, p.z), 0.08, this.step && this.step.type === 'walk' && this.step.x !== undefined ? (this.stepClear(far, p) || 1) : 1);      // (as close as the straight way to where he is going, no closer)
+        if (keep > 0 && !o.char && far(nx, nz) < keep) {
+          if (far(nx, p.z) >= keep) nz = p.z; else if (far(p.x, nz) >= keep) nx = p.x; else { nx = p.x; nz = p.z; }
+        }
         continue;
       }
       if (nx > o.x0 - m && nx < o.x1 + m && nz > o.z0 - m && nz < o.z1 + m) {

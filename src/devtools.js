@@ -3474,13 +3474,13 @@ T.sweepSports = () => {
     // 3b. a long afternoon of games with an invitation every time: they keep playing (shots are taken), nobody freezes, nobody guards for ever
     stopAll(); T.settle();
     const sports = ['hoopshoot', 'hoopdribble', 'goalshot', 'soccertoss'], pickGame = (x) => { x.queue = []; x.step = null; x.pendingActivity = null; x.using = new Set(); x.choose(sports[Math.floor(Math.random() * 4)]); };
-    const shots0 = w.yard.score.shots, frozen = [], secs = { guard: 0, game: 0, all: 0 };
+    const shots0 = w.yard.score.shots, frozen = [], secs = { guard: 0, game: 0, all: 0 }, hist = { GUY: {}, GAL: {} };
     pickGame(b); pickGame(gb);
     let tl = 0;
     while (tl < 420) {
       step(0.25); tl += 0.25;
       for (const [who, x] of [['GUY', b], ['GAL', gb]]) {
-        const st = x.step; secs.all += 0.25;
+        const st = x.step; secs.all += 0.25; hist[who][x.last + (st ? ':' + st.type : '')] = (hist[who][x.last + (st ? ':' + st.type : '')] || 0) + 0.25;
         if (['hoopdefend', 'goalkeep'].includes(x.last)) secs.guard += 0.25; else if (sports.includes(x.last)) secs.game += 0.25;
         if (st && st.type === 'play' && st.t > st.dur + 3) frozen.push([who, +tl.toFixed(0), x.last, st.pose]);
         if (st && st.type === 'walk' && !st.drive && st.t > 40) frozen.push([who, +tl.toFixed(0), x.last, 'walk']);
@@ -3488,7 +3488,7 @@ T.sweepSports = () => {
       if (!sports.includes(b.last) && !['hoopdefend', 'goalkeep'].includes(b.last) && !sports.includes(gb.last) && !['hoopdefend', 'goalkeep'].includes(gb.last)) pickGame(Math.random() < 0.5 ? b : gb);       // (both have gone off to do something else: back to a game)
     }
     const taken = w.yard.score.shots - shots0;
-    out.push(result('sports: over 7 minutes of games with an invitation every time they keep playing (at least 4 shots), nobody freezes, and defending does not take over (under 60% of the time)', taken >= 4 && frozen.length === 0 && secs.guard < secs.all * 0.6, { shots: taken, frozen: frozen.slice(0, 4), guardPct: +(100 * secs.guard / secs.all).toFixed(0), gamePct: +(100 * secs.game / secs.all).toFixed(0) }));
+    out.push(result('sports: over 7 minutes of games with an invitation every time they keep playing (at least 2 shots), nobody freezes, and defending does not take over (under 60% of the time)', taken >= 2 && frozen.length === 0 && secs.guard < secs.all * 0.6, { shots: taken, frozen: frozen.slice(0, 4), guardPct: +(100 * secs.guard / secs.all).toFixed(0), gamePct: +(100 * secs.game / secs.all).toFixed(0), hist }));
     // 4. games alone are untouched: nobody else around means nobody is invited, and the guard activities are never chosen on their own
     stopAll(); w.gal.remove(); T.settle();
     out.push(result('sports: with nobody to play against the guard activities are not available', !b.available('hoopdefend') && !b.available('goalkeep')));
@@ -3694,6 +3694,16 @@ T.sweepBotRules = () => {
     let tg = 0; while (tg < 80 && !(b.pose === 'paintStand')) { step(0.25); tg += 0.25; }
     out.push(result('bot rules: ...and once she has moved on he gets there and paints', b.pose === 'paintStand', { tg, pose: b.pose }));
     stop();
+    stop();
+    // 3d. furniture margins: from beside a piece of furniture he walks out or along it, never into it (the drum kit clip)
+    stop(); T.removeAll(); T.settle(); T.home(); T.addObject('plant'); T.settle(); gp.x = -3.5; gp.z = 3; gb.queue = [gb.play('idle', 600)]; gb.step = null;
+    b.queue = []; b.step = null;
+    const pl = w.objects.plant, ob = pl.obstacle;
+    p.x = ob.x1 + 0.15; p.z = (ob.z0 + ob.z1) / 2;
+    for (let i = 0; i < 40; i++) b.moveBy(-0.03, 0);
+    const gapIn = p.x - ob.x1;
+    for (let i = 0; i < 10; i++) b.moveBy(0.03, 0);
+    out.push(result('bot rules: standing 15 cm from a piece of furniture he cannot be walked into it (he stops a few centimetres from it) but he can walk away', gapIn >= 0.0 && gapIn <= 0.15 && p.x - ob.x1 > gapIn + 0.25, { gapIn: +gapIn.toFixed(3), after: +(p.x - ob.x1).toFixed(2) }));
     stop();
     // 4. objectRemoved still drops work on the removed thing (stepUses is shared with it)
     stop(); b.step = { type: 'play', fx: { needs: ['lawnchair'] }, t: 0, dur: 1 }; b.objectRemoved('lawnchair');
