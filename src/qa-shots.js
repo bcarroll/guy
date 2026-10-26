@@ -119,6 +119,7 @@ export function install(T, h) {
         T.prep('takeorder');
         const r = window.brain.w.restaurant;
         r.headless = false; r.paused = true; r.clear();
+        T.seed(31);                                                       // (the dish and the way he sits come from the random numbers: the same ones whatever the set-up above used)
         const c = r.stage(state === 'eating' ? 'cooked' : state, m.id);
         if (!c) return { ok: false, why: 'could not stage the customer' };
         T.freeze();                                                       // nothing moves while the model loads
@@ -138,7 +139,7 @@ export function install(T, h) {
     add('room-main', 'rooms', async () => {
       await clean(41);
       for (const id of ['piano', 'bench', 'table', 'lamp', 'armchair', 'plant', 'guitar', 'easel', 'telescope', 'drums', 'coffeetable']) T.addObject(id);
-      T.freeze(); T.home(); window.guy.root.position.set(1.5, 0, 2);
+      T.freeze(); T.home(); window.guy.root.position.set(1.5, 0, 2); window.guy.root.visible = false;       // (the room is the picture: where he happens to be in his stride is not)
       T.frameRoom('main'); await settleFrames(3);
       return { data: capture() };
     });
@@ -179,7 +180,7 @@ export function install(T, h) {
         b.hangPainting();
         for (let k = 0; k < 400 && !(P.items.length > i && b.last !== 'hangpaint' && !b.carry); k++) window.sim(0.25);
       }
-      T.freeze(); T.home(); window.guy.root.position.set(1.5, 0, 2);
+      T.freeze(); T.home(); window.guy.root.position.set(1.5, 0, 2); window.guy.root.visible = false;       // (the paintings are the picture: where he happens to be in his stride is not)
       T.frameRoom('main'); await settleFrames(4);
       const data = capture();
       P.reset();

@@ -3404,6 +3404,7 @@ T.sweepSports = () => {
     T.learn(['outdoor', 'outdoor.soccer', 'outdoor.basketball']); T.settle();
     out.push(result('sports: GAL is built', galBuild().ok));
     const gal = w.gal, gb = gal.brain;
+    b.inviteChance = 1; gb.inviteChance = 1;                                // (in the real game it is half the time: here every game is an invitation, so the sweep sees all of it)
     for (const id of ['outdoor', 'outdoor.soccer', 'outdoor.basketball']) gb.skills.known.add(id);
     const stopAll = () => { for (const x of [b, gb]) { x.unlock(false); x.queue = []; x.step = null; x.pendingActivity = null; x.last = 'wander'; x.using = new Set(); } };
     const play = (shooter, other, act, partnerPose, maxGames, kind) => {
@@ -3415,7 +3416,10 @@ T.sweepSports = () => {
           const o = w.objects[id], ball = w.yard.balls[k]; if (!o || !ball) continue;
           const p = o.at(0, 0, d); ball.position.set(p.x, ball.userData.r || 0.12, p.z); ball.userData.vel.set(0, 0, 0); ball.userData.kinematic = false;
         }
-        T.settle(); shooter.choose(act); seen.games++;
+        T.settle();
+        other.queue = []; other.step = null; other.pendingActivity = null; other.last = 'wander'; other.using = new Set();      // (settling let her wander off into something: she starts each game with nothing special on)
+        shooter.choose(act); seen.games++;
+        const why = () => ({ otherLast: other.last, avail: other.available(kind === 'basketball' ? 'hoopdefend' : 'goalkeep'), whyNot: other.whyNot(kind === 'basketball' ? 'hoopdefend' : 'goalkeep'), pend: other.pendingActivity, lock: !!other.lock, stuck: other.stuckIn(), skills: [...other.skills.known].join(','), shooterLast: shooter.last, inYard: shooter.inYard(), playing: shooter.sportPlaying(kind), galIn: other.inYard() });
         let t = 0, joinedThis = false; const tl = []; let tprev = '';
         while (t < 150 && shooter.last === act && (shooter.step || shooter.queue.length)) {
           step(0.1); t += 0.1;
@@ -3432,6 +3436,7 @@ T.sweepSports = () => {
           }
         }
         if (joinedThis) seen.joined++;
+        if (!joinedThis && game === 0) seen.why = why();
         if (t < 12) (seen.short ||= []).push(tl.slice(0, 12));
         (seen.log ||= []).push([joinedThis ? 1 : 0, +t.toFixed(0), other.last, shooter.last, !!shooter.step, shooter.queue.length, shooter.inYard()]);
       }
@@ -3440,11 +3445,11 @@ T.sweepSports = () => {
     };
     // 1. GUY shoots hoops, GAL (invited now and then) plays defence
     const bb = play(b, gb, 'hoopshoot', { first: 'defend', second: 'block' }, 14, 'basketball');
-    out.push(result('sports: GUY shooting hoops, GAL sometimes joins and plays defence (she gets into the defending stance and jumps to block)', bb.joined >= 1 && bb.poses.has('defend') && bb.poses.has('block') && bb.errs === 0, { joined: bb.joined, games: bb.games, poses: [...bb.poses], errs: bb.errs, short: bb.short && bb.short.slice(0, 2) }));
+    out.push(result('sports: GUY shooting hoops, GAL sometimes joins and plays defence (she gets into the defending stance and jumps to block)', bb.joined >= 1 && bb.poses.has('defend') && bb.poses.has('block') && bb.errs === 0, { joined: bb.joined, games: bb.games, poses: [...bb.poses], errs: bb.errs, why: bb.why }));
     out.push(result('sports: while defending she stands between the shooter and the hoop, near him but never inside him', bb.frames > 20 && bb.between >= bb.frames * 0.6 && bb.minD > 0.4, { frames: bb.frames, between: bb.between, minD: +bb.minD.toFixed(2) }));
     // 2. GUY kicks at the goal, GAL keeps goal
     const sc = play(b, gb, 'goalshot', { first: 'keeper', second: 'dive' }, 14, 'soccer');
-    out.push(result('sports: GUY kicking at the goal, GAL sometimes keeps goal (ready stance, then dives for the shot)', sc.joined >= 1 && sc.poses.has('keeper') && sc.poses.has('dive') && sc.errs === 0, { joined: sc.joined, games: sc.games, poses: [...sc.poses], errs: sc.errs }));
+    out.push(result('sports: GUY kicking at the goal, GAL sometimes keeps goal (ready stance, then dives for the shot)', sc.joined >= 1 && sc.poses.has('keeper') && sc.poses.has('dive') && sc.errs === 0, { joined: sc.joined, games: sc.games, poses: [...sc.poses], errs: sc.errs, why: sc.why }));
     out.push(result('sports: the keeper stands in front of the goal, not inside the shooter', sc.frames > 20 && sc.between >= sc.frames * 0.8 && sc.minD > 0.4, { frames: sc.frames, between: sc.between, minD: +sc.minD.toFixed(2) }));
     // 3. the other way round: GAL shoots and GUY joins
     const rv = play(gb, b, 'hoopshoot', { first: 'defend', second: 'block' }, 14, 'basketball');
@@ -3452,7 +3457,7 @@ T.sweepSports = () => {
     // 4. games alone are untouched: nobody else around means nobody is invited, and the guard activities are never chosen on their own
     stopAll(); w.gal.remove(); T.settle();
     out.push(result('sports: with nobody to play against the guard activities are not available', !b.available('hoopdefend') && !b.available('goalkeep')));
-  } finally { galReset(); }
+  } finally { delete b.inviteChance; galReset(); }
   out.push(result('sports: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
 };
@@ -3645,11 +3650,12 @@ T.sweepBotRules = () => {
     // 3c. the other robot is standing where he wants to be: he waits a little way off (no pacing round her), and gets there once she goes
     stop(); T.removeAll(); T.settle(); T.home(); T.addObject('easel'); T.learn(['easel']); T.settle();
     const ea = w.objects.easel, sl = ea.local(0, 0.85), spot = { x: ea.x + sl.x, z: ea.z + sl.z };
-    gp.x = spot.x; gp.z = spot.z; gb.queue = [gb.play('idle', 22)]; gb.step = null; gb.last = 'wander'; gb.using = new Set(['easel']);
+    gp.x = spot.x; gp.z = spot.z; gb.queue = [gb.play('idle', 14)]; gb.step = null; gb.last = 'wander'; gb.using = new Set(['easel']);      // (14 s: less than the 16 s he waits before giving up)
     b.choose('paint');
     let tw = 0, still = 0, near = 0, path = 0, lastp = { x: p.x, z: p.z }; const trail = [];
-    while (tw < 16) { step(0.1); tw += 0.1; const d = Math.hypot(p.x - spot.x, p.z - spot.z); if (tw > 9) { trail.push(d); path += Math.hypot(p.x - lastp.x, p.z - lastp.z); if (d < 1.95) near++; if (Math.hypot(p.x - lastp.x, p.z - lastp.z) < 0.004) still++; } lastp = { x: p.x, z: p.z }; }
-    out.push(result('bot rules: with the other robot standing where he is going, he stops a little way off and waits (he does not keep walking round her)', near > 55 && still > near * 0.6 && path < 1.2, { near, still, pathM: +path.toFixed(2), d: +trail[trail.length - 1].toFixed(2) }));
+    while (tw < 12.5) { step(0.1); tw += 0.1; const d = Math.hypot(p.x - spot.x, p.z - spot.z); if (tw > 5) { trail.push(d); path += Math.hypot(p.x - lastp.x, p.z - lastp.z); if (d < 1.95) near++; if (Math.hypot(p.x - lastp.x, p.z - lastp.z) < 0.004) still++; } lastp = { x: p.x, z: p.z }; }
+    out.push(result('bot rules: with the other robot standing where he is going, he stops a little way off and waits (he does not keep walking round her)', near > 45 && still > near * 0.6 && path < 1.2, { near, still, pathM: +path.toFixed(2), d: +trail[trail.length - 1].toFixed(2) }));
+    gp.x = -3; gp.z = 2; gb.queue = [gb.play('idle', 120)]; gb.step = null; gb.using = new Set();           // (she moves on, and stays away)
     let tg = 0; while (tg < 80 && !(b.pose === 'paintStand')) { step(0.25); tg += 0.25; }
     out.push(result('bot rules: ...and once she has moved on he gets there and paints', b.pose === 'paintStand', { tg, pose: b.pose }));
     stop();

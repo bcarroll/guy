@@ -595,8 +595,8 @@ export function installYard(Brain, POSES, H) {
         type: 'plan',
         fn: () => {
           const o = this.other, act = kind === 'basketball' ? 'hoopdefend' : 'goalkeep';
-          if (!o || o.lock || o.stuckIn() || o.pendingActivity || Math.random() > 0.5) return [];
-          if (!['wander', 'stretch', 'wave', 'sit', 'slouch', 'yardsit', 'birdbath', 'skyswitch', 'yardpoke', 'plant', 'lamp', 'mood', 'dance', 'dancemoves', 'read'].includes(o.last)) return [];
+          if (!o || o.lock || o.stuckIn() || o.pendingActivity || Math.random() > (this.inviteChance ?? 0.5)) return [];      // (half the time; the QA run sets inviteChance to 1)
+          if (!['wander', 'stretch', 'wave', 'sit', 'slouch', 'yardsit', 'birdbath', 'skyswitch', 'yardpoke', 'plant', 'lamp', 'mood', 'dance', 'dancemoves', 'read', 'hoopdribble', 'soccertoss', 'hoopshoot', 'goalshot'].includes(o.last)) return [];      // (a game of her own, on her own, is dropped to play with him)
           if (!o.available(act)) return [];
           o.skip(true); o.pendingActivity = act;
           return [];
