@@ -10,6 +10,7 @@ import { installWorkshop } from './workbrain.js';
 import { installYard, YARD_ACTS } from './yardbrain.js';
 import { installRestaurant, REST_OBJECTS, REST_JOBS } from './restbrain.js';
 import { installApproach } from './approach.js';
+import { installArrange } from './arrange.js';
 import { installPaintings } from './paintbrain.js';
 
 const REST_ACTS = ['takepay', 'serve', 'takeorder', 'cook', 'rwait'];
@@ -690,6 +691,7 @@ export class Brain {
           this.play('piano', song.seconds + 1.5, { piano: true, song }), this.play('idle', 1)];
       },
       sitpiano: () => {
+      ...this.arrangeActivities(),                                  // furnishing the house at the workstation (arrange.js)
         const song = this.pickSong();
         return [`sitting at the piano playing "${song.name}"`, ...this.sitSteps('pianoSit', song.seconds + 1.5, { piano: true, song })];
       },
@@ -1856,6 +1858,7 @@ export class Brain {
     if (!skill.filter((k) => !(k === 'stereo' && this.music)).every((k) => this.skills.has(k))) return false;
     if (act === 'jamguitar') { if (!this.music || !this.skills.has('guitar')) return false; }
     if (['guitar', 'riff', 'jamguitar', 'sitguitar'].includes(act) && !this.freeGuitar()) return false;           // (either guitar, if the other robot is not playing it)
+    if (act === 'arrange') return !!this.obj('workstation') && !!this.arrangePlan;                // (only when he wants something, or somebody asks: arrange.js)
     if (act === 'plink' && this.skills.has('piano')) return false;   // once he has had lessons he stops poking
     // without lessons he can only bang, scribble and peer the wrong way; once taught he stops
     if (act === 'bang' && ['drums', 'drums.solo', 'drums.band'].some((k) => this.skills.has(k))) return false;
@@ -1927,6 +1930,7 @@ export class Brain {
   busyElsewhere(names) { const o = this.other; return !!o && names.some((n) => (o.using && o.using.has(n)) || o.pushing(n)); }
   // Is he pushing `name` along now, or about to (a leg of a push is still in his queue)?
   pushing(name) { const st = (x) => x && x.push && x.push.obj && x.push.obj.name === name; return st(this.step) || this.queue.some(st); }
+    if (act === 'arrange') return ['workstation'];                 // one at the screen at a time
 
   ballRemoved() {
     if (this.lock && this.lock.name === 'ball') this.unlock(false);
@@ -2108,6 +2112,7 @@ export class Brain {
     // Where it happens: in the room its object stands in. The steps are planned for that room's floor; if he is somewhere else he goes
     // there first (out through the door of the room he is in, and in through the other's). In a room with its door locked on him he
     // can only do what can be done in there (available()), so no trip is needed.
+    if (!name && !this.restStays()) name = this.arrangeNext();         // something he wants is missing: he orders it at the workstation (arrange.js)
     const where = this.roomForAct(name), here = this.hereId();
     this.actRoom = where;
     if (ACT_OBJ[name]) this.stayRoom = where;                      // (done at an object in that room: he stays there afterwards)
@@ -3135,3 +3140,4 @@ installApproach(Brain);                                      // stations are use
 installPaintings(Brain);
 
 export { ROOM, basePose, sitLegs, makeGrid, findPath, cellBlocked, MAIN_FRAME, INFLATE };
+installArrange(Brain, { pick });

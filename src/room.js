@@ -1572,6 +1572,13 @@ export function buildRoom(scene) {
       const d = doors[id], p = WALL[d.wall].at(lat, 0), nv = inwardOf(d.wall);
       return { x: p.x - nv.x * n, z: p.z - nv.z * n };
     },
+    // The middle of a room (a new thing is put near it when somebody picks that room for it), or null if there is no such room.
+    roomSpot(id) {
+      if (id === 'main' || !id) return { x: 0, z: 0.1 };
+      if (!doors[id]) return null;
+      const { n } = world.shellSize(id), p = world.shellPoint(id, n * 0.5, 0);
+      return { x: p.x, z: p.z };
+    },
     shellRot(id) {
       const nv = inwardOf(doors[id].wall);
       return ((Math.round(Math.atan2(nv.x, nv.z) / (Math.PI / 2)) % 4) + 4) % 4;
@@ -1657,7 +1664,7 @@ export function buildRoom(scene) {
       return null;
     },
     // Put a removed object back (its old spot if that is free).
-    restoreObject(name, avoid) {
+    restoreObject(name, avoid, where = null) {
       const o = world.removed[name];
       if (!o) return false;
       if (o.decor) {
@@ -1671,7 +1678,7 @@ export function buildRoom(scene) {
       }
       // its old place, if it still fits there and neither blocks someone's standing spot nor loses its own
       const homeOk = fits(o, o.home.x, o.home.z) && world.ownStandClear(o, o.home.x, o.home.z) && !world.onSomeonesStand(o, o.home.x, o.home.z);
-      const spot = homeOk ? o.home : world.findSpot(o, o.home, avoid);
+      const spot = homeOk && !where ? o.home : world.findSpot(o, where || o.home, avoid);       // (`where`: a room somebody chose for it)
       if (!spot) return false;
       delete world.removed[name];
       room.add(o.group);
@@ -1758,7 +1765,7 @@ export function buildRoom(scene) {
       return world.addInstance(kind, null, null, true, { x: p.x, z: p.z });
     },
     // Objects that do not exist yet but can be added from the Catalog.
-    addNew(id, avoid) {
+    addNew(id, avoid, where = null) {
       if (DECOR_NEW[id]) {
         if (decor[id]) return false;
         const d = DECOR_NEW[id]();
@@ -1771,7 +1778,8 @@ export function buildRoom(scene) {
       const entry = NEW_OBJECTS[id];
       if (!entry || objects[id]) return false;
       // a preferred spot may be worked out when the object is added (an added room's furniture goes where its room is)
-      const pref = typeof entry[1] === 'function' ? entry[1](world) : entry[1];
+      const own = typeof entry[1] === 'function' ? entry[1](world) : entry[1];
+      const pref = where ? { x: where.x, z: where.z } : own;          // (`where`: a room somebody chose for it)
       if (!pref) return false;
       const o = entry[0]();
       if (pref.rot !== undefined) { o.rot = pref.rot; o.group.rotation.y = o.yaw; }

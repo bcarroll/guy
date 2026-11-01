@@ -125,6 +125,7 @@ export const MANIFEST = {
     books: { alias: true }, putback: { internal: true }, putguitar: { internal: true }, dropball: { internal: true }, lighton: { internal: true }, yardtidy: { internal: true, objects: ['shed', 'lawnchair'], room: 'backyard' },
     hangpaint: { objects: ['easel'], painted: true, max: 220, touches: ['easel'] }, putcanvas: { internal: true },      // hanging a painting (sweepPaintings tests it in depth)
     learn: { internal: true },      // using the Learning Workstation: tested by sweepWorkstation
+    arrange: { internal: true },    // ordering things into / out of any room at the Learning Workstation: tested by sweepArrange
     buildbot: { internal: true }, bandjam: { internal: true }, bandplay: { internal: true }, orderbuild: { internal: true },      // GUY and GAL: tested by sweepGal
     visit: { internal: true }, leave: { internal: true }, stuck: { internal: true }, rwait: { internal: true },      // rwait: waiting by the till for customers (tested by sweepRestaurant)
          // through the door of an added room and back: tested by sweepVisit
@@ -3804,6 +3805,7 @@ T.sweepWorkstation = () => {
     skillsOf().known.clear(); skillsOf().learn('ball');
     const shelfBooks = w.objects.shelf.books.length;
     window.__guyOpenMenu('workstation');
+  report.arrange = S(T.sweepArrange);
     const mb = [...document.getElementById('menu').querySelectorAll('[data-act="interact"]')].map((x) => x.textContent).join('|');
     document.getElementById('menu').hidden = true;
     out.push(result('workstation: its long-press menu offers "Use Workstation"', /Use Workstation/.test(mb), { mb }));
@@ -3811,6 +3813,97 @@ T.sweepWorkstation = () => {
     b.queue = []; b.step = null;
     const r = b.interact('workstation');
     const t = runUntil(() => ws.isOpen(), 60);
+// ---- The view dropdown: static / follow / 3rd person / 1st person ----
+T.sweepViews = async () => {
+  const frames = (n = 4) => new Promise((r) => { let k = 0; const t0 = performance.now(); const f = () => { if (++k >= n || performance.now() - t0 > 4000) r(); else requestAnimationFrame(f); }; requestAnimationFrame(f); });          // (the camera moves in the render loop, not in sim: wait for real frames)
+  const out = [], base = errors.length, sel = document.getElementById('view-sel'), cam = window.__camera, b = B();
+  const set = (v) => { sel.value = v; sel.dispatchEvent(new Event('change')); };
+  const d = (p) => Math.hypot(p.x - b.g.root.position.x, p.z - b.g.root.position.z);
+  try {
+    out.push(result('views: the dropdown offers static, follow, 3rd person and 1st person', ['static', 'follow', 'third', 'first'].every((v) => [...sel.options].some((o) => o.value === v))));
+    set('static'); const p0 = cam.position.clone(); step(3); await frames();
+    out.push(result('views: static: the camera stays where it was and Follow is off', cam.position.distanceTo(p0) < 1e-6 && window.__ui.view() === 'static' && !document.getElementById('follow-btn').classList.contains('on')));
+    set('third'); step(3); await frames();
+    const dist3 = d(cam.position);
+    out.push(result('views: 3rd person: the camera is a few metres behind and above him, and Follow shows on', dist3 > 2 && dist3 < 4.5 && cam.position.y > 1.5 && document.getElementById('follow-btn').classList.contains('on'), { dist3, y: cam.position.y }));
+    out.push(result('views: 3rd person: the user keeps the controls (orbit, zoom, pan stay enabled)', window.__ui.controlsEnabled() === true));
+    set('first'); step(3); await frames();
+    const fov0 = cam.fov; document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: 100, bubbles: true })); await frames(2);
+    out.push(result('views: 1st person: the user keeps the controls: the wheel zooms the lens, drag looks around', window.__ui.controlsEnabled() === true && cam.fov > fov0, { fov0, fov: cam.fov }));
+    cam.fov = fov0; cam.updateProjectionMatrix();
+    const head = b.g.root.position.clone(); b.g.bones.Head.getWorldPosition(head);
+    out.push(result('views: 1st person: the camera is at his head', cam.position.distanceTo(head) < 0.6 && cam.near < 0.1, { dist: cam.position.distanceTo(head), near: cam.near }));
+    set('static'); await frames();
+    out.push(result('views: back to static: the camera is back where it was and can be orbited again', cam.position.distanceTo(p0) < 1e-3 && cam.near >= 0.1 && window.__ui.controlsEnabled(), { moved: cam.position.distanceTo(p0) }));
+    const key = (k) => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+    key('f'); const kOn = window.__ui.view(); key('f');
+    out.push(result('views: the F key switches between static and the last moving view', kOn !== 'static' && window.__ui.view() === 'static', { kOn }));
+  } catch (e) { out.push(result('views: sweep ran without throwing', false, { error: String(e && e.stack || e).slice(0, 400) })); }
+  set('static');
+  out.push(result('views: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+// ---- Furnishing the house at the workstation: GUY orders things into and out of the room he picks (src/arrange.js) ----
+T.sweepArrange = () => {
+  const out = [], base = errors.length, w = W(), b = B(), ops = w.catalogOps;
+  const gone = () => { if (w.objects.workstation) { w.removeObject('workstation'); b.objectRemoved('workstation'); } delete w.removed.workstation; };
+  const run = (until, max = 90) => { let t = 0; while (t < max && !until()) { step(0.25); t += 0.25; } return t; };
+  try {
+    galReset(); T.settle(); T.resetRooms(); T.removeAll(); T.forget(); T.home(); T.settle(); gone();
+    const wasDev = dev.all; dev.all = true; w.addNew('workstation', null); dev.all = wasDev;
+    out.push(result('arrange: the workstation is connected to the Catalog (ops)', !!ops && !!w.objects.workstation && ops.status('guitar') !== 'unknown'));
+    if (!ops || !w.objects.workstation) throw new Error('no workstation');
+    // 1. he knows the guitar, there is none in the room: he wants one
+    skillsOf().known.clear(); skillsOf().learn('guitar');
+    b.lastWish = -999; b.wishFails = {};
+    const wish = b.arrangeWish();
+    out.push(result('arrange: knowing the guitar with none in the room, he wants one from the Catalog', !!wish && wish.act === 'arrange' && wish.add[0].id === 'guitar', { wish }));
+    // 2. an order: he walks to the screen, taps it and the guitar is there
+    b.queue = []; b.step = null;
+    const r = b.arrangeOrder({ add: [{ id: 'guitar', room: 'main' }] });
+    const t = run(() => !!w.objects.guitar);
+    const sp = w.objects.workstation.screenPoint(), gp = b.g.root.position;
+    out.push(result('arrange: asked to, he walks up to the workstation, taps the screen and the guitar appears in the room', r.ok && !!w.objects.guitar && Math.hypot(sp.x - gp.x, sp.z - gp.z) < 1.6, { msg: r.message, t, d: Math.hypot(sp.x - gp.x, sp.z - gp.z) }));
+    // 3. he wants to sit and play: no chair, so he orders one out of storage first
+    w.stock.items.builtchair = 1; delete w.stock.items.metalchair;
+    for (const id of ['armchair', 'armchair2', 'chair', 'chair2']) if (w.objects[id]) { w.removeObject(id); b.objectRemoved(id); }
+    b.lastWish = -999; b.wishFails = {};
+    const chairWish = b.arrangeWish();
+    out.push(result('arrange: with no free chair he wants one, and takes the chair he built out of storage before anything else', !!chairWish && chairWish.add && chairWish.add[0].id === 'builtchair', { chairWish, open: b.openChairs().length }));
+    b.queue = []; b.step = null;
+    b.arrangeOrder({ add: [{ id: 'builtchair', room: 'main' }] });
+    run(() => Object.values(w.objects).some((o) => o.kind === 'builtchair'));
+    out.push(result('arrange: the chair is in the room, out of storage, and he can sit on it', Object.values(w.objects).some((o) => o.kind === 'builtchair') && !w.stock.items.builtchair && b.openChairs().length > 0, { stock: w.stock.items, open: b.openChairs().length }));
+    // 4. any room he chooses
+    if (!w.rooms.isAdded('workshop')) { unlockRoom('workshop'); w.rooms.add('workshop'); }
+    const addedWork = w.rooms.isAdded('workshop');
+    w.removeObject('guitar'); b.objectRemoved('guitar');
+    b.queue = []; b.step = null;
+    b.arrangeOrder({ add: [{ id: 'guitar', room: 'workshop' }] });
+    run(() => !!w.objects.guitar);
+    const g = w.objects.guitar;
+    out.push(result('arrange: he can put it in another room: the guitar is in the Workshop', addedWork && !!g && w.roomIdAt(g.x, g.z) === 'workshop', { room: g && w.roomIdAt(g.x, g.z) }));
+    // 5. and take things out again
+    b.queue = []; b.step = null;
+    b.arrangeOrder({ remove: ['guitar'] });
+    run(() => !w.objects.guitar);
+    out.push(result('arrange: he can also order a thing out of the room: the guitar is gone', !w.objects.guitar));
+    // 5b. on his own: he wants to play, the guitar is missing, and left alone he goes to the workstation and orders it
+    b.queue = []; b.step = null; b.pendingActivity = null; b.lastWish = -999; b.wishFails = {}; T.settle();
+    let tOwn = 0; while (tOwn < 240 && !w.objects.guitar) { b.lastWish = -999; step(0.5); tOwn += 0.5; if (tOwn > 5 && !b.step && !b.queue.length) b.choose(); }
+    out.push(result('arrange: left alone with the skill and no guitar, he goes to the workstation by himself and orders one', !!w.objects.guitar, { tOwn }));
+    if (w.objects.guitar) { w.removeObject('guitar'); b.objectRemoved('guitar'); }
+    // 6. nothing to order: no wish, and with no workstation an order is refused in words
+    skillsOf().known.clear(); b.lastWish = -999; b.wishFails = {};
+    out.push(result('arrange: without the skill he has no wish for the guitar', !b.arrangeWish() || b.arrangeWish().key !== 'guitar'));
+    gone();
+    const r6 = b.arrangeOrder({ add: [{ id: 'guitar', room: 'main' }] });
+    out.push(result('arrange: with no workstation the order is refused in words', !r6.ok && /workstation/.test(r6.message), { r6 }));
+  } catch (e) { if (!/no workstation/.test(e.message)) out.push(result('arrange: sweep ran without throwing', false, { error: String(e && e.stack || e).slice(0, 400) })); }
+  gone(); delete w.stock.items.builtchair; T.resetRooms();
+  out.push(result('arrange: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
     const sp = m.screenPoint(), gp = G().root.position;
     out.push(result('workstation: asked to use it, GUY walks up, taps the screen and the panel opens for GUY', r.ok && ws.isOpen() && /GUY/.test(panel.querySelector('.who').textContent) && Math.hypot(sp.x - gp.x, sp.z - gp.z) < 1.6, { msg: r.message, t, d: Math.hypot(sp.x - gp.x, sp.z - gp.z) }));
     const rows = [...panel.querySelectorAll('.row')];
@@ -4077,7 +4170,7 @@ T.sweepVoice = async () => {
 installCharacters(T, { result, summarise });
 installAudio(T, { result, summarise });
 installShots(T, { result, summarise });
-T.runAsync = async (which = ['sweepRigs', 'sweepCustomers', 'sweepAudio', 'sweepGuitarSongs', 'sweepScreenLock', 'sweepVoice']) => {
+T.runAsync = async (which = ['sweepRigs', 'sweepCustomers', 'sweepAudio', 'sweepGuitarSongs', 'sweepScreenLock', 'sweepViews', 'sweepVoice']) => {
   const report = {};
   for (const k of which) { report[k.replace(/^sweep/, '').toLowerCase()] = summarise(await T[k]()); T.resetRooms(); }
   return report;

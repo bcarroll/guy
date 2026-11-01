@@ -166,33 +166,65 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
     for (const id of extras.albums || []) { const def = ALBUM_CATALOG.find((a) => a.id === id); if (def && (!def.premium || dev.all)) addAlbumDef(def); }
   }
 
-  function addObject(d) {
+  function addObject(d, where = null) {
     const st = objectStatus(d);
     let ok = false;
-    if (st === 'removed') ok = d.ball ? world.restoreBall(avoid()) : world.restoreObject(d.id, avoid());
+    if (st === 'removed') ok = d.ball ? world.restoreBall(avoid()) : world.restoreObject(d.id, avoid(), where);
     else if (st === 'available') {
-      ok = world.addNew(d.id, avoid());
+      ok = world.addNew(d.id, avoid(), where);
       if (ok && d.book) { const def = BOOK_CATALOG.find((b) => b.id === d.book); if (def) addBookDef(def); }
     }
     notify(ok ? `Added ${d.name}${st === 'available' && d.book ? ' and its book' : ''}` : `No room for ${d.name} right now`);
     save();
     render();
+    return ok;
   }
 
-  function addBuilt(d) {
-    const name = world.addInstance(d.id, avoid());
+  function addBuilt(d, where = null) {
+    const name = world.addInstance(d.id, avoid(), null, false, where);
     notify(name ? `Added a ${d.name} from storage` : stored(d.id) ? `No room for a ${d.name} right now` : `There is no ${d.name} in storage yet`);
     save();
     render();
+    return !!name;
   }
 
   function removeObject(d) {
-    if (!inRoom(d.id)) return;
+    if (!inRoom(d.id)) return false;
     remove(d.id);
     notify(`Took the ${d.name} out of the room`);
     save();
     render();
+    return true;
   }
+
+  // What the robots do at the Learning Workstation (arrange.js): the same adding and removing as the Catalog, by object id. `where` is
+  // { x, z }, a spot in the room they chose. A built thing (a chair GUY made) comes out of storage; anything else out of the catalog.
+  const byId = (id) => OBJECT_CATALOG.find((d) => d.id === id);
+  const ops = {
+    // 'inroom' | 'removed' | 'available' | 'stored' (built, waiting in storage) | 'locked' | 'unlisted' (a room or skill it needs is missing) | 'unknown'
+    status(id) {
+      const d = byId(id);
+      if (!d) return 'unknown';
+      if (d.built) return stored(id) ? 'stored' : builtCount(id) ? 'inroom' : 'unlisted';
+      if (!live(d)) return inRoom(id) ? 'inroom' : 'unlisted';
+      return objectStatus(d);
+    },
+    add(id, where = null) {
+      const d = byId(id), st = d && ops.status(id);
+      return !d ? false : d.built ? addBuilt(d, where) : st === 'removed' || st === 'available' ? addObject(d, where) : false;
+    },
+    // takes one away: the thing itself, or (for something GUY built) the first one standing in a room, which goes back into storage
+    remove(id) {
+      const d = byId(id);
+      if (!d) return false;
+      if (!d.built) return removeObject(d);
+      const o = Object.values(world.objects).find((x) => x.kind === id);
+      if (!o) return false;
+      remove(o.name);
+      notify(`Put the ${d.name} back in storage`);
+      return true;
+    },
+  };
 
   function addRoom(r) {
     const res = rooms.add(r.id);
@@ -346,5 +378,5 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
   root.addEventListener('pointerdown', (e) => { if (e.target === root) close(); });
   addEventListener('keydown', (e) => { if (e.key === 'Escape' && !root.hidden) close(); });
 
-  return { open() { render(); root.hidden = false; }, close, refresh: render, save, restoreExtras, isOpen: () => !root.hidden };
+  return { open() { render(); root.hidden = false; }, close, refresh: render, save, restoreExtras, ops, isOpen: () => !root.hidden };
 }

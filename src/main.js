@@ -192,6 +192,7 @@ const machineUI = initMachine({
   notify: (msg) => { showToast(msg); renderSkills(); sfx('pop'); },
   remove: (id) => removeById(id),
 });
+world.catalogOps = machineUI.ops;                    // GUY and GAL add and remove things at the workstation through the same code (arrange.js)
 // Where everything was last time: the catalog's additions first, then every piece back in its place (and what the user took
 // out), then the door of any added room (anything standing in its way comes out), then start saving changes as they happen.
 const layout = initLayout({ world, guy, remove: (id) => removeById(id), persist: !params.has('fresh') });
@@ -232,11 +233,32 @@ const togglePanel = () => { panel.hidden = !panel.hidden; };
 document.getElementById('skills-btn').addEventListener('click', togglePanel);
 addEventListener('keydown', (e) => { if (e.key === 'k' || e.key === 'K') togglePanel(); });
 
-let follow = params.has('follow');
-const followBtn = document.getElementById('follow-btn');
-const toggleFollow = () => { follow = !follow; followBtn.classList.toggle('on', follow); };
-followBtn.classList.toggle('on', follow);
+// ---- the view: the static camera you orbit yourself, Follow (the orbit centre trails GUY), 3rd person (a camera behind him) or 1st person
+// (through his eyes). The dropdown picks it; the Follow button / F key switches between the static view and the chosen one. ----
+const viewSel = document.getElementById('view-sel'), followBtn = document.getElementById('follow-btn');
+const EYE_R = 0.05;                                   // 1st person: the orbit radius round the eyes (too small to see, so dragging turns the head)
+let rideFresh = true, userRode = false, view = 'static', lastMoving = 'follow', follow = false;
+const camSaved = { pos: new THREE.Vector3(), target: new THREE.Vector3(), near: camera.near, fov: camera.fov, ctl: null };
+const setView = (v, save = true) => {
+  if (!['static', 'follow', 'third', 'first'].includes(v)) v = 'static';
+  const was = view, ride = (x) => x === 'third' || x === 'first';
+  if (!ride(was) && ride(v)) { camSaved.pos.copy(camera.position); camSaved.target.copy(controls.target); camSaved.near = camera.near; camSaved.fov = camera.fov; camSaved.ctl = { min: controls.minDistance, max: controls.maxDistance, pan: controls.enablePan, polar: controls.maxPolarAngle }; rideFresh = true; userRode = false; }
+  if (ride(was) && !ride(v)) { camera.position.copy(camSaved.pos); controls.target.copy(camSaved.target); camera.fov = camSaved.fov; Object.assign(controls, { minDistance: camSaved.ctl.min, maxDistance: camSaved.ctl.max, enablePan: camSaved.ctl.pan, maxPolarAngle: camSaved.ctl.polar }); controls.enabled = screenLock.cameraOk(); controls.update(); }
+  if (v === 'first') Object.assign(controls, { minDistance: EYE_R, maxDistance: EYE_R, enablePan: false, maxPolarAngle: Math.PI - 0.05 });      // (the wheel zooms the lens instead; looking up is allowed)
+  else if (v === 'third' && was === 'first') Object.assign(controls, { minDistance: camSaved.ctl.min, maxDistance: camSaved.ctl.max, enablePan: camSaved.ctl.pan, maxPolarAngle: camSaved.ctl.polar });
+  camera.near = v === 'first' ? 0.05 : camSaved.near; camera.updateProjectionMatrix();
+  view = v; follow = v === 'follow'; if (v !== 'static') lastMoving = v;
+  viewSel.value = v; followBtn.classList.toggle('on', v !== 'static');
+  if (save && !params.has('fresh')) { try { localStorage.setItem('guy.view.v1', v); } catch { /* no storage */ } }
+};
+const toggleFollow = () => setView(view === 'static' ? lastMoving : 'static');
+viewSel.addEventListener('change', () => setView(viewSel.value));
 followBtn.addEventListener('click', toggleFollow);
+{
+  let saved = 'static';
+  try { saved = localStorage.getItem('guy.view.v1') || 'static'; } catch { /* no storage */ }
+  setView(params.has('follow') ? 'follow' : params.has('fresh') ? 'static' : saved, false);
+}
 const nextActivity = () => { brain.unlock(false); brain.skip(); };      // Next also lets go of a lock: it is the user telling him to move on
 document.getElementById('skip-btn').addEventListener('click', nextActivity);
 addEventListener('keydown', (e) => {
@@ -824,7 +846,8 @@ canvas.addEventListener('pointerup', (e) => {
 canvas.addEventListener('pointerup', endPress);
 canvas.addEventListener('pointercancel', endPress);
 
-window.__ui = { controlsEnabled: () => controls.enabled, pick, floorAt, get pending() { return pending; }, get drag() { return drag; } };
+window.__camera = camera;
+window.__ui = { view: () => view, controlsEnabled: () => controls.enabled, pick, floorAt, get pending() { return pending; }, get drag() { return drag; } };
 
 // Debug helper: fast-forward the simulation without rendering (window.sim(seconds)).
 window.sim = (sec, dt = 1 / 30) => {
@@ -836,6 +859,42 @@ window.sim = (sec, dt = 1 / 30) => {
   if (follow) { controls.target.copy(guy.pos).setY(1.1); controls.update(); }
 };
 
+// 3rd / 1st person: the camera rides with GUY, and the user keeps the controls. 3rd person: the orbit centre sticks to his chest and the
+// camera keeps the offset the user gave it (drag = orbit, scroll = zoom, right-drag / two fingers = pan); until the user touches it, it
+// swings round behind him as he turns. 1st person: the camera sits at his eyes; drag looks around, scroll zooms (field of view).
+const rideDir = new THREE.Vector3(0, 0, 1), rideGoal = new THREE.Vector3(), headAt = new THREE.Vector3(), chest = new THREE.Vector3();
+const rideOff = new THREE.Vector3(0, 0.9, -3.2), ridePan = new THREE.Vector3(), lookDir = new THREE.Vector3(0, 0, 1);
+controls.addEventListener('start', () => { if (view === 'third' || view === 'first') userRode = true; });
+renderer.domElement.addEventListener('wheel', (e) => {
+  if (view !== 'first') return;
+  camera.fov = THREE.MathUtils.clamp(camera.fov * (1 + Math.sign(e.deltaY) * 0.08), 20, 90); camera.updateProjectionMatrix();
+}, { passive: true });
+function rideCamera(dt) {
+  const yaw = guy.root.rotation.y, fwd = rideGoal.set(Math.sin(yaw), 0, Math.cos(yaw));
+  rideDir.lerp(fwd, Math.min(1, dt * 3)).normalize();
+  controls.enabled = screenLock.cameraOk();
+  if (view === 'first') {
+    const b = guy.bones && guy.bones.Head;
+    if (b) b.getWorldPosition(headAt); else headAt.copy(guy.pos).setY(1.6);
+    headAt.addScaledVector(rideDir, 0.3).y += 0.14;
+    if (rideFresh || !userRode) lookDir.copy(rideDir);
+    rideFresh = false;
+    controls.target.copy(headAt).addScaledVector(lookDir, EYE_R); camera.position.copy(headAt);
+    controls.update();
+    lookDir.copy(controls.target).sub(camera.position).normalize();
+  } else {
+    chest.copy(guy.pos).setY(1.2);
+    if (rideFresh) { rideOff.set(-rideDir.x * 3.2, 0.9, -rideDir.z * 3.2); ridePan.set(0, 0, 0); rideFresh = false; }
+    else if (!userRode) {                                  // untouched: swing round behind him
+      const len = Math.hypot(rideOff.x, rideOff.z) || 1, a = Math.atan2(rideOff.x, rideOff.z);
+      let d = Math.atan2(-rideDir.x, -rideDir.z) - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
+      rideOff.x = Math.sin(a + d * Math.min(1, dt * 1.5)) * len; rideOff.z = Math.cos(a + d * Math.min(1, dt * 1.5)) * len;
+    }
+    controls.target.copy(chest).add(ridePan); camera.position.copy(controls.target).add(rideOff);
+    controls.update();
+    rideOff.copy(camera.position).sub(controls.target); ridePan.copy(controls.target).sub(chest);
+  }
+}
 const clock = new THREE.Clock();
 const camGoal = new THREE.Vector3();
 renderer.setAnimationLoop(() => {
@@ -857,7 +916,8 @@ renderer.setAnimationLoop(() => {
     controls.target.lerp(camGoal, 0.05);
   }
   if (!screenLock.cameraOk()) controls.enabled = false;      // 'on' freezes the camera too
-  controls.update();
+  if ((view === 'third' || view === 'first') && guy.loaded) rideCamera(dt);      // (the camera rides with him, and the user can still orbit, zoom and pan: rideCamera runs the controls)
+  else controls.update();
   renderer.render(scene, camera);
 });
 
