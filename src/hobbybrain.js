@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { Q } from './guy.js';
 import { drumHit, TRACKS } from './audio.js';
 import { sfx, drag as sfxDrag } from './sfx.js';
-import { drumStep, handFor, polyPoint, paintPlan, makeStick, makeBrush, makePalette, DRUM_STYLE_BY_TRACK } from './hobbies.js';
+import { drumStep, handFor, polyPoint, paintPlan, makeStick, makeBrush, makePalette, DRUM_STYLE_BY_TRACK, DRUM_BOOK_STYLES } from './hobbies.js';
 
 const UPV = new THREE.Vector3(0, 1, 0);
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -82,7 +82,7 @@ export function installHobbies(Brain, POSES, H) {
       });
       return {
         bang: () => drumSteps('banging on the drums', { style: 'bang', bpm: 150 }, rand(12, 18)),
-        drums: () => drumSteps('playing the drums', { style: pick(['rock', 'rock', 'soft', 'march']), bpm: pick([92, 100, 108]) }, rand(24, 34)),
+        drums: () => drumSteps('playing the drums', { style: pick(DRUM_BOOK_STYLES), bpm: pick([92, 100, 108]) }, rand(24, 34)),
         drumsolo: () => drumSteps('playing a drum solo', { style: 'solo', bpm: 112 }, rand(28, 38)),
         jamdrums: () => drumSteps(`drumming along with ${this.nowPlaying().title}`, { style: 'jam', sync: true }, rand(32, 46)),
         scribble: () => paintSteps('scribbling on the canvas with a finger', 'scribble', true),

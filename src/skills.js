@@ -36,7 +36,7 @@ export const BOOK_CATALOG = [
     blurb: 'ballroom waltz and swing dancing', requires: { object: 'table' }, desc: 'A turning waltz hold and a bouncy swing, both in time with the music.' },
   // ---- drum kit ----
   { id: 'drumming', title: 'Drumming for Robots', teaches: 'drums', color: 0xc0392b, thick: 0.055, height: 0.3,
-    blurb: 'how to keep a steady drum beat', requires: { object: 'drums' }, desc: 'Sit at the kit and keep a steady beat.' },
+    blurb: 'how to keep a steady drum beat', requires: { object: 'drums' }, desc: 'Sit at the kit and keep a steady beat: rock, soft, march, half-time ballad, bossa nova, reggae and funk grooves.' },
   { id: 'drumsolo', title: 'Fills & Solos', teaches: 'drums.solo', color: 0x8e44ad, thick: 0.05, height: 0.31,
     blurb: 'drum fills and solos', requires: { object: 'drums' }, desc: 'Tom rolls, cymbal crashes and showing off.' },
   { id: 'drumband', title: 'Playing in the Band', teaches: 'drums.band', color: 0x16a085, thick: 0.06, height: 0.32,

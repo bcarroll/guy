@@ -8,6 +8,7 @@
 // activity, add it to MANIFEST (and to .claude/skills/test-guy-game/assets.md). See that skill for the workflow.
 import { OBJECT_CATALOG } from './machine.js';
 import { BOOK_CATALOG, SKILL_INFO, TIMING_SKILLS } from './skills.js';
+import { drumStep, DRUM_BOOK_STYLES, DRUM_STYLES } from './hobbies.js';
 import { BAND } from './gal.js';
 import { wants } from './needs.js';
 import { ROOM_CATALOG } from './rooms.js';
@@ -131,6 +132,8 @@ export const MANIFEST = {
          // through the door of an added room and back: tested by sweepVisit
   },
   // what to do after reading each book: an activity that should now be possible
+  // the grooves the drumming book teaches (`drums` picks one per session): every one must keep time in drumStep (sweepDrumRhythms)
+  drumRhythms: { book: 'drumming', styles: ['rock', 'soft', 'march', 'halftime', 'bossa', 'reggae', 'funk'] },
   books: { stereo: { then: 'dance' }, piano: { then: 'piano' }, ball: { then: 'dribble' }, lighting: { then: 'mood' }, piano2: { then: 'piano' }, guitar: { then: 'guitar' },
     speedread: { then: 'read' }, dancemoves: { then: 'dancemoves' }, ballroom: { then: 'ballroom' },
     drumming: { then: 'drums' }, drumsolo: { then: 'drumsolo' }, drumband: { then: 'jamdrums' },
@@ -3779,11 +3782,39 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.botRules = S(T.sweepBotRules);
   report.workstation = S(T.sweepWorkstation);
   report.paintings = S(T.sweepPaintings);
+  report.drumRhythms = S(T.sweepDrumRhythms);
+  report.arrange = S(T.sweepArrange);
   if (seed && T.unseed) T.unseed();
   window.__qaPaused = wasPaused;
   T.lastReport = report;
   report.errorsLogged = errors.length;
   return report;
+};
+// ---- Drum rhythms: every groove the drumming book teaches keeps time, uses real pads and hands, and is really a different beat ----
+T.sweepDrumRhythms = () => {
+  const out = [];
+  const PADS = ['snare', 'hat', 'tom1', 'tom2', 'floor', 'crash', 'ride', 'kick'], HANDS = ['L', 'R', 'F'];
+  const pattern = (style) => { const rows = []; for (let n = 0; n < 32; n++) rows.push(drumStep(style, n)); return rows; };
+  const key = (rows) => rows.map((hits) => hits.map((h) => h.k + h.h).sort().join(',')).join('|');
+  const rock = key(pattern('rock'));
+  const book = MANIFEST.drumRhythms.styles;
+  const sameSet = new Set(DRUM_BOOK_STYLES).size === new Set(book).size && book.every((s) => DRUM_BOOK_STYLES.includes(s));
+  out.push(result('drum rhythms: the basic drumming pool is exactly the manifest list, and every style is one drumStep knows', sameSet && book.every((s) => DRUM_STYLES.includes(s)), { pool: DRUM_BOOK_STYLES }));
+  for (const style of book) {
+    const rows = pattern(style);
+    const bad = [];
+    rows.forEach((hits, n) => {
+      if (!Array.isArray(hits)) bad.push(`eighth ${n}: not a list`);
+      for (const h of hits || []) {
+        if (!PADS.includes(h.k) || !HANDS.includes(h.h) || !(h.v > 0 && h.v <= 1)) bad.push(`eighth ${n}: ${JSON.stringify(h)}`);
+      }
+    });
+    const bars = [0, 1, 2, 3].map((b) => rows.slice(b * 8, b * 8 + 8).some((hits) => hits.some((h) => h.k === 'snare' || h.k === 'kick')));
+    const differs = style === 'rock' || key(rows) !== rock;
+    out.push(result(`drum rhythms: ${style} has valid hits on every eighth and keeps time in every bar`, bad.length === 0 && bars.every(Boolean), { bad: bad.slice(0, 5), bars }));
+    out.push(result(`drum rhythms: ${style} is a different groove from rock`, differs));
+  }
+  return out;
 };
 // ---- The Learning Workstation (premium): a panel of the shelf's books, Learn teaches at once, the book stays for the other robot ----
 T.sweepWorkstation = () => {
@@ -3805,7 +3836,6 @@ T.sweepWorkstation = () => {
     skillsOf().known.clear(); skillsOf().learn('ball');
     const shelfBooks = w.objects.shelf.books.length;
     window.__guyOpenMenu('workstation');
-  report.arrange = S(T.sweepArrange);
     const mb = [...document.getElementById('menu').querySelectorAll('[data-act="interact"]')].map((x) => x.textContent).join('|');
     document.getElementById('menu').hidden = true;
     out.push(result('workstation: its long-press menu offers "Use Workstation"', /Use Workstation/.test(mb), { mb }));

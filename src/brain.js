@@ -690,8 +690,8 @@ export class Brain {
         return [`playing "${song.name}" on the piano`, this.benchAway(), this.walkAt('piano', 0, 0.8, Math.PI),
           this.play('piano', song.seconds + 1.5, { piano: true, song }), this.play('idle', 1)];
       },
-      sitpiano: () => {
       ...this.arrangeActivities(),                                  // furnishing the house at the workstation (arrange.js)
+      sitpiano: () => {
         const song = this.pickSong();
         return [`sitting at the piano playing "${song.name}"`, ...this.sitSteps('pianoSit', song.seconds + 1.5, { piano: true, song })];
       },
@@ -1912,6 +1912,7 @@ export class Brain {
     const piano = ['sitpiano', 'piano', 'jam', 'jampiano', 'jamsit', 'plink'], drums = ['bang', 'drums', 'drumsolo', 'jamdrums', 'slouch'];
     const guitar = ['guitar', 'riff', 'jamguitar', 'sitguitar'], easel = ['scribble', 'paint', 'mixpaint', 'portrait'], scope = ['peek', 'stargaze', 'darkstargaze', 'scopecare'];
     if (act === 'dusttop') return ['stool'];
+    if (act === 'arrange') return ['workstation'];                 // one at the screen at a time (arrange.js)
     if (piano.includes(act)) return act === 'sitpiano' || act === 'jamsit' ? ['piano', 'bench'] : ['piano'];
     if (drums.includes(act)) return ['drums'];
     if (guitar.includes(act)) return [];                                    // (the guitar he picks is marked when he picks it)
@@ -1930,7 +1931,6 @@ export class Brain {
   busyElsewhere(names) { const o = this.other; return !!o && names.some((n) => (o.using && o.using.has(n)) || o.pushing(n)); }
   // Is he pushing `name` along now, or about to (a leg of a push is still in his queue)?
   pushing(name) { const st = (x) => x && x.push && x.push.obj && x.push.obj.name === name; return st(this.step) || this.queue.some(st); }
-    if (act === 'arrange') return ['workstation'];                 // one at the screen at a time
 
   ballRemoved() {
     if (this.lock && this.lock.name === 'ball') this.unlock(false);
@@ -2094,6 +2094,7 @@ export class Brain {
       }
     }
     if (!name && this.restStays()) name = this.restNext();             // customers about: he stays and looks after them
+    if (!name && !this.restStays()) name = this.arrangeNext();         // something he wants is missing: he orders it at the workstation (arrange.js)
     if (!name) {
       const entries = Object.entries(weights)
         .filter(([k]) => this.available(k))
@@ -2112,7 +2113,6 @@ export class Brain {
     // Where it happens: in the room its object stands in. The steps are planned for that room's floor; if he is somewhere else he goes
     // there first (out through the door of the room he is in, and in through the other's). In a room with its door locked on him he
     // can only do what can be done in there (available()), so no trip is needed.
-    if (!name && !this.restStays()) name = this.arrangeNext();         // something he wants is missing: he orders it at the workstation (arrange.js)
     const where = this.roomForAct(name), here = this.hereId();
     this.actRoom = where;
     if (ACT_OBJ[name]) this.stayRoom = where;                      // (done at an object in that room: he stays there afterwards)
