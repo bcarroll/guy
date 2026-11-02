@@ -13,6 +13,10 @@ export const DRUM_STYLE_BY_TRACK = {
   rock: 'rock', hiphop: 'boombap', twostep: 'train', pop: 'disco', jazz: 'swing', slowblues: 'soft', party: 'disco',
 };
 export const PAD_SIDE = { snare: 'C', hat: 'L', crash: 'L', tom1: 'L', tom2: 'R', floor: 'R', ride: 'R' };
+// the grooves the basic drumming book teaches (`drums` picks one per session; a rock groove is picked twice as often)
+export const DRUM_BOOK_STYLES = ['rock', 'rock', 'soft', 'march', 'halftime', 'bossa', 'reggae', 'funk'];
+// every style drumStep knows, for the QA sweep
+export const DRUM_STYLES = ['rock', 'soft', 'march', 'boombap', 'train', 'disco', 'swing', 'halftime', 'bossa', 'reggae', 'funk', 'solo'];
 
 // what is played on eighth-note `n` (8 per bar) in a style
 export function drumStep(style, n) {
@@ -46,6 +50,26 @@ export function drumStep(style, n) {
     if (i === 2 || i === 6) hits.push({ k: 'hat', h: 'L', v: 0.4 });
     if (i === 0 && bar % 2 === 0) hits.push({ k: 'kick', h: 'F', v: 0.35 });
     if (i === 5 && bar % 2) hits.push({ k: 'snare', h: 'L', v: 0.3 });
+  } else if (style === 'halftime') {                            // slow ballad: the snare only on 3, the kick on 1, a ride on the quarters
+    if (i % 2 === 0) hits.push({ k: 'ride', h: 'R', v: 0.5 });
+    if (i === 0 || (i === 5 && bar % 2)) hits.push({ k: 'kick', h: 'F', v: i === 0 ? 0.9 : 0.6 });
+    if (i === 4) hits.push({ k: 'snare', h: 'R', v: 0.9 });
+  } else if (style === 'bossa') {                               // bossa nova: a light kick on 1 and the and of 2, rim clicks, a soft hat
+    hits.push({ k: 'hat', h: 'L', v: i % 2 ? 0.3 : 0.5 });
+    if (i === 0 || i === 3) hits.push({ k: 'kick', h: 'F', v: i === 0 ? 0.8 : 0.6 });
+    if (i === 1 || i === 4 || i === 6) hits.push({ k: 'snare', h: 'L', v: 0.45 });
+  } else if (style === 'reggae') {                              // one drop: kick and snare together on 3, the hat skanks off the beat
+    if (i % 2) hits.push({ k: 'hat', h: 'L', v: 0.6 });
+    if (i === 4) {
+      hits.push({ k: 'kick', h: 'F', v: 0.9 });
+      hits.push({ k: 'snare', h: 'R', v: 0.8 });
+    }
+  } else if (style === 'funk') {                                // funk: a busy kick, snare on 2 and 4 with ghost notes, eighth-note hat
+    hits.push({ k: 'hat', h: 'L', v: i % 2 ? 0.4 : 0.65 });
+    if (i === 0) hits.push({ k: 'kick', h: 'F', v: 0.95 });
+    if (i === 3 || (i === 6 && bar % 2)) hits.push({ k: 'kick', h: 'F', v: 0.7 });
+    if (i === 2 || i === 6) hits.push({ k: 'snare', h: 'R', v: 0.9 });
+    if (i === 5 || i === 7) hits.push({ k: 'snare', h: 'L', v: 0.25 });
   } else if (style === 'solo') {
     const phase = bar % 6;
     if (phase < 2) groove();
