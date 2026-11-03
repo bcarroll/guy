@@ -8,3 +8,6 @@ Y Bot.fbx
 # QA output (the approved pictures in qa/baselines are kept)
 qa/out/
 qa/index.html
+
+# source Mixamo downloads (not loaded by the game)
+models/

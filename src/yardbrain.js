@@ -48,7 +48,7 @@ export function installYard(Brain, POSES, H) {
     // ------------------------------------------------------------------ standing by a ball
     // Walk to a free spot next to the ball and face it. `at`: a function giving a world point to face *through* the ball (the goal or
     // the hoop): he then stands on the far side of the ball, so that picking it up leaves him facing that way.
-    yardBallStand(kind, at = null) {
+    yardBallStand(kind, at = null, dist = 0.65) {
       return {
         type: 'plan',
         fn: () => {
@@ -61,7 +61,7 @@ export function installYard(Brain, POSES, H) {
           const fr = this.yardFrame();
           for (const grid of [makeGrid(this.w.obstacles, 0.62, 0, null, fr), makeGrid(this.w.obstacles, 0.55, 0, null, fr)]) {
             for (const turn of turns) {
-              const x = p.x + Math.sin(base + turn) * 0.65, z = p.z + Math.cos(base + turn) * 0.65;
+              const x = p.x + Math.sin(base + turn) * dist, z = p.z + Math.cos(base + turn) * dist;
               if (x < bd.minX + 0.7 || x > bd.maxX - 0.7 || z < bd.minZ + 0.7 || z > bd.maxZ - 0.7 || cellBlocked(grid, x, z)) continue;
               return [this.walk(x, z, Math.atan2(p.x - x, p.z - z))];
             }
@@ -81,7 +81,7 @@ export function installYard(Brain, POSES, H) {
     // ------------------------------------------------------------------ soccer
     // one kick at the goal: stand behind the ball in line with the goal, swing, launch it at the goal mouth (some go wide)
     goalKick(good = 0.7) {
-      return [this.yardBallStand('soccer', () => (this.obj('soccergoal') ? this.obj('soccergoal').at(0, 0, 0.35) : null)), this.waitPartner('soccer', 0),
+      return [this.yardBallStand('soccer', () => (this.obj('soccergoal') ? this.obj('soccergoal').at(0, 0, 0.35) : null), 0.5), this.waitPartner('soccer', 0),
         {
           type: 'plan',
           fn: () => {
@@ -718,7 +718,7 @@ export function installYard(Brain, POSES, H) {
             for (let i = 0; i < 60; i++) {
               const grid = makeGrid(w.obstacles, i < 40 ? 0.55 : INFLATE, 0, null, fr);
               const dir = V(rand(bd.minX + 1, bd.maxX - 1) - b.position.x, 0, rand(bd.minZ + 1, bd.maxZ - 1) - b.position.z).normalize();
-              const from = b.position.clone().addScaledVector(dir, -0.7);
+              const from = b.position.clone().addScaledVector(dir, -0.5);
               if (from.x < bd.minX + 0.7 || from.x > bd.maxX - 0.7 || from.z < bd.minZ + 0.7 || from.z > bd.maxZ - 0.7 || cellBlocked(grid, from.x, from.z)) continue;
               return [this.walk(from.x, from.z, Math.atan2(dir.x, dir.z)),
                 this.play('kick', 1.2, { at: [0.5, () => { if (this.w.yard.roll(kind, dir, rand(0.9, 1.6))) sfx('kick', 0.4); }] }), this.waitBall(kind)];

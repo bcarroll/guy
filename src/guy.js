@@ -134,6 +134,12 @@ export class Guy {
       sv.addScaledVector(fH, -sv.dot(fH)).normalize();
       this.limb[side].handRest = { f: fH, p: side === 'Right' ? sv.clone().cross(fH) : fH.clone().cross(sv) };
     }
+    // Leg geometry at rest (root frame), used by reachFoot() to put the ankle on a point.
+    this.leg = {};
+    for (const side of ['Left', 'Right']) {
+      const H = pos(`${side}UpLeg`), K = pos(`${side}Leg`), A = pos(`${side}Foot`);
+      this.leg[side] = { L1: H.distanceTo(K), L2: K.distanceTo(A), a0: K.clone().sub(H).normalize(), f0: A.clone().sub(K).normalize(), home: A.clone() };
+    }
     this.loaded = true;
   }
 
@@ -291,6 +297,38 @@ export class Guy {
       this.target[`${side}Hand`].slerp(q, weight);
     }
     return want - dist; // how far short of the target the hand stays (m)
+  }
+
+  /**
+   * Two-bone IK for a leg: put `side`'s ankle on `targetWorld` (the knee bends towards `pole`, a root-frame direction, default forward).
+   * Returns how far short of the target the ankle stays (m).
+   */
+  reachFoot(side, targetWorld, weight = 1, pole = null) {
+    if (weight <= 0.001) return 0;
+    const { L1, L2, a0, f0 } = this.leg[side];
+    const S = this.root.worldToLocal(this.boneWorld(`${side}UpLeg`));
+    const d = this.root.worldToLocal(targetWorld.clone()).sub(S);
+    const want = d.length();
+    const dist = clamp(want, Math.abs(L1 - L2) + 0.02, (L1 + L2) * 0.995);
+    const u = d.normalize();
+    const cosA = clamp((L1 * L1 + dist * dist - L2 * L2) / (2 * L1 * dist), -1, 1);
+    const sinA = Math.sqrt(1 - cosA * cosA);
+    const pl = pole ? pole.clone() : new THREE.Vector3(0, 0.1, 1);
+    const v = pl.sub(u.clone().multiplyScalar(pl.dot(u)));
+    if (v.lengthSq() < 1e-6) v.set(0, 0, 1);
+    v.normalize();
+    const a = u.clone().multiplyScalar(cosA).addScaledVector(v, sinA).normalize();   // thigh direction
+    const K = S.clone().addScaledVector(a, L1);
+    const f = S.clone().addScaledVector(u, dist).sub(K).normalize();                 // shin direction
+    const Rleg = new THREE.Quaternion().setFromUnitVectors(a0, a);
+    const Rtf = new THREE.Quaternion().setFromUnitVectors(f0, f);
+    const Rshin = Rleg.clone().invert().multiply(Rtf);
+    const rootQ = this.root.getWorldQuaternion(new THREE.Quaternion()).invert();
+    const parentQ = rootQ.multiply(this.bones.Hips.getWorldQuaternion(new THREE.Quaternion()));
+    const D = parentQ.multiply(this.restParentInv[`${side}UpLeg`]);
+    this.target[`${side}UpLeg`].slerp(D.invert().multiply(Rleg), weight);
+    this.target[`${side}Leg`].slerp(Rshin, weight);
+    return want - dist;
   }
 
   /** Lean and crouch so a target beyond arm's length comes within reach. */

@@ -212,8 +212,26 @@ export const POSES = {
     g.set('Head', Q('x', 0.12 * e));
   },
 
-  kick(g, t, dur) {
-    // wind-up then swing right leg
+  kick(g, t, dur, ctx) {
+    // wind-up then swing right leg; with a ball in front of him (ctx.kickAt) the ankle is put through it by leg IK, so the toe really meets it at 0.5s
+    if (ctx.kickAt) {
+      g.sharp = 26;                                    // a snap, not a drift: the foot has to be at the ball when the ball goes
+      const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(g.root.getWorldQuaternion(new THREE.Quaternion()));
+      const home = g.root.localToWorld(g.leg.Right.home.clone());
+      const hit = ctx.kickAt.clone().addScaledVector(fwd, -0.14); hit.y = home.y + 0.03;     // the ankle, a toe's length behind the ball
+      const cock = hit.clone().addScaledVector(fwd, -0.25); cock.y += 0.28;
+      const thru = hit.clone().addScaledVector(fwd, 0.28); thru.y += 0.18;
+      const seg = (a, b, x) => new THREE.Vector3().lerpVectors(a, b, smooth(clamp(x, 0, 1)));
+      const p = t < 0.35 ? seg(home, cock, t / 0.35) : t < 0.5 ? seg(cock, hit, (t - 0.35) / 0.15) : t < 0.62 ? seg(hit, thru, (t - 0.5) / 0.12) : seg(thru, home, (t - 0.62) / 0.3);
+      const short = g.reachFoot('Right', p, 1);
+      const swing = smooth(clamp((t - 0.35) / 0.18, 0, 1)), back = smooth(clamp((t - 0.6) / 0.3, 0, 1));
+      const a = smooth(clamp(t / 0.35, 0, 1)) - swing + back, sw = swing * (1 - back);   // (the arms swing against the leg, as before)
+      g.set('LeftArm', Q('z', -ARM_DOWN, 'x', -0.6 * a));
+      g.set('RightArm', Q('z', ARM_DOWN, 'x', 0.6 * a));
+      g.set('Spine1', Q('x', 0.12 * sw + Math.min(0.3, short * 1.5) * sw));
+      g.hipsOffset.y = -0.03 - Math.min(0.1, short * 0.6) * sw;
+      return;
+    }
     const wind = smooth(clamp(t / 0.35, 0, 1));
     const swing = smooth(clamp((t - 0.35) / 0.18, 0, 1));
     const back = smooth(clamp((t - 0.6) / 0.3, 0, 1));
@@ -673,6 +691,7 @@ export class Brain {
       ...this.restActivities(),
       ...(this.galActivities ? this.galActivities() : {}),       // working with GAL (gal.js)
       ...this.paintActivities(),
+      ...this.arrangeActivities(),                                  // furnishing the house at the workstation (arrange.js)
       // the Learning Workstation: walk up, tap the screen, and its panel opens for whoever is here (the page shows it: onWorkstation)
       learn: () => {
         const m = () => this.obj('workstation');
@@ -691,7 +710,6 @@ export class Brain {
           this.play('piano', song.seconds + 1.5, { piano: true, song }), this.play('idle', 1)];
       },
       sitpiano: () => {
-      ...this.arrangeActivities(),                                  // furnishing the house at the workstation (arrange.js)
         const song = this.pickSong();
         return [`sitting at the piano playing "${song.name}"`, ...this.sitSteps('pianoSit', song.seconds + 1.5, { piano: true, song })];
       },
@@ -793,7 +811,7 @@ export class Brain {
             for (let i = 0; i < 60; i++) {
               const grid = makeGrid(w.obstacles, i < 40 ? 0.55 : INFLATE);
               const dir = new THREE.Vector3(rand(-3.5, 3.5) - b.x, 0, rand(-2, 3) - b.z).normalize();
-              const from = b.clone().addScaledVector(dir, -0.7);
+              const from = b.clone().addScaledVector(dir, -0.5);
               if (!this.onFloor(from.x, from.z, 0.1) || cellBlocked(grid, from.x, from.z)) continue;
               return [this.walk(from.x, from.z, Math.atan2(dir.x, dir.z)), this.play('kick', 1.2, { at: [0.5, () => this.kickBall(dir, skilled)] })];
             }
@@ -1840,6 +1858,7 @@ export class Brain {
     return this.availableIn(act);
   }
   availableIn(act) {
+    if (act === 'arrange') return !!this.obj('workstation') && !!this.arrangePlan;                // (only when he wants something, or somebody asks: arrange.js)
     if (act === 'learn') return !!this.obj('workstation');                      // the Learning Workstation (only when somebody asks: it has no weight; from another room he walks back to it first)
     if (this.galBlocks && this.galBlocks(act)) return false;                // (GAL does not do some things; GUY needs GAL for others)
     if (this.busyElsewhere(this.exclusiveFor(act))) return false;           // the other robot is using it
@@ -1858,7 +1877,6 @@ export class Brain {
     if (!skill.filter((k) => !(k === 'stereo' && this.music)).every((k) => this.skills.has(k))) return false;
     if (act === 'jamguitar') { if (!this.music || !this.skills.has('guitar')) return false; }
     if (['guitar', 'riff', 'jamguitar', 'sitguitar'].includes(act) && !this.freeGuitar()) return false;           // (either guitar, if the other robot is not playing it)
-    if (act === 'arrange') return !!this.obj('workstation') && !!this.arrangePlan;                // (only when he wants something, or somebody asks: arrange.js)
     if (act === 'plink' && this.skills.has('piano')) return false;   // once he has had lessons he stops poking
     // without lessons he can only bang, scribble and peer the wrong way; once taught he stops
     if (act === 'bang' && ['drums', 'drums.solo', 'drums.band'].some((k) => this.skills.has(k))) return false;
@@ -1912,6 +1930,7 @@ export class Brain {
     const piano = ['sitpiano', 'piano', 'jam', 'jampiano', 'jamsit', 'plink'], drums = ['bang', 'drums', 'drumsolo', 'jamdrums', 'slouch'];
     const guitar = ['guitar', 'riff', 'jamguitar', 'sitguitar'], easel = ['scribble', 'paint', 'mixpaint', 'portrait'], scope = ['peek', 'stargaze', 'darkstargaze', 'scopecare'];
     if (act === 'dusttop') return ['stool'];
+    if (act === 'arrange') return ['workstation'];                 // one at the screen at a time
     if (piano.includes(act)) return act === 'sitpiano' || act === 'jamsit' ? ['piano', 'bench'] : ['piano'];
     if (drums.includes(act)) return ['drums'];
     if (guitar.includes(act)) return [];                                    // (the guitar he picks is marked when he picks it)
@@ -1930,7 +1949,6 @@ export class Brain {
   busyElsewhere(names) { const o = this.other; return !!o && names.some((n) => (o.using && o.using.has(n)) || o.pushing(n)); }
   // Is he pushing `name` along now, or about to (a leg of a push is still in his queue)?
   pushing(name) { const st = (x) => x && x.push && x.push.obj && x.push.obj.name === name; return st(this.step) || this.queue.some(st); }
-    if (act === 'arrange') return ['workstation'];                 // one at the screen at a time
 
   ballRemoved() {
     if (this.lock && this.lock.name === 'ball') this.unlock(false);
@@ -2094,6 +2112,7 @@ export class Brain {
       }
     }
     if (!name && this.restStays()) name = this.restNext();             // customers about: he stays and looks after them
+    if (!name && !this.restStays()) name = this.arrangeNext();         // something he wants is missing: he orders it at the workstation (arrange.js)
     if (!name) {
       const entries = Object.entries(weights)
         .filter(([k]) => this.available(k))
@@ -2112,7 +2131,6 @@ export class Brain {
     // Where it happens: in the room its object stands in. The steps are planned for that room's floor; if he is somewhere else he goes
     // there first (out through the door of the room he is in, and in through the other's). In a room with its door locked on him he
     // can only do what can be done in there (available()), so no trip is needed.
-    if (!name && !this.restStays()) name = this.arrangeNext();         // something he wants is missing: he orders it at the workstation (arrange.js)
     const where = this.roomForAct(name), here = this.hereId();
     this.actRoom = where;
     if (ACT_OBJ[name]) this.stayRoom = where;                      // (done at an object in that room: he stays there afterwards)
@@ -2474,7 +2492,17 @@ export class Brain {
       const dx = Math.max(o.x0 - root.position.x, 0, root.position.x - o.x1), dz = Math.max(o.z0 - root.position.z, 0, root.position.z - o.z1);
       near = Math.min(near, Math.hypot(dx, dz));
     }
+    // the ball his kick is aimed at: the nearest one, remembered from the first frame (it is gone from the spot once he has hit it)
+    if (s.type === 'play' && s.pose === 'kick') {
+      if (!s.kickAim) {
+        const balls = [this.w.ball, ...['soccer', 'basketball'].map((k) => (this.yardBall ? this.yardBall(k) : null))].filter((b) => b && b.visible !== false);
+        let best = null, bd = 1.3;
+        for (const b of balls) { const d = Math.hypot(b.position.x - root.position.x, b.position.z - root.position.z); if (d < bd) { bd = d; best = b; } }
+        s.kickAim = best ? best.position.clone() : false;
+      }
+    }
     const ctx = {
+      kickAt: s.kickAim || null,
       armRoom: clamp((near - 0.3) / 0.35, 0, 1),
       haul: this.hauling && this.hauling.k > 0.6 ? this.haulHands() : null,
       tgt: this.bookTargets(s), readW: this.readBlend, read: this.read, ball: ballState, guitar: guitarState, hob: hobState,
@@ -3136,8 +3164,8 @@ installHobbies(Brain, POSES, { sitLegs, env, smooth, clamp, lerp, rand, pick, ma
 installWorkshop(Brain, POSES, { smooth, clamp, lerp, rand, pick });
 installYard(Brain, POSES, { clamp, rand, pick, makeGrid, cellBlocked, INFLATE, findPath });
 installRestaurant(Brain, POSES, { smooth, clamp, lerp, rand, pick });
+installArrange(Brain, { pick });
 installApproach(Brain);                                      // stations are used from whichever side is free (approach.js)
 installPaintings(Brain);
 
 export { ROOM, basePose, sitLegs, makeGrid, findPath, cellBlocked, MAIN_FRAME, INFLATE };
-installArrange(Brain, { pick });

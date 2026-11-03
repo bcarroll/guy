@@ -569,7 +569,34 @@ T.sweepPoses = () => {
     }
     out.push(result(name, !bad.length, { bad, poses: Object.keys(stats) }));
   }
+  out.push(T.kickContact());
   return out;
+};
+
+// The kick must really meet the ball: with the ball beside him, at the moment it is launched the toe is inside the ball.
+T.kickContact = () => {
+  const br = window.brain, g = br.g, b = br.w.ball, V = b.position.constructor, miss = [];
+  const r = (b.geometry && b.geometry.parameters && b.geometry.parameters.radius) || 0.18;
+  const sx = g.root.position.x, sz = g.root.position.z, sy = g.root.rotation.y;
+  // open floor, well clear of every piece of furniture (the margin rule would nudge him about near one)
+  let spot = { x: 0, z: 0 }, best = -1;
+  for (let x = -2; x <= 2; x += 0.5) for (let z = -1.5; z <= 2.5; z += 0.5) {
+    let m = 9;
+    for (const o of br.w.obstacles) { if (o.active === false) continue; m = Math.min(m, Math.hypot(Math.max(o.x0 - x, 0, x - o.x1), Math.max(o.z0 - z, 0, z - o.z1))); }
+    if (m > best) { best = m; spot = { x, z }; }
+  }
+  for (const [lat, ahead] of [[0, 0.5], [0.15, 0.5], [-0.15, 0.5], [0.25, 0.45]]) {
+    br.queue.length = 0; br.step = null;
+    g.root.rotation.y = 0;
+    g.root.position.set(spot.x, 0, spot.z);
+    b.position.set(spot.x + lat, 0.12, spot.z + ahead); b.userData.vel.set(0, 0, 0);
+    let d = null;
+    br.queue.push(br.play('kick', 1.2, { at: [0.5, () => { d = g.boneWorld('RightToeBase').distanceTo(b.position); br.kickBall(new V(0, 0, 1), true); }] }));
+    window.sim(2);
+    if (d === null || d > r) miss.push({ lat, ahead, d });
+  }
+  br.queue.length = 0; br.step = null; g.root.position.set(sx, 0, sz); g.root.rotation.y = sy;
+  return result('kick: the toe meets the ball when it is launched (ball beside him)', !miss.length, { miss });
 };
 
 T.sweepActivities = () => {
@@ -3778,6 +3805,7 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.sports = S(T.sweepSports);
   report.botRules = S(T.sweepBotRules);
   report.workstation = S(T.sweepWorkstation);
+  report.arrange = S(T.sweepArrange);
   report.paintings = S(T.sweepPaintings);
   if (seed && T.unseed) T.unseed();
   window.__qaPaused = wasPaused;
@@ -3785,34 +3813,6 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.errorsLogged = errors.length;
   return report;
 };
-// ---- The Learning Workstation (premium): a panel of the shelf's books, Learn teaches at once, the book stays for the other robot ----
-T.sweepWorkstation = () => {
-  const out = [], base = errors.length, w = W(), b = B(), ws = window.__workstation;
-  const panel = document.getElementById('wstation'), row = (id) => panel.querySelector(`.row[data-book="${id}"]`), btnOf = (id) => row(id) && row(id).querySelector('button');
-  const gone = () => { if (w.objects.workstation) { w.removeObject('workstation'); b.objectRemoved('workstation'); if (w.gal && w.gal.brain) w.gal.brain.objectRemoved('workstation'); } delete w.removed.workstation; };
-  try {
-    galReset(); T.settle(); T.resetRooms(); T.removeAll(); T.forget(); T.home(); T.settle(); gone();
-    // 1. premium: listed in the Catalog as locked, no Add button, until the development unlock
-    const wasDev = dev.all; dev.all = false; openObjects('all');
-    const card0 = [...document.querySelectorAll('#machine .card')].find((c) => /Learning Workstation/.test(c.textContent));
-    out.push(result('workstation: listed in the Catalog as a locked premium object (no Add button)', !!card0 && !card0.querySelector('.act') && /Locked/.test(card0.textContent) && !T.addObject('workstation')));
-    dev.all = true; w.addNew('workstation', null); dev.all = wasDev;
-    const m = w.objects.workstation;
-    out.push(result('workstation: with the premium unlock it is added and fits in the room', !!m && w.fits(m, m.x, m.z)));
-    if (!m) throw new Error('no workstation');
-    // 2. what is on the shelf, and what GUY knows
-    T.addObject('telescope'); T.addBook('stars');
-    skillsOf().known.clear(); skillsOf().learn('ball');
-    const shelfBooks = w.objects.shelf.books.length;
-    window.__guyOpenMenu('workstation');
-  report.arrange = S(T.sweepArrange);
-    const mb = [...document.getElementById('menu').querySelectorAll('[data-act="interact"]')].map((x) => x.textContent).join('|');
-    document.getElementById('menu').hidden = true;
-    out.push(result('workstation: its long-press menu offers "Use Workstation"', /Use Workstation/.test(mb), { mb }));
-    // 3. GUY goes to it, taps the screen and the panel opens
-    b.queue = []; b.step = null;
-    const r = b.interact('workstation');
-    const t = runUntil(() => ws.isOpen(), 60);
 // ---- The view dropdown: static / follow / 3rd person / 1st person ----
 T.sweepViews = async () => {
   const frames = (n = 4) => new Promise((r) => { let k = 0; const t0 = performance.now(); const f = () => { if (++k >= n || performance.now() - t0 > 4000) r(); else requestAnimationFrame(f); }; requestAnimationFrame(f); });          // (the camera moves in the render loop, not in sim: wait for real frames)
@@ -3904,6 +3904,33 @@ T.sweepArrange = () => {
   out.push(result('arrange: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
 };
+// ---- The Learning Workstation (premium): a panel of the shelf's books, Learn teaches at once, the book stays for the other robot ----
+T.sweepWorkstation = () => {
+  const out = [], base = errors.length, w = W(), b = B(), ws = window.__workstation;
+  const panel = document.getElementById('wstation'), row = (id) => panel.querySelector(`.row[data-book="${id}"]`), btnOf = (id) => row(id) && row(id).querySelector('button');
+  const gone = () => { if (w.objects.workstation) { w.removeObject('workstation'); b.objectRemoved('workstation'); if (w.gal && w.gal.brain) w.gal.brain.objectRemoved('workstation'); } delete w.removed.workstation; };
+  try {
+    galReset(); T.settle(); T.resetRooms(); T.removeAll(); T.forget(); T.home(); T.settle(); gone();
+    // 1. premium: listed in the Catalog as locked, no Add button, until the development unlock
+    const wasDev = dev.all; dev.all = false; openObjects('all');
+    const card0 = [...document.querySelectorAll('#machine .card')].find((c) => /Learning Workstation/.test(c.textContent));
+    out.push(result('workstation: listed in the Catalog as a locked premium object (no Add button)', !!card0 && !card0.querySelector('.act') && /Locked/.test(card0.textContent) && !T.addObject('workstation')));
+    dev.all = true; w.addNew('workstation', null); dev.all = wasDev;
+    const m = w.objects.workstation;
+    out.push(result('workstation: with the premium unlock it is added and fits in the room', !!m && w.fits(m, m.x, m.z)));
+    if (!m) throw new Error('no workstation');
+    // 2. what is on the shelf, and what GUY knows
+    T.addObject('telescope'); T.addBook('stars');
+    skillsOf().known.clear(); skillsOf().learn('ball');
+    const shelfBooks = w.objects.shelf.books.length;
+    window.__guyOpenMenu('workstation');
+    const mb = [...document.getElementById('menu').querySelectorAll('[data-act="interact"]')].map((x) => x.textContent).join('|');
+    document.getElementById('menu').hidden = true;
+    out.push(result('workstation: its long-press menu offers "Use Workstation"', /Use Workstation/.test(mb), { mb }));
+    // 3. GUY goes to it, taps the screen and the panel opens
+    b.queue = []; b.step = null;
+    const r = b.interact('workstation');
+    const t = runUntil(() => ws.isOpen(), 60);
     const sp = m.screenPoint(), gp = G().root.position;
     out.push(result('workstation: asked to use it, GUY walks up, taps the screen and the panel opens for GUY', r.ok && ws.isOpen() && /GUY/.test(panel.querySelector('.who').textContent) && Math.hypot(sp.x - gp.x, sp.z - gp.z) < 1.6, { msg: r.message, t, d: Math.hypot(sp.x - gp.x, sp.z - gp.z) }));
     const rows = [...panel.querySelectorAll('.row')];
