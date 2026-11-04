@@ -1,6 +1,6 @@
 # Asset reference for testing (keep in sync with the game; see SKILL.md section 6)
 
-Last verified against: 27 objects (13 + 14 decor and decor furniture), 21 books, 12 records, 49 tracks (4 per record + the stereo beat), 39 activities, 35 poses. `T.coverage()` is the
+Last verified against: 27 objects (13 + 14 decor and decor furniture), 21 books, 12 records, 49 tracks (4 per record + the stereo beat), 40 activities, 36 poses. `T.coverage()` is the
 machine check of this list; this file adds the expectations a human or Claude needs.
 
 ## Objects (`OBJECT_CATALOG` in `src/machine.js`, built in `src/room.js`)
@@ -134,7 +134,7 @@ playback panel or the top-shelf record list; GUY then joins in without touching 
 
 ## Activities (`activities()` in `src/brain.js`)
 
-wander, stretch, wave, yardsit, birdbath, skyswitch, mow, yardpoke, goalshot, soccertoss, hoopshoot, hoopdribble, hoopdefend, goalkeep (Backyard: the last two are the other robot joining a game, only when invited), stereoon, stereooff (menu only), piano, sitpiano, plink, jam, jampiano, jamsit, dance, lamp, mood, plant, read (alias `books`),
+wander, stretch, wave, rangeshoot (Shooting Range: shots from his lane at the bullseyes and enemies, across the lanes when the line is clear), yardsit, birdbath, skyswitch, mow, yardpoke, goalshot, soccertoss, hoopshoot, hoopdribble, hoopdefend, goalkeep (Backyard: the last two are the other robot joining a game, only when invited), stereoon, stereooff (menu only), piano, sitpiano, plink, jam, jampiano, jamsit, dance, lamp, mood, plant, read (alias `books`),
 rearrange, ball, dribble, toss, guitar, riff (makes up riffs on the guitar, see below), jamguitar, bang, drums, drumsolo, jamdrums, scribble, paint, mixpaint, portrait, peek,
 stargaze, darkstargaze, scopecare, dancemoves, ballroom, dust (needs `decorate` and a wall piece with clear floor in front); tidytools, dusttop, build (the Workshop, see below); takeorder, cook, serve, takepay (the Restaurant, see below; internal: rwait); hangpaint (from the easel's long-press menu, see GUY's paintings below; internal: putcanvas); internal: stuck (shut in a locked room), putback, putguitar, dropball, lighton, visit and leave (through the door of an added room and back: tested by `T.sweepVisit`).
 Needs and allowed arm contacts are in `MANIFEST.activities`.
@@ -195,6 +195,7 @@ book list popup (long-press a lower shelf at a book: title, read / not read).
 | workshop | **Workshop**: free, unlocked by default. Adds a closed door with a sign and a grey room (floor, three walls, ceiling) behind it | right, front, back (never left: the Catalog) | same as GUY's room: 10 wide x 8 deep, whichever wall (no `size` in the catalog entry) | GUY can go in: long-press the door > "Go into the Workshop" (see below). The room is empty until the Workshop objects exist |
 | restaurant | **Restaurant**: a **premium** room (`premium: true`, `unlocked: false`): the Rooms tab lists it under "Premium · coming soon" as 🔒 Premium with no Add button, and none of its objects or its book are listed until it is unlocked (`R().setUnlocked('restaurant', true)`, a dev bypass the harness uses via `unlockRoom`; there is no way to pay yet). The same room in warm colours, with an **elevator** against the far wall (`elevator: true`: a cabin with sliding doors, an obstacle) | front, back, right (`planDoor` skips a wall that already has a room's door, so with the Workshop on the right the Restaurant takes the front or back) | 10 x 8 like the others | customers arrive and leave through the elevator; see "The Restaurant" below |
 | backyard | **Backyard**: free, an **outdoor** room (`outdoor: true`): grass, a fence on three sides, no walls or ceiling; a gantry with a sun disc and a moon disc, a see-through blue night tint, stars at night. Cheap on phones: no real extra lights | right, front, back | like the others | day/night is saved; balls have their own physics (`yardballs.js`); mown stripes are cosmetic |
+| range | **Shooting Range**: free, unlocked by default. An indoor room with a sign, a floor, three walls and a ceiling, deeper than GUY's room (`size: {w:10, d:6}`), with three lanes marked on the floor and numbered 1-3. Low screens (1.3 m) between the lanes. Holographic bullseyes on rails at the far end and a holographic enemy in each lane | right, front, back | 10 deep x 6 wide | Its screens are pathing obstacles only while the room is there (added in `addDoor`, taken out in `removeDoor`). Shots, targets and enemies are in `src/rangeobjects.js`; the robots' activity is in `src/rangebrain.js`. See "The Shooting Range" below |
 
 Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 - A door is 1.0 m wide and 2.2 m tall, with a 1.0 m floor strip in front of it that furniture cannot be put or pushed into and wall pieces cannot cover.
@@ -379,6 +380,18 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 - `sweepBookRules` must set `forceBook` after `T.settle()` (settling can start a random read that uses the request up).
 - `OVERLAP_FAIL` is now 6 samples: 4-5 sample overlaps were walking past a box at the edge of the 0.28 m safety margin (easel, chairs); every real clip so far was 8+.
 
+## The Shooting Range (`src/rangeobjects.js`, `src/rangebrain.js`; room in `rooms.js`, built in `room.js` `buildShell`; activity `rangeshoot`)
+
+- Lanes at 2, 0 and -2 m along the door wall (`RANGE.lanes`), 2 m wide. Firing line 2.2 m in from the door wall. Screens (1.3 m high) at 1 m either side of the middle, from 3 m in to the far wall.
+- Each lane has a holographic bullseye on a rail (centre 1.55 m high, radius 0.3 m, at 9 m) and a holographic enemy (1.7 m tall) that walks up and down its lane between 4.2 and 8.2 m in, then dissolves after 4-7 s and comes back somewhere else in its lane. Enemies never leave their lane (`sweepRange`).
+- A robot shoots from his own lane: GUY from the lane at -2 m (floor number 1), GAL from the one at +2 m (number 3), or whichever lane the other robot is not using. Targets are chosen each time he is about to shoot: his own lane three times as likely as a lane across.
+- **Line of fire**: a shot is fired from the muzzle (1.42 m) at an aim point on the target, and it counts as clear only when the line passes above the top of every screen it crosses (`clearShot`, 3D, computed in the floor plane). So a low shot across two lanes is blocked and a high one clears; a shot down your own lane is always clear. The target is offered only through an aim point that is clear (`candidates`).
+- A clear shot hits with `HIT.own` (0.82) from his own lane and `HIT.cross` (0.6) across; a miss lands a little off the target. A hit drops the bullseye or dissolves the enemy.
+- Pose `aim` (`POSES.aim`): the right arm reaches out along the aim with the blaster in the hand, the left hand under the grip, a small recoil after a shot. The blaster (`world.range.gun`) is drawn from the hand each frame (`rangeLate`) and put away when the trip ends or the activity is dropped.
+- Trip: in through the door (unless he is in), walk to the firing line facing down the range, 3-5 shots, out through the door. Visual checkpoint `range-aim`.
+- Counts are in `world.range.score` (`shots`, `hits`, `cross`, `crossHits`, `enemyHits`, `railHits`). Tracers, muzzle flashes and impact rings fade in 0.24 s.
+- Not done yet: a shooting range object in the Catalog (for example a target rack), a picture baseline for `range-aim` (approve it after looking: `npm test -- --approve=new`), and a room picture for the range in `qa-shots.js`.
+
 ## Sound effects (`src/sfx.js`; hooks in brain.js, hobbybrain.js, main.js, room.js)
 
 | Event | Sound |
@@ -392,6 +405,7 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 | plant leaf, brush stroke, paint dab, telescope focus, wiping | `leaf`, `brush`, `dab`, `tick`, `wipe` |
 | footsteps | `step` |
 | GUY learns something, Catalog adds | `chime`, `pop` |
+| blaster fired at the range / a hologram hit | `shot` (crack and thump), `holo` (zap) |
 
 Checked by `T.sweepSounds` (event -> counted request). Whether it *sounds* right can only be judged by listening. Press **M** to mute the effects.
 - GUY used to keep building foot stools and shelves forever, and none were used. Each recipe now has a `cap` in `src/workshop.js` (stool 1, shelves 2, chair 2, counting what stands in a room plus what is in storage); `pickRecipe` skips a recipe at its cap, so `build` becomes unavailable once he has made them all. Tests that force `b.pickRecipe` bypass the cap.

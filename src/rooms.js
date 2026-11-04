@@ -20,6 +20,11 @@ export const ROOM_CATALOG = [
   { id: 'backyard', name: 'Backyard', icon: '🌳', unlocked: true, outdoor: true, doorWalls: ['right', 'front', 'back'],
     desc: 'An outdoor room with a lawn and a fence. Soccer, basketball, a lawn chair, a bird bath, and an artificial sun and moon you can switch.',
     look: { frame: 0x6b4a2b, door: 0x6f9f4a, panel: 0x8cc063, floor: 0x5fa046, wall: 0xb48a58 } },
+  // The Shooting Range: three lanes with holographic bullseyes and enemies. GUY and GAL shoot from their own lanes (src/rangeobjects.js,
+  // src/rangebrain.js). Deeper than a room's default, so the lanes have room to shoot down.
+  { id: 'range', name: 'Shooting Range', icon: '🎯', unlocked: true, shootingRange: true, size: { w: 10, d: 6 }, doorWalls: ['right', 'front', 'back'],
+    desc: 'A shooting range with three lanes. Holographic bullseyes and enemies pop up down the range, and the robots take shots at them: from their own lane, and across the screens when the line is clear.',
+    look: { frame: 0x3b4150, door: 0x3d4a63, panel: 0x5ef2ff, floor: 0x9a9fa6, wall: 0xc9ccd2 } },
 ];
 
 const KEY = 'guy.rooms.v1';
