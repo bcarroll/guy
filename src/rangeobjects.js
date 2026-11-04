@@ -16,6 +16,7 @@ export const RANGE = {
   firingZ: -2.2,              // the firing line: this far in from the door wall
   partitionTop: 1.3,          // the screens between the lanes are this high
   partitionFrom: -3.0,        // and run from here to the far wall (the front of the lanes is open)
+  screenPad: 0.14,            // the walking space kept clear round each screen's ends and sides (metres)
   railZ: -9.0,                // the bullseyes hang this far in
   railY: 1.55,                // at this height (their centres)
   railR: 0.3,                 // with this radius
@@ -188,7 +189,9 @@ export function buildRangeShell(g, L, N) {
       g.updateWorldMatrix(true, false);
       partitions.forEach((p, k) => {
         p.a = worldPt(p.x, p.z0); p.b = worldPt(p.x, p.z1);
-        Object.assign(obstacles[k], { x0: Math.min(p.a.x, p.b.x) - 0.04, x1: Math.max(p.a.x, p.b.x) + 0.04, z0: Math.min(p.a.z, p.b.z) - 0.04, z1: Math.max(p.a.z, p.b.z) + 0.04 });
+        // (padded well beyond the screen: the walk skips waypoints within 25 cm, so it cuts corners, and a robot's body is ~20 cm wide)
+        const pad = RANGE.screenPad;
+        Object.assign(obstacles[k], { x0: Math.min(p.a.x, p.b.x) - pad, x1: Math.max(p.a.x, p.b.x) + pad, z0: Math.min(p.a.z, p.b.z) - pad, z1: Math.max(p.a.z, p.b.z) + pad });
       });
     },
     // where a robot in lane `i` stands to shoot (world)

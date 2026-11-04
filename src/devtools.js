@@ -62,7 +62,7 @@ export const MANIFEST = {
   activities: {
     wander: {}, stretch: {}, wave: {},
     // the Shooting Range (rangebrain.js): shots from his lane at the bullseyes and enemies (no objects of its own)
-    rangeshoot: { room: 'range', max: 150, touches: [] },
+    rangeshoot: { room: 'range', max: 150, touches: [], skills: ['range.pistol'] },
     piano: { objects: ['piano'], skills: ['piano'], touches: ['piano'] },
     sitpiano: { objects: ['piano', 'bench'], skills: ['piano'], touches: ['piano', 'bench'] },
     plink: { objects: ['piano'], touches: ['piano'] },
@@ -134,6 +134,7 @@ export const MANIFEST = {
   },
   // what to do after reading each book: an activity that should now be possible
   books: { stereo: { then: 'dance' }, piano: { then: 'piano' }, ball: { then: 'dribble' }, lighting: { then: 'mood' }, piano2: { then: 'piano' }, guitar: { then: 'guitar' },
+    pulsepistol: { then: null }, arcrifle: { then: null },      // (the range is not added here: it takes a wall and moves the other rooms; sweepRange tests the blasters)
     speedread: { then: 'read' }, dancemoves: { then: 'dancemoves' }, ballroom: { then: 'ballroom' },
     drumming: { then: 'drums' }, drumsolo: { then: 'drumsolo' }, drumband: { then: 'jamdrums' },
     painting: { then: 'paint' }, colour: { then: 'mixpaint' }, portrait: { then: 'portrait' },
@@ -434,6 +435,7 @@ T.run = (name, { max = (MANIFEST.activities[name] || {}).max || 150, prep = true
   if (b.userMusic) b.stereoControl('stop');
   if ((MANIFEST.activities[name] || {}).customer) W().restaurant.clear();           // nobody is left in the restaurant to keep him there
   if (name === 'hangpaint') W().paintings.reset();                                  // and the painting he hung comes down again
+  for (const k of (MANIFEST.activities[name] || {}).skills || []) skillsOf().known.delete(k);   // a skill taught only for this activity (the blaster at the range) is unlearned again, so later sweeps see what they saw before
   const s = T.settle();
   rep.idleAfter = s.ok;
   rep.warnings = grazes(rep.overlaps);
@@ -1923,7 +1925,7 @@ T.sweepShelf = () => {
   while (t < 120) {
     step(0.25); t += 0.25;
     if (b.held === top) held = true;
-    if (b.held === top && b.pose === 'grab' && b.step && b.step.t > 0.6 && b.step.t < 1.2) { const lg = b.g.bones.RightLeg && b.g.bones.RightLeg.rotation.x; if (Math.abs(lg) > 0.5) squatted = true; }
+    if (b.held === top && b.pose === 'grab' && b.step && b.step.t > 0.6 && b.step.t < 1.2) { const lg = b.g.bones.RightLeg && b.g.bones.RightLeg.rotation.x; if (Math.abs(lg) > 0.3) squatted = true; }      // (0.3: the stack is taller with the blaster books on it, so the top one needs less squatting)
     if (held && !b.held && top.mesh.visible && t > 15) break;
   }
   out.push(result('shelf: GUY reads the top book of the stack and puts it back where it was', held && top.mesh.visible && Math.abs(top.mesh.position.y - topY) < 0.005 && b.skills.has(top.def.teaches), { held, back: top.mesh.visible, t }));
@@ -3763,6 +3765,7 @@ T.sweepRange = () => {
   const out = [], base = errors.length, w = W();
   T.settle(); T.resetRooms(); T.removeAll(); T.forget(); T.settle(); T.home();
   unlockRoom('range');
+  T.learn(['range.pistol']);                                            // a blaster is needed to shoot at the range (its book is read)
   const before = w.obstacles.length;
   const added = R().add('range');
   const rg = w.range;
@@ -3798,6 +3801,22 @@ T.sweepRange = () => {
     rg.fire(0, pick.target, pick.point);
   }
   out.push(result('range: shots across the lanes are fired and counted', rg.score.shots > c0 && rg.score.cross > x0 && rg.score.hits <= rg.score.shots, { shots: rg.score.shots - c0, cross: rg.score.cross - x0, hits: rg.score.hits }));
+  // GUY walking past and across the screens (round their ends, corners cut by the walk) keeps clear of them: he never clips one
+  {
+    const g = G(), b = B(), walks = [[6.5, -1, 11, -3], [6.4, 0.6, 10, -2.6], [6.6, -2.8, 12, 0.6], [12, 0.6, 7.5, -3], [9, -1, 14, -1], [13, -3, 8.2, -1]];
+    const segs = rg.partitions.map((p) => [p.a, p.b]);
+    const gap = (px, pz) => Math.min(...segs.map(([a, c]) => { const vx = c.x - a.x, vz = c.z - a.z, L = vx * vx + vz * vz || 1; const t = Math.max(0, Math.min(1, ((px - a.x) * vx + (pz - a.z) * vz) / L)); return Math.hypot(px - a.x - t * vx, pz - a.z - t * vz); }));
+    let closest = 9, arrived = 0;
+    for (const [sx, sz, tx, tz] of walks) {
+      g.root.position.set(sx, 0, sz); step(0.6);
+      b.queue = [{ type: 'walk', x: tx, z: tz, yaw: null }]; b.step = null;
+      for (let i = 0; i < 270; i++) { step(1 / 30); const p = g.root.position; closest = Math.min(closest, gap(p.x, p.z)); if (!b.queue.length && !b.step) break; }
+      if (Math.hypot(g.root.position.x - tx, g.root.position.z - tz) < 0.4) arrived++;
+    }
+    out.push(result('range: walking across the screens, GUY keeps clear of them (never clips one)', closest >= 0.2 && arrived === walks.length, { closest: +closest.toFixed(3), arrived }));
+    b.queue = []; b.step = null;                                        // (a walk still under way must not carry on into the next sweep)
+    T.home();
+  }
   // taking the room away takes its screens out of the pathing again, and the range with it
   R().reset('range');
   T.settle();
