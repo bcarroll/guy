@@ -110,6 +110,9 @@ const SOUNDS = {
   chime(ctx, out) { [880, 1175, 1568].forEach((f, i) => tone(ctx, out, { f0: f, f1: f * 0.99, dur: 0.55, gain: 0.12, delay: i * 0.1, attack: 0.01 })); },
   pop(ctx, out) { tone(ctx, out, { f0: 380, f1: 900, dur: 0.09, gain: 0.18 }); },
   whoosh(ctx, out) { burst(ctx, out, { dur: 0.25, f: 600, f2: 2400, q: 0.7, gain: 0.34 }); },
+  // the Shooting Range: a blaster shot (a sharp crack and a falling thump) and a hologram being hit (an electronic zap)
+  shot(ctx, out) { burst(ctx, out, { dur: 0.08, type: 'highpass', f: 2500, gain: 0.3, attack: 0.001 }); tone(ctx, out, { f0: 900, f1: 180, dur: 0.18, type: 'sawtooth', gain: 0.16, attack: 0.002 }); },
+  holo(ctx, out) { tone(ctx, out, { f0: 1400, f1: 3200, dur: 0.22, type: 'sine', gain: 0.14, attack: 0.005 }); burst(ctx, out, { dur: 0.12, type: 'highpass', f: 5000, gain: 0.08, delay: 0.04 }); },
 };
 
 export { SOUNDS };                                     // QA only (src/qa-audio.js renders each one to numbers)

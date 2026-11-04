@@ -6,6 +6,7 @@ import { makeRestaurantBuilders } from './restobjects.js';
 import { makeBotBuilders } from './botobjects.js';
 import { buildYardShell, makeYardBuilders } from './yardobjects.js';
 import { makeYard } from './yardballs.js';
+import { buildRangeShell } from './rangeobjects.js';
 
 export const ROOM = { w: 10, d: 8, h: 3.2 }; // x in [-5,5], z in [-4,4]
 
@@ -1390,7 +1391,8 @@ export function buildRoom(scene) {
     const bounds = wall === 'right' ? { minX: ROOM.w / 2, maxX: ROOM.w / 2 + N, minZ: c - L / 2, maxZ: c + L / 2 }
       : wall === 'front' ? { minX: c - L / 2, maxX: c + L / 2, minZ: ROOM.d / 2, maxZ: ROOM.d / 2 + N }
         : { minX: c - L / 2, maxX: c + L / 2, minZ: -ROOM.d / 2 - N, maxZ: -ROOM.d / 2 };
-    return { group: g, bounds, N, L };
+    // the Shooting Range: its lanes, screens, bullseyes and enemies go in the room (src/rangeobjects.js); the screens are attached in addDoor
+    return { group: g, bounds, N, L, range: def.shootingRange ? buildRangeShell(g, L, N) : null };
   };
 
   // The three walls of an added room as places to hang things: `<id>:far` (facing the door) and `<id>:a`, `<id>:b` (the sides).
@@ -1476,6 +1478,11 @@ export function buildRoom(scene) {
       doors[def.id] = { id: def.id, name: def.name, wall, u, group, leaf: group.userData.leaf, shell, cut, rect: doorRect(wall, u), rectIn: doorRectIn(wall, u), open: 0, openTo: 0, locked: false };
       if (!shell.outdoor) Object.assign(WALL, roomWalls(def.id, shell));           // its walls can hold wall pieces (GUY's paintings); a fence cannot
       if (shell.outdoor && world.yard) world.yard.attach(doors[def.id]);
+      if (shell.range) {                                        // the range's screens stop the robots and block the line of fire
+        shell.range.attach();
+        obstacles.push(...shell.range.obstacles);
+        world.range = shell.range;
+      }
       if (def.elevator) {                                       // a room with an elevator (the Restaurant): a cabin against the far wall
         const b = shell.bounds, sgn = WALL[wall].rotY === Math.PI ? -1 : 1;
         const N = wall === 'right' ? b.maxX - b.minX : b.maxZ - b.minZ, Lw = wall === 'right' ? b.maxZ - b.minZ : b.maxX - b.minX;
@@ -1497,6 +1504,10 @@ export function buildRoom(scene) {
       if (!d) return false;
       for (const g of [d.group, d.shell.group, d.cut]) { room.remove(g); disposeTree(g); }
       if (d.elevator) obstacles.splice(obstacles.indexOf(d.elevator.obstacle), 1);
+      if (d.shell.range) {                                      // the range's screens go with it
+        for (let i = obstacles.length - 1; i >= 0; i--) if (d.shell.range.obstacles.includes(obstacles[i])) obstacles.splice(i, 1);
+        if (world.range === d.shell.range) world.range = null;
+      }
       for (const key of Object.keys(WALL).filter((k) => k.startsWith(`${id}:`))) {         // what hung on its walls is put away (GUY's paintings go to the Catalog)
         for (const [name, dc] of Object.entries(decor)) if (dc.wall === key) { room.remove(dc.group); delete decor[name]; world.removed[name] = dc; }
         delete WALL[key];
@@ -1793,5 +1804,6 @@ export function buildRoom(scene) {
     },
   };
   world.yard = makeYard({ world, room, objects, obstacles });
+  world.range = null;                                       // the Shooting Range, while it is added (see addDoor)
   return world;
 }

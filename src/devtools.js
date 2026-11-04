@@ -56,11 +56,13 @@ export const MANIFEST = {
     shed: { room: 'backyard', skills: ['outdoor'], premium: true }, mower: { room: 'backyard', skills: ['outdoor'], premium: true },
   },
   // rooms the user can add from the Catalog's Rooms tab (tested by sweepRooms / sweepDoors / sweepGating / sweepSaves)
-  rooms: { workshop: {}, restaurant: {}, backyard: {} },
+  rooms: { workshop: {}, restaurant: {}, backyard: {}, range: {} },
   // activities: objects that must be in the room, skills needed, `music` = needs the stereo already playing,
   // touches = objects GUY's arms may legitimately be inside the bounding box of (hands on keys, pushing, ...)
   activities: {
     wander: {}, stretch: {}, wave: {},
+    // the Shooting Range (rangebrain.js): shots from his lane at the bullseyes and enemies (no objects of its own)
+    rangeshoot: { room: 'range', max: 150, touches: [] },
     piano: { objects: ['piano'], skills: ['piano'], touches: ['piano'] },
     sitpiano: { objects: ['piano', 'bench'], skills: ['piano'], touches: ['piano', 'bench'] },
     plink: { objects: ['piano'], touches: ['piano'] },
@@ -174,6 +176,7 @@ export const MANIFEST = {
     { id: 'yard-sit', activity: 'yardsit', pose: 'sitRest', t: 6, view: 'side', expect: 'seated in the lawn chair, back against it, legs clear of the frame' },
     { id: 'yard-shed-open', activity: 'yardtidy', pose: 'reach', t: 1.3, view: 'side', yard: true, expect: 'standing at the shed door, one hand on the knob, the door swung wide open showing the dark inside; the lawn chair still out on the grass' },
     { id: 'yard-mow', activity: 'mow', pose: 'walk', t: 1, view: 'side', push: true, expect: 'both hands on the mower handle, walking behind it, stripes cut in the grass' },
+    { id: 'range-aim', activity: 'rangeshoot', pose: 'aim', t: 0.45, view: 'side', room: 'range', expect: 'standing on the firing line facing down the range, right arm straight out with the blaster in the hand (glowing tip), left hand under the grip, a holographic bullseye ahead' },
     { id: 'scope-care', activity: 'scopecare', pose: 'scopeCare', t: 13, view: 'front', expect: 'squatting beside the tripod with a hand on one leg' },
     { id: 'stool-dust', activity: 'dusttop', pose: 'reach', t: 4, view: 'front', dist: 3.6, expect: 'standing ON the foot stool (feet on top of it, not in the floor), right hand wiping along the top of the window frame, the stool not passing through him' },
     { id: 'dust-frame', activity: 'dust', pose: 'reach', t: 2.5, view: 'front', expect: 'facing the wall, right hand wiping along the lower edge of a frame (not inside the wall or his own head)' },
@@ -338,7 +341,11 @@ T.forget = () => skillsOf().known.clear();
 T.prep = (name) => {
   const m = MANIFEST.activities[name] || {};
   const done = [];
-  if (m.room && !R().isAdded(m.room)) { unlockRoom(m.room); R().add(m.room); }
+  if (m.room && !R().isAdded(m.room)) {
+    unlockRoom(m.room);
+    // the rooms share the three walls of GUY's room: when there is no wall left for this one, the other added rooms make way (as a player would)
+    if (!R().add(m.room).ok) { for (const r of ROOM_CATALOG) if (r.id !== m.room && R().isAdded(r.id)) R().reset(r.id); R().add(m.room); }
+  }
   if (m.room === 'backyard' && W().yard) W().yard.snapNight(false);                                          // always the same daylight for the pictures                           // the room the activity happens in
   for (const id of m.objects || []) if (T.addObject(id)) done.push(id);
   T.learn(m.skills || []);
@@ -3750,6 +3757,55 @@ T.sweepBotRules = () => {
 // `seed`: every sweep starts with its own seeded random numbers (seed x 1000 + its number), so a run is the same every time and a failure
 // that shows up under one seed can be replayed: `T.runSweep('sweepRestaurant', 2, 36)` plays sweep 36 of seed 2 alone. Other seeds are other runs
 // (`npm test -- --repeat=3` uses seeds 1, 2, 3).
+// ---- 12d. The Shooting Range (src/rangeobjects.js, src/rangebrain.js): the lanes, the screens that block a line of fire, enemies that stay
+// in their own lane, cross-lane shots, and what goes when the room does
+T.sweepRange = () => {
+  const out = [], base = errors.length, w = W();
+  T.settle(); T.resetRooms(); T.removeAll(); T.forget(); T.settle(); T.home();
+  unlockRoom('range');
+  const before = w.obstacles.length;
+  const added = R().add('range');
+  const rg = w.range;
+  out.push(result('range: the room is added with three lanes and its two screens (they are pathing obstacles)', added.ok && !!rg && rg.lanes.length === 3 && w.obstacles.length === before + 2, { added: added.ok, lanes: rg && rg.lanes.length }));
+  if (!rg) { R().reset('range'); return out; }
+  // the line of fire: a low shot from the left lane into the right one clips the screen; a high one clears it; a shot down your own lane is clear
+  const from0 = rg.muzzle(0), right = rg.targets.find((t) => t.kind === 'rail' && t.lane === 2), own = rg.targets.find((t) => t.kind === 'rail' && t.lane === 0);
+  const low = rg.clearShot(from0, rg.worldAim(right, 0)), high = rg.clearShot(from0, rg.worldAim(right, 1));
+  out.push(result('range: a low shot across two lanes is blocked by the screens, a high one clears them', !low && high, { low, high }));
+  out.push(result('range: a shot down its own lane is always clear', rg.clearShot(from0, rg.worldAim(own, 0)) && rg.clearShot(from0, rg.worldAim(own, 1)), {}));
+  // a robot in the left lane is offered the right lane's bullseye only through a clear high aim, and his own lane first
+  const offered = rg.candidates(0);
+  const acrossOk = offered.filter((c) => !c.own).every((c) => rg.clearShot(from0, c.point));
+  out.push(result('range: what a robot is offered is clear to shoot at (own lane and across)', offered.some((c) => c.own) && offered.some((c) => !c.own) && acrossOk, { offered: offered.map((c) => [c.target.lane, c.own, +c.k.toFixed(2)]) }));
+  // the enemies walk and dissolve for a while, and never leave their lane or their stretch of the range
+  let seen = 0, outside = 0;
+  for (let i = 0; i < 40; i++) {
+    step(0.75);
+    for (const e of rg.targets) {
+      if (e.kind !== 'enemy') continue;
+      if (e.alive) seen++;
+      if (Math.abs(e.pos.x - rg.lanes[e.lane].x) > 1e-9 || e.pos.z < -8.25 || e.pos.z > -4.15) outside++;
+    }
+  }
+  out.push(result('range: the enemies come up in their own lane, and stay there', seen > 0 && outside === 0, { seen, outside }));
+  // shots across the lanes: fired from the left lane, the ones that are offered are counted as cross shots and can hit
+  const c0 = rg.score.shots, x0 = rg.score.cross;
+  for (let i = 0; i < 30; i++) {
+    const cands = rg.candidates(0).filter((c) => !c.own);
+    if (!cands.length) break;
+    const pick = cands[i % cands.length];
+    rg.targets.forEach((t) => { if (t.kind === 'rail') { t.alive = true; t.state = 'up'; } });
+    rg.fire(0, pick.target, pick.point);
+  }
+  out.push(result('range: shots across the lanes are fired and counted', rg.score.shots > c0 && rg.score.cross > x0 && rg.score.hits <= rg.score.shots, { shots: rg.score.shots - c0, cross: rg.score.cross - x0, hits: rg.score.hits }));
+  // taking the room away takes its screens out of the pathing again, and the range with it
+  R().reset('range');
+  T.settle();
+  out.push(result('range: removing the room takes its screens and the range away', !w.range && w.obstacles.length === before, { obstacles: w.obstacles.length, before }));
+  out.push(result('range: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   const wasPaused = window.__qaPaused;
   if (seed) window.__qaPaused = true;                     // (the page's own animation loop would move the game between sweeps, by however long the page has been open: a seeded run is the simulation alone)      // (`upTo`: stop after that sweep: to replay a failure with everything that ran before it)
@@ -3795,6 +3851,7 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.yardVoice = S(T.sweepYardVoice);
   report.mowerShed = S(T.sweepMowerShed);
   report.shed = S(T.sweepShed);
+  report.range = S(T.sweepRange);
   report.doorMoves = S(T.sweepDoorMoves);
   report.allRooms = S(T.sweepAllRooms);
   report.needs = S(T.sweepNeeds);

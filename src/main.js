@@ -854,7 +854,7 @@ window.sim = (sec, dt = 1 / 30) => {
   if (window.__simNow === undefined) window.__simNow = performance.now() / 1000;      // (the music's clock now follows simulated time: see nowSec in brain.js)
   for (let t = 0; t < sec; t += dt) {
     window.__simNow += dt;
-    brain.safeUpdate(dt); guy.apply(dt); brain.safeLate(); world.lamp.tick(brain.currentBeat()); updateBall(dt); for (const o of Object.values(world.objects)) o.update(dt); world.yard.update(dt);
+    brain.safeUpdate(dt); guy.apply(dt); brain.safeLate(); world.lamp.tick(brain.currentBeat()); updateBall(dt); for (const o of Object.values(world.objects)) o.update(dt); world.yard.update(dt); if (world.range) world.range.update(dt);
   }
   if (follow) { controls.target.copy(guy.pos).setY(1.1); controls.update(); }
 };
@@ -909,7 +909,7 @@ renderer.setAnimationLoop(() => {
   space.position.copy(camera.position);
   world.lamp.tick(brain.currentBeat());
   world.skillMachine.userData.update(performance.now() / 1000);
-  for (const o of Object.values(world.objects)) o.update(dt); world.yard.update(dt);
+  for (const o of Object.values(world.objects)) o.update(dt); world.yard.update(dt); if (world.range) world.range.update(dt);
   updateBall(dt);
   if (follow && guy.loaded) {
     camGoal.copy(guy.pos).setY(1.1);
