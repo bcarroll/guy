@@ -3803,13 +3803,13 @@ T.sweepRange = () => {
   out.push(result('range: shots across the lanes are fired and counted', rg.score.shots > c0 && rg.score.cross > x0 && rg.score.hits <= rg.score.shots, { shots: rg.score.shots - c0, cross: rg.score.cross - x0, hits: rg.score.hits }));
   // GUY walking past and across the screens (round their ends, corners cut by the walk) keeps clear of them: he never clips one
   {
-    const g = G(), b = B(), walks = [[6.5, -1, 11, -3], [6.4, 0.6, 10, -2.6], [6.6, -2.8, 12, 0.6], [12, 0.6, 7.5, -3], [9, -1, 14, -1], [13, -3, 8.2, -1]];
+    const g = G(), b = B(), walks = [[6.5, -1, 11, -3], [6.4, 0.6, 10, -2.6], [6.6, -2.8, 12, 0.6], [12, 0.6, 7.5, -3], [9, -1, 14, -1], [13, -3, 8.2, -1], [13.7, 0.15, 6, -1.5, true]];
     const segs = rg.partitions.map((p) => [p.a, p.b]);
     const gap = (px, pz) => Math.min(...segs.map(([a, c]) => { const vx = c.x - a.x, vz = c.z - a.z, L = vx * vx + vz * vz || 1; const t = Math.max(0, Math.min(1, ((px - a.x) * vx + (pz - a.z) * vz) / L)); return Math.hypot(px - a.x - t * vx, pz - a.z - t * vz); }));
     let closest = 9, arrived = 0;
-    for (const [sx, sz, tx, tz] of walks) {
+    for (const [sx, sz, tx, tz, direct] of walks) {
       g.root.position.set(sx, 0, sz); step(0.6);
-      b.queue = [{ type: 'walk', x: tx, z: tz, yaw: null }]; b.step = null;
+      b.queue = [{ type: 'walk', x: tx, z: tz, yaw: null, direct: !!direct }]; b.step = null;     // (a direct walk, as the way out of the range is: it must still go round the screens)
       for (let i = 0; i < 270; i++) { step(1 / 30); const p = g.root.position; closest = Math.min(closest, gap(p.x, p.z)); if (!b.queue.length && !b.step) break; }
       if (Math.hypot(g.root.position.x - tx, g.root.position.z - tz) < 0.4) arrived++;
     }
