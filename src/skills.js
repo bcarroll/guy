@@ -66,6 +66,11 @@ export const BOOK_CATALOG = [
     blurb: 'shots at the goal and ball handling', requires: { object: 'soccergoal' }, desc: 'Lining up a shot, striking the ball into the goal, and tossing it up and catching it.' },
   { id: 'basketball', title: 'Basketball for Robots', teaches: 'outdoor.basketball', color: 0xd9741d, thick: 0.055, height: 0.31, room: 'backyard', unlockedBy: 'outdoor',
     blurb: 'dribbling and shooting hoops', requires: { object: 'basketballhoop' }, desc: 'Dribbling, and the set shot: bend the knees, lift the ball and let it go towards the hoop.' },
+  // Fictional blasters for the Shooting Range. Reading one lets GUY (or GAL) use that blaster in the range only; it cannot be taken out.
+  { id: 'pulsepistol', title: 'Pulse Pistol Handbook', teaches: 'range.pistol', color: 0x3c6e8f, thick: 0.05, height: 0.3,
+    blurb: 'a fictional pulse pistol for the range', desc: 'A fictional sidearm for the Shooting Range: quick, light pulses, one at a time.' },
+  { id: 'arcrifle', title: 'Arc Carbine Field Guide', teaches: 'range.carbine', color: 0x5a3c8f, thick: 0.06, height: 0.32,
+    blurb: 'a fictional arc carbine for the range', desc: 'A fictional long gun for the Shooting Range: a steadier aim and a longer hold before each shot.' },
 ];
 export const BOOK_DEFS = BOOK_CATALOG.filter((b) => b.start);
 
@@ -101,6 +106,14 @@ export const SKILL_INFO = {
   'outdoor.basketball': {
     name: 'Basketball', book: 'Basketball for Robots',
     unlocks: ['Dribble the basketball', 'Shoot at the hoop with a proper set shot (some go in)'],
+  },
+  'range.pistol': {
+    name: 'Pulse pistol', book: 'Pulse Pistol Handbook',
+    unlocks: ['Shoot the pulse pistol at the Shooting Range (range only)'],
+  },
+  'range.carbine': {
+    name: 'Arc carbine', book: 'Arc Carbine Field Guide',
+    unlocks: ['Shoot the arc carbine at the Shooting Range (range only)'],
   },
   stereo: {
     name: 'Using the stereo', book: 'Stereo User Manual',

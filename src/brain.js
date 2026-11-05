@@ -1825,7 +1825,11 @@ export class Brain {
     const skill = this.skillNeeds(act).find((k) => !this.skills.has(k));
     if (skill) return `he has not learned "${skill}" yet (read its book)`;
     if (this.busyElsewhere(this.exclusiveFor(act))) return 'the other robot is using it';
-    if (RANGE_ACTS.includes(act)) { if (!this.w.doors.range) return 'there is no Shooting Range'; if (!this.rangeOpen()) return 'the Shooting Range door is locked'; }
+    if (RANGE_ACTS.includes(act)) {
+      if (!this.w.doors.range) return 'there is no Shooting Range';
+      if (!this.rangeOpen()) return 'the Shooting Range door is locked';
+      if (!this.rangeKnown().length) return 'he has not read a blaster book yet (the Pulse Pistol or the Arc Carbine)';
+    }
     if (YARD_ACTS.includes(act)) {
       if (!this.w.doors.backyard) return 'there is no Backyard';
       if (!this.yardOpen()) return 'the Backyard door is locked';
