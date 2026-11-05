@@ -63,6 +63,8 @@ export const MANIFEST = {
     wander: {}, stretch: {}, wave: {},
     // the Shooting Range (rangebrain.js): shots from his lane at the bullseyes and enemies (no objects of its own)
     rangeshoot: { room: 'range', max: 150, touches: [], skills: ['range.pistol'] },
+    rangehang: { room: 'range', max: 60, touches: [] },
+    rangefool: { room: 'range', max: 90, touches: [] },
     piano: { objects: ['piano'], skills: ['piano'], touches: ['piano'] },
     sitpiano: { objects: ['piano', 'bench'], skills: ['piano'], touches: ['piano', 'bench'] },
     plink: { objects: ['piano'], touches: ['piano'] },
@@ -178,6 +180,7 @@ export const MANIFEST = {
     { id: 'yard-shed-open', activity: 'yardtidy', pose: 'reach', t: 1.3, view: 'side', yard: true, expect: 'standing at the shed door, one hand on the knob, the door swung wide open showing the dark inside; the lawn chair still out on the grass' },
     { id: 'yard-mow', activity: 'mow', pose: 'walk', t: 1, view: 'side', push: true, expect: 'both hands on the mower handle, walking behind it, stripes cut in the grass' },
     { id: 'range-aim', activity: 'rangeshoot', pose: 'aim', t: 0.45, view: 'side', room: 'range', expect: 'standing on the firing line facing down the range, right arm straight out with the blaster in the hand (glowing tip), left hand under the grip, a holographic bullseye ahead' },
+    { id: 'range-hop', activity: 'rangefool', pose: 'jump', t: 0.2, view: 'side', room: 'range', expect: 'in mid-air a short way from the floor, just after leaving the firing line, the feet clear of the ground and a screen between the lanes beside him'},
     { id: 'scope-care', activity: 'scopecare', pose: 'scopeCare', t: 13, view: 'front', expect: 'squatting beside the tripod with a hand on one leg' },
     { id: 'stool-dust', activity: 'dusttop', pose: 'reach', t: 4, view: 'front', dist: 3.6, expect: 'standing ON the foot stool (feet on top of it, not in the floor), right hand wiping along the top of the window frame, the stool not passing through him' },
     { id: 'dust-frame', activity: 'dust', pose: 'reach', t: 2.5, view: 'front', expect: 'facing the wall, right hand wiping along the lower edge of a frame (not inside the wall or his own head)' },

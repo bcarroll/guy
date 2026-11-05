@@ -1828,7 +1828,7 @@ export class Brain {
     if (RANGE_ACTS.includes(act)) {
       if (!this.w.doors.range) return 'there is no Shooting Range';
       if (!this.rangeOpen()) return 'the Shooting Range door is locked';
-      if (!this.rangeKnown().length) return 'he has not read a blaster book yet (the Pulse Pistol or the Arc Carbine)';
+      if (act === 'rangeshoot' && !this.rangeKnown().length) return 'he has not read a blaster book yet (the Pulse Pistol or the Arc Carbine)';
     }
     if (YARD_ACTS.includes(act)) {
       if (!this.w.doors.backyard) return 'there is no Backyard';
@@ -1868,7 +1868,7 @@ export class Brain {
   availableIn(act) {
     if (act === 'arrange') return !!this.obj('workstation') && !!this.arrangePlan;                // (only when he wants something, or somebody asks: arrange.js)
     if (act === 'learn') return !!this.obj('workstation');                      // the Learning Workstation (only when somebody asks: it has no weight; from another room he walks back to it first)
-    if (RANGE_ACTS.includes(act)) return this.rangeAvailable();                // the Shooting Range: the door is open and there is a target he can hit from his lane
+    if (RANGE_ACTS.includes(act)) return act === 'rangeshoot' ? this.rangeAvailable() : this.rangeOpen();     // shooting needs a blaster; hanging about and fooling about do not                // the Shooting Range: the door is open and there is a target he can hit from his lane
     if (this.galBlocks && this.galBlocks(act)) return false;                // (GAL does not do some things; GUY needs GAL for others)
     if (this.busyElsewhere(this.exclusiveFor(act))) return false;           // the other robot is using it
     const need = {
@@ -2071,7 +2071,7 @@ export class Brain {
       bang: 1.3, drums: 1.6, drumsolo: 1.2, jamdrums: 1.5, scribble: 1.3, paint: 1.6, mixpaint: 1.3, portrait: 1.4,
       peek: 1.3, stargaze: 1.6, darkstargaze: 1.3, scopecare: 0.6, dust: 0.9, dusttop: 1.0,
       yardsit: 0.9, birdbath: 0.7, skyswitch: 0.6, mow: 0.5, yardpoke: 1.1, goalshot: 1.4, soccertoss: 0.8, hoopshoot: 1.4, hoopdribble: 0.9,
-      rangeshoot: 1.2,
+      rangeshoot: 1.2, rangehang: 0.9, rangefool: 0.9,
     };
     if (this.extraWeights) Object.assign(weights, this.extraWeights());      // working with GAL, or (for GAL) inviting GUY
     // a skill that is being forgotten is used less and less
@@ -2087,7 +2087,7 @@ export class Brain {
       sit: ['rest'], sitguitar: ['guitar'], slouch: ['drums', 'rest'],
       scribble: ['paint'], paint: ['paint'], mixpaint: ['paint'], portrait: ['paint'],
       peek: ['scope'], stargaze: ['scope'], darkstargaze: ['scope'], scopecare: ['scope', 'fidget'], dust: ['fidget'], dusttop: ['fidget'],
-      rangeshoot: ['range'], yardsit: ['rest'], birdbath: ['fidget'], skyswitch: ['fidget'], mow: ['chore'], yardpoke: ['yardball'], goalshot: ['yardball'], soccertoss: ['yardball'], hoopshoot: ['yardball'], hoopdribble: ['yardball'],
+      rangeshoot: ['range'], rangehang: ['range'], rangefool: ['range'], yardsit: ['rest'], birdbath: ['fidget'], skyswitch: ['fidget'], mow: ['chore'], yardpoke: ['yardball'], goalshot: ['yardball'], soccertoss: ['yardball'], hoopshoot: ['yardball'], hoopdribble: ['yardball'],
     };
     // the last two activities count, so he doesn't drift back to the same theme straight away
     const lastTags = [this.last, this.prev].flatMap((n) => tags[n] || []);
@@ -2473,6 +2473,7 @@ export class Brain {
       if (s.fx.sit) this.updateSit(s);
       if (s.fx.chairSit) this.updateChairSit(s);
       if (s.fx.sitDrum) this.updateDrumSit(s);
+      if (s.fx.hop) this.hopMove(s);                                           // a jump across to another place (rangebrain.js: over a range divider)
       if (s.fx.spin) root.rotation.y += s.fx.spin * dt * Math.min(1, s.t / 0.8, (s.dur - s.t) / 0.8 + 0.001);   // turning on the spot
       if (s.fx.paint) this.updatePaintStand(s);
       if (s.fx.stool) this.updateStool(s);

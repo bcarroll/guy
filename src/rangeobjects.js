@@ -194,6 +194,11 @@ export function buildRangeShell(g, L, N) {
         Object.assign(obstacles[k], { x0: Math.min(p.a.x, p.b.x) - pad, x1: Math.max(p.a.x, p.b.x) + pad, z0: Math.min(p.a.z, p.b.z) - pad, z1: Math.max(p.a.z, p.b.z) + pad });
       });
     },
+    // where a robot stands to watch the range for a while: between the screens, a few metres in from the firing line, facing downrange
+    hangSpot() {
+      const p = worldPt(0, RANGE.firingZ - 2.2), a = worldPt(0, 0), b = worldPt(0, -1);
+      return { x: p.x, z: p.z, yaw: Math.atan2(b.x - a.x, b.z - a.z) };
+    },
     // where a robot in lane `i` stands to shoot (world)
     firingSpot(i) { const p = worldPt(lanes[i], RANGE.firingZ); return { x: p.x, z: p.z }; },
     // the way a robot on the firing line faces: away from the door (world yaw, as the walk steps take it)
