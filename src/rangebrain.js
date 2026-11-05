@@ -12,7 +12,7 @@ import { sfx } from './sfx.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const ID = 'range';
-export const RANGE_ACTS = ['rangeshoot'];
+export const RANGE_ACTS = ['rangeshoot', 'rangehang', 'rangefool'];
 // The fictional blasters (each one learned from its book, skills.js). `breath`: the pause after a shot; `aim`: how long he holds the aim.
 export const BLASTERS = {
   'range.pistol': { aim: 0.6, breath: 0.4 },
@@ -36,7 +36,41 @@ export function installRange(Brain, POSES, H) {
     g.reach('Left', lhand, 1, false);
   };
 
+  // the jump: a short arc through the air from where he stands to `hop.x1, hop.z1` (the step's `fx.hop`), over whatever is between
+  POSES.jump = (g, t, dur, ctx) => {
+    POSES.idle(g, t, dur, ctx);
+    // the legs tuck up in the air: most at the top of the arc, straight again when he lands
+    const k = Math.sin(Math.PI * Math.min(1, Math.max(0, t / dur)));
+    const q = (a) => new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), a);
+    for (const side of ['Left', 'Right']) {
+      g.set(`${side}UpLeg`, q(-0.6 * k));
+      g.set(`${side}Leg`, q(1.3 * k));
+      g.set(`${side}Foot`, q(-0.5 * k));
+    }
+  };
+
   Object.assign(Brain.prototype, {
+    // the root moves along the jump (set by the step runner, brain.js hopMove): a little arc in the air, nothing in the way
+    hopMove(s) {
+      const h = s.fx.hop, k = Math.min(1, Math.max(0, s.t / s.dur));
+      if (h.x0 === undefined) return;
+      const root = this.g.root;
+      root.position.x = h.x0 + (h.x1 - h.x0) * k;
+      root.position.z = h.z0 + (h.z1 - h.z0) * k;
+      root.position.y = 0.45 * Math.sin(Math.PI * k);
+    },
+    // a jump to lane `i`'s firing spot (he may be shooting: a blaster reader does this now and then, across a divider)
+    rangeHopTo(i) {
+      const R = this.w.range, p0 = this.g.root.position, p = R.firingSpot(i);
+      this.rangeLane = i;
+      return { type: 'play', pose: 'jump', dur: 0.6, fx: { hop: { x0: p0.x, z0: p0.z, x1: p.x, z1: p.z } } };
+    },
+    // the lanes he could jump to from his own: not the one the other robot is shooting from
+    rangeHopOptions() {
+      const cur = this.rangeLane, taken = this.other ? this.other.rangeLane : null;
+      return [cur - 1, cur + 1].filter((i) => i >= 0 && i < 3 && i !== taken);
+    },
+
     // ------------------------------------------------------------------ where he is
     inRange() { return this.w.roomIdAt(this.g.root.position.x, this.g.root.position.z) === ID; },
     // the range is added and its door is not locked (and there is a range to shoot in)
@@ -82,7 +116,35 @@ export function installRange(Brain, POSES, H) {
     // `n` shots, each one planned when it is its turn (the targets have moved meanwhile)
     rangeShotSteps(n) {
       const steps = [];
-      for (let i = 0; i < n; i++) steps.push({ type: 'plan', fn: () => this.rangeOneShot() });
+      for (let i = 0; i < n; i++) {
+        if (this.rangeOwn().length) steps.push({ type: 'plan', fn: () => this.rangeMaybeHop() });    // (a blaster reader now and then changes lane)
+        steps.push({ type: 'plan', fn: () => this.rangeOneShot() });
+      }
+      return steps;
+    },
+    rangeMaybeHop() {
+      const opts = this.rangeHopOptions();
+      if (!opts.length || Math.random() > 0.3) return [];
+      return [this.rangeHopTo(pick(opts))];
+    },
+    rangeHangSteps() {
+      const R = this.w.range;
+      if (!R) { this.queue.length = 0; return []; }
+      const spot = R.hangSpot();
+      return [this.walk(spot.x, spot.z, spot.yaw), this.play('idle', 4 + Math.random() * 4), this.play('idle', 2 + Math.random() * 3)];
+    },
+    rangeFoolSteps() {
+      const R = this.w.range;
+      if (!R) { this.queue.length = 0; return []; }
+      const lane = Math.floor(Math.random() * 3);
+      const p = R.firingSpot(lane);
+      this.rangeLane = lane;
+      const rail = R.targets.find((t) => t.kind === 'rail' && t.lane === lane);     // (the lane's bullseye rail: always there)
+      const steps = [this.walk(p.x, p.z, R.awayYaw()), this.play('wave', 1.6)];
+      const rf = { point: () => R.worldAim(rail, 0.5), fired: false };
+      steps.push(this.play('aim', 1.2, { range: rf }));                // poking at a hologram: the arm out, nothing fired
+      steps.push({ type: 'plan', fn: () => [this.rangeHopTo(this.rangeHopOptions()[0] ?? lane)] });
+      steps.push(this.play('idle', 1.2));
       return steps;
     },
     // one shot: pick a target he can hit from his lane (his own lane three times as likely as one across), aim, fire, and a breath
@@ -139,6 +201,14 @@ export function installRange(Brain, POSES, H) {
           { type: 'plan', fn: () => this.rangeGoToLane() },
           { type: 'plan', fn: () => this.rangeShotSteps(3 + Math.floor(Math.random() * 3)) },
           { type: 'plan', fn: () => { this.rangeLane = null; this.rangeHold = false; return []; } },
+        ]),
+        // hanging about: he stands between the screens for a while and watches the targets, then goes out
+        rangehang: () => this.rangeTrip('hanging about at the range', [
+          { type: 'plan', fn: () => this.rangeHangSteps() },
+        ]),
+        // fooling about: he waves, walks along the lanes, pokes a hologram (aims at it, without firing) and hops a divider
+        rangefool: () => this.rangeTrip('fooling about at the range', [
+          { type: 'plan', fn: () => this.rangeFoolSteps() },
         ]),
       };
     },
