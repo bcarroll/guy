@@ -2421,7 +2421,9 @@ export class Brain {
             const wide = makeGrid(this.w.obstacles, INFLATE + 0.14, 0, null, fr);
             if (!cellBlocked(wide, s.x, s.z) && !cellBlocked(wide, root.position.x, root.position.z)) this.grid = wide;
           }
-          s.path = s.direct ? [{ x: s.x, z: s.z }] : findPath(this.grid, root.position.x, root.position.z, s.x, s.z);
+          // a direct walk goes straight there only when the straight line is clear: otherwise he goes round (the screens of the range, say)
+          const straight = s.direct && lineClear(this.grid, root.position, { x: s.x, z: s.z });
+          s.path = straight ? [{ x: s.x, z: s.z }] : findPath(this.grid, root.position.x, root.position.z, s.x, s.z);
         }
       }
       if (!finished && !s.drive) {
