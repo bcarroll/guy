@@ -4268,6 +4268,8 @@ T.sweepVoice = async () => {
     const subs = document.getElementById('subs'); V.tts.say('gal', 'Subtitle check.'); await wait(100);
     out.push(result('voice: every line shows as a subtitle with the speaker named', !subs.hidden && /GAL/.test(subs.textContent) && /Subtitle check/.test(subs.textContent), { text: subs.textContent }));
     V.tts.stop();
+    out.push(result('voice: natural voices are opt-out and never download during a QA run (fresh = offline eSpeak)', V.tts.settings.engine === 'natural' && V.tts.naturalStatus.state === 'idle' && V.tts.set('engine', 'robot') && V.tts.settings.engine === 'robot' && !V.tts.set('engine', 'nope')));
+    V.tts.set('engine', 'natural');
   } catch (e) { out.push(result('voice: offline voices ran without throwing', false, { error: String(e && e.stack || e).slice(0, 400) })); }
   out.push(result('voice: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;

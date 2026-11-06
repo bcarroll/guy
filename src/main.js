@@ -112,7 +112,11 @@ const brain = new Brain(guy, world, (t) => (label.textContent = t), skills);
 world.restaurant = new Restaurant(world, { skillOk: () => skills.has('restaurant') || !!(world.gal && world.gal.skills && world.gal.skills.has('restaurant')), guyAt: () => guy.root.position });
 // GAL, the second robot: built by GUY at the Build a Bot machine (gal.js). Her model loads at the start; she is saved unless ?fresh
 // Speech (tts.js: offline robot voices + subtitles; voice.js: commands). GUY and GAL speak only in an interaction or to each other.
-const tts = initTTS({ subs: document.getElementById('subs'), persist: !params.has('fresh') });
+function voiceLabel(s) {      // progress of the one-time natural-voice download, shown on the voice selector
+  const o = document.querySelector('#cmd-voice option[value=natural]'); if (!o) return;
+  o.textContent = s.state === 'downloading' ? `🗣️ Natural voice (downloading ${Math.round(s.progress * 100)}%)` : s.state === 'failed' ? '🗣️ Natural voice (download failed, using robot)' : '🗣️ Natural voice';
+}
+const tts = initTTS({ subs: document.getElementById('subs'), persist: !params.has('fresh'), onVoiceStatus: (s) => voiceLabel(s) });
 const galLine = document.getElementById('galline'), galLabel = document.getElementById('activity2');
 world.gal = new Gal(world, {
   scene, guyBrain: brain, persist: !params.has('fresh'), skillsInit: params.get('skills') === 'all' || params.get('skills') === 'none' ? params.get('skills') : null,
@@ -737,6 +741,8 @@ document.getElementById('talk-btn').addEventListener('click', () => { cmdBox.hid
 cmdBox.addEventListener('submit', (e) => { e.preventDefault(); const t = cmdIn.value.trim(); if (!t) return; cmdIn.value = ''; voice.run(t); });
 cmdBox.querySelector('#cmd-chatter').addEventListener('change', (e) => tts.set('chatter', e.target.value));
 cmdBox.querySelector('#cmd-chatter').value = tts.settings.chatter;
+const voiceSel = cmdBox.querySelector('#cmd-voice'); voiceSel.value = tts.settings.engine;
+voiceSel.addEventListener('change', (e) => tts.set('engine', e.target.value));
 window.__voice = { bark: voice.bark, run: (t) => voice.run(t), parse: voice.parse, tts, audienceOn: voice.audienceOn };
 
 
