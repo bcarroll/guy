@@ -974,6 +974,23 @@ function keepInView(dt) {
   viewK += (k - viewK) * Math.min(1, dt * (k < viewK ? 14 : 3));
   if (viewK < 0.999) camera.position.copy(from).addScaledVector(viewDir.copy(camera.position).sub(from), viewK);
 }
+// Shader warm-up. three.js only builds a material's shader the first time that material is drawn, and the build is a stall of a second
+// or more with a house full of furniture (GUY sits in the armchair, a hidden part shows for the first time: the whole app freezes).
+// So every material in the scene, hidden ones included, is compiled ahead of time, in the background (KHR_parallel_shader_compile),
+// at the start and again whenever something is added (an object, a room, a customer, ...).
+{
+  let seen = '', busy = false;
+  const sig = () => { let n = 0, m = 0; scene.traverse((o) => { n++; if (o.material) m++; }); return `${n}/${m}`; };
+  const warm = () => {
+    if (busy || !guy.loaded) return;
+    const s = sig();
+    if (s === seen) return;
+    busy = true; seen = s;
+    Promise.resolve(renderer.compileAsync(scene, camera)).catch(() => {}).finally(() => { busy = false; });
+  };
+  setInterval(warm, 1000);
+  window.__warm = warm;
+}
 const clock = new THREE.Clock();
 const camGoal = new THREE.Vector3();
 renderer.setAnimationLoop(() => {
