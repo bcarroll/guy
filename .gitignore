@@ -11,3 +11,4 @@ qa/index.html
 
 # source Mixamo downloads (not loaded by the game)
 models/
+.wrangler/
