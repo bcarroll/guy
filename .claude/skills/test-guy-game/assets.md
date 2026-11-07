@@ -455,3 +455,4 @@ Checked by `T.sweepSounds` (event -> counted request). Whether it *sounds* right
 
 - Regression watch: with four rooms added the fifth was refused, "no wall space": the left wall (skill machine / Catalog) was never offered. It now takes a door beside the Catalog (`doorBlockers` treats `MACHINE_RECT` as fixed); each room still has one door per wall, up to 4 (the Restaurant stays at 3: no left wall).
 - Regression watch: the door sign said the added room's name on both faces (from the Backyard it read "Backyard"); the face toward the added room now reads "GUY's Room".
+- Regression watch: the Shooting Range door sign was cut off at the frame; sign text now shrinks to fit.

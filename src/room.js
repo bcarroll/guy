@@ -1342,7 +1342,9 @@ export function buildRoom(scene) {
       const cx = c.getContext('2d');
       cx.fillStyle = '#fff6e0'; cx.fillRect(0, 0, 256, 64);
       cx.strokeStyle = '#6b4a2b'; cx.lineWidth = 6; cx.strokeRect(3, 3, 250, 58);
-      cx.fillStyle = '#3a2a1c'; cx.font = 'bold 30px sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+      cx.fillStyle = '#3a2a1c'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+      let px = 30;                                                       // long names (Shooting Range) shrink to fit inside the frame
+      for (; px > 14; px -= 2) { cx.font = `bold ${px}px sans-serif`; if (cx.measureText(label).width <= 226) break; }
       cx.fillText(label, 128, 34);
       const tex = new THREE.CanvasTexture(c);
       tex.colorSpace = THREE.SRGBColorSpace;
