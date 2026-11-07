@@ -202,7 +202,7 @@ book list popup (long-press a lower shelf at a book: title, read / not read).
 Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`):
 - A door is 1.0 m wide and 2.2 m tall, with a 1.0 m floor strip in front of it that furniture cannot be put or pushed into and wall pieces cannot cover.
 - The placement search prefers the fewest pieces to move, then the wall order (right, front, back, left), then the middle of the wall. Light and medium furniture and wall pieces in the way go to the Catalog (like a user removal; nothing is deleted or moved silently). The bookshelf and heavy furniture never move: the door goes elsewhere, or the Catalog says "No clear wall for a door right now".
-- The right and front walls face away from the default camera, so the door is built from solid parts and the sign is drawn on both sides.
+- The right and front walls face away from the default camera, so the door is built from solid parts and the sign is drawn on both sides: the room's name facing GUY's room, "GUY's Room" facing the added room.
 - Saved in `guy.rooms.v1` (separate from `guy.room.v1`). A new visit starts with the core pieces back on the walls, so the saved door is placed again first and anything in its way is taken out again; if its saved spot is now taken by something fixed it finds a new one.
 - Entries with `room: '<id>'` are not listed (not even as locked) until that room is added and unlocked.
 - Test aids: `T.resetRooms()`, `R().add(id, { at, walls })`, `R().setUnlocked(id, bool)`, `R().snapshot()` / `R().restoreFrom()` (`R()` is `window.brain.w.rooms`).
@@ -454,3 +454,4 @@ Checked by `T.sweepSounds` (event -> counted request). Whether it *sounds* right
 - The HUD hint ("drag empty space...") ran under the bottom button row on windows 700 to 1500 px wide: the status box moves to the top there and drops the hint (`index.html`, check at 1100 px).
 
 - Regression watch: with four rooms added the fifth was refused, "no wall space": the left wall (skill machine / Catalog) was never offered. It now takes a door beside the Catalog (`doorBlockers` treats `MACHINE_RECT` as fixed); each room still has one door per wall, up to 4 (the Restaurant stays at 3: no left wall).
+- Regression watch: the door sign said the added room's name on both faces (from the Backyard it read "Backyard"); the face toward the added room now reads "GUY's Room".

@@ -1335,17 +1335,21 @@ export function buildRoom(scene) {
     padlock.visible = false;
     hinge.add(padlock);
     g.userData.padlock = padlock;
-    const c = document.createElement('canvas');
-    c.width = 256; c.height = 64;
-    const cx = c.getContext('2d');
-    cx.fillStyle = '#fff6e0'; cx.fillRect(0, 0, 256, 64);
-    cx.strokeStyle = '#6b4a2b'; cx.lineWidth = 6; cx.strokeRect(3, 3, 250, 58);
-    cx.fillStyle = '#3a2a1c'; cx.font = 'bold 30px sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
-    cx.fillText(`${def.icon} ${def.name}`, 128, 34);
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    for (const [z, ry] of [[0.145, 0], [-0.005, Math.PI]]) {
-      const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.225), new THREE.MeshBasicMaterial({ map: tex }));
+    // each face names the room it leads to: the added room's name on the side facing GUY's room, "GUY's Room" on the other
+    const signTex = (label) => {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 64;
+      const cx = c.getContext('2d');
+      cx.fillStyle = '#fff6e0'; cx.fillRect(0, 0, 256, 64);
+      cx.strokeStyle = '#6b4a2b'; cx.lineWidth = 6; cx.strokeRect(3, 3, 250, 58);
+      cx.fillStyle = '#3a2a1c'; cx.font = 'bold 30px sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+      cx.fillText(label, 128, 34);
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    };
+    for (const [z, ry, label] of [[0.145, 0, `${def.icon} ${def.name}`], [-0.005, Math.PI, "🏠 GUY's Room"]]) {
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.225), new THREE.MeshBasicMaterial({ map: signTex(label) }));
       sign.position.set(0, DOOR.h + 0.3, z);
       sign.rotation.y = ry;
       g.add(sign);
