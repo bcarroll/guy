@@ -32,6 +32,9 @@ export const BAND = {
 };
 
 // ================================================================================================================ her brain
+// GAL is a she: the activity labels are written for GUY, so what the screen says about her is put in her words.
+const herLabel = (t) => String(t).replace(/\bhimself\b/g, 'herself').replace(/\b(his|him)\b/g, 'her').replace(/\bHe\b/g, 'She').replace(/\bhe\b/g, 'she');
+
 export class GalBrain extends Brain {
   constructor(guy, world, ui, skills, leader) {
     super(guy, world, ui, skills);
@@ -181,7 +184,7 @@ export class Gal {
     const skills = new Skills(this.opts.skillsInit || (this.opts.persist ? null : 'none'), SKILL_KEYS);
     this.opts.scene.add(root);
     root.position.set(x, 0, z);
-    this.brain = new GalBrain(this.g, this.w, (t) => this.opts.ui && this.opts.ui(t), skills, guy);
+    this.brain = new GalBrain(this.g, this.w, (t) => this.opts.ui && this.opts.ui(herLabel(t)), skills, guy);
     this.brain.onLearnMany = (defs) => { if (this.opts.toast) this.opts.toast(`GAL learned ${defs.length} skills!`); sfx('chime'); };
     this.brain.onStart = (n) => { if (this.opts.onStart) this.opts.onStart(n); };
     this.brain.onWorkstation = (b) => { if (this.opts.onWorkstation) this.opts.onWorkstation(b); };

@@ -1538,7 +1538,7 @@ export class Brain {
     const shelf = this.obj('shelf');
     const rec = shelf && shelf.books.find((b) => b.def.id === id);
     if (!rec) return { ok: false, message: "That book isn't on the shelf." };
-    if (this.held === rec) return { ok: false, message: 'GUY has that book in his hands right now.' };
+    if (this.held === rec) return { ok: false, message: this.isGal ? 'GAL has that book in her hands right now.' : 'GUY has that book in his hands right now.' };
     if (this.forceBook === rec) this.forceBook = null;
     const def = rec.def;
     shelf.removeBook(rec);
@@ -2282,7 +2282,7 @@ export class Brain {
     }
     if (REST_OBJECTS.includes(name) || (this.obj(name) && this.obj(name).seats)) tries = this.restTries(name);
     if (this.obj(name) && this.obj(name).heldBooks && !this.obj(name).heldBooks().some((b) => b.mesh.visible)) return { ok: false, message: 'There are no books on that bookshelf right now.' };
-    if (this.obj(name) && this.obj(name).heldBooks && this.obj(name).heldBooks().some((b) => b.mesh.visible) && !this.readableBooks(name).length) return { ok: false, message: `${this.isGal ? 'GAL' : 'GUY'} has already read everything on ${name === 'shelf' ? 'the shelf' : 'that bookshelf'}. A book he has put back in the Catalog is forgotten, and he reads it again when it is back.` };
+    if (this.obj(name) && this.obj(name).heldBooks && this.obj(name).heldBooks().some((b) => b.mesh.visible) && !this.readableBooks(name).length) return { ok: false, message: `${this.isGal ? 'GAL' : 'GUY'} has already read everything on ${name === 'shelf' ? 'the shelf' : 'that bookshelf'}. A book put back in the Catalog is forgotten, and it is read again when it is back.` };
     if (this.obj(name) && this.obj(name).heldBooks && !tries) tries = ['read'];                // a bookshelf built as a clone of the skill one: read what stands on it
     const act = (tries || []).filter((a) => this.available(a));
     if (!act.length) {
