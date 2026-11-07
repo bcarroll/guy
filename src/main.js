@@ -914,7 +914,44 @@ function rideCamera(dt) {
     controls.target.copy(chest).add(ridePan); camera.position.copy(controls.target).add(rideOff);
     controls.update();
     rideOff.copy(camera.position).sub(controls.target); ridePan.copy(controls.target).sub(chest);
+    keepInView(dt);                                         // (after the user's offset is kept: only what is drawn is pulled in)
   }
+}
+// 3rd person: nothing may come between the camera and GUY. The camera is pulled in along its line to him until it is inside the room he
+// is in (a wall between rooms) and in front of any tall piece of furniture in the way (a bookshelf); it eases back out once the way is clear.
+const viewRay = new THREE.Raycaster(), viewDir = new THREE.Vector3();
+let viewK = 1;
+function roomRectOf(p) {
+  for (const d of Object.values(world.doors)) {
+    const b = d.shell.bounds;
+    if (p.x > b.minX && p.x < b.maxX && p.z > b.minZ && p.z < b.maxZ) return d.shell.outdoor ? null : b;
+  }
+  return p.x > -5 && p.x < 5 && p.z > -4 && p.z < 4 ? { minX: -5, maxX: 5, minZ: -4, maxZ: 4 } : null;
+}
+function keepInView(dt) {
+  const from = controls.target, len = camera.position.distanceTo(from);
+  let k = 1;
+  if (len > 0.01) {
+    const rect = roomRectOf(guy.pos);
+    if (rect) {
+      const M = 0.25, c = camera.position;
+      const lim = (a, b, lo, hi) => (b > hi - M ? (hi - M - a) / (b - a) : b < lo + M ? (lo + M - a) / (b - a) : 1);
+      k = Math.min(k, lim(from.x, c.x, rect.minX, rect.maxX), lim(from.z, c.z, rect.minZ, rect.maxZ));
+    }
+    viewDir.copy(camera.position).sub(from).divideScalar(len);
+    viewRay.set(from, viewDir); viewRay.far = len;
+    const blockers = [];
+    for (const o of Object.values(world.objects)) {
+      if (o.stowed || o.hauled || o.h < 0.9) continue;
+      if (Math.abs(guy.pos.x - o.x) < o.w / 2 + 0.5 && Math.abs(guy.pos.z - o.z) < o.d / 2 + 0.5) continue;      // the piece he is using or standing against
+      blockers.push(o.group);
+    }
+    const hit = viewRay.intersectObjects(blockers, true)[0];
+    if (hit) k = Math.min(k, Math.max(0, hit.distance - 0.2) / len);
+    k = Math.max(k, Math.min(1, 0.5 / len));              // never closer than half a metre to him
+  }
+  viewK += (k - viewK) * Math.min(1, dt * (k < viewK ? 14 : 3));
+  if (viewK < 0.999) camera.position.copy(from).addScaledVector(viewDir.copy(camera.position).sub(from), viewK);
 }
 const clock = new THREE.Clock();
 const camGoal = new THREE.Vector3();

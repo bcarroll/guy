@@ -3951,6 +3951,13 @@ T.sweepViews = async () => {
       cv.removeEventListener('pointerdown', spy);
       out.push(result('views: 3rd person: a press anywhere on the picture still reaches the camera controls (left-drag orbits)', reached === hits.length, { reached, of: hits.length }));
     }
+    {   // against the left wall with the camera behind him: it must stay inside his room, not hang in the next one
+      const r = b.g.root, was = r.position.clone(), yaw = r.rotation.y;
+      r.position.set(-4.6, 0, 0); r.rotation.y = Math.PI / 2;
+      set('static'); set('third'); await frames(30);
+      out.push(result('views: 3rd person: the camera is pulled in so it stays inside his room (no wall between it and him)', cam.position.x > -5 && cam.position.x < 5 && cam.position.distanceTo({ x: -4.6, y: 1.2, z: 0, isVector3: true }) > 0.4, { x: cam.position.x }));
+      r.position.copy(was); r.rotation.y = yaw; set('third'); await frames(4);
+    }
     set('first'); step(3); await frames();
     {
       const cv = document.querySelector('canvas'); let reached = 0; const spy = () => reached++;
