@@ -22,6 +22,9 @@
   #btns button[hidden] { display: none; }
   #btns button.on { background: #2a7fb0; color: #fff; }
   @media (pointer: coarse) { #hud small { display: none; } }
+  /* the button row is about 1100 px wide: on a mid-width window the status box moves to the top (clear of the buttons) and drops the long hint; on a wide one the hint wraps in the space left */
+  @media (min-width: 701px) and (max-width: 1500px) { #hud { top: 34px; bottom: auto; } #hud small { display: none; } }
+  @media (min-width: 1501px) { #hud { max-width: calc(100vw - 1180px); } }
   @media (max-width: 700px) { #hud { top: 12px; bottom: auto; left: 12px; } #btns { left: 12px; right: 12px; bottom: 12px; justify-content: center; flex-wrap: wrap; } }
   #skills { position: fixed; right: 16px; bottom: 72px; width: min(330px, calc(100vw - 32px)); max-height: 70vh; overflow: auto; background: rgba(24,26,32,.96);
             color: #eee; border-radius: 12px; padding: 12px 14px; box-shadow: 0 8px 28px rgba(0,0,0,.55); font-size: 13px; z-index: 4; }

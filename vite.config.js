@@ -19,5 +19,5 @@ export default {
   plugins: [versionFile],
   optimizeDeps: { include: ['three', 'three/examples/jsm/controls/OrbitControls.js', 'three/examples/jsm/loaders/FBXLoader.js'] },     // found up front, so the dev server never reloads the page later to bundle them (that broke QA runs)
   // the QA run (qa/run.mjs) writes pictures and reports into qa/: the dev server must not reload the page it is testing because of them
-  server: { host: true, port: Number(process.env.PORT) || 5173, watch: { ignored: ['**/qa/**', '**/*.log', '**/models/**'] } },   // PORT lets a second checkout/chat run its own dev server
+  server: { proxy: { '/hf': { target: 'https://huggingface.co', changeOrigin: true, rewrite: (p) => p.replace(/^\/hf/, '') } }, host: true, port: Number(process.env.PORT) || 5173, watch: { ignored: ['**/qa/**', '**/*.log', '**/models/**'] } },   // PORT lets a second checkout/chat run its own dev server
 };

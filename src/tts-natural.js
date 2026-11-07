@@ -9,6 +9,19 @@ const listeners = new Set();
 export const onStatus = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
 const set = (patch) => { Object.assign(status, patch); listeners.forEach((fn) => { try { fn({ ...status }); } catch { /* listener failed */ } }); };
 
+// Hugging Face answers a page on *.workers.dev with a 404 and no CORS headers, so the model is fetched through this site's own
+// /hf/ path (src/worker.js in production, the vite proxy in dev). kokoro-js fetches its voice files with a hard-coded URL, so the
+// rewrite is done once for every fetch to the hub.
+const HUB = 'https://huggingface.co/';
+function routeHub() {
+  if (window.__hubRouted) return; window.__hubRouted = true;
+  const real = window.fetch.bind(window), local = new URL('hf/', document.baseURI).href;
+  window.fetch = (input, init) => {
+    const u = typeof input === 'string' ? input : input instanceof URL ? input.href : input && input.url;
+    return real(u && u.startsWith(HUB) ? local + u.slice(HUB.length) : input, init);
+  };
+}
+
 let tts = null, loading = null;
 export function load() {
   if (tts) return Promise.resolve(tts);
@@ -17,6 +30,7 @@ export function load() {
   try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch { /* the browser may evict the cache under pressure */ }
   const files = new Map();                                                 // per-file progress, so the bar reflects the whole download
   loading = (async () => {
+    routeHub();
     const { KokoroTTS } = await import('kokoro-js');
     tts = await KokoroTTS.from_pretrained(MODEL, {
       dtype: 'q8', device: 'wasm',
