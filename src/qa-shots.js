@@ -158,6 +158,12 @@ export function install(T, h) {
         return { data: capture() };
       });
     }
+    add('room-range', 'rooms', async () => {                       // the lanes and screens, the blaster case, the round controller and the scoreboard
+      await clean(47);
+      window.brain.w.rooms.add('range');
+      T.freeze(); window.guy.root.visible = false; T.frameRoom('range'); await settleFrames(3);
+      return { data: capture() };
+    });
     add('room-restaurant', 'rooms', async () => {
       await clean(43);
       T.prep('takeorder');

@@ -62,7 +62,7 @@ export const MANIFEST = {
   activities: {
     wander: {}, stretch: {}, wave: {},
     // the Shooting Range (rangebrain.js): shots from his lane at the bullseyes and enemies (no objects of its own)
-    rangeshoot: { room: 'range', max: 150, touches: [], skills: ['range.pistol'] },
+    rangeshoot: { room: 'range', max: 150, touches: ['round controller', 'blaster case'], skills: ['range.pistol'] },
     rangehang: { room: 'range', max: 60, touches: [] },
     rangefool: { room: 'range', max: 90, touches: [] },
     piano: { objects: ['piano'], skills: ['piano'], touches: ['piano'] },
@@ -179,7 +179,9 @@ export const MANIFEST = {
     { id: 'yard-sit', activity: 'yardsit', pose: 'sitRest', t: 6, view: 'side', expect: 'seated in the lawn chair, back against it, legs clear of the frame' },
     { id: 'yard-shed-open', activity: 'yardtidy', pose: 'reach', t: 1.3, view: 'side', yard: true, expect: 'standing at the shed door, one hand on the knob, the door swung wide open showing the dark inside; the lawn chair still out on the grass' },
     { id: 'yard-mow', activity: 'mow', pose: 'walk', t: 1, view: 'side', push: true, expect: 'both hands on the mower handle, walking behind it, stripes cut in the grass' },
-    { id: 'range-aim', activity: 'rangeshoot', pose: 'aim', t: 0.45, view: 'side', room: 'range', expect: 'standing on the firing line facing down the range, right arm straight out with the blaster in the hand (glowing tip), left hand under the grip, a holographic bullseye ahead' },
+    { id: 'range-aim', activity: 'rangeshoot', pose: 'aim', t: 0.45, view: 'side', room: 'range', range: 'shoot', expect: 'standing on the firing line facing down the range, right arm straight out with the blaster in the hand (glowing tip), left hand under the grip, a holographic bullseye ahead' },
+    { id: 'range-press', activity: 'rangeshoot', pose: 'aim', t: 0.5, view: 'side', room: 'range', range: 'press', expect: 'facing the side wall, one arm out and the hand on the green START ROUND button of the round controller (the other arm hanging), not through the panel' },
+    { id: 'range-take', activity: 'rangeshoot', pose: 'aim', t: 0.5, view: 'back', room: 'range', range: 'take', expect: 'seen from behind, facing the glass blaster case on the side wall, one arm out reaching for the blaster on the shelf, the other arm hanging, standing clear of the case' },
     { id: 'range-hop', activity: 'rangefool', pose: 'jump', t: 0.2, view: 'side', room: 'range', expect: 'in mid-air a short way from the floor, just after leaving the firing line, the feet clear of the ground and a screen between the lanes beside him'},
     { id: 'scope-care', activity: 'scopecare', pose: 'scopeCare', t: 13, view: 'front', expect: 'squatting beside the tripod with a hand on one leg' },
     { id: 'stool-dust', activity: 'dusttop', pose: 'reach', t: 4, view: 'front', dist: 3.6, expect: 'standing ON the foot stool (feet on top of it, not in the floor), right hand wiping along the top of the window frame, the stool not passing through him' },
@@ -1083,7 +1085,7 @@ T.moment = (activity, pose, t = 0, view = 'front', opts = {}) => {
   if (opts.album) b.forceAlbum = (W().objects.shelf.albums[0] || { def: {} }).def.id;
   b.queue = []; b.step = null; b.choose(activity);
   let guard = 0;
-  const ok = () => b.step && b.pose === pose && b.step.t >= t && (!opts.turning || (b.read && b.read.turning && b.read.turnT > 0.8)) && (!opts.push || b.step.push) && (!opts.yard || (b.inYard() && b.step.t >= t)) && (!opts.album || (b.held && b.held.kind === 'album'));
+  const ok = () => b.step && b.pose === pose && b.step.t >= t && (!opts.turning || (b.read && b.read.turning && b.read.turnT > 0.8)) && (!opts.push || b.step.push) && (!opts.range || (b.step.fx && b.step.fx.range && (opts.range === 'shoot' ? !b.step.fx.range.single : b.step.fx.range.tag === opts.range))) && (!opts.yard || (b.inYard() && b.step.t >= t)) && (!opts.album || (b.held && b.held.kind === 'album'));
   while (!ok() && guard++ < 40000) step(1 / 30);
   T.freeze(); T.look(view, opts.dist);                                       // (opts.dist: how far back the camera stands, for a picture of someone up on a stool)
   return { reached: guard < 40000, state: T.state(), hands: T.hands() };
@@ -3780,8 +3782,17 @@ T.sweepRange = () => {
   const before = w.obstacles.length;
   const added = R().add('range');
   const rg = w.range;
-  out.push(result('range: the room is added with three lanes and its two screens (they are pathing obstacles)', added.ok && !!rg && rg.lanes.length === 3 && w.obstacles.length === before + 2, { added: added.ok, lanes: rg && rg.lanes.length }));
+  out.push(result('range: the room is added with three lanes, its two screens and its equipment (all pathing obstacles)', added.ok && !!rg && rg.lanes.length === 3 && w.obstacles.length === before + rg.obstacles.length && rg.partitions.length === 2, { added: added.ok, lanes: rg && rg.lanes.length }));
   if (!rg) { R().reset('range'); return out; }
+  // the room is as wide as GUY's room; the display case, the round controller and the scoreboard are in the bays beside the lanes
+  {
+    const sz = w.shellSize('range'), fx = rg.obstacles.filter((o) => o.fixture), names = fx.map((o) => o.name).sort().join();
+    const bounds = w.doors.range.shell.bounds, inRoom = fx.every((o) => o.x0 >= bounds.minX - 0.01 && o.x1 <= bounds.maxX + 0.01 && o.z0 >= bounds.minZ - 0.01 && o.z1 <= bounds.maxZ + 0.01);
+    const clear = fx.every((o) => rg.partitions.every((p) => { const ob = rg.obstacles[rg.partitions.indexOf(p)]; return !(o.x1 > ob.x0 && o.x0 < ob.x1 && o.z1 > ob.z0 && o.z0 < ob.z1); }));
+    out.push(result('range: the room is 8 m wide like GUYs room, with a blaster case, a round controller and a scoreboard inside it, clear of the screens', sz.l === 8 && names === 'blaster case,round controller,scoreboard' && inRoom && clear, { size: sz, names, inRoom, clear }));
+    const slot = rg.display.slot('range.pistol'), stand = rg.display.standSpot('range.pistol');
+    out.push(result('range: the robot stands where he can walk (not in an obstacle) to use each piece of equipment', [stand, rg.panel.standSpot(), rg.board.standSpot(), rg.display.standSpot('range.carbine')].every((p) => w.walkable(p.x, p.z) && !w.obstacles.some((o) => o.active !== false && p.x > o.x0 && p.x < o.x1 && p.z > o.z0 && p.z < o.z1)) && Math.hypot(slot.x - stand.x, slot.z - stand.z) < 0.9, { slot, stand }));
+  }
   // the line of fire: a low shot from the left lane into the right one clips the screen; a high one clears it; a shot down your own lane is clear
   const from0 = rg.muzzle(0), right = rg.targets.find((t) => t.kind === 'rail' && t.lane === 2), own = rg.targets.find((t) => t.kind === 'rail' && t.lane === 0);
   const low = rg.clearShot(from0, rg.worldAim(right, 0)), high = rg.clearShot(from0, rg.worldAim(right, 1));
@@ -3791,6 +3802,22 @@ T.sweepRange = () => {
   const offered = rg.candidates(0);
   const acrossOk = offered.filter((c) => !c.own).every((c) => rg.clearShot(from0, c.point));
   out.push(result('range: what a robot is offered is clear to shoot at (own lane and across)', offered.some((c) => c.own) && offered.some((c) => !c.own) && acrossOk, { offered: offered.map((c) => [c.target.lane, c.own, +c.k.toFixed(2)]) }));
+  // the equipment is used: a shooting trip presses the button (a new round), takes the blaster out of the case, shoots, looks at the
+  // scoreboard and puts the blaster back
+  {
+    const b = B(); let sawOut = false, sawBoard = 0, startedRound = false;
+    rg.score.round.shots = 9; rg.score.round.hits = 9;
+    T.settle(); T.home(); b.queue = []; b.step = null; b.choose('rangeshoot');
+    for (let i = 0; i < 150 * 30; i++) {
+      step(1 / 30);
+      if (rg.display.out['range.pistol']) sawOut = true;
+      if (rg.panel.lit > 0 && rg.score.round.shots < 9) startedRound = true;
+      const p = rg.board.standSpot(), q = G().root.position; if (Math.hypot(p.x - q.x, p.z - q.z) < 0.4) sawBoard++;
+      if (i > 60 && b.last !== 'rangeshoot') break;
+    }
+    out.push(result('range: a shooting trip presses the round button, takes the blaster out of the case, looks at the scoreboard and puts the blaster back', startedRound && sawOut && sawBoard > 20 && !Object.keys(rg.display.out).length && !rg.gun.visible, { startedRound, sawOut, sawBoard, out: rg.display.out, gun: rg.gun.visible }));
+    T.settle(); T.home();
+  }
   // the enemies walk and dissolve for a while, and never leave their lane or their stretch of the range
   let seen = 0, outside = 0;
   for (let i = 0; i < 40; i++) {
@@ -3814,7 +3841,7 @@ T.sweepRange = () => {
   out.push(result('range: shots across the lanes are fired and counted', rg.score.shots > c0 && rg.score.cross > x0 && rg.score.hits <= rg.score.shots, { shots: rg.score.shots - c0, cross: rg.score.cross - x0, hits: rg.score.hits }));
   // GUY walking past and across the screens (round their ends, corners cut by the walk) keeps clear of them: he never clips one
   {
-    const g = G(), b = B(), walks = [[6.5, -1, 11, -3], [6.4, 0.6, 10, -2.6], [6.6, -2.8, 12, 0.6], [12, 0.6, 7.5, -3], [9, -1, 14, -1], [13, -3, 8.2, -1], [13.7, 0.15, 6, -1.5, true]];
+    const g = G(), b = B(), walks = [[6.5, 0, 11, -2], [6.4, 1.6, 10, -1.6], [6.6, -1.8, 12, 1.6], [12, 1.6, 7.5, -2], [9, 0, 14, 0], [13, -2, 8.2, 0], [13.7, 1.15, 6, -0.5, true]];   // (the range is centred on its wall: its screens are 1 m either side of the middle)
     const segs = rg.partitions.map((p) => [p.a, p.b]);
     const gap = (px, pz) => Math.min(...segs.map(([a, c]) => { const vx = c.x - a.x, vz = c.z - a.z, L = vx * vx + vz * vz || 1; const t = Math.max(0, Math.min(1, ((px - a.x) * vx + (pz - a.z) * vz) / L)); return Math.hypot(px - a.x - t * vx, pz - a.z - t * vz); }));
     let closest = 9, arrived = 0;
