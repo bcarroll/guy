@@ -181,22 +181,22 @@ export const POSES = {
     }
   },
 
-  // A robot has nothing to stretch: he checks himself over. One hand comes up in front of his face, he looks at it, turns the wrist and
-  // flexes the fingers; then the other hand does the same.
+  // A robot has nothing to stretch: he checks himself over. One hand is held out in front of him palm up, he looks down at it, turns it
+  // over a little and flexes the fingers; then the other hand does the same.
   inspect(g, t, dur) {
     const e = env(t, dur, 0.7);
     const side = t < dur / 2 ? 'Right' : 'Left', sg = side === 'Right' ? -1 : 1;           // (local x is negative on his right)
     const other = side === 'Right' ? 'Left' : 'Right';
     const half = dur / 2, th = t < half ? t : t - half, w = Math.min(1, Math.sin(clamp(th / half, 0, 1) * Math.PI) * 2.2);       // up and down once per hand
     const head = g.root.worldToLocal(g.boneWorld('Head'));
-    const target = g.root.localToWorld(new THREE.Vector3(sg * 0.05, head.y - 0.2, 0.36));         // the wrist: the fingers rise in front of his face
+    const target = g.root.localToWorld(new THREE.Vector3(sg * 0.01, head.y - 0.5, 0.34));         // the wrist, held out in front of his chest
     const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(g.root.getWorldQuaternion(new THREE.Quaternion()));
-    const fingers = new THREE.Vector3(0, 1, 0).addScaledVector(fwd, 0.3).normalize();
-    const palm = fwd.clone().negate().applyAxisAngle(fingers, sg * Math.sin(th * 3.2) * 0.45 * w);       // palm to his face, turning a little each way
-    g.reach(side, target, w * e, false, { hand: { fingers, palm } });
+    const fingers = fwd.clone().add(new THREE.Vector3(0, 0.1, 0)).normalize();
+    const palm = new THREE.Vector3(0, 1, 0).applyAxisAngle(fingers, -sg * Math.sin(th * 3.2) * 0.5 * w);      // palm up, turning over a little each way
+    g.reach(side, target, w * e, false, { hand: { fingers, palm }, pole: new THREE.Vector3(sg * 0.12, -1, -0.45) });
     const flex = 0.15 + 0.55 * (0.5 + 0.5 * Math.sin(th * 7)) * w;                    // fingers open and close
     g.curl(side, flex); g.curl(other, 0.1);
-    g.set('Head', Q('x', 0.4 * w * e, 'y', -sg * 0.12 * w * e));
+    g.set('Head', Q('x', 0.55 * w * e, 'y', -sg * 0.1 * w * e));
     g.set('Spine1', Q('x', 0.05 * w * e));
   },
 
