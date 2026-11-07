@@ -150,6 +150,7 @@ Needs and allowed arm contacts are in `MANIFEST.activities`.
 | yard-block | `hoopdefend`, pose `block`, t 0.5, front (dist 4) | off the floor, both arms straight up, legs tucked a little |
 | yard-keeper | `goalkeep`, pose `keeper`, t 1.2, front (dist 4) | wide low crouch in the goal mouth, arms out low, open hands, leaning forward |
 | inspect-right | `inspect`, pose `inspect`, t 1.5, front | right hand raised in front of his face, head tipped to look at it, left arm hanging |
+| inspect-left | `inspect`, pose `inspect`, t 4.5, side | left hand raised in front of his face, palm toward him, wrist not twisted |
 | yard-dive | `goalkeep`, pose `dive`, t 0.5, front (dist 4) | lunging sideways at full stretch, both arms reaching the same way, body tilted |
 | yard-sit | `yardsit`, pose `sitRest`, t 6, side | seated in the lawn chair, legs clear of the frame |
 | yard-shed-open | `yardtidy`, pose `reach`, t 1.3, side (in the yard) | at the shed door, hand on the knob, door swung wide open showing the dark inside |

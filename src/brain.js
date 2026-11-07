@@ -189,9 +189,11 @@ export const POSES = {
     const other = side === 'Right' ? 'Left' : 'Right';
     const half = dur / 2, th = t < half ? t : t - half, w = Math.min(1, Math.sin(clamp(th / half, 0, 1) * Math.PI) * 2.2);       // up and down once per hand
     const head = g.root.worldToLocal(g.boneWorld('Head'));
-    const target = g.root.localToWorld(new THREE.Vector3(sg * 0.04, head.y - 0.06, 0.42));
-    g.reach(side, target, w * e, false);
-    g.set(`${side}Hand`, Q('y', sg * Math.sin(th * 3.2) * 0.7 * w, 'x', -0.2 * w));
+    const target = g.root.localToWorld(new THREE.Vector3(sg * 0.05, head.y - 0.2, 0.36));         // the wrist: the fingers rise in front of his face
+    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(g.root.getWorldQuaternion(new THREE.Quaternion()));
+    const fingers = new THREE.Vector3(0, 1, 0).addScaledVector(fwd, 0.3).normalize();
+    const palm = fwd.clone().negate().applyAxisAngle(fingers, sg * Math.sin(th * 3.2) * 0.45 * w);       // palm to his face, turning a little each way
+    g.reach(side, target, w * e, false, { hand: { fingers, palm } });
     const flex = 0.15 + 0.55 * (0.5 + 0.5 * Math.sin(th * 7)) * w;                    // fingers open and close
     g.curl(side, flex); g.curl(other, 0.1);
     g.set('Head', Q('x', 0.4 * w * e, 'y', -sg * 0.12 * w * e));

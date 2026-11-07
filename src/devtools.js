@@ -168,6 +168,7 @@ export const MANIFEST = {
     { id: 'drums-solo', activity: 'drumsolo', pose: 'drumSit', t: 12, view: 'side', expect: 'arms reach the toms and crash without the elbows folding into his chest' },
     { id: 'easel-paint', activity: 'paint', pose: 'paintStand', t: 9, view: 'side', expect: 'brush tip on the canvas with a stroke being drawn, palette on the left palm, standing a step from the easel' },
     { id: 'inspect-right', activity: 'inspect', pose: 'inspect', t: 1.5, view: 'front', expect: 'right hand raised in front of his face, wrist turned, fingers part-curled, head tipped down to look at it, left arm hanging' },
+    { id: 'inspect-left', activity: 'inspect', pose: 'inspect', t: 4.5, view: 'side', expect: 'left hand raised in front of his face, palm toward him, fingers up and part-curled, wrist not twisted, right arm hanging' },
     { id: 'easel-mix', activity: 'mixpaint', pose: 'paintStand', t: 6, view: 'front', expect: 'brush circling on the palette held in the left hand' },
     { id: 'scope-peer', activity: 'stargaze', pose: 'scopePeer', t: 6, view: 'side', expect: 'eye at the eyepiece (rear end), knees bent, left hand on the focus knob, right hand on the barrel' },
     { id: 'scope-aim', activity: 'stargaze', pose: 'scopeAim', t: 2.2, view: 'top', expect: 'one hand on top of the barrel while the tube swings round' },
