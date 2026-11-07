@@ -60,7 +60,7 @@ export const MANIFEST = {
   // activities: objects that must be in the room, skills needed, `music` = needs the stereo already playing,
   // touches = objects GUY's arms may legitimately be inside the bounding box of (hands on keys, pushing, ...)
   activities: {
-    wander: {}, stretch: {}, wave: {},
+    wander: {}, inspect: {}, wave: {},
     // the Shooting Range (rangebrain.js): shots from his lane at the bullseyes and enemies (no objects of its own)
     rangeshoot: { room: 'range', max: 150, touches: ['round controller', 'blaster case'], skills: ['range.pistol'] },
     rangehang: { room: 'range', max: 60, touches: [] },
@@ -167,6 +167,7 @@ export const MANIFEST = {
     { id: 'drums-sit', activity: 'drums', pose: 'drumSit', t: 9, view: 'front', expect: 'seated on the stool, a stick in each fist held like a knife (pointing forward, only slightly down, not steeply down), tips over the pads, kit not passing through his legs' },
     { id: 'drums-solo', activity: 'drumsolo', pose: 'drumSit', t: 12, view: 'side', expect: 'arms reach the toms and crash without the elbows folding into his chest' },
     { id: 'easel-paint', activity: 'paint', pose: 'paintStand', t: 9, view: 'side', expect: 'brush tip on the canvas with a stroke being drawn, palette on the left palm, standing a step from the easel' },
+    { id: 'inspect-right', activity: 'inspect', pose: 'inspect', t: 1.5, view: 'front', expect: 'right hand raised in front of his face, wrist turned, fingers part-curled, head tipped down to look at it, left arm hanging' },
     { id: 'easel-mix', activity: 'mixpaint', pose: 'paintStand', t: 6, view: 'front', expect: 'brush circling on the palette held in the left hand' },
     { id: 'scope-peer', activity: 'stargaze', pose: 'scopePeer', t: 6, view: 'side', expect: 'eye at the eyepiece (rear end), knees bent, left hand on the focus knob, right hand on the barrel' },
     { id: 'scope-aim', activity: 'stargaze', pose: 'scopeAim', t: 2.2, view: 'top', expect: 'one hand on top of the barrel while the tube swings round' },
@@ -4309,13 +4310,13 @@ T.sweepVoice = async () => {
     out.push(result('voice: every activity has a line to say as it starts, or is on the silent list (a new activity needs one)', !noLine.length && !stale.length && !both.length, { noLine, stale, both }));
     V.tts.stop(); for (let i = 0; i < 40 && V.tts.speaking; i++) await wait(100);            // (a robot does not remark over a line being spoken)
     resetBarks(); V.tts.set('chatter', 'quiet'); const nb = V.tts.log.length;
-    b.queue = []; b.step = null; b.choose('stretch');
+    b.queue = []; b.step = null; b.choose('inspect');
     out.push(result('voice: quiet (the default): starting an activity says nothing', V.tts.log.length === nb));
-    V.tts.set('chatter', 'chatty'); resetBarks(); b.queue = []; b.step = null; b.choose('stretch');
+    V.tts.set('chatter', 'chatty'); resetBarks(); b.queue = []; b.step = null; b.choose('inspect');
     const first = V.tts.log.slice(nb).filter((l) => l.kind === 'bark');
     b.queue = []; b.step = null; b.choose('wave');
     const second = V.tts.log.slice(nb).filter((l) => l.kind === 'bark');
-    out.push(result('voice: chatty: GUY remarks as he starts something, but not twice within 25 s', first.length === 1 && first[0].who === 'guy' && BARKS.stretch.includes(first[0].text) && second.length === 1, { first, second: second.length }));
+    out.push(result('voice: chatty: GUY remarks as he starts something, but not twice within 25 s', first.length === 1 && first[0].who === 'guy' && BARKS.inspect.includes(first[0].text) && second.length === 1, { first, second: second.length }));
     V.tts.set('chatter', 'quiet'); V.tts.stop(); resetBarks();
     V.tts.stop();
   } catch (e) { if (e.message !== 'no GAL') out.push(result('voice: sweep ran without throwing', false, { error: String(e && e.stack || e).slice(0, 400) })); }

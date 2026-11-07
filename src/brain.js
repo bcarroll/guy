@@ -32,7 +32,7 @@ const ACT_OBJ = {
 };
 // what an activity needs to have in the same room as its main object (else it cannot be done, or is done without it)
 const TOGETHER = { jam: ['table'], jampiano: ['table'], jamsit: ['table'], jamguitar: ['table'], jamdrums: ['table'] };
-const FREE_ACTS = ['wander', 'stretch', 'wave'];           // done wherever he happens to be
+const FREE_ACTS = ['wander', 'inspect', 'wave'];           // done wherever he happens to be
 const OWN_ROOM_ACTS = ['leave', 'stuck', 'visit', 'dropball', 'hangpaint'];      // (they plan their own way: dropping a ball where he stands, hanging a painting on whichever wall)
 import { sfx, drag as sfxDrag } from './sfx.js';
 import { findBooks, learnBooks } from './learn.js';
@@ -181,15 +181,21 @@ export const POSES = {
     }
   },
 
-  stretch(g, t, dur) {
-    const e = env(t, dur, 0.6);
-    const wob = Math.sin(t * 2) * 0.05;
-    // Reach overhead but stop just short of vertical (±π/2) so the arms don't cross.
-    g.set('LeftArm', Q('z', lerp(-ARM_DOWN, 1.3, e) + wob));
-    g.set('RightArm', Q('z', lerp(ARM_DOWN, -1.3, e) - wob));
-    g.set('Spine1', Q('x', -0.15 * e, 'z', Math.sin(t * 1.3) * 0.2 * e));
-    g.set('Head', Q('x', -0.35 * e));
-    g.curl('Left', 0.1); g.curl('Right', 0.1);
+  // A robot has nothing to stretch: he checks himself over. One hand comes up in front of his face, he looks at it, turns the wrist and
+  // flexes the fingers; then the other hand does the same.
+  inspect(g, t, dur) {
+    const e = env(t, dur, 0.7);
+    const side = t < dur / 2 ? 'Right' : 'Left', sg = side === 'Right' ? -1 : 1;           // (local x is negative on his right)
+    const other = side === 'Right' ? 'Left' : 'Right';
+    const half = dur / 2, th = t < half ? t : t - half, w = Math.min(1, Math.sin(clamp(th / half, 0, 1) * Math.PI) * 2.2);       // up and down once per hand
+    const head = g.root.worldToLocal(g.boneWorld('Head'));
+    const target = g.root.localToWorld(new THREE.Vector3(sg * 0.04, head.y - 0.06, 0.42));
+    g.reach(side, target, w * e, false);
+    g.set(`${side}Hand`, Q('y', sg * Math.sin(th * 3.2) * 0.7 * w, 'x', -0.2 * w));
+    const flex = 0.15 + 0.55 * (0.5 + 0.5 * Math.sin(th * 7)) * w;                    // fingers open and close
+    g.curl(side, flex); g.curl(other, 0.1);
+    g.set('Head', Q('x', 0.4 * w * e, 'y', -sg * 0.12 * w * e));
+    g.set('Spine1', Q('x', 0.05 * w * e));
   },
 
   wave(g, t, dur) {
@@ -787,7 +793,7 @@ export class Brain {
       read: () => { const only = this.forceBook; this.forceBook = null; return this.readSteps(only && only.mesh.visible ? only : null); },
       books: () => this.readSteps(),
       putback: () => ['putting the book back', this.putBackStep()],
-      stretch: () => ['stretching', this.play('stretch', 5)],
+      inspect: () => ['checking himself over', this.play('inspect', 6)],
       wave: () => { const p = this.openSpotNear(this.waveSpot().x, this.waveSpot().z); return ['waving at you', this.walk(p.x, p.z, 0), this.play('wave', 3.5)]; },      // in front of the camera, but not inside the furniture there
       rearrange: () => this.rearrangeSteps(),
       // any of the plants in the room (the user can ask for a particular one: forcePlant)
@@ -2065,7 +2071,7 @@ export class Brain {
     const unread = shelf ? shelf.books.filter((b) => b.mesh.visible && this.wantsBook(b)).length : 0;
     const weights = {
       wander: 3, sit: 0.7, sitguitar: 1.1, slouch: 0.5, dancemoves: 1.5, ballroom: 1.5, piano: 1, sitpiano: 1.2, plink: 1.4, dance: 1.8, jam: 0.9, jampiano: 0.5, jamsit: 0.9, lamp: 1.2, mood: 1.1,
-      read: 1.8 + unread * 1.8, stretch: 1.3, wave: 0.7, ball: 2, dribble: 1.1, toss: 1.1, rearrange: 0.7, guitar: 1.6, riff: 1.0, plant: 0.6, jamguitar: 1.5, visit: 0.4,
+      read: 1.8 + unread * 1.8, inspect: 0.5, wave: 0.7, ball: 2, dribble: 1.1, toss: 1.1, rearrange: 0.7, guitar: 1.6, riff: 1.0, plant: 0.6, jamguitar: 1.5, visit: 0.4,
       takeorder: 40, cook: 35, serve: 45, takepay: 50,
       build: 2.0, tidytools: 0.4,
       bang: 1.3, drums: 1.6, drumsolo: 1.2, jamdrums: 1.5, scribble: 1.3, paint: 1.6, mixpaint: 1.3, portrait: 1.4,

@@ -1,7 +1,7 @@
 # GUY's Room
 
 Three.js + Vite. GUY (Mixamo Y Bot) lives in a room and chooses activities at random:
-wandering, playing the piano, dancing to the boombox, kicking a ball, toggling the lamp, browsing books, stretching, waving.
+wandering, playing the piano, dancing to the boombox, kicking a ball, toggling the lamp, browsing books, checking himself over, waving.
 
     npm install
     npm run dev      # http://localhost:5173
@@ -9,6 +9,6 @@ wandering, playing the piano, dancing to the boombox, kicking a ball, toggling t
                      # compared with qa/baselines (look at qa/index.html; see .claude/skills/test-guy-game/SKILL.md section 0)
 
 Controls: drag = orbit, scroll = zoom, the view dropdown = Static / Follow / 3rd person / 1st person, F = switch between the static view and the chosen one, Space = skip to next activity.
-Debug URLs: `?act=piano|dance|ball|lamp|books|stretch|wave`, `?follow`. There is no start screen: the sound starts on your first tap, drag or key press (`?nostart` is still accepted and does nothing). In the console `sim(seconds)` fast-forwards.
+Debug URLs: `?act=piano|dance|ball|lamp|books|inspect|wave`, `?follow`. There is no start screen: the sound starts on your first tap, drag or key press (`?nostart` is still accepted and does nothing). In the console `sim(seconds)` fast-forwards.
 
 Code map: `src/room.js` (furniture, doors), `src/rooms.js` (extra rooms added from the Catalog's Rooms tab), `src/workobjects.js`, `src/workbrain.js`, `src/workshop.js` (the Workshop: furniture, what GUY does there, the recipes), `src/needs.js` (what the house needs built), `src/gal.js`, `src/botobjects.js` (GAL, the second robot, and the machine that builds her), `src/approach.js` (using stations from any free side), `src/restobjects.js`, `src/restbrain.js`, `src/customers.js`, `src/customermodels.js` (the Restaurant: furniture and elevator, what GUY does there, the customers and who they are), `src/yardobjects.js`, `src/yardballs.js`, `src/yardbrain.js` (the Backyard: an outdoor room with day and night, a soccer goal and basketball hoop with ball physics, lawn chair, bird bath, sky switch, and the premium shed and mower), `src/rangeobjects.js`, `src/rangebrain.js` (the Shooting Range: three lanes, holographic bullseyes and enemies, shots across the lanes only when the line of fire clears the screens), `src/paintings.js`, `src/paintbrain.js` (GUY's paintings: long-press the easel > Hang painting; he hangs it on a wall of any room, three to a wall, and replaces the oldest when full), `src/layout.js` (remembers where everything is between visits), `src/update.js` (refreshes the page when a newer build is deployed), `src/guy.js` (FBX + skeleton driver), `src/brain.js` (poses, activities, A* pathing), `src/audio.js` (synth).

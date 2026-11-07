@@ -8,7 +8,7 @@ export const BARKS = {
   lamp: ['Let me see about the lamp.'], mood: ['Setting the mood.'], plant: ['The plant needs some care.'], dust: ['A bit of dusting.'], dusttop: ['The top of that window needs dusting.'],
   read: ['I will read for a while.', 'Time for a book.'], ball: ['Who wants to play ball?'], dribble: ['Dribbling.'], toss: ['Catch!'],
   guitar: ['Guitar time.'], riff: ['I have a riff in mind.'], sitguitar: ['I will sit with the guitar.'],
-  stretch: ['Time to stretch.'], wave: ['Hello!'], sit: ['I will sit for a bit.'], slouch: ['Just resting.'],
+  inspect: ['Running a self-check.'], wave: ['Hello!'], sit: ['I will sit for a bit.'], slouch: ['Just resting.'],
   bang: ['Banging the drums.'], drums: ['Drums!'], drumsolo: ['Solo time.'],
   scribble: ['A quick sketch.'], paint: ['Let me paint.'], mixpaint: ['Mixing some colours.'], portrait: ['A portrait, I think.'],
   peek: ['A quick look through the telescope.'], stargaze: ['Stargazing.'], darkstargaze: ['Lights off, for the stars.'], scopecare: ['The telescope needs looking after.'],

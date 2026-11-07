@@ -25,7 +25,7 @@ const OBJECTS = [
   [/ (workbench|work bench|tinker|build) /, 'workbench'], [/ (toolbox|tool box|tools?) /, 'toolbox'],
   [/ (plants?|tree|flowers?|water) /, 'plant'], [/ (chair|armchair|couch) /, 'sit'], [/ (workstation|work station|terminal|computer) /, 'workstation'],
 ];
-const ACTS = [[/ (dance|boogie|groove) /, 'dance'], [/ (sit|rest|relax) /, 'sit'], [/ (stretch) /, 'stretch'], [/ (wave|hello|hi|hey) /, 'wave'], [/ (wander|walk around|stroll) /, 'wander']];
+const ACTS = [[/ (dance|boogie|groove) /, 'dance'], [/ (sit|rest|relax) /, 'sit'], [/ (inspect|check yourself|check yourself over) /, 'inspect'], [/ (wave|hello|hi|hey) /, 'wave'], [/ (wander|walk around|stroll) /, 'wander']];
 
 export function parse(text, ctx = {}) {
   let t = norm(text);
