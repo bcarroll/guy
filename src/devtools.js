@@ -3941,7 +3941,27 @@ T.sweepViews = async () => {
     const dist3 = d(cam.position);
     out.push(result('views: 3rd person: the camera is a few metres behind and above him, and Follow shows on', dist3 > 2 && dist3 < 4.5 && cam.position.y > 1.5 && document.getElementById('follow-btn').classList.contains('on'), { dist3, y: cam.position.y }));
     out.push(result('views: 3rd person: the user keeps the controls (orbit, zoom, pan stay enabled)', window.__ui.controlsEnabled() === true));
+    {   // a left press anywhere (even on furniture) must reach OrbitControls so a drag turns the camera
+      const cv = document.querySelector('canvas'); let reached = 0; const spy = () => reached++;
+      cv.setPointerCapture = cv.releasePointerCapture = () => {};      // a synthetic pointer has no capture to give OrbitControls
+      cv.addEventListener('pointerdown', spy);        // (bubble phase: only runs if the capture handler did not stopImmediatePropagation... it is on the same element, so it is skipped when stopped)
+      const hits = [[0.5, 0.5], [0.5, 0.7], [0.3, 0.6], [0.7, 0.6], [0.5, 0.85]];
+      for (const [fx, fy] of hits) cv.dispatchEvent(new PointerEvent('pointerdown', { clientX: innerWidth * fx, clientY: innerHeight * fy, button: 0, bubbles: true, pointerId: 41 }));
+      cv.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 41 }));
+      cv.removeEventListener('pointerdown', spy);
+      out.push(result('views: 3rd person: a press anywhere on the picture still reaches the camera controls (left-drag orbits)', reached === hits.length, { reached, of: hits.length }));
+    }
     set('first'); step(3); await frames();
+    {
+      const cv = document.querySelector('canvas'); let reached = 0; const spy = () => reached++;
+      cv.addEventListener('pointerdown', spy);
+      const hits = [[0.5, 0.5], [0.5, 0.7], [0.3, 0.6], [0.7, 0.6], [0.5, 0.85]];
+      for (const [fx, fy] of hits) cv.dispatchEvent(new PointerEvent('pointerdown', { clientX: innerWidth * fx, clientY: innerHeight * fy, button: 0, bubbles: true, pointerId: 42 }));
+      cv.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 42 }));
+      cv.removeEventListener('pointerdown', spy);
+      delete cv.setPointerCapture; delete cv.releasePointerCapture;
+      out.push(result('views: 1st person: a press anywhere on the picture still reaches the camera controls (left-drag looks round)', reached === hits.length, { reached, of: hits.length }));
+    }
     const fov0 = cam.fov; document.querySelector('canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: 100, bubbles: true })); await frames(2);
     out.push(result('views: 1st person: the user keeps the controls: the wheel zooms the lens, drag looks around', window.__ui.controlsEnabled() === true && cam.fov > fov0, { fov0, fov: cam.fov }));
     cam.fov = fov0; cam.updateProjectionMatrix();

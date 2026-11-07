@@ -767,6 +767,20 @@ canvas.addEventListener('pointerdown', (e) => {
     }, LONG_PRESS_MS);
     return;
   }
+  // In 3rd / 1st person a drag anywhere turns the camera (the view is full of furniture, and the camera may be inside it): a press on
+  // something still opens its menu on a long hold, but moving the pointer orbits instead of dragging the piece.
+  if (view === 'third' || view === 'first') {
+    pending = { hit, x: e.clientX, y: e.clientY, off: null, orbit: true, armed: false };
+    pending.timer = setTimeout(() => {
+      if (!pending) return;
+      const h = pending.hit;
+      if (h.obj && h.obj.heldAlbums && h.point && h.point.y > TOP_SHELF_Y && h.obj.heldAlbums().length) openAlbumMenu(h.obj, pending.x, pending.y);
+      else if (h.obj && h.obj.heldBooks && h.point && h.obj.heldBooks().some((b) => b.mesh.visible) && bookHit(h)) openBookMenu(h.obj, pending.x, pending.y);
+      else openMenu(h, pending.x, pending.y);
+      pending = null;
+    }, LONG_PRESS_MS);
+    return;
+  }
   e.stopImmediatePropagation();
   const p = hit.decor ? planeAt(e, hit.decor.plane) : floorAt(e);
   if (!p) return;
@@ -787,6 +801,7 @@ canvas.addEventListener('pointermove', (e) => {
   if (pending && Math.hypot(e.clientX - pending.x, e.clientY - pending.y) > 8) {
     clearTimeout(pending.timer);
     if (pending.hit.door) { /* a door cannot be dragged: moving the pointer cancels the press */ }
+    else if (pending.orbit && !pending.armed && !(pending.hit.decor && !pending.hit.decor.wall)) { /* ride view: the drag orbits the camera */ }
     else if (!pending.orbit || pending.armed) { drag = { ...pending.hit, off: pending.off }; if (drag.obj && !drag.ball) world.beginDrag(drag.obj); }   // a held rug follows the pointer; a quick drag on one orbits
     pending = null;
   }
