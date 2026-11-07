@@ -1672,6 +1672,14 @@ T.sweepRooms = () => {
   messages.push(...none.messages);
   out.push(result('rooms: with no wall free it explains, and nothing changes', !none.ok && friendly(none.messages) && !Object.keys(w.doors).length && Object.keys(w.removed).length === before.size, { none }));
   out.push(result('rooms: every message is short and kind', friendly(messages.filter(Boolean)), { messages }));
+  // four rooms fill all four walls (the left one beside the Catalog); the Restaurant never takes the left wall
+  T.resetRooms();
+  R().setUnlocked('restaurant', true);
+  const four = ['restaurant', 'backyard', 'range', 'workshop'].map((id) => R().add(id));
+  const sides = Object.values(w.doors).map((d) => d.wall).sort().join();
+  const clearOfCatalog = Object.values(w.doors).every((d) => d.wall !== 'left' || d.u - w.DOOR.w / 2 >= w.MACHINE_RECT.u1 || d.u + w.DOOR.w / 2 <= w.MACHINE_RECT.u0);
+  out.push(result('rooms: four rooms get a door each on all four walls, the left one clear of the Catalog, and the Restaurant is not on the left',
+    four.every((r) => r.ok) && sides === 'back,front,left,right' && clearOfCatalog && w.doors.restaurant.wall !== 'left' && Object.values(w.doors).every((d) => !doorProblems(d.id).length), { sides, four: four.map((r) => r.ok) }));
   T.resetRooms(); putBackSince(before); machine().hidden = true;
   out.push(result('rooms: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;

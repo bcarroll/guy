@@ -8,7 +8,7 @@ import { dev } from './devunlock.js';
 
 export const ROOM_CATALOG = [
   // `size` ({ w: depth away from the door, d: width along the wall }) is optional: left out, a room is as big as GUY's room.
-  { id: 'workshop', name: 'Workshop', icon: '🛠️', unlocked: true, doorWalls: ['right', 'front', 'back'],
+  { id: 'workshop', name: 'Workshop', icon: '🛠️', unlocked: true, doorWalls: ['right', 'front', 'back', 'left'],
     desc: 'A place to build things. Adds a door to your room.',
     look: { frame: 0x6b4a2b, door: 0xb5532f, panel: 0xc9683f, floor: 0x8c9096, wall: 0xb4b8bd } },
   // The Restaurant: a kitchen, a cash register and dining tables, with an elevator the customers arrive in. A premium room: listed
@@ -17,12 +17,12 @@ export const ROOM_CATALOG = [
     desc: 'A kitchen and dining room. Customers arrive by elevator and GUY cooks and serves.',
     look: { frame: 0x6b4a2b, door: 0x2f6f8f, panel: 0x3d86a8, floor: 0xb98a55, wall: 0xeadbc0 } },
   // The Backyard: an open-air room (grass, a fence, no ceiling) with a goal, a hoop, a lawn chair, a bird bath and a switch for day and night.
-  { id: 'backyard', name: 'Backyard', icon: '🌳', unlocked: true, outdoor: true, doorWalls: ['right', 'front', 'back'],
+  { id: 'backyard', name: 'Backyard', icon: '🌳', unlocked: true, outdoor: true, doorWalls: ['right', 'front', 'back', 'left'],
     desc: 'An outdoor room with a lawn and a fence. Soccer, basketball, a lawn chair, a bird bath, and an artificial sun and moon you can switch.',
     look: { frame: 0x6b4a2b, door: 0x6f9f4a, panel: 0x8cc063, floor: 0x5fa046, wall: 0xb48a58 } },
   // The Shooting Range: three lanes with holographic bullseyes and enemies. GUY and GAL shoot from their own lanes (src/rangeobjects.js,
   // src/rangebrain.js). Deeper than a room's default, so the lanes have room to shoot down.
-  { id: 'range', name: 'Shooting Range', icon: '🎯', unlocked: true, shootingRange: true, size: { w: 10, d: 6 }, doorWalls: ['right', 'front', 'back'],
+  { id: 'range', name: 'Shooting Range', icon: '🎯', unlocked: true, shootingRange: true, size: { w: 10, d: 6 }, doorWalls: ['right', 'front', 'back', 'left'],
     desc: 'A shooting range with three lanes. Holographic bullseyes and enemies pop up down the range, and the robots take shots at them: from their own lane, and across the screens when the line is clear.',
     look: { frame: 0x3b4150, door: 0x3d4a63, panel: 0x5ef2ff, floor: 0x9a9fa6, wall: 0xc9ccd2 } },
 ];

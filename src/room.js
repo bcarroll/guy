@@ -482,12 +482,14 @@ export function buildRoom(scene) {
   const doorRect = (wall, u) => {                                       // the floor strip in front of a door at (wall, u)
     const hw = DOOR.w / 2 + DOOR.margin;
     if (wall === 'right') return { x0: ROOM.w / 2 - DOOR.zone, x1: ROOM.w / 2, z0: u - hw, z1: u + hw };
+    if (wall === 'left') return { x0: -ROOM.w / 2, x1: -ROOM.w / 2 + DOOR.zone, z0: u - hw, z1: u + hw };
     if (wall === 'front') return { x0: u - hw, x1: u + hw, z0: ROOM.d / 2 - DOOR.zone, z1: ROOM.d / 2 };
     return { x0: u - hw, x1: u + hw, z0: -ROOM.d / 2, z1: -ROOM.d / 2 + DOOR.zone };   // back
   };
   const doorRectIn = (wall, u) => {                                     // the same strip on the other side of the wall, inside the added room
     const hw = DOOR.w / 2 + DOOR.margin;
     if (wall === 'right') return { x0: ROOM.w / 2, x1: ROOM.w / 2 + DOOR.zone, z0: u - hw, z1: u + hw };
+    if (wall === 'left') return { x0: -ROOM.w / 2 - DOOR.zone, x1: -ROOM.w / 2, z0: u - hw, z1: u + hw };
     if (wall === 'front') return { x0: u - hw, x1: u + hw, z0: ROOM.d / 2, z1: ROOM.d / 2 + DOOR.zone };
     return { x0: u - hw, x1: u + hw, z0: -ROOM.d / 2 - DOOR.zone, z1: -ROOM.d / 2 };
   };
@@ -1211,6 +1213,7 @@ export function buildRoom(scene) {
       const through = Object.values(doors).some((dr) => {
         const b = dr.shell.bounds, hw = DOOR.w / 2, wall = dr.wall;
         if (wall === 'right') return x0 < MAIN_BOUNDS.maxX && x1 > MAIN_BOUNDS.maxX && x0 >= MAIN_BOUNDS.minX && x1 <= b.maxX && z0 >= dr.u - hw && z1 <= dr.u + hw;
+        if (wall === 'left') return x1 > MAIN_BOUNDS.minX && x0 < MAIN_BOUNDS.minX && x1 <= MAIN_BOUNDS.maxX && x0 >= b.minX && z0 >= dr.u - hw && z1 <= dr.u + hw;
         if (wall === 'front') return z0 < MAIN_BOUNDS.maxZ && z1 > MAIN_BOUNDS.maxZ && z0 >= MAIN_BOUNDS.minZ && z1 <= b.maxZ && x0 >= dr.u - hw && x1 <= dr.u + hw;
         return z1 > MAIN_BOUNDS.minZ && z0 < MAIN_BOUNDS.minZ && z1 <= MAIN_BOUNDS.maxZ && z0 >= b.minZ && x0 >= dr.u - hw && x1 <= dr.u + hw;      // back
       });
@@ -1263,6 +1266,7 @@ export function buildRoom(scene) {
       if (o.removable === false || o.weight === 'heavy') return { fixed: name, hit: [] };
       hit.push(name);
     }
+    if (wall === 'left' && overlap1(u - DOOR.w / 2, u + DOOR.w / 2, MACHINE_RECT.u0, MACHINE_RECT.u1)) return { fixed: 'skill machine', hit: [] };   // the Catalog hangs here
     if (obstacles.some((o) => o.name === 'bookstack' && rectsOverlap(r, o))) return { fixed: 'bookstack', hit: [] };   // the books stacked beside the shelf
     for (const d of Object.values(decor)) {
       if (d.wall === wall && overlap1(d.u - d.hw, d.u + d.hw, u - DOOR.w / 2, u + DOOR.w / 2) && d.v - d.hh < DOOR.h) hit.push(d.name);
@@ -1272,12 +1276,12 @@ export function buildRoom(scene) {
   const doorSpotFree = (wall, u) => !Object.values(doors).some((d) => rectsOverlap(d.rect, doorRect(wall, u)));
 
   // Where should the next door go? Fewest pieces to move first, then the wall order given, then nearest the middle of the wall.
-  // The left wall holds the Catalog and is never used.
+  // The left wall holds the Catalog: a door may go there, but not across it (see doorBlockers).
   const planDoor = (walls = ['right', 'front', 'back']) => {
     let best = null;
     walls.forEach((wall, wi) => {
       const W = WALL[wall];
-      if (!W || wall === 'left') return;
+      if (!W) return;
       if (Object.values(doors).some((d) => d.wall === wall)) return;                 // one added room to a wall: two would stand on the same ground
       const steps = Math.floor((W.hi - W.lo - 1.8) / 0.1 + 1e-6);
       for (let i = 0; i <= steps; i++) {
@@ -1355,13 +1359,14 @@ export function buildRoom(scene) {
   // from the door x width along the wall): a room that is cramped cannot hold what is built in it.
   const buildShell = (def, wall, u) => {
     const W = WALL[wall];
-    const N = def.size ? def.size.w : (wall === 'right' ? ROOM.w : ROOM.d);          // away from the door wall
+    const N = def.size ? def.size.w : (wall === 'right' || wall === 'left' ? ROOM.w : ROOM.d);          // away from the door wall
     const L = def.size ? def.size.d : W.hi - W.lo;                                    // along the door wall
     const c = Math.max(W.lo + L / 2, Math.min(W.hi - L / 2, u));
     const g = new THREE.Group();
     g.position.copy(W.at(c, 0));
     g.rotation.y = W.rotY;
     const bounds0 = wall === 'right' ? { minX: ROOM.w / 2, maxX: ROOM.w / 2 + N, minZ: c - L / 2, maxZ: c + L / 2 }
+      : wall === 'left' ? { minX: -ROOM.w / 2 - N, maxX: -ROOM.w / 2, minZ: c - L / 2, maxZ: c + L / 2 }
       : wall === 'front' ? { minX: c - L / 2, maxX: c + L / 2, minZ: ROOM.d / 2, maxZ: ROOM.d / 2 + N }
         : { minX: c - L / 2, maxX: c + L / 2, minZ: -ROOM.d / 2 - N, maxZ: -ROOM.d / 2 };
     if (def.outdoor) {                         // open air: a lawn, a fence, the sun and moon lamps; no walls or ceiling (src/yardobjects.js)
@@ -1389,6 +1394,7 @@ export function buildRoom(scene) {
     ceil.position.set(0, ROOM.h, -N / 2);
     g.add(ceil);
     const bounds = wall === 'right' ? { minX: ROOM.w / 2, maxX: ROOM.w / 2 + N, minZ: c - L / 2, maxZ: c + L / 2 }
+      : wall === 'left' ? { minX: -ROOM.w / 2 - N, maxX: -ROOM.w / 2, minZ: c - L / 2, maxZ: c + L / 2 }
       : wall === 'front' ? { minX: c - L / 2, maxX: c + L / 2, minZ: ROOM.d / 2, maxZ: ROOM.d / 2 + N }
         : { minX: c - L / 2, maxX: c + L / 2, minZ: -ROOM.d / 2 - N, maxZ: -ROOM.d / 2 };
     // the Shooting Range: its lanes, screens, bullseyes and enemies go in the room (src/rangeobjects.js); the screens are attached in addDoor
@@ -1414,7 +1420,7 @@ export function buildRoom(scene) {
   // A real doorway: the wall is left out and put back in three pieces (left of the door, right of it, and above it), so an open
   // door shows the way through and GUY can walk through it. Built in the door's own frame (local x along the wall).
   const buildDoorway = (wall, u) => {
-    const W = WALL[wall], sgn = W.rotY === Math.PI ? -1 : 1;
+    const W = WALL[wall], sgn = W.rotY === Math.PI || W.rotY === Math.PI / 2 ? -1 : 1;
     const g = new THREE.Group();
     g.position.copy(W.at(u, 0));
     g.rotation.y = W.rotY;
@@ -1485,7 +1491,7 @@ export function buildRoom(scene) {
       }
       if (def.elevator) {                                       // a room with an elevator (the Restaurant): a cabin against the far wall
         const b = shell.bounds, sgn = WALL[wall].rotY === Math.PI ? -1 : 1;
-        const N = wall === 'right' ? b.maxX - b.minX : b.maxZ - b.minZ, Lw = wall === 'right' ? b.maxZ - b.minZ : b.maxX - b.minX;
+        const ew = wall === 'right' || wall === 'left', N = ew ? b.maxX - b.minX : b.maxZ - b.minZ, Lw = ew ? b.maxZ - b.minZ : b.maxX - b.minX;
         const lat = -Lw / 2 + 1.3;
         const cabin = rest.buildElevator();
         cabin.position.set(sgn * lat, 0, -N + 0.02);
@@ -1598,8 +1604,8 @@ export function buildRoom(scene) {
     // How big an added room is: `n` away from the door wall, `l` along it. And its two directions in the world (unit vectors): towards
     // the door (out of the room) and the way `lat` grows along the wall.
     shellSize(id) {
-      const d = doors[id], b = d.shell.bounds, deep = d.wall === 'right' ? b.maxX - b.minX : b.maxZ - b.minZ;
-      return { n: deep, l: d.wall === 'right' ? b.maxZ - b.minZ : b.maxX - b.minX };
+      const d = doors[id], b = d.shell.bounds, ew = d.wall === 'right' || d.wall === 'left', deep = ew ? b.maxX - b.minX : b.maxZ - b.minZ;
+      return { n: deep, l: ew ? b.maxZ - b.minZ : b.maxX - b.minX };
     },
     shellAxes(id) {
       const d = doors[id], a = WALL[d.wall].at(1, 0), o = WALL[d.wall].at(0, 0);
