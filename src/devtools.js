@@ -3932,14 +3932,22 @@ T.sweepViews = async () => {
   const frames = (n = 4) => new Promise((r) => { let k = 0; const t0 = performance.now(); const f = () => { if (++k >= n || performance.now() - t0 > 4000) r(); else requestAnimationFrame(f); }; requestAnimationFrame(f); });          // (the camera moves in the render loop, not in sim: wait for real frames)
   const out = [], base = errors.length, sel = document.getElementById('view-sel'), cam = window.__camera, b = B();
   const set = (v) => { sel.value = v; sel.dispatchEvent(new Event('change')); };
+    const heading = () => { const v = cam.position.clone(); cam.getWorldDirection(v); return Math.atan2(v.x, v.z); };
+    const dragTurn = async (id) => {          // a real left-drag of 150 px, then the picture must stay turned (nothing puts it back)
+      const cv = document.querySelector('canvas'); cv.setPointerCapture = cv.releasePointerCapture = () => {};
+      const h0 = heading(), fire = (t, x) => cv.dispatchEvent(new PointerEvent(t, { clientX: x, clientY: innerHeight * 0.4, button: 0, buttons: 1, bubbles: true, pointerId: id, pointerType: 'mouse' }));
+      fire('pointerdown', 300); for (let i = 1; i <= 10; i++) fire('pointermove', 300 + i * 15); fire('pointerup', 450); await frames(6);
+      const h1 = heading(); delete cv.setPointerCapture; delete cv.releasePointerCapture;
+      let dh = Math.abs(h1 - h0); if (dh > Math.PI) dh = Math.PI * 2 - dh; return dh;
+    };
   const d = (p) => Math.hypot(p.x - b.g.root.position.x, p.z - b.g.root.position.z);
   try {
     out.push(result('views: the dropdown offers static, follow, 3rd person and 1st person', ['static', 'follow', 'third', 'first'].every((v) => [...sel.options].some((o) => o.value === v))));
     set('static'); const p0 = cam.position.clone(); step(3); await frames();
-    out.push(result('views: static: the camera stays where it was and Follow is off', cam.position.distanceTo(p0) < 1e-6 && window.__ui.view() === 'static' && !document.getElementById('follow-btn').classList.contains('on')));
+    out.push(result('views: static: the camera stays where it was', cam.position.distanceTo(p0) < 1e-6 && window.__ui.view() === 'static'));
     set('third'); step(3); await frames();
     const dist3 = d(cam.position);
-    out.push(result('views: 3rd person: the camera is a few metres behind and above him, and Follow shows on', dist3 > 2 && dist3 < 4.5 && cam.position.y > 1.5 && document.getElementById('follow-btn').classList.contains('on'), { dist3, y: cam.position.y }));
+    out.push(result('views: 3rd person: the camera is a few metres behind and above him', dist3 > 2 && dist3 < 4.5 && cam.position.y > 1.5 && window.__ui.view() === 'third', { dist3, y: cam.position.y }));
     out.push(result('views: 3rd person: the user keeps the controls (orbit, zoom, pan stay enabled)', window.__ui.controlsEnabled() === true));
     {   // a left press anywhere (even on furniture) must reach OrbitControls so a drag turns the camera
       const cv = document.querySelector('canvas'); let reached = 0; const spy = () => reached++;
@@ -3958,7 +3966,9 @@ T.sweepViews = async () => {
       out.push(result('views: 3rd person: the camera is pulled in so it stays inside his room (no wall between it and him)', cam.position.x > -5 && cam.position.x < 5 && cam.position.distanceTo({ x: -4.6, y: 1.2, z: 0, isVector3: true }) > 0.4, { x: cam.position.x }));
       r.position.copy(was); r.rotation.y = yaw; set('third'); await frames(4);
     }
+    { const dh = await dragTurn(51); out.push(result('views: 3rd person: dragging with the left button turns the camera and it stays turned', dh > 0.4, { dh })); }
     set('first'); step(3); await frames();
+    { const dh = await dragTurn(52); out.push(result('views: 1st person: dragging with the left button turns the view and it stays turned', dh > 0.4, { dh })); }
     {
       const cv = document.querySelector('canvas'); let reached = 0; const spy = () => reached++;
       cv.addEventListener('pointerdown', spy);
@@ -4144,27 +4154,27 @@ T.sweepScreenLock = async () => {
   const at = (el) => { const r = el.getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); };
   const canvas = document.querySelector('canvas'), btn = document.getElementById('lockscreen-btn');
   const key = (k) => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: k, code: k === ' ' ? 'Space' : undefined, cancelable: true, bubbles: true }));
-  const follow = document.getElementById('follow-btn'), skills = document.getElementById('skills');
+  const follow = document.getElementById('view-sel'), skills = document.getElementById('skills');
   const was = SL.mode;
   try {
     SL.setMode('off', { quiet: true });
     out.push(result('screenlock: off: the HUD buttons take touches, the canvas takes the canvas, the lock button is there', at(follow) === follow && body.dataset.lock === 'off' && !!btn && btn.title.includes('Off')));
-    const f0 = follow.classList.contains('on'); key('f'); const f1 = follow.classList.contains('on'); key('f');
+    const f0 = (window.__ui.view() !== 'static'); key('f'); const f1 = (window.__ui.view() !== 'static'); key('f');
     out.push(result('screenlock: off: the F key still toggles follow', f0 !== f1));
     // on
     document.getElementById('menu').hidden = false; skills.hidden = false;
     SL.setMode('on', { quiet: true });
     out.push(result('screenlock: on: menus and panels close when the screen locks', document.getElementById('menu').hidden && skills.hidden));
     out.push(result('screenlock: on: the HUD buttons, the canvas and the catalog do not take touches, the lock button still does', at(follow) !== follow && at(document.getElementById('skip-btn')) !== document.getElementById('skip-btn') && at(canvas) !== canvas && at(btn) === btn));
-    const g0 = follow.classList.contains('on'); key('f'); key('k'); key(' ');
-    out.push(result('screenlock: on: keys do nothing (follow, skills panel, next)', follow.classList.contains('on') === g0 && skills.hidden));
+    const g0 = (window.__ui.view() !== 'static'); key('f'); key('k'); key(' ');
+    out.push(result('screenlock: on: keys do nothing (follow, skills panel, next)', (window.__ui.view() !== 'static') === g0 && skills.hidden));
     out.push(result('screenlock: on: the camera is frozen', window.__ui.controlsEnabled() === false));
     canvas.dispatchEvent(new PointerEvent('pointerdown', { clientX: innerWidth / 2, clientY: innerHeight / 2, button: 0, bubbles: true, pointerId: 31 }));
     out.push(result('screenlock: on: pressing the canvas starts no object press', window.__ui.pending === null));
     // camera only
     SL.setMode('camera', { quiet: true });
     out.push(result('screenlock: camera only: the canvas takes touches (camera), the HUD buttons do not', at(canvas) === canvas && at(follow) !== follow && body.dataset.lock === 'camera'));
-    out.push(result('screenlock: camera only: the camera is live, keys still do nothing', window.__ui.controlsEnabled() === true && (key('f'), follow.classList.contains('on') === g0)));
+    out.push(result('screenlock: camera only: the camera is live, keys still do nothing', window.__ui.controlsEnabled() === true && (key('f'), (window.__ui.view() !== 'static') === g0)));
     canvas.setPointerCapture = canvas.releasePointerCapture = () => {};     // a synthetic pointer has no capture to give OrbitControls
     canvas.dispatchEvent(new PointerEvent('pointerdown', { clientX: innerWidth / 2, clientY: innerHeight * 0.8, button: 0, bubbles: true, pointerId: 32 }));
     out.push(result('screenlock: camera only: pressing the canvas still starts no object press (no drag, no menu)', window.__ui.pending === null && document.getElementById('menu').hidden));

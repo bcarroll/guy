@@ -463,3 +463,4 @@ Checked by `T.sweepSounds` (event -> counted request). Whether it *sounds* right
 - Regression watch: the door sign said the added room's name on both faces (from the Backyard it read "Backyard"); the face toward the added room now reads "GUY's Room".
 - Regression watch: the Shooting Range door sign was cut off at the frame; sign text now shrinks to fit.
 - Widened the range from 6 m to 8 m (it is now centred on its wall, so the screens are 1 m either side of the wall's middle: the "walking across the screens" test's coordinates moved with them); the side bays hold the blaster case, round controller and scoreboard (see above).
+- 3rd / 1st person: left-drag did not turn the camera (OrbitControls' turn was undone because the camera is re-placed every frame): those views now turn themselves (`turnView` in `src/main.js`); `sweepViews` drags for real and checks the picture stays turned. The Follow button is gone (the view dropdown and the F key do the job).
