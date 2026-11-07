@@ -388,12 +388,16 @@ function pick(e) {
   for (const d of Object.values(world.decor)) targets.push(d.group);
   for (const d of Object.values(world.doors)) targets.push(d.group);
   if (!world.ballGone) targets.push(world.ball);
+  const rg = world.range, rangeParts = rg ? { blasterrack: rg.display.group, rangecontroller: rg.panel.group, scoreboard: rg.board.group } : {};
+  targets.push(...Object.values(rangeParts));
   const hit = raycaster.intersectObjects(targets, true)[0];
   if (!hit) return null;
   const point = hit.point.clone();
   for (let n = hit.object; n; n = n.parent) {
     if (n === world.skillMachine) return { machine: true };
     if (n === world.ball) return { ball: true };
+    const part = Object.keys(rangeParts).find((k) => rangeParts[k] === n);
+    if (part) return { range: part, point };
     const obj = Object.values(world.objects).find((o) => o.group === n);
     if (obj) return { obj, point };
     const door = Object.values(world.doors).find((d) => d.group === n);
@@ -563,6 +567,9 @@ albumMenu.addEventListener('click', (e) => {
 function interactLabel(name) {
   const w = brain.w;
   switch (name) {
+    case 'blasterrack': return '🔫 Shoot the Target';
+    case 'rangecontroller': return '🎯 Start a Round';
+    case 'scoreboard': return '👀 Watch the Range';
     case 'piano': case 'bench': return '🎹 Play Piano';
     case 'table': return brain.music ? '🔊 Turn Stereo Off' : '🔊 Turn Stereo On';
     case 'guitar': return '🎸 Play Guitar';
@@ -614,6 +621,20 @@ function openMenu(hit, x, y) {
     menu.querySelectorAll('[data-act]').forEach((b) => { b.hidden = b.dataset.act !== 'interact' && b.dataset.act !== 'lock'; });
     menu.querySelector('[data-act="interact"]').textContent = ch.label;
     menu.querySelector('[data-act="lock"]').textContent = locked ? '🔓 Unlock the door' : '🔒 Lock the door';
+    menu.hidden = false;
+    menu.style.left = Math.min(x, innerWidth - menu.offsetWidth - 8) + 'px';
+    menu.style.top = Math.min(y, innerHeight - menu.offsetHeight - 8) + 'px';
+    return;
+  }
+  if (hit.range) {                                       // the Shooting Range's blaster rack, round controller and scoreboard: Interact / Lock in only
+    menuTitle.textContent = { blasterrack: 'blaster rack', rangecontroller: 'round controller', scoreboard: 'scoreboard' }[hit.range];
+    menuNote.textContent = '';
+    menu.querySelectorAll('[data-act]').forEach((b) => { b.hidden = b.dataset.act !== 'interact' && b.dataset.act !== 'lock'; });
+    menu.querySelector('[data-act="interact"]').textContent = interactLabel(hit.range);
+    const lk = !!(brain.lock && brain.lock.name === hit.range);
+    const la = menu.querySelector('[data-act="lock"]');
+    la.hidden = !(lk || brain.lockActs(hit.range).length);
+    la.textContent = lk ? '🔓 Unlock' : '🔒 Lock in';
     menu.hidden = false;
     menu.style.left = Math.min(x, innerWidth - menu.offsetWidth - 8) + 'px';
     menu.style.top = Math.min(y, innerHeight - menu.offsetHeight - 8) + 'px';
@@ -671,6 +692,15 @@ menu.addEventListener('click', (e) => {
     closeMenu();
     return;
   }
+  if (t.range) {                                        // long-press the blaster rack > Shoot the Target / Lock in
+    if (act === 'interact') showToast(brain.interact(t.range).message);
+    if (act === 'lock') {
+      if (brain.lock && brain.lock.name === t.range) { brain.unlock(true); showToast('GUY is free to do what he likes.'); }
+      else showToast(brain.lockOn(t.range).message);
+    }
+    closeMenu();
+    return;
+  }
   if (act === 'interact') {
     const r = brain.interact(t.ball ? 'ball' : t.obj.name);
     showToast(r.message);
@@ -712,7 +742,7 @@ menu.addEventListener('click', (e) => {
 addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
 window.__guyOpenBooks = (name = 'shelf') => openBookMenu(world.objects[name], 200, 100);          // the long-press book list, for the QA harness
 window.__guyOpenDoorMenu = (id, side = 'main') => openMenu({ door: world.doors[id], side }, 120, 120);     // for the QA harness (side: the face pressed)
-window.__guyOpenMenu = (name) => openMenu(name === 'ball' ? { ball: true } : { obj: brain.obj(name) }, 120, 120);     // for the QA harness
+window.__guyOpenMenu = (name) => openMenu(name === 'ball' ? { ball: true } : ['blasterrack', 'rangecontroller', 'scoreboard'].includes(name) ? { range: name } : { obj: brain.obj(name) }, 120, 120);     // for the QA harness
 addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') { setSoundMuted(!soundMuted); showToast(soundMuted ? 'Sound muted (M or the speaker to turn it back on)' : 'Sound on'); } });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -766,7 +796,7 @@ canvas.addEventListener('pointerdown', (e) => {
   }
   // In 3rd / 1st person a drag anywhere turns the camera (the view is full of furniture, and the camera may be inside it): a press on
   // something still opens its menu on a long hold, but moving the pointer orbits instead of dragging the piece.
-  if (view === 'third' || view === 'first') {
+  if (hit.range || view === 'third' || view === 'first') {
     pending = { hit, x: e.clientX, y: e.clientY, off: null, orbit: true, armed: false };
     pending.timer = setTimeout(() => {
       if (!pending) return;
@@ -803,7 +833,7 @@ canvas.addEventListener('pointermove', (e) => {
     pending = null;
   }
   if (!drag) {
-    if (!pending) { const h = pick(e); canvas.style.cursor = h && !(h.decor && !h.decor.wall) ? (h.machine || h.door ? 'pointer' : 'grab') : ''; }
+    if (!pending) { const h = pick(e); canvas.style.cursor = h && !(h.decor && !h.decor.wall) ? (h.machine || h.door || h.range ? 'pointer' : 'grab') : ''; }
     return;
   }
   canvas.style.cursor = 'grabbing';

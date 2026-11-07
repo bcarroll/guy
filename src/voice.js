@@ -15,6 +15,7 @@ const OBJECTS = [
   [/ lawn ?chair /, 'lawnchair'], [/ (mow|mows|mowing|mowed|mower|lawn ?mower|lawn|grass|shed) /, 'mower'],
   [/ (basketball|hoops?|dunk) /, 'basketballhoop'], [/ (soccer|football|goal|penalty|penalties) /, 'soccergoal'],
   [/ (bird ?baths?|birds?) /, 'birdbath'],
+  [/ (blasters?|shooting|shoot|shoot ?out|target practice|firing range|range) /, 'blasterrack'],
   // the Restaurant: the counter before the stove ("kitchen counter" is not "kitchen"), and the dining table before the stereo's table
   [/ (kitchen counter|counter|serve|serving|deliver) /, 'kitchencounter'], [/ (stove|cook|cooks|cooking|kitchen) /, 'stove'],
   [/ (register|till|cashier|checkout|payments?|take the money) /, 'register'], [/ (dining table|dining tables|take orders?|take the orders?|waiter|waiting tables|customers?|diners?) /, 'diningtable'],

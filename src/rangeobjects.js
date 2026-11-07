@@ -218,11 +218,13 @@ export function buildRangeShell(g, L, N) {
     }
     fixtures.push({ name: 'blaster case', x0: front, x1: side, z0: cz - len / 2, z1: cz + len / 2, h: 1.9 });
     const d = {
+      group: grp,                                                                // (what a long-press can hit)
       out: {},                                                                   // the kinds that are out of the case
       slot(kind) { return worldPt0(front + 0.2, slotY + 0.1, slots[kind].z); },                // where the hand goes to take it
       standSpot(kind) { const p = worldPt0(front - 0.5, 0, slots[kind].z); return { x: p.x, z: p.z, yaw: worldYaw(1, 0) }; },
-      take(kind) { if (!models[kind]) return false; d.out[kind] = true; models[kind].visible = false; return true; },
-      giveBack(kind) { if (!models[kind]) return false; delete d.out[kind]; models[kind].visible = true; return true; },
+      // (both robots may take the same kind: it is back on the shelf when the last one has given it back)
+      take(kind) { if (!models[kind]) return false; d.out[kind] = (d.out[kind] || 0) + 1; models[kind].visible = false; return true; },
+      giveBack(kind) { if (!models[kind]) return false; if (d.out[kind] > 1) d.out[kind]--; else { delete d.out[kind]; models[kind].visible = true; } return true; },
     };
     return d;
   })();
@@ -239,6 +241,7 @@ export function buildRangeShell(g, L, N) {
     const tag = label('START ROUND', 0.55, 0.12, 256, 56, 'bold 28px sans-serif'); tag.position.set(0.101, by + 0.05, 0); tag.rotation.y = Math.PI / 2; grp.add(tag);
     fixtures.push({ name: 'round controller', x0: -side, x1: -side + 0.15, z0: bz - 0.35, z1: bz + 0.35, h: 2.0 });
     return {
+      group: grp,
       lit: 0,
       buttonPoint() { return worldPt0(-side + 0.12, by - 0.12, bz); },
       standSpot() { const p = worldPt0(-side + 0.55, 0, bz); return { x: p.x, z: p.z, yaw: worldYaw(-1, 0) }; },
@@ -272,6 +275,7 @@ export function buildRangeShell(g, L, N) {
     face.position.set(0.082, 1.75, 0); face.rotation.y = Math.PI / 2; grp.add(face);
     fixtures.push({ name: 'scoreboard', x0: -side, x1: -side + 0.1, z0: bz - 0.93, z1: bz + 0.93, h: 2.3 });
     return {
+      group: grp,
       draw,
       standSpot() { const p = worldPt0(-side + 1.2, 0, bz); return { x: p.x, z: p.z, yaw: worldYaw(-1, 0) }; },
     };
@@ -286,18 +290,36 @@ export function buildRangeShell(g, L, N) {
   const impact = new THREE.Mesh(new THREE.RingGeometry(0.02, 0.09, 16), additive(0x9ff7ff)); impact.visible = false; g.add(impact);
   let flashT = 0, impactT = 0;
 
-  // the blaster: a grey pistol with a glowing tip, held in the right hand while he shoots
-  const gun = new THREE.Group();
-  const gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.11, 0.2), rig); gunBody.position.set(0, 0, -0.06); gun.add(gunBody);
-  const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.05, 0.2), rig); barrel.position.set(0, 0.02, -0.25); gun.add(barrel);
-  const tip = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), additive(0xff8a3d)); tip.position.set(0, 0.02, -0.36); gun.add(tip);
-  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.14, 0.06), rig); grip.position.set(0, -0.11, 0); grip.rotation.x = 0.2; gun.add(grip);
-  gun.visible = false;
-  g.add(gun);
+  // the blasters in the robots' hands: a grey pistol with a glowing tip, one for each robot (GUY's and GAL's), held in the right hand
+  const makeGun = () => {
+    const gun = new THREE.Group();
+    const gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.11, 0.2), rig); gunBody.position.set(0, 0, -0.06); gun.add(gunBody);
+    const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.05, 0.2), rig); barrel.position.set(0, 0.02, -0.25); gun.add(barrel);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), additive(0xff8a3d)); tip.position.set(0, 0.02, -0.36); gun.add(tip);
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.14, 0.06), rig); grip.position.set(0, -0.11, 0); grip.rotation.x = 0.2; gun.add(grip);
+    gun.visible = false;
+    g.add(gun);
+    return {
+      group: gun,
+      get visible() { return gun.visible; },
+      // `hand` is the hand's place (world), `dir` the way the barrel points (unit, world); the grip sits in the palm
+      hold(hand, dir) {
+        gun.visible = true;
+        const h = g.worldToLocal(hand.clone()), d = g.worldToLocal(hand.clone().add(dir)).sub(h).normalize();
+        gun.position.copy(h).addScaledVector(d, 0.06);
+        gun.quaternion.setFromUnitVectors(V(0, 0, -1), d);
+      },
+      hide() { gun.visible = false; },
+      setKind(kind) { gun.scale.z = kind === 'range.carbine' ? 1.5 : 1; },       // the long one for the carbine
+      // the glowing tip, where a shot starts (world)
+      tipWorld() { gun.updateWorldMatrix(true, false); return gun.localToWorld(V(0, 0.02, -0.36 * gun.scale.z)); },
+    };
+  };
+  const guns = { guy: makeGun(), gal: makeGun() };
 
   const worldPt = (x, z) => g.localToWorld(V(x, 0, z));
   const range = {
-    group: g, lanes: lanes.map((x, i) => ({ i, x })), obstacles, partitions, targets, score, gun, display, panel, board,
+    group: g, lanes: lanes.map((x, i) => ({ i, x })), obstacles, partitions, targets, score, guns, gun: guns.guy, makeGun, display, panel, board,
     // Call once the group is in the scene: the screens' places in the world (their ends, and the pathing boxes).
     attach() {
       g.updateWorldMatrix(true, false);
@@ -350,7 +372,8 @@ export function buildRangeShell(g, L, N) {
     },
     // Fire from lane `i` at the world point `to` on `target`. The shot hits when the line is clear and the target is still up
     // (and the hand is steady: HIT). A miss lands a little off the target.
-    fire(i, target, to) {
+    // `tip` (world, optional): where the shot leaves the blaster in his hand; the line of fire is judged from the lane's muzzle
+    fire(i, target, to, tip) {
       const from = range.muzzle(i);
       const clear = range.clearShot(from, to);
       const own = target.lane === i;
@@ -363,7 +386,7 @@ export function buildRangeShell(g, L, N) {
         if (!own) score.crossHits++;
         target.onHit();
       }
-      range.tracer(from, land);
+      range.tracer(tip || from, land);
       return { hit, clear, own, land };
     },
     // a tracer from the muzzle to where the shot lands, a flash at the muzzle and a ring where it lands (all world points)
@@ -380,16 +403,9 @@ export function buildRangeShell(g, L, N) {
       impact.position.copy(lb); impact.visible = true; impactT = 0;
       impact.quaternion.setFromUnitVectors(V(0, 0, 1), la.clone().sub(lb).normalize());     // the ring faces the shooter
     },
-    // holds the blaster in the hand (world): `hand` is the hand's place, `dir` the way the barrel points (unit, world)
-    holdGun(hand, dir) {
-      gun.visible = true;
-      const h = g.worldToLocal(hand.clone()), d = g.worldToLocal(hand.clone().add(dir)).sub(h).normalize();
-      gun.position.copy(h).addScaledVector(d, 0.06);
-      gun.quaternion.setFromUnitVectors(V(0, 0, -1), d);
-    },
-    hideGun() { gun.visible = false; },
-    // the blaster in the hand is the long one for the carbine
-    setGunKind(kind) { gun.scale.z = kind === 'range.carbine' ? 1.5 : 1; },
+    // each robot's own blaster: GUY's and GAL's (rangebrain.js holds the one that is its own)
+    gunFor(isGal) { return isGal ? guns.gal : guns.guy; },
+    hideGuns() { guns.guy.hide(); guns.gal.hide(); },
     // the way a robot on the firing line points when he is not aiming at anything (world, unit)
     awayDir() { const a = worldPt(0, 0), b = worldPt(0, -1); return V(b.x - a.x, 0, b.z - a.z).normalize(); },
     // the button on the round controller: every enemy comes up now, every bullseye is up again, and the round's score starts again

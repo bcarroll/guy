@@ -8,7 +8,7 @@ import { randomSong, makeJam, plinkSong } from './songs.js';
 import { installHobbies } from './hobbybrain.js';
 import { installWorkshop } from './workbrain.js';
 import { installYard, YARD_ACTS } from './yardbrain.js';
-import { installRange, RANGE_ACTS } from './rangebrain.js';
+import { installRange, RANGE_ACTS, RANGE_PIECES } from './rangebrain.js';
 import { installRestaurant, REST_OBJECTS, REST_JOBS } from './restbrain.js';
 import { installApproach } from './approach.js';
 import { installArrange } from './arrange.js';
@@ -2045,6 +2045,7 @@ export class Brain {
       stove: REST_ACTS, kitchencounter: REST_ACTS, register: REST_ACTS, diningtable: REST_ACTS, diningtable2: REST_ACTS,
       workbench: ['build'], toolbox: ['tidytools'], woodfactory: ['build'], metalfactory: ['build'],
       soccergoal: ['goalshot', 'soccertoss'], basketballhoop: ['hoopshoot', 'hoopdribble'], lawnchair: ['yardsit'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], shed: ['mow'], mower: ['mow'],
+      blasterrack: ['rangeshoot'], rangecontroller: ['rangeshoot'], scoreboard: ['rangehang', 'rangeshoot'],
     }[name] || (this.obj(name) && this.obj(name).seats ? REST_ACTS : this.obj(name) && this.obj(name).guitar ? ['guitar', 'riff', 'jamguitar'] : this.obj(name) && this.obj(name).heldBooks ? ['read'] : this.obj(name) && this.obj(name).sit ? ['read', 'sit', 'sitguitar'] : []);
     return list.filter((a) => this.available(a));
   }
@@ -2135,7 +2136,7 @@ export class Brain {
     if (!name && this.ballHeld && this.inYard()) name = 'dropball';        // out in the yard with a ball in his hands: set it down before anything else
     // He is in an added room: back through the door before anything else, unless he went there to use something that stands in it (a piano
     // dragged into the Workshop ...): then it is his room for now, and free activities happen there too.
-    if (!name && !this.inMain() && this.hereId() !== this.stayRoom && !this.lockedInside() && !this.restStays() && !this.stuckIn()) name = 'leave';
+    if (!name && !this.inMain() && this.hereId() !== this.stayRoom && !this.lockedInside() && !this.lockedInRange() && !this.restStays() && !this.stuckIn()) name = 'leave';
     if (!name && this.carry === 'canvas') name = 'putcanvas';                  // cut short with a painting in his hands: back to the easel with it
     if (!name && this.gtr.held && this.obj('guitar') && !this.guitarLocked()) name = 'putguitar'; // still holding the guitar: back on its stand (not while locked in on it)
     if (!name && this.lampOffByMe && this.obj('lamp') && !this.obj('lamp').on) name = 'lighton'; // he switched it off for the stars and never put it back
@@ -2147,7 +2148,7 @@ export class Brain {
     // Locked in on an object (long-press > Lock in): he keeps going back to it until the user tells him to stop. The chores above
     // (put the guitar back, drop the ball) still come first.
     if (!name && this.lock) {
-      const L = this.lock, gone = L.name === 'ball' ? this.w.ballGone : !this.obj(L.name);
+      const L = this.lock, gone = L.name === 'ball' ? this.w.ballGone : RANGE_PIECES.includes(L.name) ? !this.w.range : !this.obj(L.name);
       const opts = gone ? [] : this.lockActs(L.name);
       if (!opts.length) { this.unlock(false); this.ui(gone ? `wondering where the ${L.name} went` : 'nothing more to do there'); }
       else {
@@ -2258,6 +2259,7 @@ export class Brain {
       workbench: ['build'], toolbox: ['tidytools'], woodfactory: ['build'], metalfactory: ['build'],
       botprinter: ['buildbot'], workstation: ['learn'],
       soccergoal: ['goalshot', 'soccertoss'], basketballhoop: ['hoopshoot', 'hoopdribble'], lawnchair: ['yardsit'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], shed: ['mow'], mower: ['mow'],
+      blasterrack: ['rangeshoot'], rangecontroller: ['rangeshoot'], scoreboard: ['rangehang', 'rangeshoot'],
     }[name] || (this.obj(name) && this.obj(name).kind === 'footstool' ? ['dusttop'] : this.obj(name) && this.obj(name).guitar ? (k('guitar') ? (this.music ? ['jamguitar'] : ['guitar']) : []) : undefined);
     if (this.obj(name) && this.obj(name).guitar) this.wantGuitar = name;
     if (name === 'botprinter') {
@@ -2510,7 +2512,6 @@ export class Brain {
       if (s.fx.sit) this.updateSit(s);
       if (s.fx.chairSit) this.updateChairSit(s);
       if (s.fx.sitDrum) this.updateDrumSit(s);
-      if (s.fx.hop) this.hopMove(s);                                           // a jump across to another place (rangebrain.js: over a range divider)
       if (s.fx.spin) root.rotation.y += s.fx.spin * dt * Math.min(1, s.t / 0.8, (s.dur - s.t) / 0.8 + 0.001);   // turning on the spot
       if (s.fx.paint) this.updatePaintStand(s);
       if (s.fx.stool) this.updateStool(s);

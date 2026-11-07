@@ -185,9 +185,10 @@ export const MANIFEST = {
     { id: 'yard-shed-open', activity: 'yardtidy', pose: 'reach', t: 1.3, view: 'side', yard: true, expect: 'standing at the shed door, one hand on the knob, the door swung wide open showing the dark inside; the lawn chair still out on the grass' },
     { id: 'yard-mow', activity: 'mow', pose: 'walk', t: 1, view: 'side', push: true, expect: 'both hands on the mower handle, walking behind it, stripes cut in the grass' },
     { id: 'range-aim', activity: 'rangeshoot', pose: 'aim', t: 0.45, view: 'side', room: 'range', range: 'shoot', expect: 'standing on the firing line facing down the range, right arm straight out with the blaster in the hand (glowing tip), left hand under the grip, a holographic bullseye ahead' },
+    { id: 'range-fire', activity: 'rangeshoot', pose: 'aim', t: 0.25, view: 'side', room: 'range', range: 'fired', expect: 'the arm out and the blaster level, the bright tracer starting at the glowing tip of the blaster (not at his chest) and running down the range, a flash at the tip' },
+    { id: 'range-carry', activity: 'rangeshoot', pose: 'walk', t: 0.8, view: 'front', room: 'range', range: 'carry', expect: 'walking with the blaster carried low: right hand by his hip, fingers round the grip, barrel pointing forward and down (not out at the target), left arm swinging free' },
     { id: 'range-press', activity: 'rangeshoot', pose: 'aim', t: 0.5, view: 'side', room: 'range', range: 'press', expect: 'facing the side wall, one arm out and the hand on the green START ROUND button of the round controller (the other arm hanging), not through the panel' },
     { id: 'range-take', activity: 'rangeshoot', pose: 'aim', t: 0.5, view: 'back', room: 'range', range: 'take', expect: 'seen from behind, facing the glass blaster case on the side wall, one arm out reaching for the blaster on the shelf, the other arm hanging, standing clear of the case' },
-    { id: 'range-hop', activity: 'rangefool', pose: 'jump', t: 0.2, view: 'side', room: 'range', expect: 'in mid-air a short way from the floor, just after leaving the firing line, the feet clear of the ground and a screen between the lanes beside him'},
     { id: 'scope-care', activity: 'scopecare', pose: 'scopeCare', t: 13, view: 'front', expect: 'squatting beside the tripod with a hand on one leg' },
     { id: 'stool-dust', activity: 'dusttop', pose: 'reach', t: 4, view: 'front', dist: 3.6, expect: 'standing ON the foot stool (feet on top of it, not in the floor), right hand wiping along the top of the window frame, the stool not passing through him' },
     { id: 'dust-frame', activity: 'dust', pose: 'reach', t: 2.5, view: 'front', expect: 'facing the wall, right hand wiping along the lower edge of a frame (not inside the wall or his own head)' },
@@ -1090,7 +1091,7 @@ T.moment = (activity, pose, t = 0, view = 'front', opts = {}) => {
   if (opts.album) b.forceAlbum = (W().objects.shelf.albums[0] || { def: {} }).def.id;
   b.queue = []; b.step = null; b.choose(activity);
   let guard = 0;
-  const ok = () => b.step && b.pose === pose && b.step.t >= t && (!opts.turning || (b.read && b.read.turning && b.read.turnT > 0.8)) && (!opts.push || b.step.push) && (!opts.range || (b.step.fx && b.step.fx.range && (opts.range === 'shoot' ? !b.step.fx.range.single : b.step.fx.range.tag === opts.range))) && (!opts.yard || (b.inYard() && b.step.t >= t)) && (!opts.album || (b.held && b.held.kind === 'album'));
+  const ok = () => b.step && b.pose === pose && b.step.t >= t && (!opts.turning || (b.read && b.read.turning && b.read.turnT > 0.8)) && (!opts.push || b.step.push) && (!opts.range || (opts.range === 'carry' ? (b.rangeHold && b.step.type === 'walk') : opts.range === 'fired' ? (b.step.fx && b.step.fx.range && b.step.fx.range.fired) : (b.step.fx && b.step.fx.range && (opts.range === 'shoot' ? !b.step.fx.range.single : b.step.fx.range.tag === opts.range)))) && (!opts.yard || (b.inYard() && b.step.t >= t)) && (!opts.album || (b.held && b.held.kind === 'album'));
   while (!ok() && guard++ < 40000) step(1 / 30);
   T.freeze(); T.look(view, opts.dist);                                       // (opts.dist: how far back the camera stands, for a picture of someone up on a stool)
   return { reached: guard < 40000, state: T.state(), hands: T.hands() };
@@ -3810,18 +3811,74 @@ T.sweepRange = () => {
   // the equipment is used: a shooting trip presses the button (a new round), takes the blaster out of the case, shoots, looks at the
   // scoreboard and puts the blaster back
   {
-    const b = B(); let sawOut = false, sawBoard = 0, startedRound = false;
+    const b = B(); let sawOut = false, sawBoard = 0, startedRound = false, maxY = 0, fromTip = 0, shots = 0, carriedLow = 0, carriedWalking = 0, aimedLevel = 0;
+    const tracer0 = rg.tracer;
+    rg.tracer = (a, c) => { shots++; if (rg.guns.guy.visible && a.distanceTo(rg.guns.guy.tipWorld()) < 0.06) fromTip++; return tracer0.call(rg, a, c); };      // (the shot must leave the glowing tip of the blaster in his hand, not his chest)
+    const down = () => new window.THREE.Vector3(0, 0, -1).applyQuaternion(rg.guns.guy.group.quaternion).y;
     rg.score.round.shots = 9; rg.score.round.hits = 9;
     T.settle(); T.home(); b.queue = []; b.step = null; b.choose('rangeshoot');
     for (let i = 0; i < 150 * 30; i++) {
       step(1 / 30);
       if (rg.display.out['range.pistol']) sawOut = true;
       if (rg.panel.lit > 0 && rg.score.round.shots < 9) startedRound = true;
+      maxY = Math.max(maxY, G().root.position.y);
+      if (rg.guns.guy.visible && b.step && b.step.type === 'walk') { carriedWalking++; if (down() < -0.4) carriedLow++; }
+      if (rg.guns.guy.visible && b.step && b.step.type === 'play' && b.step.fx && b.step.fx.range && !b.step.fx.range.single && b.step.t > 0.3) { if (Math.abs(down()) < 0.45) aimedLevel++; }
       const p = rg.board.standSpot(), q = G().root.position; if (Math.hypot(p.x - q.x, p.z - q.z) < 0.4) sawBoard++;
       if (i > 60 && b.last !== 'rangeshoot') break;
     }
-    out.push(result('range: a shooting trip presses the round button, takes the blaster out of the case, looks at the scoreboard and puts the blaster back', startedRound && sawOut && sawBoard > 20 && !Object.keys(rg.display.out).length && !rg.gun.visible, { startedRound, sawOut, sawBoard, out: rg.display.out, gun: rg.gun.visible }));
+    out.push(result('range: a shooting trip presses the round button, takes the blaster out of the case, looks at the scoreboard and puts the blaster back', startedRound && sawOut && sawBoard > 20 && !Object.keys(rg.display.out).length && !rg.guns.guy.visible && !rg.guns.gal.visible, { startedRound, sawOut, sawBoard, out: rg.display.out, gun: rg.gun.visible }));
+    rg.tracer = tracer0;
+    out.push(result('range: every shot leaves the tip of the blaster in his hand (not his chest)', shots > 0 && fromTip === shots, { shots, fromTip }));
+    out.push(result('range: carried between shots the blaster points forward and down; aiming it is level with the target', carriedWalking > 5 && carriedLow >= carriedWalking * 0.9 && aimedLevel > 5, { carriedWalking, carriedLow, aimedLevel }));
+    out.push(result('range: he never leaves the floor on a trip (no hopping between the lanes)', maxY < 0.03, { maxY }));
     T.settle(); T.home();
+  }
+  // each robot has a blaster of her own: the other robot putting hers away does not take it out of her hand
+  {
+    const b = B(), gal = rg.gunFor(true), guy = rg.gunFor(false), p = rg.firingSpot(2);
+    gal.hold(new window.THREE.Vector3(p.x, 1.2, p.z), new window.THREE.Vector3(0, -0.7, -0.7).normalize());
+    step(0.5);                                                          // (GUY is not at the range: his own brain puts his blaster away)
+    out.push(result('range: GAL and GUY each have their own blaster: his brain putting his away leaves hers in her hand', gal !== guy && gal.visible && !guy.visible, { gal: gal.visible, guy: guy.visible }));
+    gal.hide();
+    rg.display.take('range.pistol'); rg.display.take('range.pistol');
+    rg.display.giveBack('range.pistol');
+    const still = !!rg.display.out['range.pistol'];
+    rg.display.giveBack('range.pistol');
+    out.push(result('range: both robots can take the same blaster out of the case; it is back on the shelf when the last one returns it', still && !rg.display.out['range.pistol'], { still }));
+    void b;
+  }
+  // the long-press menu of the blaster rack (and the round controller and the scoreboard): Shoot the Target and Lock in
+  {
+    const b = B(), THREE = window.THREE, menu = document.getElementById('menu'), cam = window.camera;
+    const saved = { pos: cam.position.clone(), quat: cam.quaternion.clone() };
+    const lookAt = (target, from) => { cam.position.copy(from); cam.lookAt(target); cam.updateMatrixWorld(true); window.scene.updateMatrixWorld(true); return window.__ui.pick({ clientX: innerWidth / 2, clientY: innerHeight / 2 }); };
+    const rack = rg.display.slot('range.pistol'), sp = rg.display.standSpot('range.pistol');
+    const h1 = lookAt(rack, new THREE.Vector3(sp.x, 1.3, sp.z));
+    const btn = rg.panel.buttonPoint(), ps = rg.panel.standSpot();
+    const h2 = lookAt(btn, new THREE.Vector3(ps.x, 1.3, ps.z));
+    const bg = new THREE.Vector3(); rg.board.group.getWorldPosition(bg); bg.y = 1.75; const bs = rg.board.standSpot();
+    const h3 = lookAt(bg, new THREE.Vector3(bs.x, 1.3, bs.z));
+    cam.position.copy(saved.pos); cam.quaternion.copy(saved.quat); cam.updateMatrixWorld(true);
+    out.push(result('range: a press on the blaster rack, the round controller and the scoreboard picks each one', !!h1 && h1.range === 'blasterrack' && !!h2 && h2.range === 'rangecontroller' && !!h3 && h3.range === 'scoreboard', { h1: h1 && Object.keys(h1), h2: h2 && Object.keys(h2), h3: h3 && Object.keys(h3) }));
+    b.unlock(false); T.settle(); T.home(); b.queue = []; b.step = null;
+    window.__guyOpenMenu('blasterrack');
+    const vis = (a) => !menu.querySelector('[data-act=' + a + ']').hidden, ib = menu.querySelector('[data-act=interact]'), lb = menu.querySelector('[data-act=lock]');
+    out.push(result('range: the blaster rack menu offers Shoot the Target and Lock in (and no Rotate or Remove)', !menu.hidden && /Shoot the Target/.test(ib.textContent) && vis('interact') && vis('lock') && /Lock in/.test(lb.textContent) && !vis('rotl') && !vis('rotr') && !vis('remove'), { title: document.getElementById('menu-title') && document.getElementById('menu-title').textContent }));
+    ib.click();
+    out.push(result('range: Shoot the Target sends him to the range to shoot', b.pendingActivity === 'rangeshoot' || b.last === 'rangeshoot'));
+    b.pendingActivity = null; b.queue = []; b.step = null;
+    window.__guyOpenMenu('blasterrack'); menu.querySelector('[data-act=lock]').click();
+    out.push(result('range: Lock in on the rack locks him on shooting', !!b.lock && b.lock.name === 'blasterrack'));
+    // locked in: he stays at the range and shoots trip after trip (he does not walk out after the first)
+    const s0 = rg.score.shots; let leftRange = false, trips = 0, lastAct = null;
+    for (let i = 0; i < 400 * 30; i++) { step(1 / 30); if (b.last === 'rangeshoot' && lastAct !== 'rangeshoot') trips++; lastAct = b.last; if (i > 600 && !b.inRange()) { leftRange = true; break; } }
+    out.push(result('range: locked in he goes on shooting trip after trip and stays in the range', rg.score.shots - s0 >= 8 && !leftRange && b.inRange(), { shots: rg.score.shots - s0, leftRange, trips }));
+    window.__guyOpenMenu('blasterrack');
+    out.push(result('range: the rack menu then offers Unlock', /Unlock/.test(menu.querySelector('[data-act=lock]').textContent)));
+    menu.querySelector('[data-act=lock]').click();
+    out.push(result('range: Unlock lets him go', !b.lock));
+    b.queue = []; b.step = null; b.skip(); T.settle(); T.home();
   }
   // the enemies walk and dissolve for a while, and never leave their lane or their stretch of the range
   let seen = 0, outside = 0;
