@@ -32,7 +32,7 @@ const ACT_OBJ = {
 };
 // what an activity needs to have in the same room as its main object (else it cannot be done, or is done without it)
 const TOGETHER = { jam: ['table'], jampiano: ['table'], jamsit: ['table'], jamguitar: ['table'], jamdrums: ['table'] };
-const FREE_ACTS = ['wander', 'inspect', 'wave'];           // done wherever he happens to be
+const FREE_ACTS = ['wander', 'lookaround', 'sway', 'akimbo', 'ponder', 'wave'];           // done wherever he happens to be
 const OWN_ROOM_ACTS = ['leave', 'stuck', 'visit', 'dropball', 'hangpaint'];      // (they plan their own way: dropping a ball where he stands, hanging a painting on whichever wall)
 import { sfx, drag as sfxDrag } from './sfx.js';
 import { findBooks, learnBooks } from './learn.js';
@@ -181,32 +181,58 @@ export const POSES = {
     }
   },
 
-  // A robot has nothing to stretch: he checks himself over. One hand is held out in front of him palm up, he looks down at it, turns it
-  // over a little and flexes the fingers; then the other hand does the same.
-  inspect(g, t, dur) {
-    const e = env(t, dur, 0.7);
-    const side = t < dur / 2 ? 'Right' : 'Left', sg = side === 'Right' ? -1 : 1;           // (local x is negative on his right)
-    const other = side === 'Right' ? 'Left' : 'Right';
-    const half = dur / 2, th = t < half ? t : t - half, w = Math.min(1, Math.sin(clamp(th / half, 0, 1) * Math.PI) * 2.2);       // up and down once per hand
-    const head = g.root.worldToLocal(g.boneWorld('Head'));
-    const target = g.root.localToWorld(new THREE.Vector3(sg * 0.01, head.y - 0.5, 0.34));         // the wrist, held out in front of his chest
-    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(g.root.getWorldQuaternion(new THREE.Quaternion()));
-    const fingers = fwd.clone().add(new THREE.Vector3(0, 0.1, 0)).normalize();
-    const palm = new THREE.Vector3(0, 1, 0).applyAxisAngle(fingers, -sg * Math.sin(th * 3.2) * 0.5 * w);      // palm up, turning over a little each way
-    g.reach(side, target, w * e, false, { hand: { fingers, palm }, pole: new THREE.Vector3(sg * 0.12, -1, -0.45) });
-    const flex = 0.15 + 0.55 * (0.5 + 0.5 * Math.sin(th * 7)) * w;                    // fingers open and close
-    g.curl(side, flex); g.curl(other, 0.1);
-    g.set('Head', Q('x', 0.55 * w * e, 'y', -sg * 0.1 * w * e));
-    g.set('Spine1', Q('x', 0.05 * w * e));
-  },
-
+  // Wave: the right hand up beside his head, palm out, the wrist rocking from side to side (the hand is placed with exact orientation).
   wave(g, t, dur) {
     const e = env(t, dur);
-    // Upper arm out to the side and a bit forward (never past vertical), forearm up and waggling.
-    g.set('RightArm', Q('z', lerp(ARM_DOWN, -0.35, e), 'y', 0.55 * e));
-    g.set('RightForeArm', Q('z', -1.0 * e + Math.sin(t * 9) * 0.4 * e));
-    g.set('Head', Q('y', -0.3 * e, 'z', 0.1 * e));
-    g.curl('Right', 0.1);
+    const head = g.root.worldToLocal(g.boneWorld('Head')), rq = g.root.getWorldQuaternion(new THREE.Quaternion());
+    const sway = Math.sin(t * 8);
+    const target = g.root.localToWorld(new THREE.Vector3(-0.42 + sway * 0.025, head.y - 0.1, 0.2));
+    const fingers = new THREE.Vector3(0.12, 1, 0.1).normalize();
+    const palm = new THREE.Vector3(0, 0, 1).applyAxisAngle(fingers, sway * 0.4);
+    g.reach('Right', target, e, false, { hand: { fingers: fingers.applyQuaternion(rq), palm: palm.applyQuaternion(rq) }, pole: new THREE.Vector3(-0.3, -1, -0.5) });
+    g.set('Head', Q('y', -0.25 * e, 'z', 0.08 * e));
+    g.curl('Right', 0.08);
+  },
+
+  // Idle things a robot does between jobs. Nothing here needs an object.
+  // lookaround: stands and slowly looks round the room, a glance to each side and up.
+  lookaround(g, t, dur) {
+    const e = env(t, dur, 0.8), p = t / dur * Math.PI * 2;
+    const yaw = (Math.sin(p * 1.5) * 0.75 + Math.sin(p * 4) * 0.08) * e;
+    g.set('Head', Q('y', yaw, 'x', (-0.08 + Math.sin(p * 2.2) * 0.12) * e));
+    g.set('Spine2', Q('y', yaw * 0.3));
+    g.set('Spine1', Q('y', yaw * 0.15));
+  },
+  // sway: shifts his weight from one foot to the other, easy, with a slight nod to some tune only he hears.
+  sway(g, t, dur) {
+    const e = env(t, dur, 0.8), s = Math.sin(t * 1.5);
+    g.set('Hips', Q('z', s * 0.04 * e, 'y', s * 0.05 * e));
+    g.set('Spine1', Q('z', -s * 0.05 * e));
+    g.set('Head', Q('z', s * 0.04 * e, 'x', Math.sin(t * 3) * 0.04 * e));
+    g.hipsOffset.x = s * 0.035 * e;
+  },
+  // akimbo: both hands on his hips, looking about with a satisfied air.
+  akimbo(g, t, dur) {
+    const e = env(t, dur, 0.6);
+    const hip = g.root.worldToLocal(g.boneWorld('Hips')), rq = g.root.getWorldQuaternion(new THREE.Quaternion());
+    for (const [side, sg] of [['Right', -1], ['Left', 1]]) {
+      const target = g.root.localToWorld(new THREE.Vector3(sg * 0.27, hip.y + 0.1, -0.02));
+      const fingers = new THREE.Vector3(-sg * 0.3, -0.9, 0.3).normalize().applyQuaternion(rq);       // down and forward round the hip
+      const palm = new THREE.Vector3(-sg, 0, 0).applyQuaternion(rq);                                      // the palm against him
+      g.reach(side, target, e, false, { hand: { fingers, palm }, pole: new THREE.Vector3(sg * 1, -0.2, -0.7) });
+    }
+    g.set('Head', Q('y', Math.sin(t * 0.8) * 0.35 * e, 'x', -0.04 * e));
+  },
+  // ponder: one hand at his chin, the other arm across his middle supporting the elbow, head tilted as he thinks.
+  ponder(g, t, dur) {
+    const e = env(t, dur, 0.7);
+    const head = g.root.worldToLocal(g.boneWorld('Head')), rq = g.root.getWorldQuaternion(new THREE.Quaternion());
+    const chin = g.root.localToWorld(new THREE.Vector3(-0.05, head.y - 0.12, 0.2));
+    g.reach('Right', chin, e, false, { hand: { fingers: new THREE.Vector3(0.9, 0.5, 0.1).normalize().applyQuaternion(rq), palm: new THREE.Vector3(0, 0, -1).applyQuaternion(rq) }, pole: new THREE.Vector3(-0.2, -1, -0.5) });
+    const belly = g.root.localToWorld(new THREE.Vector3(-0.05, head.y - 0.55, 0.3));
+    g.reach('Left', belly, e, false, { hand: { fingers: new THREE.Vector3(-1, 0, 0.3).normalize().applyQuaternion(rq), palm: new THREE.Vector3(0, 1, 0).applyQuaternion(rq) }, pole: new THREE.Vector3(0.2, -1, -0.5) });
+    g.set('Head', Q('z', 0.14 * e, 'x', 0.05 * e, 'y', Math.sin(t * 0.7) * 0.15 * e));
+    g.curl('Right', 0.5 * e);
   },
 
   // Reach out to a point (ctx.tgt.reach): a stereo button, a lamp switch, the edge of the bench. Index finger out.
@@ -795,7 +821,10 @@ export class Brain {
       read: () => { const only = this.forceBook; this.forceBook = null; return this.readSteps(only && only.mesh.visible ? only : null); },
       books: () => this.readSteps(),
       putback: () => ['putting the book back', this.putBackStep()],
-      inspect: () => ['checking himself over', this.play('inspect', 6)],
+      lookaround: () => ['looking around', this.play('lookaround', 6)],
+      sway: () => ['swaying to a tune of his own', this.play('sway', 7)],
+      akimbo: () => ['standing with his hands on his hips', this.play('akimbo', 5)],
+      ponder: () => ['pondering something', this.play('ponder', 6)],
       wave: () => { const p = this.openSpotNear(this.waveSpot().x, this.waveSpot().z); return ['waving at you', this.walk(p.x, p.z, 0), this.play('wave', 3.5)]; },      // in front of the camera, but not inside the furniture there
       rearrange: () => this.rearrangeSteps(),
       // any of the plants in the room (the user can ask for a particular one: forcePlant)
@@ -2073,7 +2102,7 @@ export class Brain {
     const unread = shelf ? shelf.books.filter((b) => b.mesh.visible && this.wantsBook(b)).length : 0;
     const weights = {
       wander: 3, sit: 0.7, sitguitar: 1.1, slouch: 0.5, dancemoves: 1.5, ballroom: 1.5, piano: 1, sitpiano: 1.2, plink: 1.4, dance: 1.8, jam: 0.9, jampiano: 0.5, jamsit: 0.9, lamp: 1.2, mood: 1.1,
-      read: 1.8 + unread * 1.8, inspect: 0.5, wave: 0.7, ball: 2, dribble: 1.1, toss: 1.1, rearrange: 0.7, guitar: 1.6, riff: 1.0, plant: 0.6, jamguitar: 1.5, visit: 0.4,
+      read: 1.8 + unread * 1.8, lookaround: 0.8, sway: 0.7, akimbo: 0.5, ponder: 0.6, wave: 0.7, ball: 2, dribble: 1.1, toss: 1.1, rearrange: 0.7, guitar: 1.6, riff: 1.0, plant: 0.6, jamguitar: 1.5, visit: 0.4,
       takeorder: 40, cook: 35, serve: 45, takepay: 50,
       build: 2.0, tidytools: 0.4,
       bang: 1.3, drums: 1.6, drumsolo: 1.2, jamdrums: 1.5, scribble: 1.3, paint: 1.6, mixpaint: 1.3, portrait: 1.4,

@@ -136,7 +136,7 @@ playback panel or the top-shelf record list; GUY then joins in without touching 
 
 ## Activities (`activities()` in `src/brain.js`)
 
-wander, inspect (a robot does not stretch: he holds each hand out palm up, looks at it, turns it over and flexes the fingers), wave, rangeshoot (Shooting Range: shots from his lane at the bullseyes and enemies, across the lanes when the line is clear), rangehang (Shooting Range, anyone: stands between the screens and watches the targets), rangefool (Shooting Range, anyone: waves, pokes a hologram without firing, hops a divider), yardsit, birdbath, skyswitch, mow, yardpoke, goalshot, soccertoss, hoopshoot, hoopdribble, hoopdefend, goalkeep (Backyard: the last two are the other robot joining a game, only when invited), stereoon, stereooff (menu only), piano, sitpiano, plink, jam, jampiano, jamsit, dance, lamp, mood, plant, read (alias `books`),
+wander, lookaround (turns his head slowly round the room), sway (weight shifts foot to foot), akimbo (hands on hips), ponder (hand at chin, other arm across), wave, rangeshoot (Shooting Range: shots from his lane at the bullseyes and enemies, across the lanes when the line is clear), rangehang (Shooting Range, anyone: stands between the screens and watches the targets), rangefool (Shooting Range, anyone: waves, pokes a hologram without firing, hops a divider), yardsit, birdbath, skyswitch, mow, yardpoke, goalshot, soccertoss, hoopshoot, hoopdribble, hoopdefend, goalkeep (Backyard: the last two are the other robot joining a game, only when invited), stereoon, stereooff (menu only), piano, sitpiano, plink, jam, jampiano, jamsit, dance, lamp, mood, plant, read (alias `books`),
 rearrange, ball, dribble, toss, guitar, riff (makes up riffs on the guitar, see below), jamguitar, bang, drums, drumsolo, jamdrums, scribble, paint, mixpaint, portrait, peek,
 stargaze, darkstargaze, scopecare, dancemoves, ballroom, dust (needs `decorate` and a wall piece with clear floor in front); tidytools, dusttop, build (the Workshop, see below); takeorder, cook, serve, takepay (the Restaurant, see below; internal: rwait); hangpaint (from the easel's long-press menu, see GUY's paintings below; internal: putcanvas); internal: stuck (shut in a locked room), putback, putguitar, dropball, lighton, visit and leave (through the door of an added room and back: tested by `T.sweepVisit`).
 Needs and allowed arm contacts are in `MANIFEST.activities`.
@@ -149,8 +149,11 @@ Needs and allowed arm contacts are in `MANIFEST.activities`.
 | yard-defend | `hoopdefend`, pose `defend`, t 1.2, front | knees bent, both arms spread wide and up with open hands, facing the camera |
 | yard-block | `hoopdefend`, pose `block`, t 0.5, front (dist 4) | off the floor, both arms straight up, legs tucked a little |
 | yard-keeper | `goalkeep`, pose `keeper`, t 1.2, front (dist 4) | wide low crouch in the goal mouth, arms out low, open hands, leaning forward |
-| inspect-right | `inspect`, pose `inspect`, t 1.5, front | right hand held out palm up in front of his chest, head tipped down to look at it |
-| inspect-left | `inspect`, pose `inspect`, t 4.5, front | left hand held out palm up in front of his chest, wrist not twisted |
+| wave-hand | `wave`, pose `wave`, t 1.5, front | right hand up beside his head, palm out, wrist straight |
+| lookaround-left | `lookaround`, pose `lookaround`, t 1.3, front | head turned well to one side, arms hanging |
+| sway-lean | `sway`, pose `sway`, t 1.0, front | weight shifted, hips and shoulders tilted opposite, feet flat |
+| akimbo-hands | `akimbo`, pose `akimbo`, t 2.5, front | both hands on his hips, elbows out |
+| ponder-chin | `ponder`, pose `ponder`, t 2.5, front | right hand at chin, left forearm across his middle |
 | yard-dive | `goalkeep`, pose `dive`, t 0.5, front (dist 4) | lunging sideways at full stretch, both arms reaching the same way, body tilted |
 | yard-sit | `yardsit`, pose `sitRest`, t 6, side | seated in the lawn chair, legs clear of the frame |
 | yard-shed-open | `yardtidy`, pose `reach`, t 1.3, side (in the yard) | at the shed door, hand on the knob, door swung wide open showing the dark inside |
