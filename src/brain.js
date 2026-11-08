@@ -2915,7 +2915,15 @@ export class Brain {
     const steps = [], moved = [];
     for (const o of list.slice(0, 2)) {
       const to = this.w.findSpot(o, { x: o.x, z: o.z }, { x: s.x, z: s.z });
-      const plan = to && this.planPushVia(o, to.x, to.z, room);
+      let plan = to && this.planPushVia(o, to.x, to.z, room);
+      if (!plan) {                                                      // (no way to the far free spot, e.g. the piece is wedged between two others: a short shove to whichever side the way is clear)
+        const segD = (px, pz) => { const ax = me.x, az = me.z, bx = s.x, bz = s.z, l2 = (bx - ax) ** 2 + (bz - az) ** 2 || 1, t = clamp(((px - ax) * (bx - ax) + (pz - az) * (bz - az)) / l2, 0, 1); return Math.hypot(px - (ax + (bx - ax) * t), pz - (az + (bz - az) * t)); };
+        for (const d of [0.8, 1.2, 1.6]) for (let k = 0; k < 8 && !plan; k++) {
+          const tx = o.x + Math.cos(k * Math.PI / 4) * d, tz = o.z + Math.sin(k * Math.PI / 4) * d;
+          if (segD(tx, tz) < 0.75 || Math.hypot(tx - me.x, tz - me.z) < 0.75) continue;
+          plan = this.planPush(o, tx, tz, null, room);
+        }
+      }
       if (plan) { steps.push(...plan); moved.push(o.name); }
     }
     s.roomTried = true;                                                  // (once: if that did not help he gives up as before)
