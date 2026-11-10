@@ -116,6 +116,16 @@ export function installHobbies(Brain, POSES, H) {
       return {
         type: 'plan',
         fn: () => {
+          const r = this.scopeAimPlan(mode);
+          if (r) return r;
+          this.queue.length = 0; this.ui("no room to use the telescope"); return [];
+        },
+      };
+    },
+    // The walk and the swing that turn the telescope (null when the furniture round it leaves no room to stand and swing it).
+    scopeAimPlan(mode) {
+      {
+        {
           const t = this.obj('telescope'), grid = makeGrid(this.w.obstacles, 0.62, 0, t.obstacle), sideGrid = makeGrid(this.w.obstacles, 0.4, 0, t.obstacle);   // he leans over the ends: more room than walking needs
           t.tube.updateWorldMatrix(true, false);
           const c = t.tube.localToWorld(V(0, 0, 0));
@@ -150,9 +160,9 @@ export function installHobbies(Brain, POSES, H) {
                 this.play('scopeAim', 4.2, { scope: 'aim', hand, from: { yaw: cur.yaw, pitch: cur.pitch }, to: { yaw: wy - t.group.rotation.y, pitch } })];
             }
           }
-          this.queue.length = 0; this.ui("no room to use the telescope"); return [];
-        },
-      };
+          return null;
+        }
+      }
     },
     // Walk to where he looks through the telescope (or to where he cleans it) for the current aim.
     scopeSpot(kind) {

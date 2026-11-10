@@ -167,6 +167,8 @@ export const MANIFEST = {
     'telescope.care.ch2': { content: 'steps' }, 'telescope.care.ch3': { content: 'steps' },
     'ball.ch2': { content: 'steps' }, 'ball.ch3': { content: 'steps' }, 'outdoor.ch2': { content: 'steps' }, 'outdoor.ch3': { content: 'steps' },
     'outdoor.soccer.ch2': { content: 'steps' }, 'outdoor.soccer.ch3': { content: 'steps' }, 'outdoor.basketball.ch2': { content: 'steps' }, 'outdoor.basketball.ch3': { content: 'steps' },
+    'workshop.ch2': { content: 'steps' }, 'workshop.ch3': { content: 'steps' }, 'workshop.materials.ch2': { content: 'steps' }, 'workshop.materials.ch3': { content: 'steps' },
+    'workshop.furniture.ch2': { content: 'steps' }, 'workshop.furniture.ch3': { content: 'steps' }, 'workshop.metal.ch2': { content: 'steps' }, 'workshop.metal.ch3': { content: 'steps' },
     'drums.ch2': { content: 'drums', styles: ['reggae', 'funk'] }, 'drums.ch3': { content: 'drums', styles: ['paradiddle'] }, 'drums.solo.ch2': { content: 'drums', styles: ['solo2'] },
   },
   tracks: ['default', ...ALBUM_CATALOG.flatMap((a) => a.tracks)],     // every track on every record; coverage fails for a track no record lists
@@ -3242,6 +3244,39 @@ T.sweepChapters = () => {
       out.push(result('chapters: the warmup and cooldown poses exist', 'warmup' in POSES && 'cooldown' in POSES));
       for (const id of ['ball.ch2', 'ball.ch3', 'outdoor.ch2', 'outdoor.ch3', 'outdoor.soccer.ch2', 'outdoor.soccer.ch3', 'outdoor.basketball.ch2', 'outdoor.basketball.ch3']) covered.add(id);
       T.resetRooms && T.resetRooms();
+    }
+    // the telescope with no room to swing it round: not started (the play sweep caught him trying again and again)
+    {
+      T.addObject('telescope'); T.settle(); only('telescope', 'telescope.dark');
+      const real = b.scopeAimPlan, ok1 = b.availableIn('stargaze') && b.availableIn('darkstargaze');
+      b.scopeAimPlan = () => null;
+      const none = !b.availableIn('stargaze') && !b.availableIn('darkstargaze');
+      b.scopeAimPlan = real;
+      out.push(result('chapters: telescope — stargazing is not started when there is no room to swing the tube round', ok1 && none, { ok1, none }));
+      T.removeAll(); T.settle();
+    }
+    // the workshop books
+    {
+      T.addObject('toolbox'); T.settle();
+      const fs = (rid, fid, ids) => { only('workshop', 'workshop.materials', 'workshop.furniture', 'workshop.metal', ...ids); return b.factorySteps(rid, fid, true).filter((x) => x.type === 'play'); };
+      const cnt = (list, pose) => list.filter((x) => x.pose === pose).length;
+      const reach = (list) => cnt(list, 'reach');
+      only('workshop', 'workshop.ch2'); const tb2 = b.toolboxSteps().filter((x) => x.type === 'play').length; only('workshop'); const tb1 = b.toolboxSteps().filter((x) => x.type === 'play').length;
+      out.push(result('chapters: workshop.ch2 — two more tools sorted in the toolbox (three reaches to begin with)', tb1 === 3 && tb2 === 5, { tb1, tb2 }));
+      const base = fs('builtchair', 'woodfactory', []);
+      out.push(result('chapters: workshop.ch3 — a look round before the factory is started, not to begin with', cnt(base, 'lookaround') === 0 && cnt(fs('builtchair', 'woodfactory', ['workshop.ch3']), 'lookaround') === 1 && fs('builtchair', 'woodfactory', ['workshop.ch3'])[0].pose === 'lookaround'));
+      out.push(result('chapters: workshop.materials ch2 inspects and ch3 sands the piece on the wood factory\'s tray (and not on the metal one)', reach(fs('footstool', 'woodfactory', ['workshop.materials.ch2'])) === reach(base) + 1
+        && reach(fs('footstool', 'woodfactory', ['workshop.materials.ch3'])) === reach(base) + 1 && fs('footstool', 'woodfactory', ['workshop.materials.ch3']).some((x) => x.dur === 4.2)
+        && reach(fs('metalchair', 'metalfactory', ['workshop.materials.ch2', 'workshop.materials.ch3'])) === reach(fs('metalchair', 'metalfactory', []))));
+      out.push(result('chapters: workshop.furniture.ch2 presses on a new chair, table or bookshelf to test it, but not on a foot stool or a guitar', reach(fs('builtchair', 'woodfactory', ['workshop.furniture.ch2'])) === reach(base) + 1
+        && reach(fs('diningtable3', 'woodfactory', ['workshop.furniture.ch2'])) === reach(fs('diningtable3', 'woodfactory', [])) + 1 && reach(fs('footstool', 'woodfactory', ['workshop.furniture.ch2'])) === reach(fs('footstool', 'woodfactory', []))
+        && reach(fs('eguitar', 'woodfactory', ['workshop.furniture.ch2'])) === reach(fs('eguitar', 'woodfactory', []))));
+      out.push(result('chapters: workshop.metal.ch2 knocks twice on a metal piece (two reaches more, each with a knock)', reach(fs('metalchair', 'metalfactory', ['workshop.metal.ch2'])) === reach(fs('metalchair', 'metalfactory', [])) + 2));
+      const cap = (id, ids) => { only(...ids); return b.capOf(RECIPES_DEF[id]); };
+      out.push(result('chapters: Matching Sets — one more wooden chair and table with workshop.furniture.ch3, one more metal ones with workshop.metal.ch3, nothing else changes',
+        cap('builtchair', []) === 3 && cap('builtchair', ['workshop.furniture.ch3']) === 4 && cap('diningtable3', ['workshop.furniture.ch3']) === 3 && cap('bookshelf2', ['workshop.furniture.ch3']) === 1 && cap('footstool', ['workshop.furniture.ch3']) === 1
+        && cap('metalchair', ['workshop.furniture.ch3']) === 3 && cap('metalchair', ['workshop.metal.ch3']) === 4 && cap('diningtable4', ['workshop.metal.ch3']) === 3 && cap('builtchair', ['workshop.metal.ch3']) === 3 && cap('eguitar', ['workshop.metal.ch3']) === 1));
+      for (const id of ['workshop.ch2', 'workshop.ch3', 'workshop.materials.ch2', 'workshop.materials.ch3', 'workshop.furniture.ch2', 'workshop.furniture.ch3', 'workshop.metal.ch2', 'workshop.metal.ch3']) covered.add(id);
     }
     const missing = CHAPTER_IDS.filter((id) => MANIFEST.chapters[id].content === 'steps' && !covered.has(id));
     out.push(result('chapters: every chapter whose content is in an activity\'s steps has a check above', !missing.length, { missing }));
