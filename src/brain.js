@@ -2462,7 +2462,11 @@ export class Brain {
           }
           // a direct walk goes straight there only when the straight line is clear: otherwise he goes round (the screens of the range, say)
           const straight = s.direct && lineClear(this.grid, root.position, { x: s.x, z: s.z });
-          s.path = straight ? [{ x: s.x, z: s.z }] : findPath(this.grid, root.position.x, root.position.z, s.x, s.z);
+          s.path = straight ? [{ x: s.x, z: s.z }] : findPath(this.grid, root.position.x, root.position.z, s.x, s.z, true);
+          if (!s.path) {                                           // no way with the usual clearance (a gap between two pieces a little too narrow): through the middle of the gap, not in a straight line that grazes both
+            const tight = makeGrid(this.w.obstacles, 0.14, 0, null, fr);
+            s.path = findPath(tight, root.position.x, root.position.z, s.x, s.z, true) || findPath(this.grid, root.position.x, root.position.z, s.x, s.z);
+          }
         }
       }
       if (!finished && !s.drive) {
