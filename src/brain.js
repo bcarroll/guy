@@ -2142,6 +2142,7 @@ export class Brain {
     if (act === 'plant' && !PLANT_NAMES.some((n) => this.obj(n))) return false;
     if (act === 'dust' && !Object.values(this.w.decor).some((d) => d.wall)) return false;
     if (act === 'dusttop' && !this.stoolJob()) return false;
+    if (['stargaze', 'darkstargaze'].includes(act) && this.obj('telescope') && !this.scopeAimPlan('sky')) return false;      // (no room to swing the tube round: not worth starting)
     if (['ball', 'dribble', 'toss'].includes(act) && this.w.ballGone) return false;
     // both hands go out to the sides of the ball: not while it is jammed against furniture (he kicks it free first)
     if (['dribble', 'toss'].includes(act) && this.w.ball) {

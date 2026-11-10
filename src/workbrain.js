@@ -106,15 +106,29 @@ export function installWorkshop(Brain, POSES, H) {
       return [this.stand('toolbox', 0.6, () => tb().lidPoint()),
         this.play('reach', 1.4, { needs: ['toolbox'], at: [0.6, () => { tb().setOpen(true); sfx('lid'); }], target: () => tb().lidPoint() }),
         this.play('reach', 1.3, { needs: ['toolbox'], target: () => tb().toolPoint() }),
+        // workshop ch2 "Tool Care": he sorts the tools, picking two more out and putting them back in their place
+        ...(this.has('workshop.ch2') ? [this.play('reach', 1.1, { needs: ['toolbox'], at: [0.5, () => sfx('click')], target: () => tb().toolPoint() }), this.play('reach', 1.1, { needs: ['toolbox'], at: [0.5, () => sfx('click')], target: () => tb().toolPoint() })] : []),
         this.play('reach', 1.4, { needs: ['toolbox'], at: [0.6, () => { tb().setOpen(false); sfx('lid'); }], target: () => tb().lidPoint() })];
     },
     // One factory, start to finish: press the button, wait while it runs, and take what it made off the tray. What comes out is the finished
     // thing, unless `last` is false (an electric guitar: the Metal Factory comes first, and its hardware goes to the Wood Factory in his hands).
     factorySteps(id, fid, last = true) {
       const r = RECIPES[id], f = () => this.obj(fid), rt = r.run, made = last ? id : 'hardware';
+      const wood = fid === 'woodfactory', metal = fid === 'metalfactory', tray = () => f().trayPoint();
+      let lastWipe = -9;
+      // the wood chapters of Wood & Metal Basics look at the piece, then sand it; the metal one knocks on it twice to hear that it is sound
+      const check = [
+        ...(wood && this.has('workshop.materials.ch2') ? [this.play('reach', 1.7, { needs: [fid], target: tray })] : []),
+        ...(wood && ['seat', 'diners', 'books'].includes(r.serves) && this.has('workshop.furniture.ch2') ? [this.play('reach', 1.8, { needs: [fid], at: [0.9, () => sfx('thud', 0.3)], target: () => tray().clone().add(V(0, 0.08, 0)) })] : []),
+        ...(wood && this.has('workshop.materials.ch3') ? [this.play('reach', 4.2, { needs: [fid], target: () => { const p = tray(); if (this.time - lastWipe > 0.5) { sfx('wipe'); lastWipe = this.time; } return p.clone().add(V(Math.sin(this.time * 4) * 0.12, 0, Math.cos(this.time * 4) * 0.05)); } })] : []),
+        ...(metal && this.has('workshop.metal.ch2') ? [0, 1].map(() => this.play('reach', 1.0, { needs: [fid], at: [0.45, () => sfx('knock')], target: tray })) : []),
+      ];
       return [this.stand(fid, 0.78, () => f().buttonPoint()),
+        // workshop ch3 "Safety First": a look round before the machine is started
+        ...(this.has('workshop.ch3') ? [this.play('lookaround', 2.4)] : []),
         this.play('reach', 1.6, { needs: [fid], at: [0.7, () => { if (this.carry === 'bars') this.setCarry(null); f().press(); f().run(rt); sfx('click'); sfx('machine'); }], target: () => f().buttonPoint() }),
         this.play('idle', rt + 0.2, { needs: [fid], at: [Math.max(0.2, rt - 0.4), () => { f().showMade(made); sfx('thud', 0.5); }] }),
+        ...check,
         this.play('reach', 1.8, { needs: [fid], at: [0.9, () => {
           f().clearMade(); sfx('bookgrab');
           if (last) this.finishBuilt(id); else this.setCarry('bars', 1);
@@ -253,13 +267,18 @@ export function installWorkshop(Brain, POSES, H) {
     // the factory he was pointed at, or is locked on ('wood' | 'metal'), or null for any
     buildLine() { return this.forceLine || (this.lock && { woodfactory: 'wood', metalfactory: 'metal' }[this.lock.name]) || null; },
     // can he build this recipe right now: the book(s), the factory it needs, and room for one more of it
+    // how many of a thing he will have made at most: one more of the furniture of a kind once he has read its "Matching Sets" chapter
+    capOf(r) {
+      const set = (r.serves === 'seat' || r.serves === 'diners') && ((r.line === 'wood' && this.has('workshop.furniture.ch3')) || (r.line === 'metal' && this.has('workshop.metal.ch3')));
+      return r.cap + (set ? 1 : 0);
+    },
     canBuild(id) {
       const r = RECIPES[id], w = this.w, st = w.stock;
       if (!r || !w.instanceKinds().includes(r.object)) return false;
       if (!skillsOf(r).every((k) => this.skills.has(k))) return false;
       if ((st.items[r.object] || 0) >= STORAGE_CAP) return false;
       const made = (st.items[r.object] || 0) + Object.values(w.objects).filter((o) => o.kind === r.object).length;
-      if (made >= r.cap) return false;                                       // enough of these
+      if (made >= this.capOf(r)) return false;                                       // enough of these
       return factoriesOf(r).every((f) => !!this.obj(f));
     },
     // which recipe he builds now: one he was told to, or the first thing the house needs that he can make (null if nothing)

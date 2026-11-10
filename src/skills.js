@@ -222,6 +222,22 @@ export const CHAPTERS = {
     { id: 'telescope.dark.ch2', title: 'Chapter 2: Dark Adaptation', after: 3, unlocks: ['Waits for his eyes to adjust before looking'] },
     { id: 'telescope.dark.ch3', title: 'Chapter 3: Night Watch', after: 6, unlocks: ['A long watch at two targets, then a look up at the sky'] },
   ],
+  workshop: [
+    { id: 'workshop.ch2', title: 'Chapter 2: Tool Care', after: 3, unlocks: ['Sorts the tools in the toolbox, two more picked out and put back'] },
+    { id: 'workshop.ch3', title: 'Chapter 3: Safety First', after: 8, unlocks: ['Looks round before starting a factory'] },
+  ],
+  'workshop.materials': [
+    { id: 'workshop.materials.ch2', title: 'Chapter 2: Joints and Glue', after: 3, unlocks: ['Looks the wooden piece over on the tray before taking it'] },
+    { id: 'workshop.materials.ch3', title: 'Chapter 3: Sanding and Finishing', after: 8, unlocks: ['Sands the wooden piece smooth before taking it'] },
+  ],
+  'workshop.furniture': [
+    { id: 'workshop.furniture.ch2', title: 'Chapter 2: Comfortable Chairs', after: 3, unlocks: ['Presses down on the new chair or table to test it'] },
+    { id: 'workshop.furniture.ch3', title: 'Chapter 3: Matching Sets', after: 7, unlocks: ['Builds one more wooden chair and table for the house'] },
+  ],
+  'workshop.metal': [
+    { id: 'workshop.metal.ch2', title: 'Chapter 2: Ringing True', after: 3, unlocks: ['Knocks twice on the metal piece to hear that it is sound'] },
+    { id: 'workshop.metal.ch3', title: 'Chapter 3: Matching Sets', after: 7, unlocks: ['Builds one more metal chair and table for the house'] },
+  ],
   ball: [
     { id: 'ball.ch2', title: 'Chapter 2: Keep It Going', after: 3, unlocks: ['A twice-as-long dribble and two tosses in a row'] },
     { id: 'ball.ch3', title: 'Chapter 3: Trick Shots', after: 8, unlocks: ['Three kicks in a row, a dribble that ends in a toss, and three tosses'] },
@@ -251,6 +267,7 @@ export const PRACTICE_ACTS = {
   drums: ['drums', 'jamdrums'], 'drums.solo': ['drumsolo'], 'drums.band': ['jamdrums'],
   'dance.moves': ['dancemoves'], 'dance.ballroom': ['ballroom'], lighting: ['mood'],
   easel: ['paint'], 'easel.colour': ['mixpaint'], 'easel.portrait': ['portrait'], decorate: ['dust'],
+  workshop: ['tidytools', 'build'], 'workshop.materials': ['build'], 'workshop.furniture': ['build'], 'workshop.metal': ['build'],
   ball: ['ball', 'dribble', 'toss'], outdoor: ['goalshot', 'soccertoss', 'hoopshoot', 'hoopdribble'], 'outdoor.soccer': ['goalshot', 'soccertoss'], 'outdoor.basketball': ['hoopshoot', 'hoopdribble'],
   telescope: ['stargaze'], 'telescope.dark': ['darkstargaze'], 'telescope.care': ['scopecare'],
 };
