@@ -257,7 +257,7 @@ document.getElementById('build').textContent = `build ${typeof __BUILD_ID__ === 
 if (params.get('records') === 'all' && world.objects.shelf) ALBUM_CATALOG.forEach((a) => { if (!world.objects.shelf.albums.some((r) => r.def.id === a.id)) world.objects.shelf.addAlbum(a); }); // testing aid
 renderSkills();
 let machinePress = null;
-const togglePanel = () => { panel.hidden = !panel.hidden; };
+const togglePanel = () => { panel.hidden = !panel.hidden; if (!panel.hidden) renderSkills(); };      // (opening it refreshes the practice counts, which do not re-draw it as they change)
 document.getElementById('skills-btn').addEventListener('click', togglePanel);
 addEventListener('keydown', (e) => { if (e.key === 'k' || e.key === 'K') togglePanel(); });
 

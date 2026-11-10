@@ -297,7 +297,7 @@ export class Skills {
       if (next && n >= next.after) { this.known.add(next.id); got.push(next); }
     }
     this.save();
-    this.listeners.forEach((f) => f(got.length ? got[0].id : null));        // (the Skills panel shows the practice count)
+    if (got.length) this.listeners.forEach((f) => f(got[0].id));
     got.forEach((c) => this.chapterListeners.forEach((f) => f(c)));
     return got;
   }
