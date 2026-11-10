@@ -19,9 +19,15 @@ const PROGRESSIONS = [
   { name: 'a moody tune', chords: [[9, 'min'], [7, 'maj'], [5, 'maj'], [4, 'maj']] },
   { name: 'a dreamy tune', chords: [[0, 'sus4'], [0, 'maj'], [5, 'sus4'], [5, 'maj']] },
   { name: 'a sunny tune', chords: [[0, 'maj'], [5, 'maj'], [9, 'min'], [7, 'maj']] },
+  // chapter 3 of the guitar book (skills.js CHAPTERS): `needs` is the chapter that has to be learned
+  { name: 'a smooth soul tune', chords: [[2, 'min7'], [7, 'dom7'], [0, 'maj7'], [5, 'maj7']], needs: 'guitar.ch3' },
+  { name: 'a gospel tune', chords: [[0, 'maj'], [5, 'maj'], [0, 'maj'], [7, 'sus4']], needs: 'guitar.ch3' },
+  { name: 'a sad ballad', chords: [[9, 'min7'], [2, 'min7'], [7, 'dom7'], [0, 'maj7']], needs: 'guitar.ch3' },
 ];
 // eight steps to the bar: D down-strum, U up-strum, . rest, B the bass note alone, 0-4 one string of the chord (picking)
-const PATTERNS = ['D.DU.UDU', 'DDUUDUDU', 'D.D.D.DU', 'D.DUDUDU', 'B.DUB.DU', 'DUDUDUDU', 'D...D.DU', '0.1.2.1.', 'B.123.21', 'D.UU.UD.'];
+const PATTERNS = ['D.DU.UDU', 'DDUUDUDU', 'D.D.D.DU', 'D.DUDUDU', 'B.DUB.DU', 'DUDUDUDU', 'D...D.DU', '0.1.2.1.', 'B.123.21', 'D.UU.UD.',
+  'D.DU.UD.', 'B.D.B.DU', '01230321'];       // the last three come with chapter 2 of the guitar book (PATTERN_NEEDS)
+const PATTERN_NEEDS = { 'D.DU.UD.': 'guitar.ch2', 'B.D.B.DU': 'guitar.ch2', '01230321': 'guitar.ch2' };
 const KEYS = [43, 45, 48, 50, 52];                     // G, A, C, D, E
 
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
@@ -35,10 +41,11 @@ export function chordFor(tonic, semis, shape) {
 }
 
 // A new song: { name, chords, pat, step (seconds per eighth note), bars (per chord), secs (how long to play it), key }
-export function makeStrum() {
-  const prog = pick(PROGRESSIONS), tonic = pick(KEYS);
+// `has(skill)`: which chapters this player has learned (everything when left out).
+export function makeStrum(has = () => true) {
+  const prog = pick(PROGRESSIONS.filter((p) => !p.needs || has(p.needs))), tonic = pick(KEYS);
   const chords = prog.chords.map(([semis, shape]) => chordFor(tonic, semis, shape));
-  return { name: prog.name, key: NAMES[tonic % 12], chords, pat: pick(PATTERNS), step: +rand(0.24, 0.36).toFixed(3), bars: Math.random() < 0.25 ? 2 : 1, secs: Math.round(rand(24, 36)) };
+  return { name: prog.name, key: NAMES[tonic % 12], chords, pat: strumPattern(has), step: +rand(0.24, 0.36).toFixed(3), bars: Math.random() < 0.25 ? 2 : 1, secs: Math.round(rand(24, 36)) };
 }
-export const strumPattern = () => pick(PATTERNS);
-export { PATTERNS, PROGRESSIONS };
+export const strumPattern = (has = () => true) => pick(PATTERNS.filter((p) => !PATTERN_NEEDS[p] || has(PATTERN_NEEDS[p])));
+export { PATTERNS, PROGRESSIONS, PATTERN_NEEDS };

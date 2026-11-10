@@ -12,6 +12,8 @@ export const DRUM_STYLE_BY_TRACK = {
   default: 'rock', happy: 'rock', classical: 'march', country: 'soft', blues: 'rock', lullaby: 'soft',
   rock: 'rock', hiphop: 'boombap', twostep: 'train', pop: 'disco', jazz: 'swing', slowblues: 'soft', party: 'disco',
 };
+// every style drumStep knows (the QA sweep plays each one)
+export const DRUM_STYLES = ['rock', 'soft', 'march', 'boombap', 'train', 'disco', 'swing', 'solo', 'reggae', 'funk', 'paradiddle', 'solo2'];
 export const PAD_SIDE = { snare: 'C', hat: 'L', crash: 'L', tom1: 'L', tom2: 'R', floor: 'R', ride: 'R' };
 
 // what is played on eighth-note `n` (8 per bar) in a style
@@ -46,6 +48,37 @@ export function drumStep(style, n) {
     if (i === 2 || i === 6) hits.push({ k: 'hat', h: 'L', v: 0.4 });
     if (i === 0 && bar % 2 === 0) hits.push({ k: 'kick', h: 'F', v: 0.35 });
     if (i === 5 && bar % 2) hits.push({ k: 'snare', h: 'L', v: 0.3 });
+  } else if (style === 'reggae') {                               // one-drop: nothing on beat 1, kick and snare together on beat 3, hat on the off-beats
+    if (i % 2 === 1) hits.push({ k: 'hat', h: 'L', v: 0.55 });
+    if (i === 4) { hits.push({ k: 'kick', h: 'F', v: 0.85 }); hits.push({ k: 'snare', h: 'R', v: 0.6 }); }
+  } else if (style === 'funk') {                                 // a syncopated kick, ghosted snare, busy hat
+    hits.push({ k: 'hat', h: 'L', v: i % 2 ? 0.35 : 0.65 });
+    if (i === 0 || i === 3 || (i === 5 && bar % 2) || (i === 7 && bar % 4 === 3)) hits.push({ k: 'kick', h: 'F', v: 0.9 });
+    if (i === 2 || i === 6) hits.push({ k: 'snare', h: 'R', v: 0.9 });
+    else if (i === 5 || (i === 1 && bar % 2)) hits.push({ k: 'snare', h: 'R', v: 0.25 });
+  } else if (style === 'paradiddle') {                           // RLRR LRLL on the snare, drifting over to the toms on every second bar
+    const sticking = 'RLRRLRLL'[i], onToms = bar % 4 >= 2;
+    const pad = onToms ? ['tom1', 'tom1', 'tom2', 'tom2', 'tom1', 'tom1', 'tom2', 'floor'][i] : 'snare';
+    hits.push({ k: pad, h: onToms ? handFor(pad) : sticking, v: (i === 0 || i === 4) ? 0.85 : 0.55 });
+    if (i === 0 || i === 4) hits.push({ k: 'kick', h: 'F', v: 0.8 });
+  } else if (style === 'solo2') {                                // a longer solo: grooves, a tom cascade, a snare roll, then a crash
+    const phase = bar % 8;
+    if (phase < 2) groove();
+    else if (phase === 2) {                                      // cascade down the toms
+      const seq = [['tom1', 'L'], ['tom1', 'R'], ['tom2', 'L'], ['tom2', 'R'], ['floor', 'L'], ['floor', 'R'], ['floor', 'R'], ['crash', 'L']][i];
+      hits.push({ k: seq[0], h: seq[1], v: 0.7 + i * 0.04 });
+      if (i === 7) hits.push({ k: 'kick', h: 'F', v: 1 });
+    } else if (phase === 3 || phase === 6) {                     // a roll that grows louder
+      hits.push({ k: 'snare', h: i % 2 ? 'L' : 'R', v: 0.4 + i * 0.07 });
+      if (i === 7) hits.push({ k: 'crash', h: 'L', v: 0.95 });
+    } else if (phase === 7) {                                    // the big finish: the kick and the crash together on every beat
+      if (i % 2 === 0) { hits.push({ k: 'kick', h: 'F', v: 1 }); hits.push({ k: 'crash', h: 'L', v: 0.9 }); }
+      else hits.push({ k: 'snare', h: 'R', v: 0.8 });
+    } else {                                                     // free playing round the kit
+      const pad = pick(['tom1', 'tom2', 'floor', 'snare', 'ride', 'hat']);
+      hits.push({ k: pad, h: handFor(pad), v: rand(0.6, 0.95) });
+      if (i % 4 === 0) hits.push({ k: 'kick', h: 'F', v: 0.9 });
+    }
   } else if (style === 'solo') {
     const phase = bar % 6;
     if (phase < 2) groove();

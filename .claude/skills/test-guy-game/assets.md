@@ -97,6 +97,26 @@ left wall and cannot be removed, moved or rotated.
 
 GUY learns a skill only after keeping the book open for 8 s (3.2 s at full Speed Reading); interrupted reads teach nothing.
 
+## Chapters (`CHAPTERS` and `PRACTICE_ACTS` in `src/skills.js`; `MANIFEST.chapters`; sweep `T.sweepChapters`)
+
+A book's first reading teaches its skill. Later chapters are **learned by practice**: every time a robot sets out to do one of a skill's practice activities with that skill known (and not fading), the skill's practice count goes up, and when it reaches a chapter's `after` the next chapter is learned (in order). A chapter is a skill id of its own, `<skill>.ch<N>` (`piano.ch2`), that content is gated on with `skills.has(id)` (`brain.has(id)` in code that picks content). Not in `SKILL_INFO`, so no book is needed to cover it. The count is saved per robot (`<known key>.practice`), forgetting a book fades its chapters with it and clears the count when they are gone, and `?skills=all` includes them. The Skills panel (K) lists each chapter under its book: learned, "practise N more times", or "comes after the one before". A toast and the HUD line say it when one is learned.
+
+| skill | practice activities | chapter (after N sessions) | what it opens up |
+|---|---|---|---|
+| piano | piano, sitpiano, jam, jampiano, jamsit | `piano.ch2` Hands Together (3) | Mary Had a Little Lamb, Row Row Row Your Boat, When the Saints, D major and E minor scales |
+| | | `piano.ch3` Folk Songs & Hymns (8) | Amazing Grace, Greensleeves, F major and C blues scales |
+| piano.advanced | same | `piano.advanced.ch2` Baroque & Classical (3) | Minuet in G, Canon, Broken Chord Prelude |
+| | | `piano.advanced.ch3` Ragtime & Lullabies (7) | Easy Ragtime (stride left hand), Cradle Song |
+| guitar | guitar, sitguitar, riff, jamguitar | `guitar.ch2` Strumming Patterns (3) | three more strumming/picking patterns (`PATTERN_NEEDS` in `src/strum.js`) |
+| | | `guitar.ch3` Colourful Chords (8) | soul, gospel and ballad progressions with 7th and sus chords (`needs` on `PROGRESSIONS`) |
+| drums | drums, jamdrums | `drums.ch2` Grooves (3) | reggae and funk styles in the `drums` activity |
+| | | `drums.ch3` Rudiments (8) | paradiddle style (snare, drifting to the toms) |
+| drums.solo | drumsolo | `drums.solo.ch2` Showing Off (3) | `solo2`: tom cascade, snare roll, big finish (60% of solos once learned) |
+
+Adding a chapter: an entry in `CHAPTERS` (ids `<skill>.ch2`, `.ch3`..., `after` rising), content gated on its id (`MAKERS` in `songs.js`, `PATTERN_NEEDS` / `needs` in `strum.js`, a style in `hobbies.js` `DRUM_STYLES` picked in `hobbybrain.js`), and a `MANIFEST.chapters` line. `T.sweepChapters` checks the data, that every tune is well formed and gated, the unlock order, forgetting, saving, GAL's own count, and that the guitar and drums use only what has been learned.
+
+- Regression watch: the chapter sweep must fail if `Brain.choose` stops calling `skills.practice` (checked by hand: it does).
+
 ## Records and tracks (`src/albums.js`, `TRACKS` in `src/audio.js`)
 
 Every record has four songs (`tracks` in `src/albums.js`, ids `x`, `x2`, `x3`, `x4`), each with a title of its own (`label` in `TRACKS`):

@@ -8,7 +8,7 @@ import { buildRoom, ROOM } from './room.js';
 import { Guy } from './guy.js';
 import { Brain } from './brain.js';
 import { initAudio, audio } from './audio.js';
-import { Skills, SKILL_INFO } from './skills.js';
+import { Skills, SKILL_INFO, CHAPTERS } from './skills.js';
 import { sfx, drag as sfxDrag, setMuted, isMuted } from './sfx.js';
 import { initMachine } from './machine.js';
 import { initRooms } from './rooms.js';
@@ -138,6 +138,16 @@ const SKILL_OBJECT = { workshop: 'workbench', 'workshop.materials': 'woodfactory
   stereo: 'table', piano: 'piano', 'piano.advanced': 'piano', ball: 'ball', lighting: 'lamp', guitar: 'guitar', speedreading: 'shelf',
   drums: 'drums', 'drums.solo': 'drums', 'drums.band': 'drums', easel: 'easel', 'easel.colour': 'easel', 'easel.portrait': 'easel',
   telescope: 'telescope', 'telescope.dark': 'telescope', 'telescope.care': 'telescope' };
+// the later chapters of a book (skills.js CHAPTERS): learned by practising, so each shows what it opens up or how far along he is
+function chapterRows(id) {
+  const list = CHAPTERS[id] || [], prog = skills.progress(id);
+  if (!list.length) return '';
+  return `<ul class="chapters">${list.map((c) => {
+    const got = skills.has(c.id), next = prog && prog.next.id === c.id;
+    const note = got ? c.unlocks.join('; ') : next ? `practise ${prog.of - prog.done} more time${prog.of - prog.done === 1 ? '' : 's'}` : 'comes after the one before';
+    return `<li>${got ? (skills.strength(c.id) < 1 ? '◔' : '✓') : '○'} <b>${c.title}</b> <small>${note}</small></li>`;
+  }).join('')}</ul>`;
+}
 function renderSkills() {
   const onShelf = (id) => !!world.objects.shelf && world.objects.shelf.books.some((b) => b.def.teaches === id);
   panel.querySelector('.list').innerHTML = Object.entries(SKILL_INFO).filter(([id]) => skills.has(id) || onShelf(id)).map(([id, info]) => `
@@ -145,6 +155,7 @@ function renderSkills() {
       <div class="name">${skills.has(id) ? (skills.strength(id) < 1 ? '◔' : '✓') : '○'} ${info.name}</div>
       <div class="book">📕 ${info.book}${skills.has(id) ? (skills.strength(id) < 1 ? ` — forgetting (${Math.round(skills.strength(id) * 100)}% left)` : '') : ' — not read yet'}</div>
       <ul>${info.unlocks.map((u) => `<li>${u}</li>`).join('')}</ul>
+      ${skills.has(id) ? chapterRows(id) : ''}
     </div>`).join('');
 }
 renderSkills();
@@ -163,6 +174,7 @@ function showToast(msg) {
 }
 brain.onLearn = (def) => { showToast(`GUY learned ${def.blurb}!`); sfx('chime'); if (machineUI.isOpen()) machineUI.refresh(); };
 brain.onRiff = (msg) => { showToast(msg); sfx('chime'); };
+brain.onChapter = (c) => { showToast(`GUY learned ${c.title.toLowerCase()} by practising!`); sfx('chime'); };
 brain.onBuilt = (msg) => { showToast(msg); machineUI.refresh(); };           // something finished in the Workshop: it is in storage now
 riffConfig.persist = !params.has('fresh');           // ?fresh keeps the riffs he makes up in memory only
 

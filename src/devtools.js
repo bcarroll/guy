@@ -7,7 +7,10 @@
 // T.coverage() reports anything the MANIFEST below does not know about yet. When you add an asset or an
 // activity, add it to MANIFEST (and to .claude/skills/test-guy-game/assets.md). See that skill for the workflow.
 import { OBJECT_CATALOG } from './machine.js';
-import { BOOK_CATALOG, SKILL_INFO, TIMING_SKILLS } from './skills.js';
+import { BOOK_CATALOG, SKILL_INFO, TIMING_SKILLS, CHAPTERS, CHAPTER_IDS, PRACTICE_ACTS, Skills } from './skills.js';
+import { allSongs, randomSong, SONG_NEEDS } from './songs.js';
+import { makeStrum, PATTERN_NEEDS, PROGRESSIONS } from './strum.js';
+import { drumStep, DRUM_STYLES, PAD_SIDE } from './hobbies.js';
 import { BAND } from './gal.js';
 import { wants } from './needs.js';
 import { ROOM_CATALOG } from './rooms.js';
@@ -150,6 +153,12 @@ export const MANIFEST = {
     happy: {}, rock: {}, hiphop: {}, twostep: {}, pop: {}, jazz: {}, slowblues: {}, party: {},
     classical: { premium: true }, country: { premium: true }, blues: { premium: true }, lullaby: { premium: true },
   },
+  // chapters learned by practice (skills.js CHAPTERS): where the content each one opens up lives
+  chapters: {
+    'piano.ch2': { content: 'songs' }, 'piano.ch3': { content: 'songs' }, 'piano.advanced.ch2': { content: 'songs' }, 'piano.advanced.ch3': { content: 'songs' },
+    'guitar.ch2': { content: 'strum' }, 'guitar.ch3': { content: 'strum' },
+    'drums.ch2': { content: 'drums', styles: ['reggae', 'funk'] }, 'drums.ch3': { content: 'drums', styles: ['paradiddle'] }, 'drums.solo.ch2': { content: 'drums', styles: ['solo2'] },
+  },
   tracks: ['default', ...ALBUM_CATALOG.flatMap((a) => a.tracks)],     // every track on every record; coverage fails for a track no record lists
   // the visual checkpoints: freeze GUY at (activity, pose, t) and look from `view`. See assets.md for the full checklist.
   visual: [
@@ -250,6 +259,7 @@ T.coverage = () => {
     tracks: inv.tracks.filter((x) => !MANIFEST.tracks.includes(x)),
     skills: inv.skills.filter((x) => !BOOK_CATALOG.some((b) => b.teaches === x)),
     rooms: inv.rooms.filter((x) => !(x in MANIFEST.rooms)),
+    chapters: CHAPTER_IDS.filter((x) => !(x in MANIFEST.chapters)),
   };
   const stale = {
     rooms: Object.keys(MANIFEST.rooms).filter((x) => !inv.rooms.includes(x)),
@@ -2967,6 +2977,105 @@ T.sweepGal = () => {
   return out;
 };
 
+// ---- 12b. Chapters: later parts of a book, learned by practice (skills.js CHAPTERS) --------------------------------------------------
+T.sweepChapters = () => {
+  const out = [], base = errors.length, b = B();
+  const parents = Object.keys(CHAPTERS);
+  // 1. the data hangs together
+  out.push(result('chapters: every chapter belongs to a book skill, is numbered 2, 3 ... in order, needs more practice than the one before, and has something it lets him do',
+    parents.every((p) => p in SKILL_INFO && p in PRACTICE_ACTS && CHAPTERS[p].every((c, i) => c.id === `${p}.ch${i + 2}` && c.title && c.unlocks.length && (!i || c.after > CHAPTERS[p][i - 1].after))), { parents }));
+  out.push(result('chapters: the manifest lists every chapter (and nothing that is gone)', CHAPTER_IDS.every((id) => id in MANIFEST.chapters) && Object.keys(MANIFEST.chapters).every((id) => CHAPTER_IDS.includes(id))));
+  out.push(result('chapters: the practice activities of every book are real activities', Object.values(PRACTICE_ACTS).flat().every((a) => a in b.activities())));
+  // 2. each chapter has content behind it, and it is gated on that chapter
+  const strumNeeds = new Set([...Object.values(PATTERN_NEEDS), ...PROGRESSIONS.map((p) => p.needs).filter(Boolean)]);
+  for (const id of CHAPTER_IDS) {
+    const c = MANIFEST.chapters[id];
+    const has = c.content === 'songs' ? SONG_NEEDS.includes(id) : c.content === 'strum' ? strumNeeds.has(id) : c.styles.every((st) => DRUM_STYLES.includes(st));
+    out.push(result(`chapters: ${id} has ${c.content} behind it`, has));
+  }
+  // 3. the tunes: every one is well formed
+  const songs = allSongs();
+  const badSong = songs.filter((sg) => !sg.events.length || !(sg.bpm >= 40 && sg.bpm <= 200) || sg.events.some((e) => !Number.isFinite(e.beat) || e.beat < 0 || !(e.dur > 0)) ||
+    sg.events.flatMap((e) => [...(e.r || []), ...(e.l || [])]).some((m) => !Number.isFinite(m) || m < 36 || m > 96) || Math.max(...sg.events.map((e) => e.beat + e.dur)) < 12);
+  out.push(result(`chapters: all ${songs.length} piano tunes are well formed (notes on the keyboard, a sane tempo, at least 12 beats long)`, !badSong.length, { bad: badSong.map((sg) => sg.name) }));
+  out.push(result('chapters: no two piano tunes share a name', new Set(songs.map((sg) => sg.name)).size === songs.length));
+  const draw = (has) => new Set(Array.from({ length: 400 }, () => randomSong(null, has).name));
+  const names = (need) => new Set(songs.filter((sg) => sg.needs === need).map((sg) => sg.name));
+  const basic = draw((k) => k === 'piano'), ch2 = draw((k) => k === 'piano' || k === 'piano.ch2');
+  out.push(result('chapters: with only the basic piano book he plays none of the chapter tunes', [...basic].every((n) => !CHAPTER_IDS.some((id) => names(id).has(n)))));
+  out.push(result('chapters: with chapter 2 he plays its tunes (all of them in 400 goes) and none from chapter 3', [...names('piano.ch2')].every((n) => ch2.has(n)) && [...names('piano.ch3')].every((n) => !ch2.has(n))));
+  out.push(result('chapters: advanced-book chapters need the advanced book chapter, not just the basic one', [...draw((k) => k !== 'piano.advanced.ch2' && k !== 'piano.advanced.ch3')].every((n) => !names('piano.advanced.ch2').has(n) && !names('piano.advanced.ch3').has(n))));
+  // 4. practice unlocks them, in order
+  const sk = new Skills('none');
+  sk.learn('piano');
+  const gotNow = [];
+  sk.onChapter((c) => gotNow.push(c.id));
+  sk.practice('sitpiano'); sk.practice('jam');
+  out.push(result('chapters: two practice sessions are not enough for chapter 2 (it needs three)', !sk.has('piano.ch2') && sk.progress('piano').done === 2 && sk.progress('piano').of === 3));
+  const g3 = sk.practice('piano');
+  out.push(result('chapters: the third practice session teaches chapter 2, and the listener hears of it once', g3.length === 1 && sk.has('piano.ch2') && gotNow.join() === 'piano.ch2' && sk.has('piano') && !sk.has('piano.ch3')));
+  for (let i = 0; i < 4; i++) sk.practice('piano');
+  out.push(result('chapters: chapter 3 waits for its own count (not there after 7 sessions)', !sk.has('piano.ch3')));
+  sk.practice('piano');
+  out.push(result('chapters: chapter 3 comes at the eighth session; there is nothing left to wait for', sk.has('piano.ch3') && sk.progress('piano') === null));
+  sk.practice('stargaze'); sk.practice('bang');
+  out.push(result('chapters: practising something else counts for nothing here', !sk.has('guitar.ch2') && (sk.practiced.get('guitar') || 0) === 0));
+  out.push(result('chapters: practice does not count for a skill he does not know (no advanced piano yet)', !sk.practiced.has('piano.advanced')));
+  // 5. forgetting the book fades the chapters with it; practice stops while it fades; they are gone together
+  sk.forget('piano');
+  const was = sk.practiced.get('piano');
+  sk.practice('piano');
+  out.push(result('chapters: forgetting a book makes its chapters fade too, and fading skills are not practised', sk.fading.has('piano.ch2') && sk.fading.has('piano.ch3') && sk.practiced.get('piano') === was));
+  sk.learn('piano');
+  out.push(result('chapters: reading the book again brings its chapters back in full', !sk.fading.has('piano') && !sk.fading.has('piano.ch2') && !sk.fading.has('piano.ch3') && sk.has('piano.ch3')));
+  sk.forget('piano');
+  for (let i = 0; i < 400; i++) sk.tick(1);
+  out.push(result('chapters: a forgotten book takes its chapters and its practice count with it', !sk.has('piano') && !sk.has('piano.ch2') && !sk.has('piano.ch3') && !sk.practiced.has('piano')));
+  // 6. saved, per robot
+  const keys = { known: 'guy.test.chap.k', fade: 'guy.test.chap.f' };
+  const clean = () => ['guy.test.chap.k', 'guy.test.chap.f', 'guy.test.chap.k.practice'].forEach((k) => { try { localStorage.removeItem(k); } catch { /* no storage */ } });
+  clean();
+  const a = new Skills(null, keys); a.learn('guitar'); a.practice('riff'); a.practice('guitar');
+  const a2 = new Skills(null, keys);
+  out.push(result('chapters: the practice count is saved and comes back on the next visit', a2.practiced.get('guitar') === 2 && a2.progress('guitar').done === 2));
+  a2.practice('jamguitar');
+  out.push(result('chapters: a chapter learned by practice is still there on the next visit', new Skills(null, keys).has('guitar.ch2')));
+  clean();
+  out.push(result('chapters: GAL counts her practice separately from GUY (her own save key)', new Skills(null, { known: 'guy.gal.skills.v1', fade: 'guy.gal.fade.v1' }).keys.practice !== new Skills(null).keys.practice));
+  out.push(result('chapters: skills=all includes every chapter', (() => { const all = new Skills('all'); return CHAPTER_IDS.every((id) => all.has(id)); })()));
+  // 7. the guitar and the drums use only what he has learned
+  const has1 = (k) => k === 'guitar';
+  const gs = Array.from({ length: 300 }, () => makeStrum(has1));
+  out.push(result('chapters: with only the basic guitar book none of the new patterns or chord progressions turn up', gs.every((x) => !PATTERN_NEEDS[x.pat] && !PROGRESSIONS.some((p) => p.needs && p.name === x.name))));
+  const gs2 = Array.from({ length: 400 }, () => makeStrum(() => true));
+  out.push(result('chapters: with every chapter all the new patterns and progressions turn up', Object.keys(PATTERN_NEEDS).every((p) => gs2.some((x) => x.pat === p)) && PROGRESSIONS.filter((p) => p.needs).every((p) => gs2.some((x) => x.name === p.name))));
+  const hitsOf = (style) => { const pads = new Set(); let n = 0; for (let i = 0; i < 64; i++) for (const h of drumStep(style, i)) { n++; pads.add(h.k); if (!(h.k in PAD_SIDE) && h.k !== 'kick') return null; if (!['L', 'R', 'F'].includes(h.h) || !(h.v > 0 && h.v <= 1)) return null; } return { n, pads: pads.size }; };
+  out.push(result(`chapters: every drum style (${DRUM_STYLES.length}) plays real pads with the right hands, at a sensible loudness`, DRUM_STYLES.every((st) => { const h = hitsOf(st); return h && h.n >= 16; }), { bad: DRUM_STYLES.filter((st) => !hitsOf(st)) }));
+  const styleOf = (act) => { const st = b.activities()[act]().find((x) => x && x.type === 'play' && x.fx && x.fx.style); return st && st.fx.style; };
+  const sk0 = skillsOf();
+  T.addObject('drums'); T.settle();
+  sk0.known.clear(); sk0.fading.clear(); T.learn(['drums', 'drums.solo']);
+  const seen = (act, n = 150) => new Set(Array.from({ length: n }, () => styleOf(act)));
+  const plain = seen('drums'), solo1 = seen('drumsolo');
+  out.push(result('chapters: with only the basic drum books he plays none of the chapter grooves and solos', !['reggae', 'funk', 'paradiddle'].some((x) => plain.has(x)) && !solo1.has('solo2'), { plain: [...plain], solo1: [...solo1] }));
+  T.learn(['drums.ch2', 'drums.ch3', 'drums.solo.ch2']);
+  const full = seen('drums'), solo2 = seen('drumsolo');
+  out.push(result('chapters: with the drum chapters learned the new grooves and the long solo turn up', ['reggae', 'funk', 'paradiddle'].every((x) => full.has(x)) && solo2.has('solo2') && solo2.has('solo'), { full: [...full], solo2: [...solo2] }));
+  // 8. in the game: starting an instrument activity is a practice session
+  sk0.known.clear(); sk0.fading.clear(); sk0.practiced.clear(); T.learn(['piano']);
+  T.addObject('piano'); T.addObject('bench'); T.settle();
+  const toast = [], said = [], ui0 = b.ui;
+  b.onChapter = (c) => toast.push(c.id);
+  b.ui = (m) => { said.push(String(m)); return ui0(m); };
+  for (let i = 0; i < 3; i++) { b.queue = []; b.step = null; b.skip(true); b.choose('piano'); }
+  out.push(result('chapters: in the game, three goes at the piano teach chapter 2 and he says so', sk0.has('piano.ch2') && toast.join() === 'piano.ch2' && said.some((m) => /learned chapter 2/i.test(m)), { said: said.slice(-3), practiced: sk0.practiced.get('piano') }));
+  b.onChapter = null; b.ui = ui0;
+  b.queue = []; b.step = null; b.skip(true);
+  T.removeAll(); sk0.known.clear(); sk0.fading.clear(); sk0.practiced.clear(); T.settle();
+  out.push(result('chapters: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 // ---- 13. Guitar riffs: made up, judged, and the good ones remembered (src/riffs.js) -----------------------------------------------
 T.sweepRiffs = () => {
   const out = [], base = errors.length, key = 'guy.riffs.test';
@@ -3969,6 +4078,7 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.layout = S(T.sweepLayout);
   report.update = S(T.sweepUpdate);
   report.start = S(T.sweepStart);
+  report.chapters = S(T.sweepChapters);
   report.riffs = S(T.sweepRiffs);
   report.lock = S(T.sweepLock);
   report.speed = S(T.sweepSpeed);
