@@ -2456,7 +2456,7 @@ export class Brain {
           const ra = this.w.roomIdAt(root.position.x, root.position.z), rb = this.w.roomIdAt(s.x, s.z);
           const fr = ra === rb && ra !== 'main' && ra !== 'door' ? this.w.frameOf(ra) : MAIN_FRAME;
           // He is inside an added room and the spot is in his own: the grid of his own room knows nothing of the other one, so he goes out through the door first (not into its wall)
-          if (ra !== rb && ra !== 'main' && ra !== 'door' && rb === 'main' && !s.viaDoor && !s.push && !s.drive && this.w.doors[ra] && !this.stuckIn()) {
+          if (ra !== rb && ra !== 'main' && ra !== 'door' && rb === 'main' && !s.viaDoor && !s.direct && !s.push && !s.drive && this.w.doors[ra] && !this.stuckIn()) {
             const [, ...out] = this.activities().leave();
             this.queue.unshift(...out, { ...s, viaDoor: true });
             this.step = null;

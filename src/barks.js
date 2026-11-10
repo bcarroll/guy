@@ -17,8 +17,9 @@ export const BARKS = {
   yardsit: ['Some fresh air.', 'Time to sit in the sun.'], birdbath: ['Let me see the bird bath.'], skyswitch: ['Let me change the sky.'], mow: ['The lawn needs mowing.'],
   yardpoke: ['A kick about, perhaps.'], goalshot: ['Shots at the goal.'], soccertoss: ['A little ball handling.'], hoopshoot: ['Let me shoot some hoops.'], hoopdribble: ['Dribbling.'], hoopdefend: ['I will play defence.'], goalkeep: ['I will keep goal.'],
   visit: ['Let me have a look in there.'], learn: ['Off to the workstation.'],
+  rangeshoot: ['Some target practice.', 'Off to the range.'], rangehang: ['I will drop by the range.'], rangefool: ['Let us see what this blaster can do.'],
 };
-export const NO_BARK = ['wander', 'lookaround', 'sway', 'akimbo', 'ponder', 'books', 'putback', 'putguitar', 'dropball', 'lighton', 'putcanvas', 'hangpaint', 'leave', 'stuck', 'rwait',
+export const NO_BARK = ['yardtidy', 'arrange', 'wander', 'lookaround', 'sway', 'akimbo', 'ponder', 'books', 'putback', 'putguitar', 'dropball', 'lighton', 'putcanvas', 'hangpaint', 'leave', 'stuck', 'rwait',
   'takeorder', 'cook', 'serve', 'takepay',                     // the restaurant jobs already talk to the customers
   'buildbot', 'bandjam', 'bandplay', 'orderbuild',             // GUY and GAL's own talk (gal.js)
   'stock', 'galread', 'findguy', 'invitedance'];
