@@ -10,7 +10,8 @@ import { OBJECT_CATALOG } from './machine.js';
 import { BOOK_CATALOG, SKILL_INFO, TIMING_SKILLS, CHAPTERS, CHAPTER_IDS, PRACTICE_ACTS, Skills } from './skills.js';
 import { allSongs, randomSong, SONG_NEEDS } from './songs.js';
 import { makeStrum, PATTERN_NEEDS, PROGRESSIONS } from './strum.js';
-import { drumStep, DRUM_STYLES, PAD_SIDE } from './hobbies.js';
+import { drumStep, DRUM_STYLES, PAD_SIDE, paintPlan } from './hobbies.js';
+import { lampLooks, LAMP_LOOKS } from './brain.js';
 import { BAND } from './gal.js';
 import { wants } from './needs.js';
 import { ROOM_CATALOG } from './rooms.js';
@@ -157,6 +158,13 @@ export const MANIFEST = {
   chapters: {
     'piano.ch2': { content: 'songs' }, 'piano.ch3': { content: 'songs' }, 'piano.advanced.ch2': { content: 'songs' }, 'piano.advanced.ch3': { content: 'songs' },
     'guitar.ch2': { content: 'strum' }, 'guitar.ch3': { content: 'strum' },
+    'drums.band.ch2': { content: 'steps' }, 'drums.band.ch3': { content: 'steps' }, 'drums.solo.ch3': { content: 'drums', styles: ['solo3'] },
+    'dance.moves.ch2': { content: 'steps' }, 'dance.moves.ch3': { content: 'steps' }, 'dance.ballroom.ch2': { content: 'steps' }, 'dance.ballroom.ch3': { content: 'steps' },
+    'lighting.ch2': { content: 'steps' }, 'lighting.ch3': { content: 'steps' },
+    'easel.ch2': { content: 'steps' }, 'easel.ch3': { content: 'steps' }, 'easel.colour.ch2': { content: 'steps' }, 'easel.colour.ch3': { content: 'steps' },
+    'easel.portrait.ch2': { content: 'steps' }, 'easel.portrait.ch3': { content: 'steps' }, 'decorate.ch2': { content: 'steps' }, 'decorate.ch3': { content: 'steps' },
+    'telescope.ch2': { content: 'steps' }, 'telescope.ch3': { content: 'steps' }, 'telescope.dark.ch2': { content: 'steps' }, 'telescope.dark.ch3': { content: 'steps' },
+    'telescope.care.ch2': { content: 'steps' }, 'telescope.care.ch3': { content: 'steps' },
     'drums.ch2': { content: 'drums', styles: ['reggae', 'funk'] }, 'drums.ch3': { content: 'drums', styles: ['paradiddle'] }, 'drums.solo.ch2': { content: 'drums', styles: ['solo2'] },
   },
   tracks: ['default', ...ALBUM_CATALOG.flatMap((a) => a.tracks)],     // every track on every record; coverage fails for a track no record lists
@@ -183,6 +191,14 @@ export const MANIFEST = {
     { id: 'ponder-chin', activity: 'ponder', pose: 'ponder', t: 2.5, view: 'front', expect: 'right hand at his chin, left forearm across his middle, head tilted, no hand through the face' },
     { id: 'easel-mix', activity: 'mixpaint', pose: 'paintStand', t: 6, view: 'front', expect: 'brush circling on the palette held in the left hand' },
     { id: 'scope-peer', activity: 'stargaze', pose: 'scopePeer', t: 6, view: 'side', expect: 'eye at the eyepiece (rear end), knees bent, left hand on the focus knob, right hand on the barrel' },
+    { id: 'dance-sprinkler', activity: 'dancemoves', pose: 'sprinkler', t: 2.0, view: 'front', skills: ['dance.moves', 'dance.moves.ch2'], expect: 'right arm held out level at the side, left hand raised bent at the head, knees soft, no hand through the head' },
+    { id: 'dance-moonwalk', activity: 'dancemoves', pose: 'moonwalk', t: 2.0, view: 'side', skills: ['dance.moves', 'dance.moves.ch2'], expect: 'one foot flat and the other heel lifted, upper body upright, arms bent a little and swinging, no hand in front of or through the face' },
+    { id: 'dance-headbang', activity: 'dancemoves', pose: 'headbang', t: 1.0, view: 'side', skills: ['dance.moves', 'dance.moves.ch3'], expect: 'head nodding forward, knees bent in a wide stance, both fists pumping in front of the face or chest, none through the head' },
+    { id: 'dance-armwave', activity: 'dancemoves', pose: 'armwave', t: 2.0, view: 'front', skills: ['dance.moves', 'dance.moves.ch3'], expect: 'both arms out sideways with the wave running along them, shoulders level, knees soft' },
+    { id: 'dance-tango', activity: 'ballroom', pose: 'tango', t: 3.0, view: 'front', skills: ['dance.ballroom', 'dance.ballroom.ch2'], expect: 'arms held out in a ballroom hold, head turned to one side, knees slightly bent' },
+    { id: 'dance-foxtrot', activity: 'ballroom', pose: 'foxtrot', t: 3.0, view: 'front', skills: ['dance.ballroom', 'dance.ballroom.ch2'], expect: 'arms held out in a ballroom hold, upright, a slow gliding step' },
+    { id: 'dance-jive', activity: 'ballroom', pose: 'jive', t: 1.9, view: 'front', skills: ['dance.ballroom', 'dance.ballroom.ch3'], expect: 'arms bent and swinging, one knee kicked up, hips turned, bouncing' },
+    { id: 'dance-dip', activity: 'ballroom', pose: 'dip', t: 5.0, view: 'side', skills: ['dance.ballroom', 'dance.ballroom.ch3'], expect: 'a deep lunge with the weight on one bent knee, back leaning, arm round the partner, head tilted' },
     { id: 'scope-aim', activity: 'stargaze', pose: 'scopeAim', t: 2.2, view: 'top', expect: 'one hand on top of the barrel while the tube swings round' },
     { id: 'scope-wrong', activity: 'peek', pose: 'scopeWrong', t: 2.8, view: 'side', expect: 'eye at the big lens end, hand on the barrel, other hand on his knee' },
     { id: 'yard-shoot', activity: 'hoopshoot', pose: 'shoot', t: 0.9, view: 'side', expect: 'knees dipped then extended, both hands up at the release with the basketball just leaving them, facing the hoop' },
@@ -1107,7 +1123,7 @@ T.look = (view = 'front', dist = 2.1) => {
 };
 // Run an activity until GUY reaches (pose, t), freeze and frame him. `opts.turning` waits for a page turn.
 T.moment = (activity, pose, t = 0, view = 'front', opts = {}) => {
-  T.unfreeze(); T.prep(activity); T.settle();
+  T.unfreeze(); T.prep(activity); if (opts.skills) T.learn(opts.skills); T.settle();
   const b = B();
   if (opts.album && !(W().objects.shelf.albums || []).length) T.addAlbum(ALBUM_CATALOG.find((x) => !x.premium).id);       // a record on the shelf to carry
   if (opts.album) b.forceAlbum = (W().objects.shelf.albums[0] || { def: {} }).def.id;
@@ -2990,7 +3006,7 @@ T.sweepChapters = () => {
   const strumNeeds = new Set([...Object.values(PATTERN_NEEDS), ...PROGRESSIONS.map((p) => p.needs).filter(Boolean)]);
   for (const id of CHAPTER_IDS) {
     const c = MANIFEST.chapters[id];
-    const has = c.content === 'songs' ? SONG_NEEDS.includes(id) : c.content === 'strum' ? strumNeeds.has(id) : c.styles.every((st) => DRUM_STYLES.includes(st));
+    const has = c.content === 'steps' ? true : c.content === 'songs' ? SONG_NEEDS.includes(id) : c.content === 'strum' ? strumNeeds.has(id) : c.styles.every((st) => DRUM_STYLES.includes(st));
     out.push(result(`chapters: ${id} has ${c.content} behind it`, has));
   }
   // 3. the tunes: every one is well formed
@@ -3072,6 +3088,80 @@ T.sweepChapters = () => {
   b.onChapter = null; b.ui = ui0;
   b.queue = []; b.step = null; b.skip(true);
   T.removeAll(); sk0.known.clear(); sk0.fading.clear(); sk0.practiced.clear(); T.settle();
+  // 9. chapters whose content is in the steps an activity builds (dance poses, lamp looks, painting plans, telescope and dusting rounds, drumming along)
+  {
+    const covered = new Set();
+    const only = (...ids) => { sk0.known.clear(); sk0.fading.clear(); T.learn(ids); };
+    const acts = () => b.activities();
+    const posesOf = (act) => new Set([].concat(acts()[act]()).filter((x) => x && x.type === 'play').map((x) => x.pose));
+    const manyPoses = (act, n = 60) => { const all = new Set(); for (let i = 0; i < n; i++) posesOf(act).forEach((p) => all.add(p)); return all; };
+    T.addObject('table'); T.settle();
+    // dance
+    for (const [skill, act, ch2, ch3] of [['dance.moves', 'dancemoves', ['sprinkler', 'moonwalk'], ['headbang', 'armwave']], ['dance.ballroom', 'ballroom', ['tango', 'foxtrot'], ['jive', 'dip']]]) {
+      only(skill);
+      const base = manyPoses(act);
+      out.push(result(`chapters: ${skill} with no chapters never dances the new moves`, [...ch2, ...ch3].every((p) => !base.has(p)), { base: [...base] }));
+      only(skill, `${skill}.ch2`);
+      const a = manyPoses(act);
+      out.push(result(`chapters: ${skill}.ch2 brings in ${ch2.join(' and ')} and not the chapter 3 moves`, ch2.every((p) => a.has(p)) && ch3.every((p) => !a.has(p)), { a: [...a] }));
+      only(skill, `${skill}.ch3`);
+      const c = manyPoses(act);
+      out.push(result(`chapters: ${skill}.ch3 brings in ${ch3.join(' and ')} and not the chapter 2 moves`, ch3.every((p) => c.has(p)) && ch2.every((p) => !c.has(p)), { c: [...c] }));
+      covered.add(`${skill}.ch2`); covered.add(`${skill}.ch3`);
+      out.push(result(`chapters: every dance pose of ${skill} exists`, [...ch2, ...ch3].every((p) => p in POSES)));
+    }
+    // the lamp
+    const base = lampLooks(() => false), c2 = lampLooks((k) => k === 'lighting.ch2'), c3 = lampLooks((k) => k === 'lighting.ch3');
+    out.push(result('chapters: lighting looks: five to begin with, ch2 adds colours, ch3 adds moving looks', base.length === 5 && c2.length === 8 && c3.length === 8 && c2.every((l) => !l.animate) && c3.slice(5).every((l) => l.animate), { base: base.length, c2: c2.length, c3: c3.length }));
+    const lamp = W().lamp;
+    const moving = LAMP_LOOKS.filter((l) => l.animate);
+    const seenColors = moving.map((l) => { lamp.setLook(l.color, l.base); lamp.animate(l.animate); const c0 = lamp.color.getHex(), i0 = lamp.base; lamp.tick(0); return { name: l.name, ok: Number.isFinite(lamp.base) && lamp.base > 0 && lamp.mode === l.animate, c: lamp.color.getHex() !== undefined && (c0 !== undefined || i0 !== undefined) }; });
+    out.push(result('chapters: each moving lamp look runs in the lamp (mode kept, a sensible brightness)', seenColors.every((x) => x.ok), { seenColors }));
+    lamp.set(false); lamp.set(true);
+    out.push(result('chapters: switching the lamp off and on again ends a moving look', lamp.mode === 'normal'));
+    covered.add('lighting.ch2'); covered.add('lighting.ch3');
+    // painting
+    const kinds = [['basic', null], ['dabs', null], ['bands', null], ['spiral', null], ['splash', null], ['mix', null], ['gradient', null], ['tints', null], ...['landscape', 'face', 'still life', 'seascape', 'skyline', 'night sky', 'robot'].map((sb) => ['portrait', sb])];
+    const badPlans = kinds.filter(([kind, sb]) => {
+      const plan = paintPlan(kind, false, sb), strokes = plan.segs.filter((x) => x.type === 'stroke');
+      return !strokes.length || !(plan.total > 3 && plan.total < 120) || strokes.some((x) => !x.pts.length || x.pts.some(([u, v]) => !(u > -0.1 && u < 1.1 && v > -0.1 && v < 1.1)) || !(x.dur > 0) || !/^#[0-9a-f]{6}$/i.test(x.color)) || (sb && plan.subject !== sb);
+    });
+    out.push(result(`chapters: all ${kinds.length} painting plans are well formed (strokes on the canvas, valid colours, a sensible length, the subject asked for)`, !badPlans.length, { bad: badPlans.map((x) => x.join(':')) }));
+    const subjectsSeen = (skills) => { only('easel.portrait', ...skills); const set = new Set(); for (let i = 0; i < 160; i++) { const st = [].concat(acts().portrait()); set.add(st[0]); } return set; };
+    const labelsOf = (skillIds, act) => { only(...skillIds); const set = new Set(); for (let i = 0; i < 160; i++) set.add([].concat(acts()[act]())[0]); return set; };
+    const pb = labelsOf(['easel'], 'paint'), p2 = labelsOf(['easel', 'easel.ch2'], 'paint'), p3 = labelsOf(['easel', 'easel.ch3'], 'paint');
+    out.push(result('chapters: easel — plain painting to begin with; ch2 adds dabbing and broad bands; ch3 adds swirls and splashes', pb.size === 1 && p2.has('dabbing paint onto the canvas') && p2.has('laying down broad bands of colour') && !p2.has('painting a swirl') && p3.has('painting a swirl') && p3.has('flinging paint about') && !p3.has('dabbing paint onto the canvas'), { p2: [...p2], p3: [...p3] }));
+    const mb = labelsOf(['easel.colour'], 'mixpaint'), m2 = labelsOf(['easel.colour', 'easel.colour.ch2'], 'mixpaint'), m3 = labelsOf(['easel.colour', 'easel.colour.ch3'], 'mixpaint');
+    out.push(result('chapters: easel.colour — mixing to begin with; ch2 adds gradients; ch3 adds tints and shades', mb.size === 1 && m2.has('blending colours into a gradient') && !m2.has('painting tints and shades') && m3.has('painting tints and shades') && !m3.has('blending colours into a gradient'), { m2: [...m2], m3: [...m3] }));
+    const ob = labelsOf(['easel.portrait'], 'portrait'), o2 = labelsOf(['easel.portrait', 'easel.portrait.ch2'], 'portrait'), o3 = labelsOf(['easel.portrait', 'easel.portrait.ch3'], 'portrait');
+    out.push(result('chapters: easel.portrait — three subjects to begin with; ch2 adds a seascape and a skyline; ch3 a night sky and a robot', ob.size === 3 && o2.has('painting a seascape') && o2.has('painting a skyline') && !o2.has('painting a robot') && o3.has('painting a night sky') && o3.has('painting a robot') && !o3.has('painting a seascape'), { ob: [...ob], o2: [...o2], o3: [...o3] }));
+    for (const id of ['easel.ch2', 'easel.ch3', 'easel.colour.ch2', 'easel.colour.ch3', 'easel.portrait.ch2', 'easel.portrait.ch3']) covered.add(id);
+    // dusting
+    T.removeAll(); T.settle();
+    const dustN = (ids) => { only('decorate', ...ids); const st = [].concat(acts().dust()); return st.filter((x) => x && x.type === 'plan').length; };
+    out.push(result('chapters: decorate — one piece dusted to begin with, two with ch2, three with ch3', dustN([]) === 1 && dustN(['decorate.ch2']) === 2 && dustN(['decorate.ch2', 'decorate.ch3']) === 3, { n: [dustN([]), dustN(['decorate.ch2']), dustN(['decorate.ch2', 'decorate.ch3'])] }));
+    covered.add('decorate.ch2'); covered.add('decorate.ch3');
+    // telescope
+    T.addObject('telescope'); T.addObject('lamp'); T.settle();
+    const cnt = (ids, act, pose) => { only(...ids); return [].concat(acts()[act]()).filter((x) => x && x.type === 'play' && x.pose === pose).length; };
+    out.push(result('chapters: telescope — one target to begin with, two with ch2, three with ch3', cnt(['telescope'], 'stargaze', 'scopePeer') === 1 && cnt(['telescope', 'telescope.ch2'], 'stargaze', 'scopePeer') === 2 && cnt(['telescope', 'telescope.ch2', 'telescope.ch3'], 'stargaze', 'scopePeer') === 3));
+    out.push(result('chapters: telescope.dark — ch2 waits for his eyes to adjust (a look round before the first look), ch3 watches two targets and looks up at the end', cnt(['telescope.dark'], 'darkstargaze', 'lookaround') === 0 && cnt(['telescope.dark', 'telescope.dark.ch2'], 'darkstargaze', 'lookaround') === 1 && cnt(['telescope.dark', 'telescope.dark.ch2', 'telescope.dark.ch3'], 'darkstargaze', 'lookaround') === 2 && cnt(['telescope.dark', 'telescope.dark.ch3'], 'darkstargaze', 'scopePeer') === 2 && cnt(['telescope.dark'], 'darkstargaze', 'scopePeer') === 1));
+    out.push(result('chapters: telescope.care — ch3 cleans it twice; ch2 swings the tube level afterwards', cnt(['telescope.care'], 'scopecare', 'scopeCare') === 1 && cnt(['telescope.care', 'telescope.care.ch3'], 'scopecare', 'scopeCare') === 2 && (only('telescope.care'), [].concat(acts().scopecare()).length) + 1 === (only('telescope.care', 'telescope.care.ch2'), [].concat(acts().scopecare()).length)));
+    for (const id of ['telescope.ch2', 'telescope.ch3', 'telescope.dark.ch2', 'telescope.dark.ch3', 'telescope.care.ch2', 'telescope.care.ch3']) covered.add(id);
+    // drumming along: fills and sections
+    T.addObject('drums'); T.settle();
+    const jamFx = (ids) => { only('drums', 'drums.band', ...ids); const st = [].concat(acts().jamdrums()).find((x) => x && x.type === 'play' && x.fx && x.fx.drums); return st ? st.fx : {}; };
+    out.push(result('chapters: drums.band — fills with ch2, verse and chorus with ch3, nothing before', !jamFx([]).fills && !jamFx([]).sections && jamFx(['drums.band.ch2']).fills && !jamFx(['drums.band.ch2']).sections && jamFx(['drums.band.ch2', 'drums.band.ch3']).sections));
+    const bars = (style, opts, from, to) => Array.from({ length: (to - from) * 8 }, (_, k) => drumStep(style, from * 8 + k, opts));
+    const fillBar = bars('rock', { fills: true }, 3, 4);
+    out.push(result('chapters: the fill is on the last half of every fourth bar only (toms, a crash on the last beat), the rest is the groove', fillBar.slice(4).every((h) => h.some((x) => ['tom1', 'tom2', 'floor'].includes(x.k))) && fillBar[7].some((x) => x.k === 'crash') && bars('rock', { fills: true }, 0, 1).every((h, k) => JSON.stringify(h) === JSON.stringify(drumStep('rock', k))) && bars('rock', { fills: true }, 4, 5).every((h, k) => JSON.stringify(h) === JSON.stringify(drumStep('rock', 32 + k)))));
+    const ride = (bar) => bars('rock', { sections: true }, bar, bar + 1).flat().some((x) => x.k === 'ride');
+    out.push(result('chapters: the chorus (bars 9 to 16 of every sixteen) has the ride cymbal and a crash where it starts; the verse does not', !ride(0) && ride(8) && bars('rock', { sections: true }, 8, 9)[0].some((x) => x.k === 'crash') && !bars('rock', { sections: true }, 9, 10)[0].some((x) => x.k === 'crash') && !ride(16)));
+    covered.add('drums.band.ch2'); covered.add('drums.band.ch3');
+    const missing = CHAPTER_IDS.filter((id) => MANIFEST.chapters[id].content === 'steps' && !covered.has(id));
+    out.push(result('chapters: every chapter whose content is in an activity\'s steps has a check above', !missing.length, { missing }));
+    T.removeAll(); sk0.known.clear(); sk0.fading.clear(); sk0.practiced.clear(); T.settle();
+  }
   out.push(result('chapters: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
 };

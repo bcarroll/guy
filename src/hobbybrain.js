@@ -53,9 +53,9 @@ export function installHobbies(Brain, POSES, H) {
         this.walkAt('drums', 0.55, 0.6, Math.PI, true),
         this.play('drumSit', dur, { drums: true, sitDrum: true, startAt: 2.4, ...fx }),
         this.walkAt('drums', 0.55, 1.15, null, true)];
-      const paintSteps = (label, kind, finger = false) => {
+      const paintSteps = (label, kind, finger = false, subject = null) => {
         const e = this.obj('easel');
-        const plan = paintPlan(kind, !!(e && e.painted));
+        const plan = paintPlan(kind, !!(e && e.painted), subject);
         const ret = finger ? 0 : 1.0;                                       // put the palette back before stepping away
         plan.admireStart += ret; plan.total += ret; plan.ret = ret;
         return [label,
@@ -83,16 +83,29 @@ export function installHobbies(Brain, POSES, H) {
       return {
         bang: () => drumSteps('banging on the drums', { style: 'bang', bpm: 150 }, rand(12, 18)),
         drums: () => drumSteps('playing the drums', { style: pick([...['rock', 'rock', 'soft', 'march'], ...(this.has('drums.ch2') ? ['reggae', 'funk', 'funk'] : []), ...(this.has('drums.ch3') ? ['paradiddle', 'paradiddle'] : [])]), bpm: pick([92, 100, 108]) }, rand(24, 34)),
-        drumsolo: () => drumSteps('playing a drum solo', { style: this.has('drums.solo.ch2') && Math.random() < 0.6 ? 'solo2' : 'solo', bpm: 112 }, rand(28, 38)),
-        jamdrums: () => drumSteps(`drumming along with ${this.nowPlaying().title}`, { style: 'jam', sync: true }, rand(32, 46)),
+        drumsolo: () => drumSteps('playing a drum solo', { style: pick(['solo', ...(this.has('drums.solo.ch2') ? ['solo2', 'solo2'] : []), ...(this.has('drums.solo.ch3') ? ['solo3', 'solo3'] : [])]), bpm: 112 }, rand(28, 38)),
+        jamdrums: () => drumSteps(`drumming along with ${this.nowPlaying().title}`, { style: 'jam', sync: true, fills: this.has('drums.band.ch2'), sections: this.has('drums.band.ch3') }, rand(32, 46)),
         scribble: () => paintSteps('scribbling on the canvas with a finger', 'scribble', true),
-        paint: () => paintSteps('painting', 'basic'),
-        mixpaint: () => paintSteps('mixing colours and painting', 'mix'),
-        portrait: () => paintSteps('painting a picture', 'portrait'),
+        // chapters (skills.js CHAPTERS): easel ch2 dabs and bands, ch3 swirls and splashes; easel.colour ch2 blends, ch3 tints and shades; easel.portrait ch2 seascapes and skylines, ch3 night skies and robots
+        paint: () => { const kind = pick(['basic', ...(this.has('easel.ch2') ? ['dabs', 'bands', 'dabs', 'bands'] : []), ...(this.has('easel.ch3') ? ['spiral', 'splash'] : [])]); return paintSteps(kind === 'dabs' ? 'dabbing paint onto the canvas' : kind === 'bands' ? 'laying down broad bands of colour' : kind === 'spiral' ? 'painting a swirl' : kind === 'splash' ? 'flinging paint about' : 'painting', kind); },
+        mixpaint: () => { const kind = pick(['mix', ...(this.has('easel.colour.ch2') ? ['gradient', 'gradient'] : []), ...(this.has('easel.colour.ch3') ? ['tints', 'tints'] : [])]); return paintSteps(kind === 'gradient' ? 'blending colours into a gradient' : kind === 'tints' ? 'painting tints and shades' : 'mixing colours and painting', kind); },
+        portrait: () => { const subject = pick(['landscape', 'face', 'still life', ...(this.has('easel.portrait.ch2') ? ['seascape', 'skyline', 'seascape', 'skyline'] : []), ...(this.has('easel.portrait.ch3') ? ['night sky', 'robot', 'night sky', 'robot'] : [])]); return paintSteps(`painting a ${subject}`, 'portrait', false, subject); },
         peek: () => ['peering into the telescope (the wrong end)', this.scopeAim('room'), this.scopeSpot('wrong'), this.play('scopeWrong', 10, { scope: 'wrong' })],
-        stargaze: () => ['stargazing through the telescope', this.scopeAim('sky'), this.scopeSpot('peer'), this.play('scopePeer', rand(14, 20), { scope: 'peer' })],
-        darkstargaze: () => ['switching the lights off to stargaze', lampOff(), this.scopeAim('sky'), this.scopeSpot('peer'), this.play('scopePeer', rand(20, 28), { scope: 'peer' }), lampOn()],
-        scopecare: () => ['looking after the telescope', this.scopeSpot('care'), this.play('scopeCare', 17, { scope: 'care' })],
+        // chapters (skills.js CHAPTERS): telescope ch2 two targets and ch3 three; telescope.dark ch2 waits for his eyes to adjust, ch3 a long night watch; telescope.care ch2 levels the tube afterwards, ch3 a second round of cleaning
+        stargaze: () => {
+          const n = this.has('telescope.ch3') ? 3 : this.has('telescope.ch2') ? 2 : 1;
+          const look = (dur) => [this.scopeAim('sky'), this.scopeSpot('peer'), this.play('scopePeer', dur, { scope: 'peer' })];
+          return [n === 3 ? 'surveying the deep sky' : n === 2 ? 'hunting for planets and the moon' : 'stargazing through the telescope', ...Array.from({ length: n }, () => look(n === 1 ? rand(14, 20) : rand(10, 14))).flat()];
+        },
+        darkstargaze: () => {
+          const look = (dur) => [this.scopeAim('sky'), this.scopeSpot('peer'), this.play('scopePeer', dur, { scope: 'peer' })];
+          const adjust = this.has('telescope.dark.ch2') ? [this.play('lookaround', 6)] : [];
+          const targets = this.has('telescope.dark.ch3') ? [...look(rand(18, 24)), ...look(rand(18, 24))] : look(rand(20, 28));
+          return ['switching the lights off to stargaze', lampOff(), ...adjust, ...targets, ...(this.has('telescope.dark.ch3') ? [this.play('lookaround', 5)] : []), lampOn()];
+        },
+        scopecare: () => ['looking after the telescope', this.scopeSpot('care'), this.play('scopeCare', 17, { scope: 'care' }),
+          ...(this.has('telescope.care.ch3') ? [this.scopeSpot('care'), this.play('scopeCare', 17, { scope: 'care' })] : []),
+          ...(this.has('telescope.care.ch2') ? [this.scopeAim('room')] : [])],
         lighton: () => ['putting the light back on', lampOn()],
       };
     },
@@ -240,7 +253,7 @@ export function installHobbies(Brain, POSES, H) {
         const style = fx.style === 'jam' ? ((TRACKS[this.track] && TRACKS[this.track].drums) || DRUM_STYLE_BY_TRACK[this.track] || 'rock') : fx.style;
         while (dr.n < Math.floor(b * 2) + 3) {
           dr.n++;
-          const hits = style === 'bang' ? bangStep() : drumStep(style, dr.n);
+          const hits = style === 'bang' ? bangStep() : drumStep(style, dr.n, fx.fills || fx.sections ? { fills: fx.fills, sections: fx.sections } : null);
           for (const h of hits) dr.q[h.h].push({ pad: h.k, time: dr.n / 2, v: h.v });
         }
         for (const hd of ['L', 'R', 'F']) {

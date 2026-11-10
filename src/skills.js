@@ -180,6 +180,51 @@ export const CHAPTERS = {
   ],
   'drums.solo': [
     { id: 'drums.solo.ch2', title: 'Chapter 2: Showing Off', after: 3, unlocks: ['Longer solos: tom cascades, rolls and a big finish'] },
+    { id: 'drums.solo.ch3', title: 'Chapter 3: Trick Sticks', after: 7, unlocks: ['Crossovers, flams and a rapid-fire roll to finish'] },
+  ],
+  'drums.band': [
+    { id: 'drums.band.ch2', title: 'Chapter 2: Fills', after: 3, unlocks: ['A tom fill at the end of every fourth bar when drumming along'] },
+    { id: 'drums.band.ch3', title: 'Chapter 3: Verse & Chorus', after: 8, unlocks: ['Ride cymbal and a crash when the chorus comes in'] },
+  ],
+  'dance.moves': [
+    { id: 'dance.moves.ch2', title: 'Chapter 2: Disco Fever', after: 3, unlocks: ['The sprinkler and the moonwalk'] },
+    { id: 'dance.moves.ch3', title: 'Chapter 3: Freestyle', after: 8, unlocks: ['Headbanging and an arm wave'] },
+  ],
+  'dance.ballroom': [
+    { id: 'dance.ballroom.ch2', title: 'Chapter 2: Tango & Foxtrot', after: 3, unlocks: ['A sharp, staccato tango and a smooth foxtrot'] },
+    { id: 'dance.ballroom.ch3', title: 'Chapter 3: Jive & Dips', after: 8, unlocks: ['A bouncy jive and a deep dip'] },
+  ],
+  lighting: [
+    { id: 'lighting.ch2', title: 'Chapter 2: Colour Schemes', after: 3, unlocks: ['Sunset orange, ocean teal and lavender dusk'] },
+    { id: 'lighting.ch3', title: 'Chapter 3: Living Light', after: 8, unlocks: ['Flickering candlelight, a slow rainbow and northern lights'] },
+  ],
+  easel: [
+    { id: 'easel.ch2', title: 'Chapter 2: Brush Techniques', after: 3, unlocks: ['Dabbing paint on, and broad bands of colour'] },
+    { id: 'easel.ch3', title: 'Chapter 3: Bold Abstracts', after: 8, unlocks: ['Big swirls and flung splashes of paint'] },
+  ],
+  'easel.colour': [
+    { id: 'easel.colour.ch2', title: 'Chapter 2: Blends', after: 3, unlocks: ['Gradients: one paint blended into another in steps'] },
+    { id: 'easel.colour.ch3', title: 'Chapter 3: Tints & Shades', after: 8, unlocks: ['Lightening with white and darkening with black'] },
+  ],
+  'easel.portrait': [
+    { id: 'easel.portrait.ch2', title: 'Chapter 2: Sea & City', after: 3, unlocks: ['Seascapes and city skylines'] },
+    { id: 'easel.portrait.ch3', title: 'Chapter 3: Night & Character', after: 8, unlocks: ['Starry night skies and robot portraits'] },
+  ],
+  decorate: [
+    { id: 'decorate.ch2', title: 'Chapter 2: Thorough Dusting', after: 3, unlocks: ['Dusts two pieces in one go'] },
+    { id: 'decorate.ch3', title: 'Chapter 3: Spring Clean', after: 7, unlocks: ['Dusts three pieces in one go'] },
+  ],
+  telescope: [
+    { id: 'telescope.ch2', title: 'Chapter 2: Planets & the Moon', after: 3, unlocks: ['Hunts across the sky: swings the tube to a second target'] },
+    { id: 'telescope.ch3', title: 'Chapter 3: Deep Sky', after: 7, unlocks: ['A survey of three targets in a night'] },
+  ],
+  'telescope.dark': [
+    { id: 'telescope.dark.ch2', title: 'Chapter 2: Dark Adaptation', after: 3, unlocks: ['Waits for his eyes to adjust before looking'] },
+    { id: 'telescope.dark.ch3', title: 'Chapter 3: Night Watch', after: 6, unlocks: ['A long watch at two targets, then a look up at the sky'] },
+  ],
+  'telescope.care': [
+    { id: 'telescope.care.ch2', title: 'Chapter 2: Levelling the Tube', after: 3, unlocks: ['Swings the tube level when he has finished'] },
+    { id: 'telescope.care.ch3', title: 'Chapter 3: Deep Clean', after: 6, unlocks: ['A second round of wiping and checking'] },
   ],
 };
 // the activities that count as a practice session for a skill's chapters
@@ -187,7 +232,10 @@ const PIANO_ACTS = ['piano', 'sitpiano', 'jam', 'jampiano', 'jamsit'];
 export const PRACTICE_ACTS = {
   piano: PIANO_ACTS, 'piano.advanced': PIANO_ACTS,
   guitar: ['guitar', 'sitguitar', 'riff', 'jamguitar'],
-  drums: ['drums', 'jamdrums'], 'drums.solo': ['drumsolo'],
+  drums: ['drums', 'jamdrums'], 'drums.solo': ['drumsolo'], 'drums.band': ['jamdrums'],
+  'dance.moves': ['dancemoves'], 'dance.ballroom': ['ballroom'], lighting: ['mood'],
+  easel: ['paint'], 'easel.colour': ['mixpaint'], 'easel.portrait': ['portrait'], decorate: ['dust'],
+  telescope: ['stargaze'], 'telescope.dark': ['darkstargaze'], 'telescope.care': ['scopecare'],
 };
 export const CHAPTER_IDS = Object.values(CHAPTERS).flat().map((c) => c.id);
 const chaptersOf = (id) => (CHAPTERS[id] || []).map((c) => c.id);
