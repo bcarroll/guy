@@ -112,6 +112,21 @@ A book's first reading teaches its skill. Later chapters are **learned by practi
 | drums | drums, jamdrums | `drums.ch2` Grooves (3) | reggae and funk styles in the `drums` activity |
 | | | `drums.ch3` Rudiments (8) | paradiddle style (snare, drifting to the toms) |
 | drums.solo | drumsolo | `drums.solo.ch2` Showing Off (3) | `solo2`: tom cascade, snare roll, big finish (60% of solos once learned) |
+| drums.band | jamdrums | `drums.band.ch2` Fills (3) | a fill (toms, crash) every fourth bar when drumming along |
+| | | `drums.band.ch3` Verse & Chorus (8) | verse and chorus: ride cymbal and a crash on the chorus bars |
+| drums.solo | drumsolo | `drums.solo.ch3` Showstopper (7) | `solo3` style |
+| dance.moves | dancemoves | `dance.moves.ch2` Classic Moves (3) | sprinkler, moonwalk (poses) |
+| | | `dance.moves.ch3` Freestyle (8) | headbang, armwave |
+| dance.ballroom | ballroom | `dance.ballroom.ch2` Latin & Smooth (3) | tango, foxtrot |
+| | | `dance.ballroom.ch3` Quickstep & Showpieces (8) | jive, dip |
+| lighting | mood | `lighting.ch2` (3), `.ch3` (8) | ch2: three more lamp colours; ch3: candle, drift and aurora moving looks (`LAMP_LOOKS` in `brain.js`, `lamp.animate` in `room.js`) |
+| easel | paint | `easel.ch2` (3), `.ch3` (8) | dabbing and broad bands; swirls and splashes (`paintPlan` kinds in `hobbies.js`) |
+| easel.colour | mixpaint | `easel.colour.ch2` (3), `.ch3` (8) | gradients; tints and shades |
+| easel.portrait | portrait | `easel.portrait.ch2` (3), `.ch3` (8) | seascape and skyline; night sky and robot |
+| decorate | dust | `decorate.ch2` (3), `.ch3` (7) | dusts two, then three pieces in one go |
+| telescope | stargaze | `telescope.ch2` (3), `.ch3` (7) | two, then three targets in a night |
+| telescope.dark | darkstargaze | `telescope.dark.ch2` (3), `.ch3` (6) | waits for his eyes to adjust; two targets and a look up at the end |
+| telescope.care | scopecare | `telescope.care.ch2` (3), `.ch3` (6) | swings the tube level afterwards; cleans it twice |
 
 Adding a chapter: an entry in `CHAPTERS` (ids `<skill>.ch2`, `.ch3`..., `after` rising), content gated on its id (`MAKERS` in `songs.js`, `PATTERN_NEEDS` / `needs` in `strum.js`, a style in `hobbies.js` `DRUM_STYLES` picked in `hobbybrain.js`), and a `MANIFEST.chapters` line. `T.sweepChapters` checks the data, that every tune is well formed and gated, the unlock order, forgetting, saving, GAL's own count, and that the guitar and drums use only what has been learned.
 
@@ -203,6 +218,13 @@ Needs and allowed arm contacts are in `MANIFEST.activities`.
 | dance-twist | `T.moment('dancemoves','twist',4,'front')` | hips and shoulders twist opposite ways, knees bent and apart |
 | dance-shuffle | `T.moment('dancemoves','shuffle',4,'front')` | one foot slides forward at a time, elbows pumping alternately |
 | dance-twirl | `T.moment('dancemoves','twirl',2.5,'front')` | arms out, spinning on the spot (`fx.spin`) clear of furniture |
+| dance-sprinkler | `T.moment('dancemoves','sprinkler',2,'front',{skills:['dance.moves','dance.moves.ch2']})` | right arm out level, left hand raised bent at the head |
+| dance-moonwalk | `T.moment('dancemoves','moonwalk',2,'side',...)` | one heel lifted, arms bent and swinging, no hand in the face |
+| dance-headbang | `T.moment('dancemoves','headbang',1,'side',...)` | head nodding, wide stance, fists pumping in front of face/chest |
+| dance-armwave | `T.moment('dancemoves','armwave',2,'front',...)` | arms out sideways with the wave along them |
+| dance-tango / dance-foxtrot | `T.moment('ballroom','tango'|'foxtrot',3,'front',...)` | arms in a ballroom hold, upright |
+| dance-jive | `T.moment('ballroom','jive',1.9,'front',...)` | arms bent and swinging, one knee kicked up |
+| dance-dip | `T.moment('ballroom','dip',5,'side',...)` | deep lunge, arms forward as if holding a partner |
 | dance-waltz | `T.moment('ballroom','waltz',5,'front')` | arms in a dance hold, slow turn |
 | dance-swing | `T.moment('ballroom','swing',4,'front')` | arms swinging wide, alternate knee kicks |
 | sit-rest | `T.moment('sit','sitRest',5,'side')` | sitting on the seat (not hovering), hands on the knees |

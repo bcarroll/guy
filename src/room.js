@@ -395,8 +395,15 @@ export function buildRoom(scene) {
     toggle() { this.set(!this.on); },
     setLook(hex, base) { this.mode = 'normal'; this.color.set(hex); this.base = base; this.on = true; this.apply(); },
     party() { this.mode = 'party'; this.on = true; this.apply(); },
+    // lighting book, chapter 3: looks that move by themselves ('candle' flickers, 'drift' slowly changes colour, 'aurora' sways between green and violet)
+    animate(mode) { this.mode = mode; this.on = true; this.apply(); },
     tick(beat) {
-      if (this.mode !== 'party' || !this.on) return;
+      if (!this.on) return;
+      const now = performance.now() / 1000;
+      if (this.mode === 'candle') { this.color.set(0xffa04a); this.base = 3.2 + 0.9 * Math.sin(now * 9.1) + 0.6 * Math.sin(now * 14.3 + 1) + 0.4 * Math.sin(now * 23.7); this.apply(); return; }
+      if (this.mode === 'drift') { this.color.setHSL((now * 0.02) % 1, 0.65, 0.6); this.base = 5; this.apply(); return; }
+      if (this.mode === 'aurora') { this.color.setHSL(0.33 + 0.28 * (0.5 + 0.5 * Math.sin(now * 0.35)), 0.75, 0.55); this.base = 5 + Math.sin(now * 0.7); this.apply(); return; }
+      if (this.mode !== 'party') return;
       this.color.setHSL((beat * 0.125) % 1, 0.9, 0.55);
       this.base = 5 + 4 * Math.abs(Math.sin(beat * Math.PI));
       this.apply();

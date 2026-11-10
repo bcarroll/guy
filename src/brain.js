@@ -142,6 +142,16 @@ function sitLegs(g, e) {
 // 0 -> 1 after `delay` seconds, back to 0 `lead` seconds before the end: when the hands are on the book.
 const readWeight = (t, dur, delay, lead) => smooth(clamp((t - delay) / 0.8, 0, 1)) * (1 - smooth(clamp((t - (dur - lead)) / 0.8, 0, 1)));
 
+const shuffled = (a) => a.map((x) => [Math.random(), x]).sort((p, q) => p[0] - q[0]).map(([, x]) => x);
+// the ballroom hold: left hand out holding a partner's hand, right arm curved round a partner's back
+function holdArms(g, e) {
+  g.set('LeftArm', Q('z', lerp(-ARM_DOWN, -0.5, e), 'y', -0.7 * e));
+  g.set('LeftForeArm', Q('z', 0.9 * e));
+  g.set('RightArm', Q('z', lerp(ARM_DOWN, 0.8, e), 'y', -0.9 * e));
+  g.set('RightForeArm', Q('z', -1.3 * e));
+  g.curl('Left', 0.45 * e); g.curl('Right', 0.45 * e);
+}
+
 export const POSES = {
   idle(g, t) {
     g.set('Head', Q('y', Math.sin(t * 0.45) * 0.45, 'x', Math.sin(t * 0.3) * 0.08));
@@ -395,6 +405,135 @@ export const POSES = {
     g.set('RightLeg', Q('x', (0.4 + 0.9 * R) * e));
     g.set('LeftFoot', Q('x', -0.2 * e)); g.set('RightFoot', Q('x', -0.2 * e));
     g.hipsOffset.y = -0.07 * e - 0.05 * q * e;
+  },
+
+  // ---- chapters of the dance books (skills.js CHAPTERS) ----
+  // dance.moves ch2 "Disco Fever"
+  sprinkler(g, t, dur, ctx) {                                          // one arm sweeping out in jerky stops, the other hand behind the head
+    const e = env(t, dur, 0.5), b = ctx.beat;
+    const seq = [-0.7, -0.35, 0, 0.35, 0.7, 0.35, 0, -0.35], n = Math.floor(b * 2), f = smooth(clamp(((b * 2) % 1) * 4, 0, 1));
+    const yaw = lerp(seq[(((n - 1) % 8) + 8) % 8], seq[((n % 8) + 8) % 8], f);
+    g.set('RightArm', Q('z', lerp(ARM_DOWN, 0.15, e), 'y', yaw * e));
+    g.set('RightForeArm', Q('z', -0.15 * e));
+    g.set('LeftArm', Q('z', lerp(-ARM_DOWN, -0.3, e), 'y', -0.5 * e));
+    g.set('LeftForeArm', Q('z', 2.1 * e));
+    g.curl('Right', 0.1 * e); g.curl('Left', 0.4 * e);
+    g.set('Spine1', Q('y', -yaw * 0.25 * e));
+    g.set('Head', Q('y', yaw * 0.3 * e, 'z', 0.08 * e));
+    for (const [side, ph] of [['Left', 0], ['Right', 1]]) {
+      const k = (1 + Math.cos((b + ph) * Math.PI)) / 2;
+      g.set(`${side}UpLeg`, Q('x', (-0.2 - 0.2 * k) * e));
+      g.set(`${side}Leg`, Q('x', (0.4 + 0.4 * k) * e));
+      g.set(`${side}Foot`, Q('x', -0.2 * e));
+    }
+    g.hipsOffset.y = -0.07 * e - 0.03 * Math.cos(b * Math.PI * 2) * e;
+  },
+
+  moonwalk(g, t, dur, ctx) {                                            // gliding backwards in place: the standing foot slides, the other heel lifts
+    const e = env(t, dur, 0.5), b = ctx.beat;
+    const p = Math.sin(b * Math.PI), L = Math.max(0, p), R = Math.max(0, -p);
+    g.set('LeftUpLeg', Q('x', (-0.1 + 0.35 * (1 - L) * (R > 0 ? 1 - R : 0.3)) * e));
+    g.set('RightUpLeg', Q('x', (-0.1 + 0.35 * (1 - R) * (L > 0 ? 1 - L : 0.3)) * e));
+    g.set('LeftLeg', Q('x', (0.15 + 0.9 * L) * e));
+    g.set('RightLeg', Q('x', (0.15 + 0.9 * R) * e));
+    g.set('LeftFoot', Q('x', (-0.1 + 0.7 * L) * e)); g.set('RightFoot', Q('x', (-0.1 + 0.7 * R) * e));
+    g.set('LeftArm', Q('z', lerp(-ARM_DOWN, -0.45, e), 'x', -p * 0.3 * e));
+    g.set('RightArm', Q('z', lerp(ARM_DOWN, 0.45, e), 'x', p * 0.3 * e));
+    g.set('LeftForeArm', Q('z', 0.4 * e)); g.set('RightForeArm', Q('z', -0.4 * e));
+    g.curl('Left', 0.5 * e); g.curl('Right', 0.5 * e);
+    g.set('Spine1', Q('x', -0.1 * e, 'y', p * 0.1 * e));
+    g.set('Head', Q('x', 0.1 * e));
+    g.hipsOffset.y = -0.05 * e - 0.02 * Math.cos(b * Math.PI * 2) * e;
+  },
+
+  // dance.moves ch3 "Freestyle"
+  headbang(g, t, dur, ctx) {                                            // fists pumping, head nodding on every beat, wide stance
+    const e = env(t, dur, 0.4), b = ctx.beat;
+    const nod = Math.abs(Math.sin(b * Math.PI)), pump = Math.sin(b * Math.PI * 2);
+    g.set('Head', Q('x', (0.05 + 0.5 * nod) * e));
+    g.set('Spine1', Q('x', (0.08 + 0.18 * nod) * e));
+    g.set('LeftArm', Q('z', lerp(-ARM_DOWN, -0.3, e), 'x', pump * 0.35 * e));
+    g.set('RightArm', Q('z', lerp(ARM_DOWN, 0.3, e), 'x', -pump * 0.35 * e));
+    g.set('LeftForeArm', Q('z', 0.75 * e)); g.set('RightForeArm', Q('z', -0.75 * e));
+    g.curl('Left', 1 * e); g.curl('Right', 1 * e);
+    g.set('LeftUpLeg', Q('x', -0.25 * e, 'z', 0.22 * e)); g.set('RightUpLeg', Q('x', -0.25 * e, 'z', -0.22 * e));
+    g.set('LeftLeg', Q('x', (0.5 + 0.2 * nod) * e)); g.set('RightLeg', Q('x', (0.5 + 0.2 * nod) * e));
+    g.set('LeftFoot', Q('x', -0.25 * e)); g.set('RightFoot', Q('x', -0.25 * e));
+    g.hipsOffset.y = -0.12 * e - 0.05 * nod * e;
+  },
+
+  armwave(g, t, dur, ctx) {                                             // a wave running along both arms, swaying side to side
+    const e = env(t, dur, 0.5), b = ctx.beat, ph = b * Math.PI;
+    g.set('LeftArm', Q('z', lerp(-ARM_DOWN, -0.1 + 0.35 * Math.sin(ph), e), 'y', -0.2 * e));
+    g.set('RightArm', Q('z', lerp(ARM_DOWN, 0.1 + 0.35 * Math.sin(ph - 1.2), e), 'y', 0.2 * e));
+    g.set('LeftForeArm', Q('z', (0.7 + 0.7 * Math.sin(ph - 0.9)) * e, 'y', 0.2 * Math.sin(ph - 0.9) * e));
+    g.set('RightForeArm', Q('z', (-0.7 - 0.7 * Math.sin(ph - 2.1)) * e, 'y', -0.2 * Math.sin(ph - 2.1) * e));
+    g.set('LeftHand', Q('z', 0.4 * Math.sin(ph - 1.8) * e)); g.set('RightHand', Q('z', -0.4 * Math.sin(ph - 3) * e));
+    g.curl('Left', 0.2 * e); g.curl('Right', 0.2 * e);
+    g.set('Spine1', Q('z', Math.sin(ph * 0.5) * 0.12 * e, 'y', Math.sin(ph) * 0.1 * e));
+    g.set('Head', Q('z', -Math.sin(ph * 0.5) * 0.15 * e));
+    for (const [side, off] of [['Left', 0], ['Right', Math.PI]]) {
+      const k = (1 + Math.cos(ph * 0.5 + off)) / 2;
+      g.set(`${side}UpLeg`, Q('x', (-0.15 - 0.15 * k) * e));
+      g.set(`${side}Leg`, Q('x', (0.3 + 0.35 * k) * e));
+    }
+    g.hipsOffset.x = Math.sin(ph * 0.5) * 0.1 * e;
+    g.hipsOffset.y = -0.05 * e;
+  },
+
+  // dance.ballroom ch2 "Tango & Foxtrot": the same hold as the waltz (holdArms), different feet and head
+  tango(g, t, dur, ctx) {                                               // sharp, staccato: head snaps, knees pulled in on the beat, a stalking step
+    const e = env(t, dur, 0.6), b = ctx.beat, f = smooth(clamp((b % 1) * 5, 0, 1)), side = Math.floor(b / 2) % 2 ? -1 : 1;
+    holdArms(g, e);
+    g.set('Head', Q('y', (0.3 + 0.35 * side * f) * e, 'x', -0.08 * e, 'z', -0.1 * side * f * e));
+    g.set('Spine1', Q('y', 0.12 * e, 'x', -0.1 * e));
+    for (const [sd, ph] of [['Left', 0], ['Right', 1]]) {
+      const k = Math.floor(b) % 2 === ph ? 1 - smooth(clamp((b % 1) * 2.5, 0, 1)) : 0;
+      g.set(`${sd}UpLeg`, Q('x', (-0.25 - 0.4 * k) * e));
+      g.set(`${sd}Leg`, Q('x', (0.5 + 0.5 * k) * e));
+      g.set(`${sd}Foot`, Q('x', -0.2 * e));
+    }
+    g.hipsOffset.y = -0.07 * e - 0.02 * f * e;
+  },
+
+  foxtrot(g, t, dur, ctx) {                                             // slow, slow, quick-quick: long gliding steps with a gentle rise and fall
+    const e = env(t, dur, 0.6), b = ctx.beat, ph = b * Math.PI / 2;
+    holdArms(g, e);
+    g.set('Head', Q('y', 0.3 * e, 'x', -0.06 * e));
+    g.set('Spine1', Q('y', 0.12 * e, 'z', Math.sin(ph) * 0.05 * e));
+    const L = Math.max(0, Math.sin(ph)), R = Math.max(0, -Math.sin(ph));
+    g.set('LeftUpLeg', Q('x', (-0.12 - 0.5 * L) * e)); g.set('RightUpLeg', Q('x', (-0.12 - 0.5 * R) * e));
+    g.set('LeftLeg', Q('x', (0.2 + 0.45 * L) * e)); g.set('RightLeg', Q('x', (0.2 + 0.45 * R) * e));
+    g.set('LeftFoot', Q('x', -0.1 * e)); g.set('RightFoot', Q('x', -0.1 * e));
+    g.hipsOffset.y = -0.03 * e - 0.025 * (1 + Math.cos(ph * 2)) / 2 * e;
+  },
+
+  // dance.ballroom ch3 "Jive & Dips"
+  jive(g, t, dur, ctx) {                                                // bouncy and quick: flicking kicks, swinging arms, a springy bounce
+    const e = env(t, dur, 0.5), b = ctx.beat;
+    const p = Math.sin(b * Math.PI * 2), L = Math.max(0, p), R = Math.max(0, -p), bounce = (1 + Math.cos(b * Math.PI * 4)) / 2;
+    g.set('LeftArm', Q('z', lerp(-ARM_DOWN, -0.3, e), 'x', p * 1.0 * e, 'y', -0.3 * e));
+    g.set('RightArm', Q('z', lerp(ARM_DOWN, 0.3, e), 'x', -p * 1.0 * e, 'y', 0.3 * e));
+    g.set('LeftForeArm', Q('z', 1.2 * e)); g.set('RightForeArm', Q('z', -1.2 * e));
+    g.curl('Left', 0.3 * e); g.curl('Right', 0.3 * e);
+    g.set('Hips', Q('y', p * 0.25 * e));
+    g.set('Spine1', Q('y', -p * 0.2 * e));
+    g.set('Head', Q('z', p * 0.1 * e));
+    g.set('LeftUpLeg', Q('x', (-0.2 - 0.8 * L) * e)); g.set('RightUpLeg', Q('x', (-0.2 - 0.8 * R) * e));
+    g.set('LeftLeg', Q('x', (0.4 + 1.3 * L) * e)); g.set('RightLeg', Q('x', (0.4 + 1.3 * R) * e));
+    g.set('LeftFoot', Q('x', -0.2 * e)); g.set('RightFoot', Q('x', -0.2 * e));
+    g.hipsOffset.y = -0.08 * e - 0.06 * bounce * e;
+  },
+
+  dip(g, t, dur, ctx) {                                                 // into the hold, a deep lunge as if lowering a partner, then back up
+    const e = env(t, dur, 0.6), c = smooth(clamp(Math.sin(Math.PI * clamp(t / dur, 0, 1)) * 2.2, 0, 1));
+    holdArms(g, e);
+    g.set('Head', Q('y', 0.3 * e, 'x', (-0.08 + 0.1 * c) * e));
+    g.set('Spine1', Q('y', 0.12 * e, 'x', (-0.04 + 0.12 * c) * e));
+    g.set('LeftUpLeg', Q('x', (-0.12 - 0.75 * c) * e)); g.set('LeftLeg', Q('x', (0.25 + 1.0 * c) * e)); g.set('LeftFoot', Q('x', -0.15 * e));
+    g.set('RightUpLeg', Q('x', (-0.12 + 0.3 * c) * e)); g.set('RightLeg', Q('x', (0.25 - 0.1 * c) * e)); g.set('RightFoot', Q('x', (-0.15 + 0.2 * c) * e));
+    g.hipsOffset.y = -0.03 * e - 0.2 * c * e;
+    g.hipsOffset.z = 0.12 * c * e;
   },
 
   robot(g, t, dur, ctx) {
@@ -780,10 +919,13 @@ export class Brain {
       // the dance books: the same stereo session as `dance`, with new moves
       dancemoves: () => {
         const ss = this.stereoSession();
+        // chapters (skills.js CHAPTERS): each one adds two moves that turn up in the routine
+        const extra = [...(this.has('dance.moves.ch2') ? ['sprinkler', 'moonwalk'] : []), ...(this.has('dance.moves.ch3') ? ['headbang', 'armwave'] : [])];
+        const more = extra.length ? shuffled(extra).slice(0, 3).map((m) => this.play(m, 9, { dance: true })) : [];
         return [ss.title ? `doing the twist to "${ss.title}"` : 'practising his new dance moves', ...ss.pre, ...ss.on,
           this.walk(this.danceSpot().x, this.danceSpot().z, 0),
-          this.play('twist', 9, { dance: true }), this.play('shuffle', 9, { dance: true }),
-          this.play('twirl', 5, { dance: true, spin: 5.2 }), this.play(pick(['twist', 'shuffle']), 8, { dance: true }),
+          this.play('twist', 9, { dance: true }), this.play('shuffle', 9, { dance: true }), ...more.slice(0, 1),
+          this.play('twirl', 5, { dance: true, spin: 5.2 }), ...more.slice(1), this.play(pick(['twist', 'shuffle']), 8, { dance: true }),
           this.play('wave', 2.2, { dance: true }), ...ss.off, ...ss.post];
       },
       ballroom: () => {
@@ -792,6 +934,9 @@ export class Brain {
           this.walk(this.danceSpot().x, this.danceSpot().z, 0),
           this.play('waltz', 11, { dance: true, spin: 0.9 }), this.play('swing', 9, { dance: true }),
           this.play('waltz', 9, { dance: true, spin: -0.9 }), this.play('swing', 8, { dance: true, spin: 1.6 }),
+          // chapters: tango and foxtrot (ch2), jive and a dip (ch3)
+          ...(this.has('dance.ballroom.ch2') ? [this.play('tango', 9, { dance: true }), this.play('foxtrot', 9, { dance: true })] : []),
+          ...(this.has('dance.ballroom.ch3') ? [this.play('jive', 8, { dance: true, spin: 1.2 }), this.play('dip', 8, { dance: true })] : []),
           this.play('wave', 2.2, { dance: true }), ...ss.off, ...ss.post];
       },
       // from the stereo's long-press menu: switch it on (the song the player has selected) or off
@@ -812,7 +957,7 @@ export class Brain {
       // lighting book: choose a mood for the room
       mood: () => ['setting the mood with the lamp', this.sideStep('lamp', 0.55),
         this.play('reach', 1.8, {
-          at: [0.9, () => { const l = pick(LAMP_LOOKS); w.lamp.setLook(l.color, l.base); this.ui(`lamp: ${l.name}`); }],
+          at: [0.9, () => { const l = pick(lampLooks(this.has)); w.lamp.setLook(l.color, l.base); if (l.animate) w.lamp.animate(l.animate); this.ui(`lamp: ${l.name}`); }],
           needs: ['lamp'], target: () => this.lampSwitch(),
         })],
       // no lessons yet: poking at the keys with one finger
@@ -838,7 +983,8 @@ export class Brain {
         },
       }],
       // decorating book: dust a picture frame, wall light or window sill, wiping along its lower edge
-      dust: () => ['dusting the picture frames', { type: 'plan', fn: () => this.dustSteps() }],
+      // decorate ch2: two pieces in one go, ch3: three
+      dust: () => ['dusting the picture frames', ...Array.from({ length: 1 + (this.has('decorate.ch2') ? 1 : 0) + (this.has('decorate.ch3') ? 1 : 0) }, () => ({ type: 'plan', fn: () => this.dustSteps() }))],
       // Without the ball book he only pokes it; with it he kicks properly.
       ball: () => {
         const skilled = this.skills.has('ball');
@@ -3020,13 +3166,22 @@ export class Brain {
 
 // ---- Books ----
 // Lamp moods the lighting book teaches.
-const LAMP_LOOKS = [
+export const LAMP_LOOKS = [
   { name: 'warm and cosy', color: 0xffb870, base: 3.5 },
   { name: 'bright daylight', color: 0xe6f0ff, base: 9 },
   { name: 'romantic pink', color: 0xff7aa8, base: 4.5 },
   { name: 'moody blue', color: 0x6aa0ff, base: 5 },
   { name: 'forest green', color: 0x6fe08a, base: 5 },
+  // lighting book chapters (skills.js CHAPTERS): ch2 more colour schemes, ch3 looks that move by themselves
+  { name: 'sunset orange', color: 0xff8a3d, base: 4.5, needs: 'lighting.ch2' },
+  { name: 'ocean teal', color: 0x3fd6d0, base: 5, needs: 'lighting.ch2' },
+  { name: 'lavender dusk', color: 0xb59cff, base: 4.5, needs: 'lighting.ch2' },
+  { name: 'candlelight', color: 0xffa04a, base: 3.2, needs: 'lighting.ch3', animate: 'candle' },
+  { name: 'slow rainbow', color: 0xffd9a0, base: 5, needs: 'lighting.ch3', animate: 'drift' },
+  { name: 'northern lights', color: 0x6fe0a0, base: 5, needs: 'lighting.ch3', animate: 'aurora' },
 ];
+
+export const lampLooks = (has) => LAMP_LOOKS.filter((x) => !x.needs || has(x.needs));
 
 // A record sleeve as carried: ~31 cm square, art on the front, a record peeking out would be overkill.
 function makeHeldAlbum() {
