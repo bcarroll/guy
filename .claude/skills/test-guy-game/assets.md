@@ -117,6 +117,7 @@ A book's first reading teaches its skill. Later chapters are **learned by practi
 | drums.solo | drumsolo | `drums.solo.ch3` Showstopper (7) | `solo3` style |
 | dance.moves | dancemoves | `dance.moves.ch2` Classic Moves (3) | sprinkler, moonwalk (poses) |
 | | | `dance.moves.ch3` Freestyle (8) | headbang, armwave |
+| (none) | dancemoves, dance | **secret**: no book, chapter or What's New line | airguitar, windmill, kneeslide: danced only once an `eguitar` stands in the same room as the table (`secretMoves()` in `brain.js`) |
 | dance.ballroom | ballroom | `dance.ballroom.ch2` Latin & Smooth (3) | tango, foxtrot |
 | | | `dance.ballroom.ch3` Quickstep & Showpieces (8) | jive, dip |
 | lighting | mood | `lighting.ch2` (3), `.ch3` (8) | ch2: three more lamp colours; ch3: candle, drift and aurora moving looks (`LAMP_LOOKS` in `brain.js`, `lamp.animate` in `room.js`) |
@@ -234,6 +235,7 @@ Needs and allowed arm contacts are in `MANIFEST.activities`.
 | dance-moonwalk | `T.moment('dancemoves','moonwalk',2,'side',...)` | one heel lifted, arms bent and swinging, no hand in the face |
 | dance-headbang | `T.moment('dancemoves','headbang',1,'side',...)` | head nodding, wide stance, fists pumping in front of face/chest |
 | dance-armwave | `T.moment('dancemoves','armwave',2,'front',...)` | arms out sideways with the wave along them |
+| dance-airguitar / dance-windmill / dance-kneeslide | `T.moment('dancemoves','airguitar'|'windmill'|'kneeslide',2,'front',{objects:['eguitar']})` | secret moves (electric guitar in the room): air-guitar strum with a nodding head; one big arm circle; low lean-back knee slide. No hand through the face, nothing through the floor |
 | dance-tango / dance-foxtrot | `T.moment('ballroom','tango'|'foxtrot',3,'front',...)` | arms in a ballroom hold, upright |
 | dance-jive | `T.moment('ballroom','jive',1.9,'front',...)` | arms bent and swinging, one knee kicked up |
 | dance-dip | `T.moment('ballroom','dip',5,'side',...)` | deep lunge, arms forward as if holding a partner |

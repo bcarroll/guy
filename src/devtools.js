@@ -28,6 +28,7 @@ import { install as installAudio } from './qa-audio.js';
 import { install as installShots } from './qa-shots.js';
 import { counts as sfxCounts } from './sfx.js';
 import { BARKS, NO_BARK, resetBarks } from './barks.js';
+import { WHATS_NEW } from './whatsnew.js';
 
 // ---------------------------------------------------------------------------------------------------------------
 // MANIFEST: what the test knows about each asset. Keep in sync with the game (T.coverage() tells you what is missing).
@@ -226,6 +227,9 @@ export const MANIFEST = {
     { id: 'dust-frame', activity: 'dust', pose: 'reach', t: 2.5, view: 'front', expect: 'facing the wall, right hand wiping along the lower edge of a frame (not inside the wall or his own head)' },
     { id: 'dance-twist', activity: 'dancemoves', pose: 'twist', t: 4, view: 'front', expect: 'hips and shoulders twisting opposite ways, knees bent and apart, elbows bent, feet flat' },
     { id: 'dance-shuffle', activity: 'dancemoves', pose: 'shuffle', t: 4, view: 'front', expect: 'one foot slides forward at a time, elbows bent and pumping alternately' },
+    { id: 'dance-airguitar', activity: 'dancemoves', pose: 'airguitar', t: 2, view: 'front', objects: ['eguitar'], expect: 'secret move: left hand up an invisible neck, right arm strumming across the body, head nodding, wide knees-bent stance, no hand through the face' },
+    { id: 'dance-windmill', activity: 'dancemoves', pose: 'windmill', t: 1, view: 'front', objects: ['eguitar'], expect: 'secret move: one arm sweeping a big circle, the other out to the side, knees bent and apart' },
+    { id: 'dance-kneeslide', activity: 'dancemoves', pose: 'kneeslide', t: 2, view: 'side', objects: ['eguitar'], expect: 'secret move: dropped low on one deep-bent knee, back leaning right back, head up, arms playing, nothing through the floor' },
     { id: 'dance-twirl', activity: 'dancemoves', pose: 'twirl', t: 2.5, view: 'front', expect: 'arms out to the sides, spinning on the spot without drifting or hitting furniture' },
     { id: 'dance-waltz', activity: 'ballroom', pose: 'waltz', t: 5, view: 'front', expect: 'dance hold: left arm out and bent, right arm curved as if round a partner, slowly turning' },
     { id: 'dance-swing', activity: 'ballroom', pose: 'swing', t: 4, view: 'front', expect: 'arms swinging wide in opposition, alternate knee kicks on the beat' },
@@ -1130,7 +1134,7 @@ T.look = (view = 'front', dist = 2.1) => {
 };
 // Run an activity until GUY reaches (pose, t), freeze and frame him. `opts.turning` waits for a page turn.
 T.moment = (activity, pose, t = 0, view = 'front', opts = {}) => {
-  T.unfreeze(); T.prep(activity); if (opts.skills) T.learn(opts.skills); T.settle();
+  T.unfreeze(); T.prep(activity); if (opts.skills) T.learn(opts.skills); for (const o of opts.objects || []) T.addObject(o); T.settle();      // (opts.objects: extras that must be in the room, e.g. the electric guitar for the secret dance moves)
   const b = B();
   if (opts.album && !(W().objects.shelf.albums || []).length) T.addAlbum(ALBUM_CATALOG.find((x) => !x.premium).id);       // a record on the shelf to carry
   if (opts.album) b.forceAlbum = (W().objects.shelf.albums[0] || { def: {} }).def.id;
@@ -3168,6 +3172,20 @@ T.sweepChapters = () => {
       out.push(result(`chapters: ${skill}.ch3 brings in ${ch3.join(' and ')} and not the chapter 2 moves`, ch3.every((p) => c.has(p)) && ch2.every((p) => !c.has(p)), { c: [...c] }));
       covered.add(`${skill}.ch2`); covered.add(`${skill}.ch3`);
       out.push(result(`chapters: every dance pose of ${skill} exists`, [...ch2, ...ch3].every((p) => p in POSES)));
+    }
+    // secret dance moves: in no book or chapter, only once an electric guitar stands in the room
+    {
+      const secret = ['airguitar', 'windmill', 'kneeslide'];
+      only('dance.moves', 'dance.moves.ch2', 'dance.moves.ch3', 'dance.ballroom');
+      const before = new Set([...manyPoses('dancemoves'), ...manyPoses('dance'), ...manyPoses('ballroom')]);
+      out.push(result('secret moves: with no electric guitar in the room nothing dances them', secret.every((p) => !before.has(p)), { before: [...before] }));
+      T.addObject('eguitar'); T.settle();
+      const moves = manyPoses('dancemoves'), free = manyPoses('dance');
+      out.push(result('secret moves: once the electric guitar is there, the dance moves and the free dance bring them in', secret.every((p) => moves.has(p)) && secret.some((p) => free.has(p)), { moves: [...moves], free: [...free] }));
+      only('dance.moves');
+      const noBooks = manyPoses('dancemoves');
+      out.push(result('secret moves: they need no book or chapter', secret.every((p) => noBooks.has(p)), { noBooks: [...noBooks] }));
+      out.push(result('secret moves: every one has a pose, and none is mentioned in a book, chapter or the What\'s New list', secret.every((p) => p in POSES) && !JSON.stringify([SKILL_INFO, CHAPTERS, WHATS_NEW]).match(/air ?guitar|windmill|knee ?slide/i)));
     }
     // the lamp
     const base = lampLooks(() => false), c2 = lampLooks((k) => k === 'lighting.ch2'), c3 = lampLooks((k) => k === 'lighting.ch3');
