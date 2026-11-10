@@ -82,8 +82,8 @@ export function installHobbies(Brain, POSES, H) {
       });
       return {
         bang: () => drumSteps('banging on the drums', { style: 'bang', bpm: 150 }, rand(12, 18)),
-        drums: () => drumSteps('playing the drums', { style: pick(['rock', 'rock', 'soft', 'march']), bpm: pick([92, 100, 108]) }, rand(24, 34)),
-        drumsolo: () => drumSteps('playing a drum solo', { style: 'solo', bpm: 112 }, rand(28, 38)),
+        drums: () => drumSteps('playing the drums', { style: pick([...['rock', 'rock', 'soft', 'march'], ...(this.has('drums.ch2') ? ['reggae', 'funk', 'funk'] : []), ...(this.has('drums.ch3') ? ['paradiddle', 'paradiddle'] : [])]), bpm: pick([92, 100, 108]) }, rand(24, 34)),
+        drumsolo: () => drumSteps('playing a drum solo', { style: this.has('drums.solo.ch2') && Math.random() < 0.6 ? 'solo2' : 'solo', bpm: 112 }, rand(28, 38)),
         jamdrums: () => drumSteps(`drumming along with ${this.nowPlaying().title}`, { style: 'jam', sync: true }, rand(32, 46)),
         scribble: () => paintSteps('scribbling on the canvas with a finger', 'scribble', true),
         paint: () => paintSteps('painting', 'basic'),

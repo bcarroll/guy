@@ -188,6 +188,7 @@ export class Gal {
     this.brain.onLearnMany = (defs) => { if (this.opts.toast) this.opts.toast(`GAL learned ${defs.length} skills!`); sfx('chime'); };
     this.brain.onStart = (n) => { if (this.opts.onStart) this.opts.onStart(n); };
     this.brain.onWorkstation = (b) => { if (this.opts.onWorkstation) this.opts.onWorkstation(b); };
+    this.brain.onChapter = (c) => { if (this.opts.toast) this.opts.toast(`GAL learned ${c.title.toLowerCase()} by practising!`); sfx('chime'); };
     this.brain.onLearn = (def) => { if (this.opts.toast) this.opts.toast(`GAL learned ${def.blurb}!`); sfx('chime'); };
     // each is an obstacle for the other
     const mk = (name) => { const ob = { x0: 0, x1: 0, z0: 0, z1: 0, h: 1.8, active: true, name, char: true }; this.w.obstacles.push(ob); return ob; };

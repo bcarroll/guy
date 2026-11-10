@@ -154,6 +154,44 @@ export const SKILL_INFO = {
   'telescope.care': { name: 'Telescope care', book: 'Looking After Your Telescope', unlocks: ['Wipe the lens and tube, check the tripod'] },
 };
 
+// ---- Chapters --------------------------------------------------------------------------------------------------------
+// A book's first reading teaches its skill (chapter 1). Later chapters are not read: they are learned by PRACTICE. Every time a
+// robot sets out to do one of the activities in PRACTICE_ACTS[skill] with that skill known, the practice count of the skill goes
+// up by one, and when it reaches a chapter's `after` the chapter is learned (in order: chapter 3 never comes before chapter 2).
+// A chapter is a skill of its own, `<skill>.ch<N>`; the code that plays a tune or a beat asks for it with skills.has(id), and
+// the Skills panel lists them under their book. Forgetting a book fades its chapters with it. To add one: an entry here, content
+// gated on its id (songs.js MAKERS, strum.js, hobbies.js DRUM_STYLES), and a MANIFEST.chapters line in devtools.js.
+export const CHAPTERS = {
+  piano: [
+    { id: 'piano.ch2', title: 'Chapter 2: Hands Together', after: 3, unlocks: ['Mary Had a Little Lamb, Row Row Row Your Boat and When the Saints', 'D major and E minor scales'] },
+    { id: 'piano.ch3', title: 'Chapter 3: Folk Songs & Hymns', after: 8, unlocks: ['Amazing Grace and Greensleeves', 'F major and C blues scales'] },
+  ],
+  'piano.advanced': [
+    { id: 'piano.advanced.ch2', title: 'Chapter 2: Baroque & Classical', after: 3, unlocks: ['A minuet and a canon', 'A flowing prelude of broken chords'] },
+    { id: 'piano.advanced.ch3', title: 'Chapter 3: Ragtime & Lullabies', after: 7, unlocks: ['A bouncy ragtime with a stride left hand', 'A cradle song'] },
+  ],
+  guitar: [
+    { id: 'guitar.ch2', title: 'Chapter 2: Strumming Patterns', after: 3, unlocks: ['Three new strumming and picking patterns'] },
+    { id: 'guitar.ch3', title: 'Chapter 3: Colourful Chords', after: 8, unlocks: ['Songs with minor-seventh, major-seventh and suspended chords', 'A gospel tune and a ballad'] },
+  ],
+  drums: [
+    { id: 'drums.ch2', title: 'Chapter 2: Grooves', after: 3, unlocks: ['Reggae one-drop and funk grooves'] },
+    { id: 'drums.ch3', title: 'Chapter 3: Rudiments', after: 8, unlocks: ['Paradiddles round the snare and toms'] },
+  ],
+  'drums.solo': [
+    { id: 'drums.solo.ch2', title: 'Chapter 2: Showing Off', after: 3, unlocks: ['Longer solos: tom cascades, rolls and a big finish'] },
+  ],
+};
+// the activities that count as a practice session for a skill's chapters
+const PIANO_ACTS = ['piano', 'sitpiano', 'jam', 'jampiano', 'jamsit'];
+export const PRACTICE_ACTS = {
+  piano: PIANO_ACTS, 'piano.advanced': PIANO_ACTS,
+  guitar: ['guitar', 'sitguitar', 'riff', 'jamguitar'],
+  drums: ['drums', 'jamdrums'], 'drums.solo': ['drumsolo'],
+};
+export const CHAPTER_IDS = Object.values(CHAPTERS).flat().map((c) => c.id);
+const chaptersOf = (id) => (CHAPTERS[id] || []).map((c) => c.id);
+
 const KEY = 'guy.skills.v1';
 const FADE_KEY = 'guy.skills.fade.v1';
 // How long a forgotten skill takes to fade away completely (seconds of game time). Speed reading is slow to go.
@@ -167,18 +205,22 @@ export class Skills {
   /** `initial`: 'all' | 'none' | comma separated ids | null (restore what he learned last time) */
   // `keys`: where it is saved ({ known, fade }); GAL has her own
   constructor(initial = null, keys = null) {
-    this.keys = keys || { known: KEY, fade: FADE_KEY };
+    this.keys = { ...(keys || { known: KEY, fade: FADE_KEY }) };
+    this.keys.practice ||= this.keys.known + '.practice';
+    this.practiced = new Map();     // skill id -> practice sessions so far (see CHAPTERS)
+    this.chapterListeners = [];
     this.known = new Set();
     this.fading = new Map();     // skill id -> strength left (1 = fully remembered ... 0 = gone); only skills whose book was forgotten
     this.listeners = [];
     this.lostListeners = [];
     this._since = 0;
-    if (initial === 'all') Object.keys(SKILL_INFO).forEach((k) => this.known.add(k));
+    if (initial === 'all') [...Object.keys(SKILL_INFO), ...CHAPTER_IDS].forEach((k) => this.known.add(k));
     else if (initial === 'none') { /* start from scratch */ }
     else if (initial) initial.split(',').forEach((k) => this.known.add(k.trim()));
     else {
       try { (JSON.parse(localStorage.getItem(this.keys.known)) || []).forEach((k) => this.known.add(k)); } catch { /* no storage */ }
       try { Object.entries(JSON.parse(localStorage.getItem(this.keys.fade)) || {}).forEach(([k, v]) => { if (this.known.has(k)) this.fading.set(k, v); }); } catch { /* no storage */ }
+      try { Object.entries(JSON.parse(localStorage.getItem(this.keys.practice)) || {}).forEach(([k, v]) => { if (Number.isFinite(v)) this.practiced.set(k, v); }); } catch { /* no storage */ }
     }
     this.persist = initial === null;
   }
@@ -193,13 +235,14 @@ export class Skills {
     try {
       localStorage.setItem(this.keys.known, JSON.stringify([...this.known]));
       localStorage.setItem(this.keys.fade, JSON.stringify(Object.fromEntries(this.fading)));
+      localStorage.setItem(this.keys.practice, JSON.stringify(Object.fromEntries(this.practiced)));
     } catch { /* no storage */ }
   }
 
   /** The book was forgotten: the lessons start to fade. Returns false if he did not know it. */
   forget(id) {
     if (!this.known.has(id)) return false;
-    if (!this.fading.has(id)) this.fading.set(id, 1);
+    for (const k of [id, ...chaptersOf(id)]) if (this.known.has(k) && !this.fading.has(k)) this.fading.set(k, 1);     // (its chapters go with it)
     this.save();
     this.listeners.forEach((f) => f(id));
     return true;
@@ -213,7 +256,7 @@ export class Skills {
       const left = s - dt / (FADE_SECONDS[id] || FADE_SECONDS.default);
       if (left <= 0) lost.push(id); else this.fading.set(id, left);
     }
-    for (const id of lost) { this.fading.delete(id); this.known.delete(id); }
+    for (const id of lost) { this.fading.delete(id); this.known.delete(id); this.practiced.delete(id); }
     this._since += dt;
     if (lost.length || this._since > 5) { this._since = 0; this.save(); }
     if (lost.length) { this.listeners.forEach((f) => f(lost[0])); this.lostListeners.forEach((f) => f(lost)); }
@@ -228,6 +271,7 @@ export class Skills {
     if (this.known.has(id)) {
       if (!this.fading.has(id)) return false;
       this.fading.delete(id);                // read again while it was fading: remembered in full
+      chaptersOf(id).forEach((k) => this.fading.delete(k));
       this.save();
       this.listeners.forEach((f) => f(id));
       return true;
@@ -239,4 +283,29 @@ export class Skills {
   }
 
   onChange(fn) { this.listeners.push(fn); }
+  onChapter(fn) { this.chapterListeners.push(fn); }
+
+  /** One practice session of activity `act` has begun. Counts for every skill known (and not being forgotten) that lists it, and
+   *  learns the next chapter when the count gets there. Returns the chapters learned just now. */
+  practice(act) {
+    const got = [];
+    for (const [skill, acts] of Object.entries(PRACTICE_ACTS)) {
+      if (!acts.includes(act) || !this.known.has(skill) || this.fading.has(skill)) continue;
+      const n = (this.practiced.get(skill) || 0) + 1;
+      this.practiced.set(skill, n);
+      const next = (CHAPTERS[skill] || []).find((c) => !this.known.has(c.id));
+      if (next && n >= next.after) { this.known.add(next.id); got.push(next); }
+    }
+    this.save();
+    if (got.length) this.listeners.forEach((f) => f(got[0].id));
+    got.forEach((c) => this.chapterListeners.forEach((f) => f(c)));
+    return got;
+  }
+
+  /** How far the next chapter of `skill` is: { next, done, of } (null when every chapter is learned or the skill is not known). */
+  progress(skill) {
+    if (!this.known.has(skill)) return null;
+    const next = (CHAPTERS[skill] || []).find((c) => !this.known.has(c.id));
+    return next ? { next, done: Math.min(this.practiced.get(skill) || 0, next.after), of: next.after } : null;
+  }
 }

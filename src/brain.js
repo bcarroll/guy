@@ -798,7 +798,7 @@ export class Brain {
       sit: () => ['sitting down for a rest', this.chairStep((c) => [this.play('sitRest', rand(10, 16), { chairSit: true, chair: c.name })])],
       sitguitar: () => (this.pickGuitar(), ['sitting down to play the guitar', this.walkAt(this.gname, 0, 0.62, Math.PI),
         this.play('takeGuitar', 2.4, { guitar: true, at: [1.0, () => this.setGuitarHeld(true)] }),
-        this.chairStep((c) => [this.play('sitGuitar', rand(22, 32), { guitar: true, chairSit: true, chair: c.name, strum: makeStrum() }),
+        this.chairStep((c) => [this.play('sitGuitar', rand(22, 32), { guitar: true, chairSit: true, chair: c.name, strum: makeStrum(this.has) }),
           { ...this.walkAt(this.gname, 0, 0.62, Math.PI), fx: { guitar: true } },
           this.play('putGuitar', 2.4, { guitar: true, at: [1.3, () => this.setGuitarHeld(false)] })], true)]),
       slouch: () => ['slouching on the drum stool', this.walkAt('drums', 0.55, 1.15), this.walkAt('drums', 0.55, 0.6, Math.PI, true),
@@ -869,7 +869,7 @@ export class Brain {
         this.play('putdown', 2.0, { ball: true, at: [1.0, () => this.releaseBall()] })],
       // a new song every time (strum.js): a key, a chord progression, a pattern and a tempo
       guitar: () => {
-        const song = makeStrum();
+        const song = makeStrum(this.has);
         return [`strumming ${song.name} in ${song.key} on the guitar (${song.chords.map((c) => c.name).join(' ')})`, ...this.guitarBegin(), this.play('guitar', song.secs, { guitar: true, strum: song }), ...this.guitarEnd()];
       },
       // the stereo is on: strum along in time and in the key of whatever is playing
@@ -924,7 +924,7 @@ export class Brain {
           } }),
           ...this.guitarEnd()];
       },
-      jamguitar: () => [`playing the guitar along with ${this.nowPlaying().title}`, ...this.guitarBegin(), this.play('guitar', rand(30, 45), { guitar: true, sync: true, strum: { pat: strumPattern() } }), ...this.guitarEnd()],
+      jamguitar: () => [`playing the guitar along with ${this.nowPlaying().title}`, ...this.guitarBegin(), this.play('guitar', rand(30, 45), { guitar: true, sync: true, strum: { pat: strumPattern(this.has) } }), ...this.guitarEnd()],
       // he was interrupted while holding the guitar: take it back to its stand
       putguitar: () => ['putting the guitar back', this.walkAt(this.gname, 0, 0.62, Math.PI),
         this.play('putGuitar', 2.4, { guitar: true, at: [1.3, () => this.setGuitarHeld(false)] })],
@@ -1737,6 +1737,8 @@ export class Brain {
   // With only the basic book the beat stays her own. A new instrument: add it to TIMING_SKILLS, call publishTempo when it plays a tempo
   // of its own, ask tempoToFollow when it starts a bar; sweepGal 6b checks every instrument in BAND (gal.js).
   publishTempo(t0, bl) { this.bandClock = { t0, bl, seen: this.time }; }
+  // `has(skill)` for code that picks content by what has been learned (songs, strums, drum styles)
+  get has() { return (k) => this.skills.has(k); }
   isTight(inst) { return (TIMING_SKILLS[inst] || []).some((k) => this.skills.has(k)); }
   tempoToFollow(inst) {
     if (!this.isTight(inst)) return null;
@@ -2185,6 +2187,8 @@ export class Brain {
     else if (!FREE_ACTS.includes(name)) this.stayRoom = null;
     let label, steps;
     try { [label, ...steps] = acts[name](); } finally { this.actRoom = null; }
+    // a practice session of an instrument: after enough of them the next chapter of its book is learned (skills.js CHAPTERS)
+    for (const c of this.skills.practice(name)) { this.ui(`learned ${c.title.toLowerCase()}`); if (this.onChapter) this.onChapter(c); }
     if (!this.stuckIn() && where !== here && !OWN_ROOM_ACTS.includes(name)) {
       // (the yard, Workshop and Restaurant jobs go in through their own door themselves: they only need him out of the room he is in)
       const ownTrip = YARD_ACTS.includes(name) || WORK_ACTS.includes(name) || REST_JOBS.includes(name) || REST_ACTS.includes(name);

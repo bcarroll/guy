@@ -120,6 +120,79 @@ const cMajorScale = () => scaleSong('C Major Scale', 60, [0, 2, 4, 5, 7, 9, 11, 
 const aMinorScale = () => scaleSong('A Minor Scale', 57, [0, 2, 3, 5, 7, 8, 10, 12]);
 const gMajorScale = () => scaleSong('G Major Scale', 55, [0, 2, 4, 5, 7, 9, 11, 12]);
 
+
+// ---- Chapter tunes (skills.js CHAPTERS): each one waits for the chapter named in MAKERS ----
+// note name -> MIDI (C5 = 72, like the tunes above): n('E5') = 76
+const NOTE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+const n = (s) => { const m = /^([A-G])([#b]?)(\d)$/.exec(s); return 12 * (+m[3] + 1) + NOTE[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0); };
+// "E5:1 D5:1 R:2" -> [[midi, beats], ...] (R = a rest)
+const tune = (str) => str.trim().split(/\s+/).map((t) => { const [a, b] = t.split(':'); return [a === 'R' ? 0 : n(a), +b]; });
+const bass3 = (chords, per) => chords.flatMap((c, i) => [{ beat: i * per, l: [CH[c][0]], dur: per * 0.6 }, { beat: i * per + 1, l: CH[c].slice(1), dur: 1.2 }, ...(per > 2 ? [{ beat: i * per + 2, l: CH[c].slice(1), dur: 1.2 }] : [])]);
+
+function maryLamb() {
+  const m = tune('E5:1 D5:1 C5:1 D5:1 E5:1 E5:1 E5:2 D5:1 D5:1 D5:2 E5:1 G5:1 G5:2 E5:1 D5:1 C5:1 D5:1 E5:1 E5:1 E5:1 E5:1 D5:1 D5:1 E5:1 D5:1 C5:4');
+  return { name: 'Mary Had a Little Lamb', bpm: 108, events: merge(line(0, m), comp(['C', 'C', 'G', 'C', 'C', 'C', 'G', 'C'])) };
+}
+function rowBoat() {         // 6/8 written in eighth notes (0.5 beat)
+  const e = 0.5, q = 1, dq = 1.5;
+  const m = [['C5', dq], ['C5', dq], ['C5', q], ['D5', e], ['E5', dq], ['E5', q], ['D5', e], ['E5', q], ['F5', e], ['G5', dq + dq],
+    ['C6', e], ['C6', e], ['C6', e], ['G5', e], ['G5', e], ['G5', e], ['E5', e], ['E5', e], ['E5', e], ['C5', e], ['C5', e], ['C5', e],
+    ['G5', q], ['F5', e], ['E5', q], ['D5', e], ['C5', dq + dq]].map(([a, b]) => [n(a), b]);
+  return { name: 'Row, Row, Row Your Boat', bpm: 126, events: merge(line(0, m), comp(['C', 'C', 'C', 'G', 'C', 'C', 'G', 'C'], 3)) };
+}
+function saints() {
+  const m = tune('C5:1 E5:1 F5:1 G5:4 R:1 C5:1 E5:1 F5:1 G5:4 R:1 C5:1 E5:1 F5:1 G5:2 E5:2 C5:2 E5:2 D5:4 E5:1 E5:1 D5:1 D5:1 C5:2 C5:2 C5:4');
+  return { name: 'When the Saints Go Marching In', bpm: 120, events: merge(line(0, m), comp(['C', 'C', 'C', 'C', 'C', 'G', 'C', 'C'])) };
+}
+function amazingGrace() {    // 3/4
+  const m = tune('R:2 G4:1 C5:2 E5:0.5 C5:0.5 E5:2 D5:1 C5:2 A4:1 G4:2 G4:1 C5:2 E5:0.5 C5:0.5 E5:2 D5:1 G5:3 E5:3');
+  const m2 = tune('E5:1 G5:1 G5:0.5 E5:0.5 G5:2 E5:1 D5:1 C5:2 A4:1 G4:2 G4:1 C5:2 E5:0.5 C5:0.5 E5:2 D5:1 C5:3');
+  return { name: 'Amazing Grace', bpm: 84, events: merge(line(0, m), line(m.reduce((a, [, b]) => a + b, 0), m2), bass3(['C', 'C', 'C', 'F', 'C', 'C', 'G', 'C', 'C', 'C', 'F', 'C', 'C', 'G', 'C', 'C'].slice(0, 16), 3).slice(0, 48)) };
+}
+function greensleeves() {    // 3/4, A minor
+  const m = tune('A4:1 C5:2 D5:1 E5:1.5 F5:0.5 E5:1 D5:2 B4:1 G4:1.5 A4:0.5 B4:1 C5:2 A4:1 A4:1.5 G#4:0.5 A4:1 B4:2 G#4:1 E4:3');
+  return { name: 'Greensleeves', bpm: 96, events: merge(line(0, m), bass3(['Am', 'Am', 'G', 'G', 'Am', 'Am', 'E', 'E'], 3)) };
+}
+function minuetG() {         // after Petzold, 3/4
+  const m = tune('D6:1 G5:0.5 A5:0.5 B5:0.5 C6:0.5 D6:1 G5:1 G5:1 E6:1 C6:0.5 D6:0.5 E6:0.5 F#6:0.5 G6:1 G5:1 G5:1 C6:1 D6:0.5 C6:0.5 B5:0.5 A5:0.5 B5:1 C6:0.5 B5:0.5 A5:0.5 G5:0.5 F#5:1 G5:0.5 A5:0.5 B5:0.5 G5:0.5 B5:2 R:1');
+  return { name: 'Minuet in G', bpm: 116, events: merge(line(0, m), bass3(['G', 'G', 'C', 'C', 'G', 'D', 'G', 'G'], 3)) };
+}
+function canon() {           // a simplified Canon in D: the ground bass over a rising melody, 4/4
+  const bass = [38, 45, 47, 42, 43, 38, 43, 45];
+  const chords = [[62, 66, 69], [57, 61, 64], [59, 62, 66], [54, 57, 61], [55, 59, 62], [50, 54, 57], [55, 59, 62], [57, 61, 64]];
+  const mel = tune('F#5:2 E5:2 D5:2 C#5:2 B4:2 A4:2 B4:2 C#5:2 D5:1 F#5:1 A5:1 G5:1 F#5:1 D5:1 F#5:1 E5:1 D5:1 B4:1 D5:1 A5:1 G5:1 B5:1 A5:1 G5:1');
+  const events = [];
+  bass.forEach((b, i) => { events.push({ beat: i * 4, l: [b], dur: 3.5 }); events.push({ beat: i * 4 + 2, l: chords[i], dur: 1.8 }); });
+  return { name: 'Canon', bpm: 76, events: merge(events, line(8, mel.slice(0, 8)), line(24, mel.slice(8))) };
+}
+function prelude() {         // broken chords, one pattern of eight notes per bar (after the shape of Bach's first prelude)
+  const bars = [[48, 52, 55, 60, 64], [48, 50, 57, 62, 65], [47, 50, 55, 62, 65], [48, 52, 55, 60, 64], [48, 52, 57, 64, 69], [48, 50, 54, 57, 62], [47, 50, 55, 62, 67], [47, 48, 52, 55, 60]];
+  const events = [];
+  bars.forEach((c, i) => {
+    events.push({ beat: i * 4, l: [c[0], c[1]], dur: 4 });
+    for (let k = 0; k < 8; k++) events.push({ beat: i * 4 + k * 0.5, r: [c[2 + (k % 2 ? ((k >> 1) % 2) + 1 : 0) % 3] + 12], dur: 0.9 });
+  });
+  return { name: 'Broken Chord Prelude', bpm: 88, events: events.sort((a, b) => a.beat - b.beat) };
+}
+function ragtime() {         // a stride left hand (bass, chord, bass, chord) under a syncopated right hand, 4/4
+  const prog = [['C', 48, [60, 64, 67]], ['C', 48, [60, 64, 67]], ['G', 43, [59, 62, 67]], ['C', 48, [60, 64, 67]], ['F', 41, [57, 60, 65]], ['C', 48, [60, 64, 67]], ['G', 43, [59, 62, 67]], ['C', 48, [60, 64, 67]]];
+  const events = [];
+  prog.forEach(([, bass, ch], i) => {
+    events.push({ beat: i * 4, l: [bass], dur: 0.9 }); events.push({ beat: i * 4 + 1, l: ch, dur: 0.8 });
+    events.push({ beat: i * 4 + 2, l: [bass + 7], dur: 0.9 }); events.push({ beat: i * 4 + 3, l: ch, dur: 0.8 });
+  });
+  const mel = tune('E5:0.5 G5:0.5 C6:1 B5:0.5 G5:0.5 E5:1 D5:0.5 F5:0.5 B5:1 G5:0.5 D5:0.5 B4:1 C5:0.5 E5:0.5 G5:1 A5:0.5 F5:0.5 C5:1 D5:0.5 F5:0.5 A5:1 G5:0.5 E5:0.5 C5:1 B4:0.5 D5:0.5 G5:1 E5:0.5 C5:0.5 G4:1 C5:1.5 E5:0.5 C5:2');
+  return { name: 'Easy Ragtime', bpm: 104, events: merge(events, line(0, mel)) };
+}
+function lullaby() {         // after Brahms' lullaby, 3/4
+  const m = tune('E5:1 E5:1 G5:2 E5:1 E5:1 G5:2 E5:1 G5:1 C6:1 B5:2 A5:1 A5:1 G5:2 D5:1 E5:1 F5:1 D5:2 D5:1 E5:1 F5:1 D5:2 D5:1 F5:1 B5:1 A5:2 G5:1 C6:3');
+  return { name: 'Cradle Song', bpm: 72, events: merge(line(0, m), bass3(['C', 'C', 'C', 'G', 'G', 'G', 'C', 'F', 'C', 'G'], 3)) };
+}
+const dMajorScale = () => scaleSong('D Major Scale', 62, [0, 2, 4, 5, 7, 9, 11, 12]);
+const eMinorScale = () => scaleSong('E Minor Scale', 52, [0, 2, 3, 5, 7, 8, 10, 12]);
+const fMajorScale = () => scaleSong('F Major Scale', 53, [0, 2, 4, 5, 7, 9, 11, 12]);
+const cBluesScale = () => scaleSong('C Blues Scale', 60, [0, 3, 5, 6, 7, 10, 12]);
+
 // Someone with no lessons yet: one finger, random keys, long pauses.
 export function plinkSong() {
   const events = [];
@@ -137,7 +210,16 @@ const MAKERS = [
   { make: odeToJoy, needs: 'piano' }, { make: twinkle, needs: 'piano' },
   { make: furElise, needs: 'piano.advanced' }, { make: blues, needs: 'piano.advanced' },
   { make: waltz, needs: 'piano.advanced' }, { make: improv, needs: 'piano.advanced' },
+  // chapters learned by practice (skills.js CHAPTERS)
+  { make: maryLamb, needs: 'piano.ch2' }, { make: rowBoat, needs: 'piano.ch2' }, { make: saints, needs: 'piano.ch2' },
+  { make: dMajorScale, needs: 'piano.ch2' }, { make: eMinorScale, needs: 'piano.ch2' },
+  { make: amazingGrace, needs: 'piano.ch3' }, { make: greensleeves, needs: 'piano.ch3' },
+  { make: fMajorScale, needs: 'piano.ch3' }, { make: cBluesScale, needs: 'piano.ch3' },
+  { make: minuetG, needs: 'piano.advanced.ch2' }, { make: canon, needs: 'piano.advanced.ch2' }, { make: prelude, needs: 'piano.advanced.ch2' },
+  { make: ragtime, needs: 'piano.advanced.ch3' }, { make: lullaby, needs: 'piano.advanced.ch3' },
 ];
+export const SONG_NEEDS = MAKERS.map((m) => m.needs);
+export const allSongs = () => MAKERS.map((m) => ({ ...m.make(), needs: m.needs }));
 
 export function randomSong(avoid, has = () => true) {
   const pool = MAKERS.filter((m) => has(m.needs));
