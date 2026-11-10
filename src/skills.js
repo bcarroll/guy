@@ -4,7 +4,7 @@
 // put the book on the shelf with world.objects.shelf.addBook(def), and gate the activity in Brain.available().
 
 // Every book that exists. `start` ones are on the shelf from the beginning; the rest are added from the Catalog.
-// requires.object: the object that has to be in the room first; locked: a future premium item.
+// requires: the object the book is about (the Catalog still lists it; the book can be added and read before that object is in the room); locked: a future premium item.
 export const BOOK_CATALOG = [
   { id: 'stereo', title: 'Stereo User Manual', teaches: 'stereo', color: 0x2d6a9f, thick: 0.055, height: 0.31, blurb: 'how to use the stereo', start: true, desc: 'How to use the stereo.' },
   { id: 'piano', title: 'Piano Playing for Robots', teaches: 'piano', color: 0x8b2d4d, thick: 0.065, height: 0.33, blurb: 'piano scales and a few simple tunes', start: true, desc: 'Piano scales and a few simple tunes.' },

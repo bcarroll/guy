@@ -5,7 +5,7 @@
 //   removed   was taken out by the user; can be put back
 //   available free to add
 //   locked    a future premium unlock (shown, but the button does nothing yet)
-// Books: shelf (on the shelf), available, needs-object / needs-shelf (can't be added yet), locked.
+// Books: shelf (on the shelf), available, needs-shelf (can't be added yet), locked. (A book never needs the object it is about.)
 import { BOOK_CATALOG } from './skills.js';
 import { ALBUM_CATALOG } from './albums.js';
 import { dev } from './devunlock.js';
@@ -130,8 +130,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
     if (shelf() && shelf().books.some((r) => r.def.id === b.id)) return 'shelf';
     if (b.unlockedBy && !dev.all && !knows(b.unlockedBy)) return 'needs-skill';
     if (!shelf()) return 'needs-shelf';
-    if (b.requires && b.requires.object && !hasObject(b.requires.object)) return 'needs-object';
-    if (b.requires && b.requires.anyObject && !b.requires.anyObject.some(hasObject)) return 'needs-object';
+    // (a book can be read before the object it is about is in the room: GUY learns it and uses the object when it arrives)
     return 'available';
   };
 
@@ -362,7 +361,6 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
         if (st === 'shelf') bookGroups['On the shelf'].push(card({ ...base, label: '✓ On the shelf' }));
         else if (st === 'available') bookGroups['Add to the shelf'].push(card({ ...base, label: 'Add to shelf', action: i }));
         else if (st === 'needs-skill') bookGroups['Not available yet'].push(card({ ...base, label: 'Read the first book', note: 'GUY or GAL has to read "' + ((BOOK_CATALOG.find((x) => x.teaches === b.unlockedBy) || {}).title || 'the first book') + '" first.' }));
-        else if (st === 'needs-object') bookGroups['Not available yet'].push(card({ ...base, label: 'Needs ' + reqName, note: `Add the ${reqName} to the room first.` }));
         else if (st === 'needs-shelf') bookGroups['Not available yet'].push(card({ ...base, label: 'Needs a bookshelf', note: 'Put the bookshelf back first.' }));
         else bookGroups['Premium · coming soon'].push(card({ ...base, label: '🔒 Locked', note: reqName ? `Needs the ${reqName}.` : '' }));
       }

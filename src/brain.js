@@ -68,6 +68,9 @@ function basePose(g, t) {
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
+// How far in front of the shelf (its own frame, x) he stands to read an open book standing up: the book is 0.48 m ahead of his chest
+// and the shelf's front is at x = -0.2, so this leaves the open book clear of it. Tried in order.
+const READ_BACK_X = [-1.05, -1.0, -0.95];
 // Taking something off a shelf: at mid height a handshake grip (thumb up); above the shoulder the fingers point up, so
 // the palm faces the shelf instead.
 function shelfGrip(g, ctx) {
@@ -1606,6 +1609,20 @@ export class Brain {
     return !cellBlocked(makeGrid(this.w.obstacles, 0.05, 0, host.obstacle), x, z);
   }
 
+  // The open book floats in front of his chest (readAnchor) and is not an object, so at the spot where he takes a book down it would
+  // be inside the bookshelf. To read standing he first steps back from the shelf; putBackStep walks him forward again.
+  // [] when there is no clear spot behind him (he reads where he is).
+  readBack(book) {
+    const name = this.hostName(book), host = this.obj(name);
+    if (!host) return [];
+    const grid = makeGrid(this.w.obstacles, 0.05, 0, host.obstacle);
+    for (const dx of READ_BACK_X) {
+      const l = host.local(dx, book.z), x = host.x + l.x, z = host.z + l.z;
+      if (this.w.walkable(x, z) && this.onFloor(x, z, 0.15, 0.1) && !cellBlocked(grid, x, z)) return [this.walkAt(name, dx, book.z, Math.PI / 2)];
+    }
+    return [];
+  }
+
   readSteps(only = null) {
     const shelf = this.obj('shelf');
     const top = shelf.stackTop ? shelf.stackTop() : null;           // from the stack beside the shelf he can only take the top book
@@ -1631,9 +1648,9 @@ export class Brain {
       {
         type: 'plan',
         fn: () => {
-          if (atShelf) return quick;
+          if (atShelf) return [...this.readBack(book), ...quick];
           const c = this.pickChair();                     // any chair in the room he can get to
-          return c ? sitting(c) : standing;
+          return c ? sitting(c) : [...this.readBack(book), ...standing];
         },
       },
       this.putBackStep()];

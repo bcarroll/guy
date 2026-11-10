@@ -1211,14 +1211,41 @@ T.sweepBookRules = () => {
     sk.known.delete(rec2.def.teaches);
     T.settle(); T.home(); b.queue = []; b.step = null; b.pendingActivity = null; b.forceBook = rec2; b.choose('read');
     const poses = new Set(); let t = 0; const labels = [label()];
-    while (t < 150 && b.last === 'read') { step(0.1); t += 0.1; if (b.step) poses.add(b.pose); }
-    return { seconds: +t.toFixed(1), poses: [...poses], learned: sk.has(rec2.def.teaches), labels };
+    // how close the open book floats to the bookshelf while he reads standing up (it is not an object: only where he stands keeps it clear)
+    const ob = w.objects.shelf.obstacle; let minGap = Infinity;
+    while (t < 150 && b.last === 'read') {
+      step(0.1); t += 0.1; if (b.step) poses.add(b.pose);
+      if (b.pose === 'readStand' && b.read && b.read.open > 0.5) {
+        const a = b.readAnchor();
+        minGap = Math.min(minGap, Math.hypot(Math.max(ob.x0 - a.x, 0, a.x - ob.x1), Math.max(ob.z0 - a.z, 0, a.z - ob.z1)));
+      }
+    }
+    return { seconds: +t.toFixed(1), poses: [...poses], learned: sk.has(rec2.def.teaches), labels, minGap: +minGap.toFixed(2) };
   };
   const normal = readRun('lighting');
   sk.known.add('speedreading');
   const fast = readRun('lighting');
   out.push(result('speed reading: reads standing at the shelf, much faster, and still learns from the book', normal.learned && fast.learned && !fast.poses.includes('readSit') && fast.seconds < normal.seconds * 0.7, { normal, fast }));
   out.push(result('speed reading: without it he sits in a chair to read', normal.poses.includes('readSit'), { poses: normal.poses }));
+  // the open book must not be inside the bookshelf: he steps back from it to read standing (found by hand: it clipped into the shelf)
+  out.push(result('speed reading: the open book floats clear of the bookshelf (he steps back to read)', fast.minGap >= 0.08 && fast.minGap < Infinity, { minGap: fast.minGap }));
+  sk.known.delete('speedreading');
+  w.removeObject('armchair'); b.objectRemoved('armchair'); T.settle();
+  const noChair = readRun('ball');
+  T.addObject('armchair');
+  out.push(result('reading: with no chair he reads standing, and the open book is clear of the bookshelf too', noChair.poses.includes('readStand') && noChair.minGap >= 0.08 && noChair.minGap < Infinity && noChair.learned, { noChair }));
+  sk.known.add('speedreading');
+
+  // a book is not held back because the object it is about is not in the room: it is added from the Catalog and read like any other
+  if (w.objects.easel) { w.removeObject('easel'); b.objectRemoved('easel'); }
+  const easelAbsent = !w.objects.easel;
+  const addedAbout = T.addBook('painting');
+  const aboutRec = w.objects.shelf.books.find((x) => x.def.id === 'painting');
+  out.push(result('books: a book about an object that is not in the room can be added from the Catalog', easelAbsent && addedAbout && !!aboutRec && !w.objects.easel, { easelAbsent, addedAbout }));
+  sk.known.delete('easel'); sk.fading.clear();
+  const aboutRun = aboutRec ? readRun('painting') : null;
+  out.push(result('books: and he reads it and learns it with the object still missing', !!aboutRun && aboutRun.learned && !w.objects.easel, { aboutRun }));
+  if (aboutRec) b.removeBook('painting');
 
   // forgetting Speed Reading is slow (5 minutes) and the effect fades with it
   b.forgetBook('speedread');
