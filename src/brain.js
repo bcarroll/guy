@@ -71,13 +71,23 @@ const UP = new THREE.Vector3(0, 1, 0);
 // How far in front of the shelf (its own frame, x) he stands to read an open book standing up: the book is 0.48 m ahead of his chest
 // and the shelf's front is at x = -0.2, so this leaves the open book clear of it. Tried in order.
 const READ_BACK_X = [-1.05, -1.0, -0.95];
-// Taking something off a shelf: at mid height a handshake grip (thumb up); above the shoulder the fingers point up, so
-// the palm faces the shelf instead.
-function shelfGrip(g, ctx) {
-  const high = ctx.tgt.shelf.y > g.boneWorld('RightArm').y - 0.1;
+// Taking something off a shelf: the palm lands on the book's spine with the fingers pointing in and a little up, at every height
+// (exact hand orientation: the roll-only grip left the back of his hand towards the book, the fingers sweeping sideways). While the book
+// is pulled to his side (`pull` 0 -> 1) the hand turns to the carrying grip: fingers down and forward, thumb up, palm inward.
+// The wrist target is the book point moved back along the fingers by half a hand, so the middle of the palm lands on it.
+function shelfGrip(g, pull) {
   const fwd = new THREE.Vector3(Math.sin(g.root.rotation.y), 0, Math.cos(g.root.rotation.y));
-  return high ? { palm: fwd } : { side: UP };
+  const left = new THREE.Vector3(Math.cos(g.root.rotation.y), 0, -Math.sin(g.root.rotation.y));
+  const mix = (a, b) => a.clone().lerp(b, pull).normalize();
+  const fingers = mix(UP.clone().multiplyScalar(0.5).addScaledVector(fwd, 0.85), UP.clone().multiplyScalar(-0.85).addScaledVector(fwd, 0.5));
+  const palm = mix(fwd.clone().multiplyScalar(0.85).addScaledVector(UP, -0.5), left);
+  return { fingers, palm };
 }
+const shelfReach = (g, from, to, k, weight) => {          // arm to the point between the shelf (k = 0) and his side (k = 1), the hand turned to match
+  const pull = clamp(k, 0, 1), grip = shelfGrip(g, pull);
+  const target = new THREE.Vector3().lerpVectors(from, to, pull).addScaledVector(grip.fingers, -g.limb.Right.handLen * 0.55);
+  g.reach('Right', target, weight, false, { hand: grip });
+};
 // How far to squat to reach the shelf target: 0 at shelf height, 1 for a book lying on the floor stack beside it.
 const squatFor = (ctx) => clamp((0.85 - ctx.tgt.shelf.y) / 0.5, 0, 1);
 const squat = (g, k) => {
@@ -658,10 +668,9 @@ export const POSES = {
     const reachIn = smooth(clamp(t / 0.7, 0, 1));
     const pull = smooth(clamp((t - 1.0) / 0.7, 0, 1));
     const fade = 1 - smooth(clamp((t - 1.8) / 0.6, 0, 1));
-    const target = new THREE.Vector3().lerpVectors(ctx.tgt.shelf, ctx.tgt.carry, pull);
     const sq = squatFor(ctx) * reachIn * fade;                              // a book on the floor stack: he squats down to it
     squat(g, sq);
-    g.reach('Right', target, reachIn * fade, true, shelfGrip(g, ctx));   // handshake grip at mid height, palm to the shelf when reaching up
+    shelfReach(g, ctx.tgt.shelf, ctx.tgt.carry, pull, reachIn * fade);   // palm on the spine, then the carrying grip
     g.curl('Right', 0.1 + 0.65 * smooth(clamp((t - 0.75) / 0.25, 0, 1)));
     g.set('Spine1', Q('x', 0.1 * reachIn * fade + 0.3 * sq));
     g.set('Head', Q('x', 0.12 * reachIn * fade, 'y', -0.15 * reachIn * fade));
@@ -671,10 +680,9 @@ export const POSES = {
   putBook(g, t, dur, ctx) {
     const raise = smooth(clamp(t / 0.9, 0, 1));
     const retreat = smooth(clamp((t - 1.5) / 0.7, 0, 1));
-    const target = new THREE.Vector3().lerpVectors(ctx.tgt.carry, ctx.tgt.shelf, raise);
     const sq = squatFor(ctx) * raise * (1 - retreat);
     squat(g, sq);
-    g.reach('Right', target, raise * (1 - retreat), true, shelfGrip(g, ctx));
+    shelfReach(g, ctx.tgt.shelf, ctx.tgt.carry, 1 - raise, raise * (1 - retreat));
     g.curl('Right', 0.75 - 0.65 * smooth(clamp((t - 1.25) / 0.3, 0, 1)));
     g.set('Spine1', Q('x', 0.1 * raise * (1 - retreat) + 0.3 * sq));
     g.set('Head', Q('x', 0.1 * raise * (1 - retreat), 'y', -0.15 * raise * (1 - retreat)));

@@ -172,7 +172,8 @@ export const MANIFEST = {
   tracks: ['default', ...ALBUM_CATALOG.flatMap((a) => a.tracks)],     // every track on every record; coverage fails for a track no record lists
   // the visual checkpoints: freeze GUY at (activity, pose, t) and look from `view`. See assets.md for the full checklist.
   visual: [
-    { id: 'read-grab-mid', activity: 'read', pose: 'grab', t: 1.2, view: 'hand:Right', expect: 'handshake grip, thumb up, hand reaches the book, arm in front of him' },
+    { id: 'read-grab-mid', activity: 'read', pose: 'grab', t: 1.2, view: 'hand:Right', expect: 'palm on the book spine, fingers pointing in and a little up (never the back of the hand towards the book), arm in front of him' },
+    { id: 'read-stand-shelf', activity: 'read', pose: 'readStand', t: 8, view: 'side', skills: ['speedreading'], expect: 'speed reading standing a step back from the bookshelf: the open book floats in front of his chest, clear of the shelf, both hands on its lower edges' },
     { id: 'read-sit', activity: 'read', pose: 'readSit', t: 8, view: 'front', expect: 'book open with pages facing GUY, both hands on the lower edges, seated in the chair with legs clear of it' },
     { id: 'read-turn', activity: 'read', pose: 'readSit', t: 0, view: 'front', turning: true, expect: 'right hand on the reader side of the page while a page flips' },
     { id: 'guitar-play', activity: 'guitar', pose: 'guitar', t: 7, view: 'front', expect: 'guitar rests on his belly on a strap; right fingers hang over the strings; left wrist under the neck, fingers up, thumb to the headstock; nothing passes through the body' },
@@ -1255,6 +1256,31 @@ T.sweepBookRules = () => {
   b.forgetBook('speedread');
   const sp0 = b.readSpeed(); step(150); const sp150 = b.readSpeed(); step(160);
   out.push(result('speed reading: forgetting takes 5 minutes, the reading speed falls gradually back to normal', sp0 === 2.5 && sp150 > 1.4 && sp150 < 2.0 && b.readSpeed() === 1 && !sk.has('speedreading'), { sp0, sp150, end: b.readSpeed() }));
+  // (palm measured from the thumb bone reads about 25 degrees further down than the hand's palm; the old bug read -0.7 towards the shelf)
+  // taking a book down: the palm faces the spine and the fingers point into it, a little up, at a high and at a mid-height book (found by hand: at mid height
+  // the back of his hand went to the book with the fingers sweeping sideways)
+  const grabHand = (id) => {
+    T.unfreeze(); T.removeAll(); T.forget(); sk.fading.clear(); T.settle(); T.home();
+    b.forceBook = w.objects.shelf.books.find((x) => x.def.id === id);
+    T.prep('read'); b.queue = []; b.step = null; b.choose('read');             // (not T.moment: its camera framing would switch the auto-framing off for the sweeps after this one)
+    let guard = 0;
+    while (!(b.step && b.pose === 'grab' && b.step.t >= 0.85) && guard++ < 40000) step(1 / 30);
+    T.freeze();
+    const mr = { reached: guard < 40000 };
+    step(0.6);                                                           // (the frozen brain still lets the bones catch up with their targets)
+    const g = window.guy, THREE = window.THREE, V = (n) => g.boneWorld(n), yaw = b.g.root.rotation.y;
+    const wr = V('RightHand'), fc = V('RightHandMiddle1').sub(wr).normalize(), sv = V('RightHandThumb1').sub(wr);      // (the knuckle, not the fingertip: the fingers are curling)
+    sv.addScaledVector(fc, -sv.dot(fc)).normalize();
+    const palm = sv.clone().cross(fc), fwd = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+    T.unfreeze(); b.forceBook = null;
+    return { reached: mr.reached, palmToShelf: +palm.dot(fwd).toFixed(2), palmUp: +palm.y.toFixed(2), fingersUp: +fc.y.toFixed(2), fingersIn: +fc.dot(fwd).toFixed(2) };
+  };
+  for (const [id, what] of [['stereo', 'a high'], ['piano', 'a mid-height']]) {
+    const gh = grabHand(id);
+    out.push(result(`grab: taking ${what} book, the palm faces the spine and the fingers point into it, a little up`, gh.reached && gh.palmToShelf > 0.3 && gh.palmUp < 0 && gh.fingersUp > 0.2 && gh.fingersIn > 0.6, gh));
+  }
+  T.settle(); T.home();
+
   out.push(result('forget: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
 };

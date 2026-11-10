@@ -66,7 +66,7 @@ async function main() {
   const open = async () => {
     for (let attempt = 1; ; attempt++) {                           // (a file saved while the run is going makes the dev server reload the page: try again)
       try {
-        await page.goto(`http://localhost:${PORT}/?fresh&skills=none`, { waitUntil: 'networkidle0', timeout: 60000 });
+        await page.goto(`http://localhost:${PORT}/?fresh&skills=none`, { waitUntil: 'domcontentloaded', timeout: 60000 });
         await page.waitForFunction(() => window.brain && window.guy && window.guy.loaded, { timeout: 60000 });
         await page.evaluate(async () => { window.T = (await import('/src/devtools.js')).default; });
         return;
