@@ -1240,7 +1240,7 @@ export class Brain {
       const S2 = { x: B.x - d.x * off, z: B.z - d.z * off };
       const bd = room && room.bd;
       const inRoom = room ? (q) => q.x >= bd.minX + 0.6 && q.x <= bd.maxX - 0.6 && q.z >= bd.minZ + 0.6 && q.z <= bd.maxZ - 0.6   // (nor against a fence)
-        : (q) => Math.abs(q.x) <= 4.5 && q.z >= -3.5 && q.z <= 3.6; // GUY can't stand in the wall
+        : (q) => (Math.abs(q.x) <= 4.5 && q.z >= -3.5 && q.z <= 3.6) || this.w.walkable(q.x, q.z); // GUY can't stand in the wall (but he can in an open doorway: a piece shoved against the door from outside)
       if (!inRoom(S) || !inRoom(S2) || cellBlocked(guyGrid, S.x, S.z) || cellBlocked(guyGrid, S2.x, S2.z) || !lineClear(guyGrid, S, S2)) return null;
       const yaw = Math.atan2(d.x, d.z);
       steps.push(this.walk(S.x, S.z, yaw));
@@ -2455,13 +2455,23 @@ export class Brain {
           // the grid of the room he is walking in: his own, or an added room when he and his goal are both in it
           const ra = this.w.roomIdAt(root.position.x, root.position.z), rb = this.w.roomIdAt(s.x, s.z);
           const fr = ra === rb && ra !== 'main' && ra !== 'door' ? this.w.frameOf(ra) : MAIN_FRAME;
+          // He is inside an added room and the spot is in his own: the grid of his own room knows nothing of the other one, so he goes out through the door first (not into its wall)
+          if (ra !== rb && ra !== 'main' && ra !== 'door' && rb === 'main' && !s.viaDoor && !s.push && !s.drive && this.w.doors[ra] && !this.stuckIn()) {
+            const [, ...out] = this.activities().leave();
+            this.queue.unshift(...out, { ...s, viaDoor: true });
+            this.step = null;
+            return;
+          }
           this.grid = makeGrid(this.w.obstacles, INFLATE, 0, null, fr);
           if (s.fx && s.fx.guitar) {                               // carrying the guitar sticks his hands out: give furniture more room when the way is clear
             const wide = makeGrid(this.w.obstacles, INFLATE + 0.14, 0, null, fr);
             if (!cellBlocked(wide, s.x, s.z) && !cellBlocked(wide, root.position.x, root.position.z)) this.grid = wide;
           }
           // a direct walk goes straight there only when the straight line is clear: otherwise he goes round (the screens of the range, say)
-          const straight = s.direct && lineClear(this.grid, root.position, { x: s.x, z: s.z });
+          const inDoorway = (x, z) => !(Math.abs(x) <= 4.5 && z >= -3.5 && z <= 3.6) && this.w.walkable(x, z);
+          // (in an open doorway the grid knows nothing of the walls: from one spot of the doorway to another he walks the straight way, not round a corner of the room)
+          const doorwayWalk = ra === 'main' && inDoorway(root.position.x, root.position.z) && inDoorway(s.x, s.z) && [0.25, 0.5, 0.75].every((t) => this.w.walkable(lerp(root.position.x, s.x, t), lerp(root.position.z, s.z, t)));
+          const straight = doorwayWalk || (s.direct && lineClear(this.grid, root.position, { x: s.x, z: s.z }));
           s.path = straight ? [{ x: s.x, z: s.z }] : findPath(this.grid, root.position.x, root.position.z, s.x, s.z, true);
           if (!s.path) {                                           // no way with the usual clearance (a gap between two pieces a little too narrow): through the middle of the gap, not in a straight line that grazes both
             const tight = makeGrid(this.w.obstacles, 0.14, 0, null, fr);
