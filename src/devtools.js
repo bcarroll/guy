@@ -659,6 +659,7 @@ T.sweepBooks = () => {
   for (const def of BOOK_CATALOG) {
     if (def.locked) { out.push(result(`book:${def.id}`, true, { skipped: 'locked (premium)' })); continue; }
     if (def.requires && def.requires.object) T.addObject(def.requires.object);
+    if (def.requires && def.requires.anyObject) T.addObject(def.requires.anyObject[0]);
     const added = T.addBook(def.id);
     skillsOf().known.delete(def.teaches);
     T.settle();
@@ -678,6 +679,17 @@ T.sweepBooks = () => {
     out.push(result(`book:${def.id}`, added && learned && (!use || use.pass) && errors.length === base, {
       added, learned, seconds: t, trail: learned ? undefined : trail, stateWhenStuck: where, then, usedOk: use ? use.pass : null, useDetail: use && !use.pass ? { completed: use.completed, overlaps: use.overlaps, errors: use.errors, idleAfter: use.idleAfter, where: use.where } : null, errors: errors.slice(base),
     }));
+  }
+    // "What GUY learned": a learned skill is clickable and sends him to its object; a skill with no object stays plain
+  {
+    const b = B(); skillsOf().learn('guitar');
+    const panel = document.getElementById('skills'), row = (id) => panel.querySelector(`.skill[data-skill="${id}"]`);
+    const r = row('guitar'), plain = row('decorate');
+    b.skip(); T.settle();
+    const was = b.pendingActivity;
+    if (r) r.click();
+    out.push(result('skills panel: a learned skill is clickable (Guitar) and the click orders GUY to use that object', !!r && r.classList.contains('do') && !!b.pendingActivity && b.pendingActivity !== was, { has: !!r, cls: r && r.className, pending: b.pendingActivity, toast: document.getElementById('toast').textContent, music: b.music }));
+    out.push(result('skills panel: a skill with no object (Decorating) is not clickable', !plain || !plain.classList.contains('do')));
   }
   return out;
 };
@@ -2667,7 +2679,7 @@ T.sweepNeeds = () => {
   // 6. books on the floor: a bookshelf, and the stacked books move onto it
   needSetup('right', ['workshop', 'workshop.materials', 'workshop.furniture']);
   const sh = w.objects.shelf;
-  for (const d of BOOK_CATALOG) { if (d.room || d.locked) continue; if (d.requires && d.requires.object && !w.objects[d.requires.object]) T.addObject(d.requires.object); T.addBook(d.id); }
+  for (const d of BOOK_CATALOG) { if (d.room || d.locked) continue; if (d.requires && d.requires.object && !w.objects[d.requires.object]) T.addObject(d.requires.object); if (d.requires && d.requires.anyObject) T.addObject(d.requires.anyObject[0]); T.addBook(d.id); }
   const stacked0 = sh.books.filter((r) => r.stack).length, wantBooks = wants(b).some((x) => x.serves === 'books');
   const e6 = errors.length, t6 = buildToEnd(b);
   const shelf2 = kindIn(w, 'bookshelf2', 'main')[0];

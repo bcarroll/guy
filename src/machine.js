@@ -131,6 +131,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
     if (b.unlockedBy && !dev.all && !knows(b.unlockedBy)) return 'needs-skill';
     if (!shelf()) return 'needs-shelf';
     if (b.requires && b.requires.object && !hasObject(b.requires.object)) return 'needs-object';
+    if (b.requires && b.requires.anyObject && !b.requires.anyObject.some(hasObject)) return 'needs-object';
     return 'available';
   };
 
@@ -173,6 +174,8 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
     else if (st === 'available') {
       ok = world.addNew(d.id, avoid(), where);
       if (ok && d.book) { const def = BOOK_CATALOG.find((b) => b.id === d.book); if (def) addBookDef(def); }
+      // any instrument also brings "Playing in the Band"
+      if (ok && d.cat === 'music' && ['piano', 'guitar', 'drums'].includes(d.id)) { const def = BOOK_CATALOG.find((b) => b.id === 'drumband'); if (def) addBookDef(def); }
     }
     notify(ok ? `Added ${d.name}${st === 'available' && d.book ? ' and its book' : ''}` : `No room for ${d.name} right now`);
     save();
@@ -355,7 +358,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
         const st = bookStatus(b);
         const i = handlers.push(() => addBook(b)) - 1;
         const base = { icon: '📕', name: b.title, desc: b.desc, status: st };
-        const reqName = b.requires && b.requires.object ? (OBJECT_CATALOG.find((d) => d.id === b.requires.object) || {}).name : '';
+        const reqName = b.requires && b.requires.object ? (OBJECT_CATALOG.find((d) => d.id === b.requires.object) || {}).name : b.requires && b.requires.anyObject ? 'an instrument' : '';
         if (st === 'shelf') bookGroups['On the shelf'].push(card({ ...base, label: '✓ On the shelf' }));
         else if (st === 'available') bookGroups['Add to the shelf'].push(card({ ...base, label: 'Add to shelf', action: i }));
         else if (st === 'needs-skill') bookGroups['Not available yet'].push(card({ ...base, label: 'Read the first book', note: 'GUY or GAL has to read "' + ((BOOK_CATALOG.find((x) => x.teaches === b.unlockedBy) || {}).title || 'the first book') + '" first.' }));

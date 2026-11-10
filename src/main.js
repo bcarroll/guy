@@ -132,10 +132,16 @@ world.paintings = new Paintings(world, { persist: !params.has('fresh') });
 const panel = document.getElementById('skills');
 const toast = document.getElementById('toast');
 let toastTimer = 0;
+// Tapping a learned skill asks GUY to use the thing it is about (the same order as choosing it from an object's menu).
+const SKILL_OBJECT = { workshop: 'workbench', 'workshop.materials': 'woodfactory', 'workshop.furniture': 'workbench', 'workshop.metal': 'metalfactory', restaurant: 'stove',
+  outdoor: 'lawnchair', 'outdoor.soccer': 'soccergoal', 'outdoor.basketball': 'basketballhoop', 'range.pistol': 'blasterrack', 'range.carbine': 'blasterrack',
+  stereo: 'table', piano: 'piano', 'piano.advanced': 'piano', ball: 'ball', lighting: 'lamp', guitar: 'guitar', speedreading: 'shelf',
+  drums: 'drums', 'drums.solo': 'drums', 'drums.band': 'drums', easel: 'easel', 'easel.colour': 'easel', 'easel.portrait': 'easel',
+  telescope: 'telescope', 'telescope.dark': 'telescope', 'telescope.care': 'telescope' };
 function renderSkills() {
   const onShelf = (id) => !!world.objects.shelf && world.objects.shelf.books.some((b) => b.def.teaches === id);
   panel.querySelector('.list').innerHTML = Object.entries(SKILL_INFO).filter(([id]) => skills.has(id) || onShelf(id)).map(([id, info]) => `
-    <div class="skill ${skills.has(id) ? 'known' : ''}">
+    <div class="skill ${skills.has(id) ? 'known' : ''}${skills.has(id) && SKILL_OBJECT[id] ? ' do' : ''}" data-skill="${id}"${skills.has(id) && SKILL_OBJECT[id] ? ' role="button" tabindex="0" title="Ask GUY to do this"' : ''}>
       <div class="name">${skills.has(id) ? (skills.strength(id) < 1 ? '◔' : '✓') : '○'} ${info.name}</div>
       <div class="book">📕 ${info.book}${skills.has(id) ? (skills.strength(id) < 1 ? ` — forgetting (${Math.round(skills.strength(id) * 100)}% left)` : '') : ' — not read yet'}</div>
       <ul>${info.unlocks.map((u) => `<li>${u}</li>`).join('')}</ul>
@@ -143,6 +149,12 @@ function renderSkills() {
 }
 renderSkills();
 skills.onChange(renderSkills);
+panel.addEventListener('click', (e) => {
+  const row = e.target.closest('.skill.do'); if (!row) return;
+  const obj = SKILL_OBJECT[row.dataset.skill];
+  if (!brain.obj(obj)) { showToast(`There is no ${obj} in the room.`); return; }
+  showToast(brain.interact(obj).message);
+});
 function showToast(msg) {
   toast.textContent = msg;
   toast.classList.add('show');

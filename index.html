@@ -32,6 +32,9 @@
   #skills h3 { margin: 0 0 8px; font-size: 15px; }
   #skills .skill { padding: 8px 0; border-top: 1px solid rgba(255,255,255,.1); opacity: .6; }
   #skills .skill.known { opacity: 1; }
+  #skills .skill.do { cursor: pointer; }
+  #skills .skill.do:hover { background: rgba(143,240,164,.1); }
+  #skills .skill.do .name::after { content: ' ▶'; font-size: 11px; opacity: .7; }
   #skills .name { font-weight: 600; }
   #skills .skill.known .name { color: #8ff0a4; }
   #skills .book { color: #9db4d0; margin: 2px 0 4px; }

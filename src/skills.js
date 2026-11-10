@@ -40,7 +40,7 @@ export const BOOK_CATALOG = [
   { id: 'drumsolo', title: 'Fills & Solos', teaches: 'drums.solo', color: 0x8e44ad, thick: 0.05, height: 0.31,
     blurb: 'drum fills and solos', requires: { object: 'drums' }, desc: 'Tom rolls, cymbal crashes and showing off.' },
   { id: 'drumband', title: 'Playing in the Band', teaches: 'drums.band', color: 0x16a085, thick: 0.06, height: 0.32,
-    blurb: 'how to play drums along with the music', requires: { object: 'drums' }, desc: 'Keep time with whatever is on the stereo.' },
+    blurb: 'how to play along with the music', requires: { anyObject: ['piano', 'guitar', 'drums'] }, desc: 'Keep time with whatever is on the stereo. Comes with any instrument.' },
   // ---- easel ----
   { id: 'painting', title: 'Painting for Robots', teaches: 'easel', color: 0xe84393, thick: 0.05, height: 0.3,
     blurb: 'how to paint', requires: { object: 'easel' }, desc: 'Brushes, canvas and first strokes.' },
