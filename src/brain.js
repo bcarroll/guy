@@ -459,6 +459,57 @@ export const POSES = {
     g.hipsOffset.y = -0.05 * e - 0.02 * Math.cos(b * Math.PI * 2) * e;
   },
 
+  // ---- secret moves: in no book and no chapter. They only turn up in his dancing once an electric guitar has been built ----
+  airguitar(g, t, dur, ctx) {                                           // left hand up the invisible neck, right arm windmilling the strings, head nodding, wide stance
+    const e = env(t, dur, 0.4), b = ctx.beat;
+    const strum = Math.sin(b * Math.PI * 4), nod = Math.abs(Math.sin(b * Math.PI));
+    const hip = g.root.worldToLocal(g.boneWorld('Hips'));                // hands by IK: the left up an invisible neck out in front, the right strumming low across the body
+    g.reach('Left', g.root.localToWorld(new THREE.Vector3(0.3, hip.y + 0.32, 0.36)), e, false);
+    g.reach('Right', g.root.localToWorld(new THREE.Vector3(-0.1 + strum * 0.04, hip.y + 0.08 + strum * 0.1, 0.24)), e, false, { pole: new THREE.Vector3(-0.6, -0.4, -0.7) });
+    g.curl('Left', 0.9 * e); g.curl('Right', 0.3 * e);
+    g.set('Spine1', Q('y', 0.15 * e, 'x', (-0.12 + 0.08 * nod) * e));
+    g.set('Head', Q('x', (0.05 + 0.3 * nod) * e, 'y', 0.2 * e));
+    g.set('LeftUpLeg', Q('x', -0.3 * e, 'z', 0.25 * e)); g.set('RightUpLeg', Q('x', -0.3 * e, 'z', -0.25 * e));
+    g.set('LeftLeg', Q('x', (0.6 + 0.15 * nod) * e)); g.set('RightLeg', Q('x', (0.6 + 0.15 * nod) * e));
+    g.set('LeftFoot', Q('x', -0.3 * e)); g.set('RightFoot', Q('x', -0.3 * e));
+    g.hipsOffset.y = -0.14 * e - 0.04 * nod * e;
+  },
+
+  windmill(g, t, dur, ctx) {                                            // one big arm circle every two beats, the other arm out for balance, knees bent
+    const e = env(t, dur, 0.4), b = ctx.beat, ph = b * Math.PI;
+    g.set('RightArm', Q('z', lerp(ARM_DOWN, 0.3, e), 'x', Math.sin(ph) * 1.4 * e, 'y', 0.2 * e));
+    g.set('RightForeArm', Q('z', -0.15 * e));
+    g.set('LeftArm', Q('z', lerp(-ARM_DOWN, -0.7, e), 'x', -0.2 * e));
+    g.set('LeftForeArm', Q('z', 0.2 * e));
+    g.curl('Left', 0.3 * e); g.curl('Right', 0.3 * e);
+    g.set('Spine1', Q('z', -Math.sin(ph) * 0.1 * e, 'x', 0.08 * e));
+    g.set('Head', Q('z', -Math.sin(ph) * 0.1 * e));
+    for (const [side, sgn] of [['Left', 1], ['Right', -1]]) {
+      g.set(`${side}UpLeg`, Q('x', -0.3 * e, 'z', sgn * 0.2 * e));
+      g.set(`${side}Leg`, Q('x', 0.55 * e));
+      g.set(`${side}Foot`, Q('x', -0.25 * e));
+    }
+    g.hipsOffset.y = -0.12 * e - 0.03 * Math.cos(ph * 2) * e;
+  },
+
+  kneeslide(g, t, dur, ctx) {                                           // dropping low and leaning right back with the head up, hands strumming on the way down
+    const e = env(t, dur, 0.5), b = ctx.beat;
+    const strum = Math.sin(b * Math.PI * 4);
+    g.set('Spine', Q('x', -0.3 * e));
+    g.set('Spine1', Q('x', -0.25 * e));
+    g.set('Head', Q('x', -0.35 * e));
+    g.set('LeftArm', Q('z', lerp(-ARM_DOWN, -0.5, e), 'y', -0.7 * e));
+    g.set('LeftForeArm', Q('z', 0.7 * e));
+    g.set('RightArm', Q('z', lerp(ARM_DOWN, 0.5, e), 'y', -0.8 * e, 'x', strum * 0.3 * e));
+    g.set('RightForeArm', Q('z', -1.0 * e));
+    g.curl('Left', 0.8 * e); g.curl('Right', 0.3 * e);
+    g.set('LeftUpLeg', Q('x', -0.5 * e, 'z', 0.2 * e));
+    g.set('RightUpLeg', Q('x', -0.9 * e, 'z', -0.15 * e));
+    g.set('LeftLeg', Q('x', 0.9 * e)); g.set('RightLeg', Q('x', 1.5 * e));
+    g.set('LeftFoot', Q('x', -0.4 * e)); g.set('RightFoot', Q('x', -0.6 * e));
+    g.hipsOffset.y = -0.3 * e;
+  },
+
   // outdoor ch2 "Warm-Ups": big arm circles and a gentle twist, knees soft
   warmup(g, t, dur) {
     const e = env(t, dur, 0.6), ph = t * 3.2;
@@ -889,6 +940,8 @@ export class Brain {
   walkAt(name, dx, dz, yaw = null, direct = false) { return { type: 'walk', anchor: { name, dx, dz, yaw }, yaw, direct }; }
   play(pose, dur, fx = {}) { return { type: 'play', pose, dur, fx }; }
   obj(name) { return this.w.objects[name]; }
+  // moves that are in no book: they only show up once an electric guitar has been built and stands in the room
+  secretMoves() { const g = Object.values(this.w.objects).find((o) => o.electric && this.sameRoom(o.name, 'table')); return g ? ['airguitar', 'windmill', 'kneeslide'] : []; }
 
   activities() {
     const w = this.w;
@@ -936,6 +989,7 @@ export class Brain {
         const lampStep = (fn) => [this.walkAt('lamp', 0.55, 0, -Math.PI / 2),
           this.play('reach', 1.8, { at: [0.9, fn], needs: ['lamp'], target: () => this.lampSwitch() })];
         const ss = this.stereoSession();
+        const secret = this.secretMoves();
         const what = lights ? 'throwing a dance party' : 'dancing';
         return [ss.title ? `${what} to "${ss.title}"` : what,
           ...ss.pre,
@@ -943,8 +997,8 @@ export class Brain {
           ...ss.on,
           this.walk(this.danceSpot().x, this.danceSpot().z, 0),
           this.play(pick(['disco', 'robot', 'pump']), 9, { dance: true }),
-          this.play(pick(['disco', 'robot', 'pump']), 9, { dance: true }),
-          this.play(pick(['disco', 'robot', 'pump']), 9, { dance: true }),
+          this.play(pick(['disco', 'robot', 'pump', ...secret]), 9, { dance: true }),
+          this.play(pick(['disco', 'robot', 'pump', ...secret]), 9, { dance: true }),
           this.play('wave', 2.2, { dance: true }),
           ...ss.off,
           ...(lights ? lampStep(() => w.lamp.setLook(0xffd9a0, 6)) : []),
@@ -955,7 +1009,7 @@ export class Brain {
       dancemoves: () => {
         const ss = this.stereoSession();
         // chapters (skills.js CHAPTERS): each one adds two moves that turn up in the routine
-        const extra = [...(this.has('dance.moves.ch2') ? ['sprinkler', 'moonwalk'] : []), ...(this.has('dance.moves.ch3') ? ['headbang', 'armwave'] : [])];
+        const extra = [...(this.has('dance.moves.ch2') ? ['sprinkler', 'moonwalk'] : []), ...(this.has('dance.moves.ch3') ? ['headbang', 'armwave'] : []), ...this.secretMoves()];
         const more = extra.length ? shuffled(extra).slice(0, 3).map((m) => this.play(m, 9, { dance: true })) : [];
         return [ss.title ? `doing the twist to "${ss.title}"` : 'practising his new dance moves', ...ss.pre, ...ss.on,
           this.walk(this.danceSpot().x, this.danceSpot().z, 0),
