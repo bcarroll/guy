@@ -122,8 +122,11 @@ export function installHobbies(Brain, POSES, H) {
           const out = Math.abs(c.x) / 4.6 > Math.abs(c.z) / 3.6 ? V(Math.sign(c.x), 0, 0) : V(0, 0, Math.sign(c.z));   // the nearest wall
           if (mode === 'room') out.negate();
           const cur = t.aim, wy0 = cur.yaw + t.group.rotation.y;
-          for (let tries = 0; tries < 24; tries++) {
-            const wy = Math.atan2(out.x, out.z) + (tries ? rand(-0.5, 0.5) : 0);
+          // the nearest wall (or into the room) first; when there is no room that way, the other three directions of the compass
+          const dirs = [out, V(-out.z, 0, out.x), V(out.z, 0, -out.x), out.clone().negate()];
+          for (let tries = 0; tries < 24 * 4; tries++) {
+            const o4 = dirs[Math.floor(tries / 24)], k24 = tries % 24;
+            const wy = Math.atan2(o4.x, o4.z) + (k24 ? rand(-0.5, 0.5) : 0);
             const pitch = mode === 'room' ? 0.2 : rand(0.18, 0.36);
             const dir = V(Math.sin(wy), 0, Math.cos(wy));
             // the big end must not poke into other furniture (he leans in over it)
@@ -143,7 +146,7 @@ export function installHobbies(Brain, POSES, H) {
               const standDir = c.clone().sub(side).setY(0).normalize();
               const left = V(standDir.z, 0, -standDir.x);
               const hand = toHand.dot(left) > 0 ? 'Left' : 'Right';
-              return [this.walk(side.x, side.z, Math.atan2(standDir.x, standDir.z)),
+              return [{ ...this.walk(side.x, side.z, Math.atan2(standDir.x, standDir.z)), tol: 0.2 },
                 this.play('scopeAim', 4.2, { scope: 'aim', hand, from: { yaw: cur.yaw, pitch: cur.pitch }, to: { yaw: wy - t.group.rotation.y, pitch } })];
             }
           }
@@ -168,7 +171,7 @@ export function installHobbies(Brain, POSES, H) {
             const perp = V(-dh.z, 0, dh.x);
             for (const sgn of [1, -1]) cands.push([c.clone().addScaledVector(perp, sgn * 0.74).addScaledVector(dh, 0.15), perp.clone().multiplyScalar(-sgn)]);
           }
-          for (const [p, face] of cands) if (ok(p)) return [this.walk(p.x, p.z, Math.atan2(face.x, face.z))];
+          for (const [p, face] of cands) if (ok(p)) return [{ ...this.walk(p.x, p.z, Math.atan2(face.x, face.z)), tol: 0.2 }];       // (pressed against the wall a few centimetres short is close enough)
           this.queue.length = 0; this.ui("can't get at the telescope"); return [];
         },
       };

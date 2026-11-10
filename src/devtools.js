@@ -165,6 +165,8 @@ export const MANIFEST = {
     'easel.portrait.ch2': { content: 'steps' }, 'easel.portrait.ch3': { content: 'steps' }, 'decorate.ch2': { content: 'steps' }, 'decorate.ch3': { content: 'steps' },
     'telescope.ch2': { content: 'steps' }, 'telescope.ch3': { content: 'steps' }, 'telescope.dark.ch2': { content: 'steps' }, 'telescope.dark.ch3': { content: 'steps' },
     'telescope.care.ch2': { content: 'steps' }, 'telescope.care.ch3': { content: 'steps' },
+    'ball.ch2': { content: 'steps' }, 'ball.ch3': { content: 'steps' }, 'outdoor.ch2': { content: 'steps' }, 'outdoor.ch3': { content: 'steps' },
+    'outdoor.soccer.ch2': { content: 'steps' }, 'outdoor.soccer.ch3': { content: 'steps' }, 'outdoor.basketball.ch2': { content: 'steps' }, 'outdoor.basketball.ch3': { content: 'steps' },
     'drums.ch2': { content: 'drums', styles: ['reggae', 'funk'] }, 'drums.ch3': { content: 'drums', styles: ['paradiddle'] }, 'drums.solo.ch2': { content: 'drums', styles: ['solo2'] },
   },
   tracks: ['default', ...ALBUM_CATALOG.flatMap((a) => a.tracks)],     // every track on every record; coverage fails for a track no record lists
@@ -199,6 +201,8 @@ export const MANIFEST = {
     { id: 'dance-foxtrot', activity: 'ballroom', pose: 'foxtrot', t: 3.0, view: 'front', skills: ['dance.ballroom', 'dance.ballroom.ch2'], expect: 'arms held out in a ballroom hold, upright, a slow gliding step' },
     { id: 'dance-jive', activity: 'ballroom', pose: 'jive', t: 1.9, view: 'front', skills: ['dance.ballroom', 'dance.ballroom.ch3'], expect: 'arms bent and swinging, one knee kicked up, hips turned, bouncing' },
     { id: 'dance-dip', activity: 'ballroom', pose: 'dip', t: 5.0, view: 'side', skills: ['dance.ballroom', 'dance.ballroom.ch3'], expect: 'a deep lunge with the weight on one bent knee, back leaning, arm round the partner, head tilted' },
+    { id: 'yard-warmup', activity: 'goalshot', pose: 'warmup', t: 2.5, view: 'front', yard: true, skills: ['outdoor', 'outdoor.ch2'], expect: 'arms out to the sides, circling, knees soft, body twisting a little, no hand through the body' },
+    { id: 'yard-cooldown', activity: 'goalshot', pose: 'cooldown', t: 2.5, view: 'side', yard: true, skills: ['outdoor', 'outdoor.ch3'], expect: 'folded forward from the waist, arms hanging down in front, head down, knees a little bent' },
     { id: 'scope-aim', activity: 'stargaze', pose: 'scopeAim', t: 2.2, view: 'top', expect: 'one hand on top of the barrel while the tube swings round' },
     { id: 'scope-wrong', activity: 'peek', pose: 'scopeWrong', t: 2.8, view: 'side', expect: 'eye at the big lens end, hand on the barrel, other hand on his knee' },
     { id: 'yard-shoot', activity: 'hoopshoot', pose: 'shoot', t: 0.9, view: 'side', expect: 'knees dipped then extended, both hands up at the release with the basketball just leaving them, facing the hoop' },
@@ -3185,6 +3189,34 @@ T.sweepChapters = () => {
     const ride = (bar) => bars('rock', { sections: true }, bar, bar + 1).flat().some((x) => x.k === 'ride');
     out.push(result('chapters: the chorus (bars 9 to 16 of every sixteen) has the ride cymbal and a crash where it starts; the verse does not', !ride(0) && ride(8) && bars('rock', { sections: true }, 8, 9)[0].some((x) => x.k === 'crash') && !bars('rock', { sections: true }, 9, 10)[0].some((x) => x.k === 'crash') && !ride(16)));
     covered.add('drums.band.ch2'); covered.add('drums.band.ch3');
+    // the ball and the yard sports
+    {
+      const poses = (act, ids) => { only(...ids); return [].concat(acts()[act]()).filter((x) => x && x.type === 'play').map((x) => x.pose); };
+      const n = (list, p) => list.filter((x) => x === p).length;
+      T.prep('goalshot'); T.prep('hoopshoot'); T.prep('dribble'); T.settle();
+      const base = ['ball'];
+      out.push(result('chapters: ball — dribble and toss once to begin with; ch2 doubles the dribble and tosses twice; ch3 ends the dribble in a toss and tosses three times',
+        n(poses('dribble', base), 'dribble') === 1 && n(poses('dribble', base), 'toss') === 0 && n(poses('toss', base), 'toss') === 1
+        && n(poses('dribble', [...base, 'ball.ch2']), 'dribble') === 2 && n(poses('toss', [...base, 'ball.ch2']), 'toss') === 2
+        && n(poses('dribble', [...base, 'ball.ch3']), 'toss') === 1 && n(poses('toss', [...base, 'ball.ch3']), 'toss') === 2 && n(poses('toss', [...base, 'ball.ch2', 'ball.ch3']), 'toss') === 3));
+      const kicks = (ids) => { only(...ids); return [].concat(acts().ball()).filter((x) => x && x.type === 'plan').length; };
+      out.push(result('chapters: ball.ch3 — three kicks in a row (one to begin with)', kicks(['ball']) === 1 && kicks(['ball', 'ball.ch2']) === 1 && kicks(['ball', 'ball.ch3']) === 3));
+      const len = (act, ids) => { only(...ids); return [].concat(acts()[act]()).length; };
+      const gk = b.goalKick(0.5).length, hs = b.hoopShot(0.5).length;
+      out.push(result('chapters: outdoor.soccer.ch2 adds two shots at the goal; ch3 three tosses', len('goalshot', ['outdoor.soccer']) + 2 * gk === len('goalshot', ['outdoor.soccer', 'outdoor.soccer.ch2'])
+        && len('goalshot', ['outdoor.soccer']) === len('goalshot', ['outdoor.soccer', 'outdoor.soccer.ch3']) && n(poses('soccertoss', ['outdoor.soccer']), 'toss') === 1 && n(poses('soccertoss', ['outdoor.soccer', 'outdoor.soccer.ch3']), 'toss') === 3));
+      out.push(result('chapters: outdoor.basketball.ch2 adds two shots at the hoop; ch3 a longer dribble ending in a toss', len('hoopshoot', ['outdoor.basketball']) + 2 * hs === len('hoopshoot', ['outdoor.basketball', 'outdoor.basketball.ch2'])
+        && n(poses('hoopdribble', ['outdoor.basketball']), 'dribble') === 1 && n(poses('hoopdribble', ['outdoor.basketball', 'outdoor.basketball.ch3']), 'dribble') === 2 && n(poses('hoopdribble', ['outdoor.basketball', 'outdoor.basketball.ch3']), 'toss') === 1));
+      const warm = (ids, act) => { const p = poses(act, ['outdoor.soccer', 'outdoor.basketball', 'outdoor', ...ids]); const sp = ['kick', 'toss', 'shoot', 'dribble'], ci = p.indexOf('cooldown'), wi = p.indexOf('warmup'), first = p.findIndex((x) => sp.includes(x)); return [n(p, 'warmup'), n(p, 'cooldown'), wi < 0 || first < 0 || wi < first, ci < 0 || !p.slice(ci).some((x) => sp.includes(x))]; };
+      const okAll = ['goalshot', 'soccertoss', 'hoopshoot', 'hoopdribble'].every((act) => {
+        const w0 = warm([], act), w2 = warm(['outdoor.ch2'], act), w3 = warm(['outdoor.ch3'], act);
+        return w0[0] === 0 && w0[1] === 0 && w2[0] === 1 && w2[1] === 0 && w3[0] === 0 && w3[1] === 1 && w2[2] && w3[3];
+      });
+      out.push(result('chapters: outdoor — ch2 warms up before each yard sport, ch3 cools down after it, neither to begin with', okAll));
+      out.push(result('chapters: the warmup and cooldown poses exist', 'warmup' in POSES && 'cooldown' in POSES));
+      for (const id of ['ball.ch2', 'ball.ch3', 'outdoor.ch2', 'outdoor.ch3', 'outdoor.soccer.ch2', 'outdoor.soccer.ch3', 'outdoor.basketball.ch2', 'outdoor.basketball.ch3']) covered.add(id);
+      T.resetRooms && T.resetRooms();
+    }
     const missing = CHAPTER_IDS.filter((id) => MANIFEST.chapters[id].content === 'steps' && !covered.has(id));
     out.push(result('chapters: every chapter whose content is in an activity\'s steps has a check above', !missing.length, { missing }));
     T.removeAll(); sk0.known.clear(); sk0.fading.clear(); sk0.practiced.clear(); T.settle();

@@ -127,6 +127,12 @@ A book's first reading teaches its skill. Later chapters are **learned by practi
 | telescope | stargaze | `telescope.ch2` (3), `.ch3` (7) | two, then three targets in a night |
 | telescope.dark | darkstargaze | `telescope.dark.ch2` (3), `.ch3` (6) | waits for his eyes to adjust; two targets and a look up at the end |
 | telescope.care | scopecare | `telescope.care.ch2` (3), `.ch3` (6) | swings the tube level afterwards; cleans it twice |
+| ball | ball, dribble, toss | `ball.ch2` Keep It Going (3) | dribble twice as long, two tosses |
+| | | `ball.ch3` Trick Shots (8) | three kicks in a row, dribble ending in a toss, three tosses |
+| outdoor | goalshot, soccertoss, hoopshoot, hoopdribble | `outdoor.ch2` Warm-Ups (3) | `warmup` pose before each yard sport |
+| | | `outdoor.ch3` Cool Down (8) | `cooldown` pose after it |
+| outdoor.soccer | goalshot, soccertoss | `outdoor.soccer.ch2` Penalty Practice (3), `.ch3` Keepy-Uppy (8) | two more shots at the goal; three tosses in a row |
+| outdoor.basketball | hoopshoot, hoopdribble | `outdoor.basketball.ch2` Free Throws (3), `.ch3` Ball Handling (7) | two more hoop shots; longer dribble ending in a toss |
 
 Adding a chapter: an entry in `CHAPTERS` (ids `<skill>.ch2`, `.ch3`..., `after` rising), content gated on its id (`MAKERS` in `songs.js`, `PATTERN_NEEDS` / `needs` in `strum.js`, a style in `hobbies.js` `DRUM_STYLES` picked in `hobbybrain.js`), and a `MANIFEST.chapters` line. `T.sweepChapters` checks the data, that every tune is well formed and gated, the unlock order, forgetting, saving, GAL's own count, and that the guitar and drums use only what has been learned.
 
@@ -225,6 +231,8 @@ Needs and allowed arm contacts are in `MANIFEST.activities`.
 | dance-tango / dance-foxtrot | `T.moment('ballroom','tango'|'foxtrot',3,'front',...)` | arms in a ballroom hold, upright |
 | dance-jive | `T.moment('ballroom','jive',1.9,'front',...)` | arms bent and swinging, one knee kicked up |
 | dance-dip | `T.moment('ballroom','dip',5,'side',...)` | deep lunge, arms forward as if holding a partner |
+| yard-warmup | `T.moment('goalshot','warmup',2.5,'front',{yard:true,skills:['outdoor','outdoor.ch2']})` | arms out sideways circling, knees soft |
+| yard-cooldown | `T.moment('goalshot','cooldown',2.5,'side',{yard:true,skills:['outdoor','outdoor.ch3']})` | folded forward, arms hanging, head down |
 | dance-waltz | `T.moment('ballroom','waltz',5,'front')` | arms in a dance hold, slow turn |
 | dance-swing | `T.moment('ballroom','swing',4,'front')` | arms swinging wide, alternate knee kicks |
 | sit-rest | `T.moment('sit','sitRest',5,'side')` | sitting on the seat (not hovering), hands on the knees |
@@ -519,3 +527,4 @@ Checked by `T.sweepSounds` (event -> counted request). Whether it *sounds* right
 - The skills panel ("What GUY learned"): a learned skill with an object (`SKILL_OBJECT` in `src/main.js`) is a button that does `brain.interact(object)`. Tested in `sweepBooks` (Guitar clickable, Decorating plain).
 - Seed 2 `play`: GUY stood for ever in the open range doorway behind the easel (the walk grid knows nothing of the doorway: his first waypoint was outside it, so he never moved). Walks between two spots of an open doorway now go straight, and a piece shoved against the door can be pushed from the doorway. A walk from inside an added room to a spot in his own room (asking GAL to build, borrowing her blaster) first leaves through the door (`!s.direct` matters: the door walks themselves are direct, and without it the walk re-queued itself for ever and the sweeps hung).
 - Still flaky: the `play` sweeps' "could not get there" count when a page plays several seeds in a row (seed 2 after seed 1: `stargaze` / `darkstargaze` / `peek` at the telescope); not reproducible by replaying the seed alone. Picture checkpoints `guitar-play`, `drums-sit`, `drums-solo`, `sit-guitar`, `range-*` differ from their baselines (drums-sit: hands together, no sticks, an extra book on the shelf from the new "any instrument brings Playing in the Band" rule); look before approving.
+- Regression watch (chapters, telescope): the `play` sweep failed with "no room to use the telescope" once the telescope books had chapters (three targets a session means three tries at finding room to swing the tube). `scopeAim` now tries all four directions of the compass, nearest wall first. If that sweep starts failing again with "no room" or "could not get there" at the telescope, look there first.
