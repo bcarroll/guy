@@ -2,6 +2,7 @@
 // telling the player about is deployed: new rooms, objects, books, things GUY can do. The update notice (src/update.js) lists the
 // entries the running page has not seen yet, and vite.config.js writes the whole list into version.json.
 export const WHATS_NEW = [
+  { id: 'chapters-yard', items: ['More chapters for the ball and the yard sports: longer dribbles, trick kicks, extra shots at the goal and the hoop, and a warm-up before and a cool-down after every game.'] },
   { id: 'chapters-hobbies', items: ['The hobby books have more chapters too: dancing (sprinkler, moonwalk, headbang, tango, jive, dip ...), the lamp (new colours, candle and aurora looks), painting (new brush work and subjects), the telescope and dusting.', 'Drumming along to music now adds fills, and verse and chorus.'] },
   { id: 'chapters', items: ['The music books have more chapters now. GUY and GAL learn them by practising: three or so goes at an instrument teaches the next chapter, with more after that.', 'New piano tunes (Mary Had a Little Lamb, Amazing Grace, a minuet, a canon, ragtime ...), new guitar patterns and chords, and new drum grooves, paradiddles and longer solos.', 'The skills panel (K) shows each chapter and how many more goes it needs.'] },
   { id: 'factories-only', items: ['The Workshop is simpler: the Wood Factory and the Metal Factory now make everything on their own, so the saw, mallet, sander, metal cutter, welder and anvil are gone.', 'That leaves more room in the Workshop for the things GUY and GAL build.'] },

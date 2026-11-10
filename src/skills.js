@@ -222,6 +222,22 @@ export const CHAPTERS = {
     { id: 'telescope.dark.ch2', title: 'Chapter 2: Dark Adaptation', after: 3, unlocks: ['Waits for his eyes to adjust before looking'] },
     { id: 'telescope.dark.ch3', title: 'Chapter 3: Night Watch', after: 6, unlocks: ['A long watch at two targets, then a look up at the sky'] },
   ],
+  ball: [
+    { id: 'ball.ch2', title: 'Chapter 2: Keep It Going', after: 3, unlocks: ['A twice-as-long dribble and two tosses in a row'] },
+    { id: 'ball.ch3', title: 'Chapter 3: Trick Shots', after: 8, unlocks: ['Three kicks in a row, a dribble that ends in a toss, and three tosses'] },
+  ],
+  outdoor: [
+    { id: 'outdoor.ch2', title: 'Chapter 2: Warm-Ups', after: 3, unlocks: ['Arm circles and a twist before a game in the yard'] },
+    { id: 'outdoor.ch3', title: 'Chapter 3: Cool Down', after: 8, unlocks: ['Folds forward and breathes slowly after a game'] },
+  ],
+  'outdoor.soccer': [
+    { id: 'outdoor.soccer.ch2', title: 'Chapter 2: Penalty Practice', after: 3, unlocks: ['Two more, straighter shots at the goal'] },
+    { id: 'outdoor.soccer.ch3', title: 'Chapter 3: Keepy-Uppy', after: 8, unlocks: ['Tosses the soccer ball up three times in a row'] },
+  ],
+  'outdoor.basketball': [
+    { id: 'outdoor.basketball.ch2', title: 'Chapter 2: Free Throws', after: 3, unlocks: ['Two more, better shots at the hoop'] },
+    { id: 'outdoor.basketball.ch3', title: 'Chapter 3: Ball Handling', after: 7, unlocks: ['A longer dribble that finishes with a toss'] },
+  ],
   'telescope.care': [
     { id: 'telescope.care.ch2', title: 'Chapter 2: Levelling the Tube', after: 3, unlocks: ['Swings the tube level when he has finished'] },
     { id: 'telescope.care.ch3', title: 'Chapter 3: Deep Clean', after: 6, unlocks: ['A second round of wiping and checking'] },
@@ -235,6 +251,7 @@ export const PRACTICE_ACTS = {
   drums: ['drums', 'jamdrums'], 'drums.solo': ['drumsolo'], 'drums.band': ['jamdrums'],
   'dance.moves': ['dancemoves'], 'dance.ballroom': ['ballroom'], lighting: ['mood'],
   easel: ['paint'], 'easel.colour': ['mixpaint'], 'easel.portrait': ['portrait'], decorate: ['dust'],
+  ball: ['ball', 'dribble', 'toss'], outdoor: ['goalshot', 'soccertoss', 'hoopshoot', 'hoopdribble'], 'outdoor.soccer': ['goalshot', 'soccertoss'], 'outdoor.basketball': ['hoopshoot', 'hoopdribble'],
   telescope: ['stargaze'], 'telescope.dark': ['darkstargaze'], 'telescope.care': ['scopecare'],
 };
 export const CHAPTER_IDS = Object.values(CHAPTERS).flat().map((c) => c.id);

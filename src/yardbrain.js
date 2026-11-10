@@ -680,6 +680,8 @@ export function installYard(Brain, POSES, H) {
       const w = this.w;
       const k = (id) => this.skills.has(id);
       const night = () => w.yard.isNight();
+      // outdoor ch2: a warm-up before a game, ch3: a cool-down after it
+      const sport = (steps) => [...(this.has('outdoor.ch2') ? [this.play('warmup', 5)] : []), ...steps, ...(this.has('outdoor.ch3') ? [this.play('cooldown', 4)] : [])];
       return {
         // the lawn chair: a long rest in the open air
         yardsit: () => this.yardTrip('relaxing in the lawn chair', [this.fetchOut(['lawnchair']), {
@@ -734,15 +736,21 @@ export function installYard(Brain, POSES, H) {
           return this.yardTrip(t.mode === 'out' ? 'taking things out of the shed' : 'putting things away in the shed',
             [t.mode === 'out' ? this.fetchOut(t.keys || []) : this.tidyYard(t.keys, { mower: true })]);
         },
-        goalshot: () => this.yardTrip('taking shots at the goal', [this.fetchOut(['soccergoal', 'ball:soccer']), this.inviteSportPartner('soccer'), ...this.goalKick(0.55), ...this.goalKick(0.7), ...this.goalKick(0.85)]),
-        soccertoss: () => this.yardTrip('tossing the soccer ball up and catching it', [this.fetchOut(['soccergoal', 'ball:soccer']), this.inviteSportPartner('soccer'), this.yardBallStand('soccer'), this.waitPartner('soccer', 0),
-          this.pickupBall('soccer', ['soccergoal']), this.play('toss', 6.85, { ball: true, ballKind: 'soccer', needs: ['soccergoal'] }), this.putdownBall('soccer', ['soccergoal'])]),
-        hoopdribble: () => this.yardTrip('dribbling the basketball', [this.fetchOut(['basketballhoop', 'ball:basketball']), this.inviteSportPartner('basketball'), this.yardBallStand('basketball'), this.waitPartner('basketball', 0),
-          this.pickupBall('basketball', ['basketballhoop']), this.play('dribble', 9, { ball: true, ballKind: 'basketball', needs: ['basketballhoop'] }), this.putdownBall('basketball', ['basketballhoop'])]),
+        // soccer ch2 "Penalty Practice": two more shots, a little straighter; ch3 "Keepy-Uppy": three tosses in a row
+        goalshot: () => this.yardTrip('taking shots at the goal', [this.fetchOut(['soccergoal', 'ball:soccer']), this.inviteSportPartner('soccer'), ...sport([...this.goalKick(0.55), ...this.goalKick(0.7), ...this.goalKick(0.85),
+          ...(k('outdoor.soccer.ch2') ? [...this.goalKick(0.85), ...this.goalKick(0.9)] : [])])]),
+        soccertoss: () => this.yardTrip('tossing the soccer ball up and catching it', [this.fetchOut(['soccergoal', 'ball:soccer']), this.inviteSportPartner('soccer'), ...sport([this.yardBallStand('soccer'), this.waitPartner('soccer', 0),
+          this.pickupBall('soccer', ['soccergoal']), ...Array.from({ length: k('outdoor.soccer.ch3') ? 3 : 1 }, () => this.play('toss', 6.85, { ball: true, ballKind: 'soccer', needs: ['soccergoal'] })), this.putdownBall('soccer', ['soccergoal'])])]),
+        // basketball ch3 "Ball Handling": a longer dribble that ends with a toss
+        hoopdribble: () => this.yardTrip('dribbling the basketball', [this.fetchOut(['basketballhoop', 'ball:basketball']), this.inviteSportPartner('basketball'), ...sport([this.yardBallStand('basketball'), this.waitPartner('basketball', 0),
+          this.pickupBall('basketball', ['basketballhoop']), this.play('dribble', 9, { ball: true, ballKind: 'basketball', needs: ['basketballhoop'] }),
+          ...(k('outdoor.basketball.ch3') ? [this.play('dribble', 9, { ball: true, ballKind: 'basketball', needs: ['basketballhoop'] }), this.play('toss', 6.85, { ball: true, ballKind: 'basketball', needs: ['basketballhoop'] })] : []),
+          this.putdownBall('basketball', ['basketballhoop'])])]),
         // playing with the other robot: she defends the hoop or keeps goal while he takes his shots (started by his invitation)
         hoopdefend: () => this.yardTrip('defending the hoop', [{ type: 'plan', fn: () => this.sportGuard('basketball') }]),
         goalkeep: () => this.yardTrip('keeping goal', [{ type: 'plan', fn: () => this.sportGuard('soccer') }]),
-        hoopshoot: () => this.yardTrip('shooting hoops', [this.fetchOut(['basketballhoop', 'ball:basketball']), this.inviteSportPartner('basketball'), ...this.hoopShot(0.55), ...this.hoopShot(0.65), ...this.hoopShot(0.75)]),
+        hoopshoot: () => this.yardTrip('shooting hoops', [this.fetchOut(['basketballhoop', 'ball:basketball']), this.inviteSportPartner('basketball'), ...sport([...this.hoopShot(0.55), ...this.hoopShot(0.65), ...this.hoopShot(0.75),
+          ...(k('outdoor.basketball.ch2') ? [...this.hoopShot(0.8), ...this.hoopShot(0.85)] : [])])]),
       };
     },
 

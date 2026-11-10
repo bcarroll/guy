@@ -449,6 +449,30 @@ export const POSES = {
     g.hipsOffset.y = -0.05 * e - 0.02 * Math.cos(b * Math.PI * 2) * e;
   },
 
+  // outdoor ch2 "Warm-Ups": big arm circles and a gentle twist, knees soft
+  warmup(g, t, dur) {
+    const e = env(t, dur, 0.6), ph = t * 3.2;
+    g.set('LeftArm', Q('z', lerp(-ARM_DOWN, -0.25, e), 'x', Math.sin(ph) * 0.9 * e));
+    g.set('RightArm', Q('z', lerp(ARM_DOWN, 0.25, e), 'x', -Math.sin(ph) * 0.9 * e));
+    g.set('LeftForeArm', Q('z', 0.15 * e)); g.set('RightForeArm', Q('z', -0.15 * e));
+    g.curl('Left', 0.2 * e); g.curl('Right', 0.2 * e);
+    g.set('Spine1', Q('y', Math.sin(ph * 0.5) * 0.3 * e));
+    g.set('Head', Q('y', Math.sin(ph * 0.5) * 0.15 * e));
+    for (const sd of ['Left', 'Right']) { g.set(`${sd}UpLeg`, Q('x', -0.2 * e)); g.set(`${sd}Leg`, Q('x', 0.4 * e)); g.set(`${sd}Foot`, Q('x', -0.2 * e)); }
+    g.hipsOffset.y = -0.05 * e - 0.025 * Math.sin(ph * 2) * e;
+  },
+  // outdoor ch3 "Cool Down": folded forward with the arms hanging, slow breaths
+  cooldown(g, t, dur) {
+    const e = env(t, dur, 0.8), br = Math.sin(t * 1.4);
+    g.set('Spine', Q('x', (0.45 + 0.04 * br) * e));
+    g.set('Spine1', Q('x', (0.35 + 0.04 * br) * e));
+    g.set('Head', Q('x', 0.25 * e));
+    g.set('LeftArm', Q('z', -ARM_DOWN + 0.1 * e)); g.set('RightArm', Q('z', ARM_DOWN - 0.1 * e));
+    g.curl('Left', 0.2 * e); g.curl('Right', 0.2 * e);
+    for (const sd of ['Left', 'Right']) { g.set(`${sd}UpLeg`, Q('x', -0.25 * e)); g.set(`${sd}Leg`, Q('x', 0.3 * e)); g.set(`${sd}Foot`, Q('x', -0.1 * e)); }
+    g.hipsOffset.y = -0.04 * e;
+  },
+
   // dance.moves ch3 "Freestyle"
   headbang(g, t, dur, ctx) {                                            // fists pumping, head nodding on every beat, wide stance
     const e = env(t, dur, 0.4), b = ctx.beat;
@@ -991,7 +1015,7 @@ export class Brain {
       // Without the ball book he only pokes it; with it he kicks properly.
       ball: () => {
         const skilled = this.skills.has('ball');
-        return [skilled ? 'kicking the ball' : 'poking the ball with his foot', {
+        const kickPlan = {
           type: 'plan',
           fn: () => {
             const b = w.ball.position;
@@ -1006,15 +1030,21 @@ export class Brain {
             this.queue.length = 0;
             return [];
           },
-        }];
+        };
+        // ball ch3: three kicks in a row, a pause between them for the ball to stop
+        const goes = skilled && this.has('ball.ch3') ? 3 : 1;
+        return [skilled ? 'kicking the ball' : 'poking the ball with his foot', ...Array.from({ length: goes }, (_, i) => (i ? [this.play('idle', 2.2), kickPlan] : [kickPlan])).flat()];
       },
+      // ball ch2: twice as long a dribble and two tosses; ch3: a dribble that ends in a toss, and three tosses
       dribble: () => ['dribbling the ball', this.ballStand(),
         this.play('pickup', 2.0, { ball: true, at: [0.9, () => { this.ballHeld = true; }] }),
         this.play('dribble', 11, { ball: true }),
+        ...(this.has('ball.ch2') ? [this.play('dribble', 11, { ball: true })] : []),
+        ...(this.has('ball.ch3') ? [this.play('toss', 6.85, { ball: true })] : []),
         this.play('putdown', 2.0, { ball: true, at: [1.0, () => this.releaseBall()] })],
       toss: () => ['tossing the ball up and catching it', this.ballStand(),
         this.play('pickup', 2.0, { ball: true, at: [0.9, () => { this.ballHeld = true; }] }),
-        this.play('toss', 6.85, { ball: true }),
+        ...Array.from({ length: 1 + (this.has('ball.ch2') ? 1 : 0) + (this.has('ball.ch3') ? 1 : 0) }, () => this.play('toss', 6.85, { ball: true })),
         this.play('putdown', 2.0, { ball: true, at: [1.0, () => this.releaseBall()] })],
       // a new song every time (strum.js): a key, a chord progression, a pattern and a tempo
       guitar: () => {
