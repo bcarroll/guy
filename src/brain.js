@@ -3453,12 +3453,21 @@ function findPath(blocked, sx, sz, gx, gz, strict = false) {
   const [gi, gj] = nearestFree(cell(gx, gz));
   const g = new Float32Array(NX * NZ).fill(Infinity);
   const from = new Int32Array(NX * NZ).fill(-1);
-  const open = [[0, si + sj * NX]];
+  // binary min-heap on f (sorting the whole open list on every step took ~200 ms when the goal was unreachable, and seconds on a big room: a freeze)
+  const hf = [], hc = [], done = new Uint8Array(NX * NZ);
+  const push = (f, c) => { let k = hf.length; hf.push(f); hc.push(c); while (k > 0) { const p = (k - 1) >> 1; if (hf[p] <= f) break; hf[k] = hf[p]; hc[k] = hc[p]; k = p; } hf[k] = f; hc[k] = c; };
+  const pop = () => {
+    const c = hc[0], lf = hf.pop(), lc = hc.pop(), n = hf.length;
+    if (n) { let k = 0; for (;;) { let m = 2 * k + 1; if (m >= n) break; if (m + 1 < n && hf[m + 1] < hf[m]) m++; if (hf[m] >= lf) break; hf[k] = hf[m]; hc[k] = hc[m]; k = m; } hf[k] = lf; hc[k] = lc; }
+    return c;
+  };
+  push(0, si + sj * NX);
   g[si + sj * NX] = 0;
   const h = (i, j) => Math.hypot(i - gi, j - gj);
-  while (open.length) {
-    open.sort((a, b) => a[0] - b[0]);
-    const [, cur] = open.shift();
+  while (hf.length) {
+    const cur = pop();
+    if (done[cur]) continue;                                 // a stale entry: this cell was already reached by a cheaper way
+    done[cur] = 1;
     const ci = cur % NX, cj = (cur / NX) | 0;
     if (ci === gi && cj === gj) break;
     for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
@@ -3467,7 +3476,7 @@ function findPath(blocked, sx, sz, gx, gz, strict = false) {
       if (i < 0 || j < 0 || i >= NX || j >= NZ || blocked[i + j * NX]) continue;
       if (di && dj && (blocked[ci + di + cj * NX] || blocked[ci + (cj + dj) * NX])) continue;
       const ng = g[cur] + Math.hypot(di, dj);
-      if (ng < g[i + j * NX]) { g[i + j * NX] = ng; from[i + j * NX] = cur; open.push([ng + h(i, j), i + j * NX]); }
+      if (ng < g[i + j * NX]) { g[i + j * NX] = ng; from[i + j * NX] = cur; push(ng + h(i, j), i + j * NX); }
     }
   }
   const pts = [];

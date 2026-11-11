@@ -10,53 +10,46 @@ export const onStatus = (fn) => { listeners.add(fn); return () => listeners.dele
 const set = (patch) => { Object.assign(status, patch); listeners.forEach((fn) => { try { fn({ ...status }); } catch { /* listener failed */ } }); };
 
 // Hugging Face answers a page on *.workers.dev with a 404 and no CORS headers, so the model is fetched through this site's own
-// /hf/ path (src/worker.js in production, the vite proxy in dev). kokoro-js fetches its voice files with a hard-coded URL, so the
-// rewrite is done once for every fetch to the hub.
-const HUB = 'https://huggingface.co/';
-function routeHub() {
-  if (window.__hubRouted) return; window.__hubRouted = true;
-  const real = window.fetch.bind(window), local = new URL('hf/', document.baseURI).href;
-  window.fetch = (input, init) => {
-    const u = typeof input === 'string' ? input : input instanceof URL ? input.href : input && input.url;
-    return real(u && u.startsWith(HUB) ? local + u.slice(HUB.length) : input, init);
-  };
+// /hf/ path (src/worker.js in production, the vite proxy in dev); tts-worker.js rewrites the hub's URLs to it.
+// The model runs in a Web Worker: loading it and every generate() are seconds of CPU that froze the page when they ran on its thread.
+let worker = null, loading = null, ok = false, seq = 0;
+const pending = new Map(), files = new Map();                              // per-file progress, so the bar reflects the whole download
+function ask(msg) {
+  return new Promise((resolve, reject) => { const id = ++seq; pending.set(id, { resolve, reject }); worker.postMessage({ ...msg, id }); });
 }
-
-let tts = null, loading = null;
 export function load() {
-  if (tts) return Promise.resolve(tts);
+  if (ok) return Promise.resolve(true);
   if (loading) return loading;
   set({ state: 'downloading', progress: 0, error: '' });
   try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch { /* the browser may evict the cache under pressure */ }
-  const files = new Map();                                                 // per-file progress, so the bar reflects the whole download
-  loading = (async () => {
-    routeHub();
-    const { KokoroTTS } = await import('kokoro-js');
-    tts = await KokoroTTS.from_pretrained(MODEL, {
-      dtype: 'q8', device: 'wasm',
-      progress_callback: (p) => {
-        if (p.status === 'progress' && p.total) {
-          files.set(p.file, p); let got = 0, all = 0;
-          files.forEach((f) => { got += f.loaded; all += f.total; });
-          set({ progress: all ? got / all : 0 });
-        }
-      },
-    });
-    set({ state: 'ready', progress: 1 });
-    return tts;
-  })().catch((e) => { loading = null; set({ state: 'failed', error: String(e && e.message || e) }); throw e; });
+  worker = new Worker(new URL('./tts-worker.js', import.meta.url), { type: 'module' });
+  worker.onmessage = (e) => {
+    const d = e.data;
+    if (d.progress) {
+      files.set(d.progress.file, d.progress); let got = 0, all = 0;
+      files.forEach((f) => { got += f.loaded; all += f.total; });
+      set({ progress: all ? got / all : 0 });
+      return;
+    }
+    const p = pending.get(d.id); if (!p) return;
+    pending.delete(d.id);
+    d.ok ? p.resolve(d.bytes || true) : p.reject(new Error(d.error));
+  };
+  worker.onerror = (e) => { const err = new Error(e.message || 'voice worker failed'); pending.forEach((p) => p.reject(err)); pending.clear(); };
+  loading = ask({ op: 'load', model: MODEL, local: new URL('hf/', document.baseURI).href })
+    .then(() => { ok = true; set({ state: 'ready', progress: 1 }); return true; })
+    .catch((e) => { loading = null; try { worker.terminate(); } catch { /* gone */ } worker = null; set({ state: 'failed', error: String((e && e.message) || e) }); throw e; });
   return loading;
 }
-export const ready = () => !!tts;
+export const ready = () => ok;
 
 // WAV bytes for a line (same shape as tts.js render()); null when the model is not loaded yet
 const cache = new Map();
 export async function render(who, text) {
-  if (!tts) return null;
+  if (!ok) return null;
   const k = who + '|' + text;
   if (cache.has(k)) return cache.get(k);
-  const audio = await tts.generate(text, { voice: NATURAL_VOICES[who] || NATURAL_VOICES.guy, speed: 1 });
-  const bytes = audio.toWav();
+  const bytes = await ask({ op: 'gen', text, voice: NATURAL_VOICES[who] || NATURAL_VOICES.guy });
   if (cache.size > 80) cache.delete(cache.keys().next().value);
   cache.set(k, bytes);
   return bytes;
