@@ -143,6 +143,20 @@ export function install(T, h) {
       T.frameRoom('main'); await settleFrames(3);
       return { data: capture() };
     });
+    // the easter eggs, each up close (they are built only when their ingredients stand in the room: the QA adds them directly)
+    for (const [kind, ingredients] of [['mirrorball', []], ['trophy', []], ['lavalamp', []]]) {
+      add(`egg-${kind}`, 'rooms', async () => {
+        await clean(43);
+        for (const id of ingredients) T.addObject(id);
+        const o = window.brain.w.addInstance(kind, null, null, true); const ob = window.brain.w.objects[o];
+        if (!ob) return { ok: false, why: `${kind} did not fit in the room` };
+        T.freeze(); window.guy.root.position.set(0, 0, 3); window.guy.root.visible = false;
+        ob.group.userData.tick && ob.group.userData.tick(0.4);
+        T.frameAt(ob.x, ob.z, ob.yaw, 'front', 2.4, 0.9);
+        await settleFrames(3);
+        return { data: capture() };
+      });
+    }
     add('room-workshop', 'rooms', async () => {
       await clean(42);
       for (const id of ['workbench', 'toolbox', 'woodfactory', 'metalfactory']) T.addObject(id);

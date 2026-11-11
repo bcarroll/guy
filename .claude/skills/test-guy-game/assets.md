@@ -118,6 +118,7 @@ A book's first reading teaches its skill. Later chapters are **learned by practi
 | dance.moves | dancemoves | `dance.moves.ch2` Classic Moves (3) | sprinkler, moonwalk (poses) |
 | | | `dance.moves.ch3` Freestyle (8) | headbang, armwave |
 | (none) | dancemoves, dance | **secret**: no book, chapter or What's New line | airguitar, windmill, kneeslide: danced only once an `eguitar` stands in the same room as the table (`secretMoves()` in `brain.js`) |
+| (none) | needs.js `egg.<id>` | **easter eggs** (`egg` in RECIPES, workshop.js): no book, only the basic `workshop` skill; GUY builds each once all its ingredients stand in the main room | `mirrorball` (stereo `table` + `drums`, metal), `trophy` (`piano` + `guitar` + `drums`, metal), `lavalamp` (`lamp` + `nightstand` + `coffeetable`, both lines). Each idles by `group.userData.tick`. Hidden from the Catalog until built; `T.sweepNeeds` part 9 |
 | dance.ballroom | ballroom | `dance.ballroom.ch2` Latin & Smooth (3) | tango, foxtrot |
 | | | `dance.ballroom.ch3` Quickstep & Showpieces (8) | jive, dip |
 | lighting | mood | `lighting.ch2` (3), `.ch3` (8) | ch2: three more lamp colours; ch3: candle, drift and aurora moving looks (`LAMP_LOOKS` in `brain.js`, `lamp.animate` in `room.js`) |

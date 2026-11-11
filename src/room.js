@@ -106,6 +106,7 @@ export function buildRoom(scene) {
         while (d > Math.PI) d -= Math.PI * 2;
         while (d < -Math.PI) d += Math.PI * 2;
         group.rotation.y += d * Math.min(1, dt * 10);
+        if (group.userData.tick) group.userData.tick(dt);                 // idle animation (the easter eggs)
       },
     };
     obj.set(x, z);
@@ -1087,6 +1088,32 @@ export function buildRoom(scene) {
     for (const y of [0.04, 0.4, 0.76, 1.12, 1.34]) box(0.86, 0.03, 0.34, light, 0, y, 0, g);
     for (const [x2, y, c] of [[-0.25, 0.44, 0xd9534f], [-0.2, 0.44, 0x4a90d9], [0.2, 0.8, 0x6bbf59], [0.3, 0.8, 0xe9c46a]]) box(0.06, 0.2, 0.16, mat(c), x2, y + 0.1, 0.0, g);
   });
+  // ---- easter eggs: built only once the right things stand in the room (see EGGS in workshop.js). Each has a slow idle animation (`group.userData.tick(dt)`).
+  const buildMirrorBall = (name, x = 0, z = 0) => makeObject(name, x, z, 0.5, 0.5, 1.7, 'light', (g) => {
+    const steel = mat(0x8a8f98, { metalness: 0.6, roughness: 0.4 });
+    box(0.36, 0.04, 0.36, steel, 0, 0.02, 0, g);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.2, 10), steel); pole.position.set(0, 0.64, 0); g.add(pole);
+    const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(0.24, 1), new THREE.MeshStandardMaterial({ color: 0xe8eef6, emissive: 0x6d7a8c, emissiveIntensity: 0.6, metalness: 0.25, roughness: 0.15, flatShading: true }));
+    ball.position.set(0, 1.45, 0); g.add(ball);
+    g.userData.tick = (dt) => { ball.rotation.y += dt * 0.9; };
+  });
+  const buildTrophy = (name, x = 0, z = 0) => makeObject(name, x, z, 0.4, 0.4, 1.05, 'light', (g) => {
+    const gold = mat(0xf0c43c, { emissive: 0x7a5a10, emissiveIntensity: 0.7, metalness: 0.25, roughness: 0.3 }), wood = mat(0x7a4a26);
+    box(0.4, 0.3, 0.4, wood, 0, 0.15, 0, g); box(0.44, 0.04, 0.44, gold, 0, 0.32, 0, g);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.3, 12), gold); stem.position.set(0, 0.5, 0); g.add(stem);
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.07, 0.26, 16, 1, true), gold); cup.position.set(0, 0.78, 0); g.add(cup);
+    const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.09), gold); star.position.set(0, 1.0, 0); g.add(star);
+    g.userData.tick = (dt) => { star.rotation.y += dt * 1.4; star.position.y = 1.0 + Math.sin(performance.now() / 600) * 0.02; };
+  });
+  const buildLavaLamp = (name, x = 0, z = 0) => makeObject(name, x, z, 0.34, 0.34, 1.0, 'light', (g) => {
+    const wood = mat(0x4a2f1b), cap = mat(0x2b2b2b, { metalness: 0.5, roughness: 0.4 });
+    box(0.34, 0.5, 0.34, wood, 0, 0.25, 0, g);
+    const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.11, 0.38, 16), new THREE.MeshStandardMaterial({ color: 0xff5a8a, emissive: 0xff2d6f, emissiveIntensity: 0.5, transparent: true, opacity: 0.55, roughness: 0.2 }));
+    glass.position.set(0, 0.7, 0); g.add(glass);
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.05, 14), cap); top.position.set(0, 0.92, 0); g.add(top);
+    const blobs = [0, 1, 2].map((i) => { const b = new THREE.Mesh(new THREE.SphereGeometry(0.045 + i * 0.008, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffd23f })); g.add(b); return b; });
+    g.userData.tick = (dt) => { const t = performance.now() / 1000; blobs.forEach((b, i) => { b.position.set(Math.sin(t * 0.7 + i * 2) * 0.03, 0.58 + (0.5 + 0.5 * Math.sin(t * 0.5 + i * 2.1)) * 0.24, Math.cos(t * 0.6 + i) * 0.03); }); };
+  });
   // A bookshelf GUY or GAL built is a clone of the skill bookshelf: the same shelf (looks, size, weight) holding the books and records
   // that did not fit on the others, and used the same way (read from it, long-press for its book and record lists).
   const buildBookshelf2 = (name, x = 0, z = 0) => {
@@ -1122,6 +1149,9 @@ export function buildRoom(scene) {
   };
   const INSTANCE_KINDS = {
     eguitar: { build: (name, x, z) => buildGuitar(x, z, name, true), pref: { x: 2.2, z: -1.6 } },
+    mirrorball: { build: buildMirrorBall, pref: { x: -3.6, z: -2.6 } },
+    trophy: { build: buildTrophy, pref: { x: 3.9, z: -2.9 } },
+    lavalamp: { build: buildLavaLamp, pref: { x: -4.0, z: 0.4 } },
     bookshelf2: { build: buildBookshelf2, pref: { x: 4.1, z: -2.2 } },
     // the foot stool stands in front of a window whose top is out of reach (the owner's rule: built where it is needed), right by the wall
     footstool: { build: buildFootStool, pref: () => {

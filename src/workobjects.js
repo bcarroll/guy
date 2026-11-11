@@ -38,6 +38,15 @@ export function makeWorkshopBuilders({ makeObject, box, mat }) {
     } else if (kind === 'eguitar') {
       box(0.16, 0.24, 0.035, mat(0xc0392b), 0, 0.12, 0, g);
       box(0.035, 0.26, 0.03, mat(0x2b2b2b), 0, 0.37, 0, g);
+    } else if (kind === 'mirrorball') {
+      box(0.14, 0.02, 0.14, barMat, 0, 0.01, 0, g); box(0.015, 0.2, 0.015, barMat, 0, 0.12, 0, g);
+      const b = new THREE.Mesh(new THREE.IcosahedronGeometry(0.07, 1), new THREE.MeshStandardMaterial({ color: 0xe8eef6, emissive: 0x6d7a8c, emissiveIntensity: 0.6, metalness: 0.25, roughness: 0.15, flatShading: true })); b.position.set(0, 0.28, 0); g.add(b);
+    } else if (kind === 'trophy') {
+      box(0.14, 0.08, 0.14, wd, 0, 0.04, 0, g);
+      const c = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.025, 0.1, 12, 1, true), mat(0xf0c43c, { emissive: 0x7a5a10, emissiveIntensity: 0.7, metalness: 0.25, roughness: 0.3 })); c.position.set(0, 0.2, 0); g.add(c);
+    } else if (kind === 'lavalamp') {
+      box(0.12, 0.12, 0.12, wd, 0, 0.06, 0, g);
+      const c = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.045, 0.16, 12), mat(0xff5a8a, { transparent: true, opacity: 0.7 })); c.position.set(0, 0.2, 0); g.add(c);
     } else if (kind === 'footstool') {
       box(0.26, 0.03, 0.2, light, 0, 0.19, 0, g);
       for (const sx of [-0.1, 0.1]) for (const sz of [-0.07, 0.07]) box(0.035, 0.18, 0.035, wd, sx, 0.09, sz, g);
