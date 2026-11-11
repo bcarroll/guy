@@ -2,6 +2,7 @@
 // telling the player about is deployed: new rooms, objects, books, things GUY can do. The update notice (src/update.js) lists the
 // entries the running page has not seen yet, and vite.config.js writes the whole list into version.json.
 export const WHATS_NEW = [
+  { id: 'corner-rooms', items: ['Rooms can go in the corners now: the Library, Bedroom, Garage and Game Room. A corner room opens through a door in the side wall of the room beside it (the Workshop), so GUY and GAL walk through that room to get there.'] },
   { id: 'chapters-workshop', items: ['The four workshop books have more chapters: sorting the toolbox, a safety look-round, inspecting and sanding wood, knocking on metal to hear it ring, and one more chair and table of each kind for the house.'] },
   { id: 'chapters-yard', items: ['More chapters for the ball and the yard sports: longer dribbles, trick kicks, extra shots at the goal and the hoop, and a warm-up before and a cool-down after every game.'] },
   { id: 'chapters-hobbies', items: ['The hobby books have more chapters too: dancing (sprinkler, moonwalk, headbang, tango, jive, dip ...), the lamp (new colours, candle and aurora looks), painting (new brush work and subjects), the telescope and dusting.', 'Drumming along to music now adds fills, and verse and chorus.'] },

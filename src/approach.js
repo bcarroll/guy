@@ -16,11 +16,12 @@ export function installApproach(Brain) {
     // robot, furniture): then the nearest free place in front of it, so he never heads for a spot he cannot reach.
     doorStand(id) {
       const w = this.w, face = w.doorYaw(id, false), tx = Math.cos(face), tz = -Math.sin(face);
-      const grid = makeGrid(w.obstacles, 0.22, 0, this.selfOb || null, MAIN_FRAME);
+      const parent = w.doors[id].parent || 'main';                     // the room the door is in: his own, or the room beside a corner room
+      const grid = makeGrid(w.obstacles, 0.22, 0, this.selfOb || null, parent === 'main' ? MAIN_FRAME : w.frameOf(parent));
       for (const d of [0.8, 1.0, 0.65, 1.25]) {
         for (const lat of [0, 0.3, -0.3, 0.5, -0.5]) {
           const p = w.doorPoint(id, d), x = p.x + tx * lat, z = p.z + tz * lat;
-          if (w.roomIdAt(x, z) === 'main' && !cellBlocked(grid, x, z)) return { x, z };
+          if (w.roomIdAt(x, z) === parent && !cellBlocked(grid, x, z)) return { x, z };
         }
       }
       return w.doorPoint(id, 0.8);
