@@ -25,6 +25,10 @@ export const RECIPES = {
   metalchair: { name: 'Metal Chair', icon: '🪑', skill: 'workshop.metal', line: 'metal', run: 4.4, object: 'metalchair', cap: 3, serves: 'seat' },
   diningtable4: { name: 'Metal Dining Table', icon: '🍽️', skill: 'workshop.metal', line: 'metal', run: 5.0, object: 'diningtable4', cap: 2, serves: 'diners', to: 'restaurant' },
   eguitar: { name: 'Electric Guitar', icon: '🎸', skill: ['workshop.metal', 'workshop.materials'], line: 'both', run: 3.6, object: 'eguitar', cap: 1, serves: 'band' },
+  // Easter eggs: in no book. GUY builds one on his own once everything in `egg` stands in his room (see needs.js), with the basic Workshop book.
+  mirrorball: { name: 'Mirror Ball', icon: '🪩', skill: 'workshop', line: 'metal', run: 4.0, object: 'mirrorball', cap: 1, serves: 'egg.mirrorball', egg: ['table', 'drums'] },
+  trophy: { name: 'Golden Trophy', icon: '🏆', skill: 'workshop', line: 'metal', run: 4.6, object: 'trophy', cap: 1, serves: 'egg.trophy', egg: ['piano', 'guitar', 'drums'] },
+  lavalamp: { name: 'Lava Lamp', icon: '🫧', skill: 'workshop', line: 'both', run: 3.8, object: 'lavalamp', cap: 1, serves: 'egg.lavalamp', egg: ['lamp', 'nightstand', 'coffeetable'] },
 };
 // older saves may hold these: they are still shown and can be put back, but nothing builds them any more
 export const LEGACY_KINDS = ['woodshelves'];

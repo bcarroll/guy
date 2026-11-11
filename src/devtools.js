@@ -50,7 +50,7 @@ export const MANIFEST = {
     woodfactory: { room: 'workshop', skills: ['workshop.materials'] }, metalfactory: { room: 'workshop', skills: ['workshop.metal'] },
     botprinter: { skills: [] },       // the Build a Bot machine (premium, one use): tested by sweepGal
     workstation: { skills: [] },      // the Learning Workstation (premium): tested by sweepWorkstation
-    footstool: { room: 'workshop', built: true }, woodshelves: { room: 'workshop', built: true }, builtchair: { room: 'workshop', built: true }, metalchair: { room: 'workshop', built: true }, bookshelf2: { room: 'workshop', built: true }, eguitar: { room: 'workshop', built: true },
+    footstool: { room: 'workshop', built: true }, woodshelves: { room: 'workshop', built: true }, builtchair: { room: 'workshop', built: true }, metalchair: { room: 'workshop', built: true }, bookshelf2: { room: 'workshop', built: true }, mirrorball: { room: 'workshop', built: true }, trophy: { room: 'workshop', built: true }, lavalamp: { room: 'workshop', built: true }, eguitar: { room: 'workshop', built: true },
     diningtable3: { room: 'workshop', built: true, alsoRoom: 'restaurant' }, diningtable4: { room: 'workshop', built: true, alsoRoom: 'restaurant' },       // (they go in the Restaurant, so it has to be there)
     // the Restaurant (another added room): the kitchen and the dining room
     stove: { room: 'restaurant', skills: ['restaurant'] }, kitchencounter: { room: 'restaurant', skills: ['restaurant'] }, register: { room: 'restaurant', skills: ['restaurant'] },
@@ -2822,6 +2822,21 @@ T.sweepNeeds = () => {
   const wantBand = wants(b).some((x) => x.serves === 'band'), e8 = errors.length, t8 = buildToEnd(b, 1500);
   const eg = kindIn(w, 'eguitar', 'main')[0];
   out.push(result('needs: with both workshop lines and a guitar he builds an electric guitar (metal hardware, wooden body) and puts it together in the room', wantBand && t8 > 0 && !!eg && eg.guitar && eg.electric && errors.length === e8, { wantBand, t8, eg: !!eg, errs: errors.slice(e8, e8 + 1) }));
+  // 9. easter eggs: in no book. Built only when every object the recipe lists is in the room, then never again
+  const eggs = () => wants(b).filter((x) => /^egg\./.test(x.serves)).map((x) => x.serves);
+  needSetup('right', ['workshop'], { metal: true });
+  T.addObject('table');
+  out.push(result('needs: eggs: with the factories and the basic book but the drums missing, no egg is wanted', !eggs().length, { eggs: eggs() }));
+  T.addObject('drums');
+  const w9 = eggs(), e9 = errors.length;
+  out.push(result('needs: eggs: once the stereo and the drums are there a Mirror Ball is wanted (and nothing else: the trophy needs a band, the lava lamp a cosy corner)', w9.length === 1 && w9[0] === 'egg.mirrorball', { w9 }));
+  const t9 = buildToEnd(b, 1500), mb = kindIn(w, 'mirrorball', 'main')[0];
+  mb && mb.group.userData.tick && mb.group.userData.tick(0.5);
+  out.push(result('needs: eggs: he builds it with no special book, puts it together in the room, it turns by itself, and it is not wanted again', t9 > 0 && !!mb && mb.group.userData.tick && !eggs().length && errors.length === e9, { t9, mb: !!mb, left: eggs(), errs: errors.slice(e9, e9 + 1) }));
+  for (const id of ['piano', 'guitar', 'lamp', 'nightstand', 'coffeetable']) T.addObject(id);
+  out.push(result('needs: eggs: a full band (piano, guitar, drums) wants the Golden Trophy and a lamp with a nightstand and a coffee table wants the Lava Lamp', ['egg.trophy', 'egg.lavalamp'].every((x) => eggs().includes(x)), { eggs: eggs() }));
+  T.forget(); T.learn([]);
+  out.push(result('needs: eggs: without even the basic Workshop book nothing is built', b.pickRecipe() === null, { picked: b.pickRecipe() }));
   clearBooks(); T.removeAll(); T.settle(); machine().hidden = true;
   out.push(result('needs: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
