@@ -29,6 +29,16 @@ export const RECIPES = {
   mirrorball: { name: 'Mirror Ball', icon: '🪩', skill: 'workshop', line: 'metal', run: 4.0, object: 'mirrorball', cap: 1, serves: 'egg.mirrorball', egg: ['table', 'drums'] },
   trophy: { name: 'Golden Trophy', icon: '🏆', skill: 'workshop', line: 'metal', run: 4.6, object: 'trophy', cap: 1, serves: 'egg.trophy', egg: ['piano', 'guitar', 'drums'] },
   lavalamp: { name: 'Lava Lamp', icon: '🫧', skill: 'workshop', line: 'both', run: 3.8, object: 'lavalamp', cap: 1, serves: 'egg.lavalamp', egg: ['lamp', 'nightstand', 'coffeetable'] },
+  crystalball: { name: 'Crystal Ball', icon: '🔮', skill: 'workshop', line: 'metal', run: 4.2, object: 'crystalball', cap: 1, serves: 'egg.crystalball', egg: ['telescope', 'nightstand'] },
+  rubberduck: { name: 'Rubber Duck', icon: '🦆', skill: 'workshop', line: 'wood', run: 3.0, object: 'rubberduck', cap: 1, serves: 'egg.rubberduck', egg: ['plant', 'coffeetable'] },
+  gnome: { name: 'Garden Gnome', icon: '🧙', skill: 'workshop', line: 'wood', run: 3.8, object: 'gnome', cap: 1, serves: 'egg.gnome', egg: ['plant', 'armchair', 'easel'] },
+  toyrocket: { name: 'Toy Rocket', icon: '🚀', skill: 'workshop', line: 'metal', run: 4.4, object: 'toyrocket', cap: 1, serves: 'egg.toyrocket', egg: ['telescope', 'drums'] },
+  arcade: { name: 'Arcade Cabinet', icon: '🕹️', skill: 'workshop', line: 'metal', run: 5.0, object: 'arcade', cap: 1, serves: 'egg.arcade', egg: ['table', 'guitar', 'easel'] },
+  piggybank: { name: 'Piggy Bank', icon: '🐷', skill: 'workshop', line: 'wood', run: 3.4, object: 'piggybank', cap: 1, serves: 'egg.piggybank', egg: ['coffeetable', 'nightstand', 'armchair'] },
+  grandfatherclock: { name: 'Grandfather Clock', icon: '🕰️', skill: 'workshop', line: 'wood', run: 5.6, object: 'grandfatherclock', cap: 1, serves: 'egg.grandfatherclock', egg: ['piano', 'shelf', 'nightstand'] },
+  bubblemachine: { name: 'Bubble Machine', icon: '🫧', skill: 'workshop', line: 'metal', run: 4.0, object: 'bubblemachine', cap: 1, serves: 'egg.bubblemachine', egg: ['lamp', 'drums', 'easel'] },
+  snowglobe: { name: 'Snow Globe', icon: '❄️', skill: 'workshop', line: 'both', run: 4.0, object: 'snowglobe', cap: 1, serves: 'egg.snowglobe', egg: ['lamp', 'armchair', 'nightstand'] },
+  petrock: { name: 'Pet Rock', icon: '🪨', skill: 'workshop', line: 'wood', run: 2.6, object: 'petrock', cap: 1, serves: 'egg.petrock', egg: ['plant', 'guitar', 'easel'] },
 };
 // older saves may hold these: they are still shown and can be put back, but nothing builds them any more
 export const LEGACY_KINDS = ['woodshelves'];

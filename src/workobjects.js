@@ -18,6 +18,7 @@ export function makeWorkshopBuilders({ makeObject, box, mat }) {
 
   // A small model of something a factory has made, standing at the origin of `g` (the factory's tray). `kind` is what the recipe makes
   // ('hardware' is the metal part of an electric guitar, made at the Metal Factory before the Wood Factory makes the body).
+  const EGG_KINDS = ['crystalball', 'rubberduck', 'gnome', 'toyrocket', 'arcade', 'piggybank', 'grandfatherclock', 'bubblemachine', 'snowglobe', 'petrock'];
   const productModel = (g, kind) => {
     const light = mat(WOOD_LIGHT), wd = mat(WOOD);
     if (kind === 'hardware') {
@@ -47,6 +48,8 @@ export function makeWorkshopBuilders({ makeObject, box, mat }) {
     } else if (kind === 'lavalamp') {
       box(0.12, 0.12, 0.12, wd, 0, 0.06, 0, g);
       const c = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.045, 0.16, 12), mat(0xff5a8a, { transparent: true, opacity: 0.7 })); c.position.set(0, 0.2, 0); g.add(c);
+    } else if (EGG_KINDS.includes(kind)) {                                       // (the other easter eggs: a small wrapped box on the tray)
+      box(0.14, 0.12, 0.14, mat(0xe0453b), 0, 0.06, 0, g); box(0.15, 0.025, 0.03, mat(0xffd23f), 0, 0.13, 0, g); box(0.03, 0.025, 0.15, mat(0xffd23f), 0, 0.13, 0, g);
     } else if (kind === 'footstool') {
       box(0.26, 0.03, 0.2, light, 0, 0.19, 0, g);
       for (const sx of [-0.1, 0.1]) for (const sz of [-0.07, 0.07]) box(0.035, 0.18, 0.035, wd, sx, 0.09, sz, g);
