@@ -39,6 +39,8 @@ export const MANIFEST = {
     piano: { skills: ['piano'] }, bench: { skills: ['piano'] }, table: { skills: ['stereo'] }, shelf: { skills: [], fixed: true },
     lamp: { skills: ['lighting'] }, armchair: { skills: [] }, armchair2: { skills: [] }, chair: { skills: [] }, chair2: { skills: [] }, plant: { skills: [] }, ball: { skills: ['ball'] }, guitar: { skills: ['guitar'] },
     drums: { skills: ['drums'] }, easel: { skills: ['easel'] }, telescope: { skills: ['telescope'] },
+    // the easter eggs (last, so the objects before them are placed as they always were)
+    mirrorball: { room: 'workshop', built: true }, trophy: { room: 'workshop', built: true }, lavalamp: { room: 'workshop', built: true }, crystalball: { room: 'workshop', built: true }, rubberduck: { room: 'workshop', built: true }, gnome: { room: 'workshop', built: true }, toyrocket: { room: 'workshop', built: true }, arcade: { room: 'workshop', built: true }, piggybank: { room: 'workshop', built: true }, grandfatherclock: { room: 'workshop', built: true }, bubblemachine: { room: 'workshop', built: true }, snowglobe: { room: 'workshop', built: true }, petrock: { room: 'workshop', built: true },
     // decor (world.decor): no interaction; tested by sweepDecor (remove / put back through the Catalog, wall limits)
     rug: { decor: true }, picture: { decor: true, wall: 'back' }, window: { decor: true, wall: 'left' }, window2: { decor: true, wall: 'back', startsOut: true },
     art_mountains: { decor: true, wall: 'left', startsOut: true }, art_abstract: { decor: true, wall: 'back', startsOut: true }, art_moon: { decor: true, wall: 'left', startsOut: true },
@@ -50,7 +52,7 @@ export const MANIFEST = {
     woodfactory: { room: 'workshop', skills: ['workshop.materials'] }, metalfactory: { room: 'workshop', skills: ['workshop.metal'] },
     botprinter: { skills: [] },       // the Build a Bot machine (premium, one use): tested by sweepGal
     workstation: { skills: [] },      // the Learning Workstation (premium): tested by sweepWorkstation
-    footstool: { room: 'workshop', built: true }, woodshelves: { room: 'workshop', built: true }, builtchair: { room: 'workshop', built: true }, metalchair: { room: 'workshop', built: true }, bookshelf2: { room: 'workshop', built: true }, mirrorball: { room: 'workshop', built: true }, trophy: { room: 'workshop', built: true }, lavalamp: { room: 'workshop', built: true }, eguitar: { room: 'workshop', built: true },
+    footstool: { room: 'workshop', built: true }, woodshelves: { room: 'workshop', built: true }, builtchair: { room: 'workshop', built: true }, metalchair: { room: 'workshop', built: true }, bookshelf2: { room: 'workshop', built: true }, eguitar: { room: 'workshop', built: true },
     diningtable3: { room: 'workshop', built: true, alsoRoom: 'restaurant' }, diningtable4: { room: 'workshop', built: true, alsoRoom: 'restaurant' },       // (they go in the Restaurant, so it has to be there)
     // the Restaurant (another added room): the kitchen and the dining room
     stove: { room: 'restaurant', skills: ['restaurant'] }, kitchencounter: { room: 'restaurant', skills: ['restaurant'] }, register: { room: 'restaurant', skills: ['restaurant'] },
@@ -556,6 +558,9 @@ T.sweepObjects = () => {
       errors: [...(before.errors || []), ...(after.errors || [])], overlaps: { ...before.overlaps, ...after.overlaps },
     }));
   }
+  // the easter eggs have no activity of their own: put them away again, so the sweeps after this one run in the same room as without them
+  for (const [n, o] of Object.entries(W().objects)) if (o.kind && RECIPES_DEF[o.kind] && RECIPES_DEF[o.kind].egg) { W().storeInstance(n); B().objectRemoved(n); }
+  for (const r of Object.values(RECIPES_DEF)) if (r.egg) delete W().stock.items[r.object];
   return out;
 };
 
@@ -2835,6 +2840,28 @@ T.sweepNeeds = () => {
   out.push(result('needs: eggs: he builds it with no special book, puts it together in the room, it turns by itself, and it is not wanted again', t9 > 0 && !!mb && mb.group.userData.tick && !eggs().length && errors.length === e9, { t9, mb: !!mb, left: eggs(), errs: errors.slice(e9, e9 + 1) }));
   for (const id of ['piano', 'guitar', 'lamp', 'nightstand', 'coffeetable']) T.addObject(id);
   out.push(result('needs: eggs: a full band (piano, guitar, drums) wants the Golden Trophy and a lamp with a nightstand and a coffee table wants the Lava Lamp', ['egg.trophy', 'egg.lavalamp'].every((x) => eggs().includes(x)), { eggs: eggs() }));
+  // every egg: wanted exactly when all its ingredients are in the room (and each ingredient matters)
+  {
+    const bad = [];
+    for (const [id, r] of Object.entries(RECIPES_DEF)) {
+      if (!r.egg) continue;
+      needSetup('right', ['workshop'], { metal: true, chair: false });
+      for (const k of r.egg.slice(0, -1)) T.addObject(k);
+      const partial = eggs().includes(r.serves);
+      T.addObject(r.egg[r.egg.length - 1]);
+      if (partial || !eggs().includes(r.serves)) bad.push(id);
+    }
+    out.push(result('needs: eggs: every egg is wanted only once all of its ingredients are in the room', !bad.length, { bad }));
+    // an egg of the wooden line and one that needs both lines are built end to end
+    for (const id of ['rubberduck', 'snowglobe']) {
+      needSetup('right', ['workshop'], { metal: true });
+      for (const k of RECIPES_DEF[id].egg) T.addObject(k);
+      const e = errors.length;
+      b.pickRecipe = () => id; const t = buildToEnd(b, 1500); delete b.pickRecipe;
+      const o = kindIn(w, id, 'main')[0];
+      out.push(result(`needs: eggs: the ${RECIPES_DEF[id].name} is built (line: ${RECIPES_DEF[id].line}), put together in the room, and it animates`, t > 0 && !!o && !!o.group.userData.tick && errors.length === e, { t, o: !!o, errs: errors.slice(e, e + 1) }));
+    }
+  }
   T.forget(); T.learn([]);
   out.push(result('needs: eggs: without even the basic Workshop book nothing is built', b.pickRecipe() === null, { picked: b.pickRecipe() }));
   clearBooks(); T.removeAll(); T.settle(); machine().hidden = true;

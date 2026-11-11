@@ -1114,6 +1114,75 @@ export function buildRoom(scene) {
     const blobs = [0, 1, 2].map((i) => { const b = new THREE.Mesh(new THREE.SphereGeometry(0.045 + i * 0.008, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffd23f })); g.add(b); return b; });
     g.userData.tick = (dt) => { const t = performance.now() / 1000; blobs.forEach((b, i) => { b.position.set(Math.sin(t * 0.7 + i * 2) * 0.03, 0.58 + (0.5 + 0.5 * Math.sin(t * 0.5 + i * 2.1)) * 0.24, Math.cos(t * 0.6 + i) * 0.03); }); };
   });
+  // ---- ten more easter eggs (same rules as the three above; see EGGS in workshop.js)
+  const sph = (r, c, o = {}) => new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), new THREE.MeshStandardMaterial({ color: c, roughness: 0.5, ...o }));
+  const cyl = (rt, rb, h, c, o = {}, seg = 14) => new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, ...o }));
+  const cone = (r, h, c, seg = 14) => new THREE.Mesh(new THREE.ConeGeometry(r, h, seg), new THREE.MeshStandardMaterial({ color: c, roughness: 0.6 }));
+  const at = (m, x, y, z, g) => { m.position.set(x, y, z); g.add(m); return m; };
+  const glow = (c, i = 0.6, op = 1) => ({ emissive: c, emissiveIntensity: i, transparent: op < 1, opacity: op });
+  const buildCrystalBall = (name, x = 0, z = 0) => makeObject(name, x, z, 0.4, 0.4, 0.8, 'light', (g) => {
+    at(cyl(0.16, 0.2, 0.3, 0x3a2a55), 0, 0.15, 0, g); at(cyl(0.2, 0.2, 0.03, 0xe0b02e, glow(0x7a5a10, 0.7)), 0, 0.32, 0, g);
+    at(sph(0.2, 0x8a5cff, glow(0x6a3cff, 0.5, 0.7)), 0, 0.55, 0, g);
+    const core = at(sph(0.07, 0xffffff, glow(0xd0c0ff, 1.2)), 0, 0.55, 0, g);
+    g.userData.tick = () => { const t = performance.now() / 700; core.scale.setScalar(0.8 + 0.3 * Math.sin(t)); core.position.x = Math.sin(t * 0.6) * 0.05; };
+  });
+  const buildRubberDuck = (name, x = 0, z = 0) => makeObject(name, x, z, 0.36, 0.36, 0.45, 'light', (g) => {
+    const duck = new THREE.Group(); g.add(duck);
+    at(sph(0.16, 0xffd23f), 0, 0.17, 0, duck).scale.set(1.15, 0.85, 0.9); at(sph(0.1, 0xffd23f), 0.1, 0.34, 0, duck);
+    at(cone(0.035, 0.09, 0xff8a1f), 0.2, 0.33, 0, duck).rotation.z = -Math.PI / 2; at(sph(0.015, 0x111111), 0.15, 0.37, 0.06, duck); at(sph(0.015, 0x111111), 0.15, 0.37, -0.06, duck);
+    g.userData.tick = () => { const t = performance.now() / 900; duck.position.y = Math.sin(t) * 0.02; duck.rotation.z = Math.sin(t * 0.8) * 0.06; };
+  });
+  const buildGnome = (name, x = 0, z = 0) => makeObject(name, x, z, 0.34, 0.34, 0.75, 'light', (g) => {
+    const gn = new THREE.Group(); g.add(gn);
+    at(cyl(0.12, 0.14, 0.3, 0x2f6fd0), 0, 0.15, 0, gn); at(sph(0.09, 0xf3c9a0), 0, 0.37, 0, gn);
+    at(cone(0.1, 0.1, 0xf5f5f5), 0, 0.31, 0.06, gn).rotation.x = Math.PI; at(cone(0.11, 0.3, 0xd9342b), 0, 0.57, 0, gn);
+    g.userData.tick = () => { gn.rotation.z = Math.sin(performance.now() / 1100) * 0.05; };
+  });
+  const buildToyRocket = (name, x = 0, z = 0) => makeObject(name, x, z, 0.36, 0.36, 0.95, 'light', (g) => {
+    const rk = new THREE.Group(); g.add(rk);
+    box(0.36, 0.04, 0.36, mat(0x555a63), 0, 0.02, 0, g);
+    at(cyl(0.09, 0.09, 0.5, 0xf2f2f2), 0, 0.5, 0, rk); at(cone(0.09, 0.2, 0xd9342b), 0, 0.85, 0, rk);
+    for (const a of [0, 1, 2]) { const f = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.18, 0.12), new THREE.MeshStandardMaterial({ color: 0xd9342b })); f.position.set(Math.cos(a * 2.09) * 0.12, 0.34, Math.sin(a * 2.09) * 0.12); f.rotation.y = -a * 2.09; rk.add(f); }
+    at(sph(0.05, 0xffd23f, glow(0xff9a1f, 1)), 0, 0.2, 0, rk);
+    g.userData.tick = () => { const t = performance.now() / 1000; rk.position.y = Math.abs(Math.sin(t * 1.5)) * 0.04; rk.rotation.z = Math.sin(t * 30) * 0.006; };
+  });
+  const buildArcade = (name, x = 0, z = 0) => makeObject(name, x, z, 0.55, 0.5, 1.5, 'medium', (g) => {
+    box(0.55, 1.3, 0.45, mat(0x2b2f6b), 0, 0.65, 0, g); box(0.5, 0.06, 0.2, mat(0x1a1c3f), 0, 0.82, 0.24, g);
+    const scr = at(new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.3), new THREE.MeshBasicMaterial({ color: 0x35f2a0 })), 0, 1.08, 0.231, g);
+    at(sph(0.025, 0xff3b3b), -0.1, 0.87, 0.28, g); at(sph(0.02, 0xffd23f), 0.1, 0.86, 0.28, g); box(0.55, 0.14, 0.45, mat(0xe0453b), 0, 1.37, 0, g);
+    g.userData.tick = () => { const t = Math.floor(performance.now() / 350) % 3; scr.material.color.setHex([0x35f2a0, 0x35a0f2, 0xf2d035][t]); };
+  });
+  const buildPiggyBank = (name, x = 0, z = 0) => makeObject(name, x, z, 0.36, 0.3, 0.5, 'light', (g) => {
+    const pig = at(new THREE.Group(), 0, 0, 0, g);
+    at(sph(0.16, 0xf59ac0), 0, 0.2, 0, pig).scale.set(1.2, 0.95, 0.95); at(cyl(0.05, 0.05, 0.04, 0xf07aa8), 0.2, 0.2, 0, pig).rotation.z = Math.PI / 2;
+    for (const sz of [-0.07, 0.07]) at(cone(0.04, 0.07, 0xf07aa8, 4), 0.1, 0.36, sz, pig);
+    for (const sx of [-0.09, 0.09]) for (const sz of [-0.07, 0.07]) at(cyl(0.03, 0.03, 0.08, 0xf07aa8), sx, 0.04, sz, pig);
+    const coin = at(cyl(0.05, 0.05, 0.01, 0xffd23f, glow(0x7a5a10, 0.8), 18), 0, 0.5, 0, g); coin.rotation.x = Math.PI / 2;
+    g.userData.tick = () => { const t = (performance.now() / 1400) % 1; coin.position.y = 0.55 - t * 0.2; coin.rotation.z = t * 6; coin.visible = t < 0.9; };
+  });
+  const buildGrandfatherClock = (name, x = 0, z = 0) => makeObject(name, x, z, 0.45, 0.32, 1.9, 'heavy', (g) => {
+    const wd = mat(0x6b3f1f); box(0.45, 0.25, 0.32, wd, 0, 0.125, 0, g); box(0.34, 1.2, 0.28, wd, 0, 0.85, 0, g); box(0.44, 0.35, 0.32, wd, 0, 1.68, 0, g);
+    at(cyl(0.12, 0.12, 0.02, 0xf6f1e0, {}, 24), 0, 1.68, 0.165, g).rotation.x = Math.PI / 2;
+    const pend = new THREE.Group(); pend.position.set(0, 1.35, 0.15); g.add(pend); at(cyl(0.008, 0.008, 0.5, 0xc9a227), 0, -0.25, 0, pend); at(cyl(0.05, 0.05, 0.02, 0xe0b02e, glow(0x7a5a10, 0.7), 18), 0, -0.5, 0, pend).rotation.x = Math.PI / 2;
+    const hand = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.08, 0.006), new THREE.MeshStandardMaterial({ color: 0x111111 })); hand.geometry.translate(0, 0.04, 0); hand.position.set(0, 1.68, 0.18); g.add(hand);
+    g.userData.tick = () => { const t = performance.now() / 1000; pend.rotation.z = Math.sin(t * Math.PI) * 0.35; hand.rotation.z = -t * 0.5; };
+  });
+  const buildBubbleMachine = (name, x = 0, z = 0) => makeObject(name, x, z, 0.4, 0.4, 1.1, 'light', (g) => {
+    box(0.4, 0.3, 0.3, mat(0x2fa7d9), 0, 0.15, 0, g); at(cyl(0.1, 0.1, 0.04, 0xdddddd, { metalness: 0.3 }, 20), 0, 0.32, 0.05, g).rotation.x = Math.PI / 2;
+    const bub = [0, 1, 2, 3, 4].map((i) => at(sph(0.04 + 0.01 * (i % 3), 0xbfeaff, { transparent: true, opacity: 0.45, roughness: 0.1 }), 0, 0.5, 0.05, g));
+    g.userData.tick = () => { const t = performance.now() / 1000; bub.forEach((b, i) => { const u = (t * 0.35 + i * 0.2) % 1; b.position.set(Math.sin(t + i * 2) * 0.1, 0.38 + u * 0.7, 0.05 + u * 0.03); b.visible = u < 0.95; }); };
+  });
+  const buildSnowGlobe = (name, x = 0, z = 0) => makeObject(name, x, z, 0.4, 0.4, 0.8, 'light', (g) => {
+    at(cyl(0.18, 0.22, 0.14, 0x7a4a26), 0, 0.07, 0, g); at(sph(0.2, 0xcfeaff, { transparent: true, opacity: 0.35, roughness: 0.05 }), 0, 0.36, 0, g);
+    at(cone(0.06, 0.16, 0x2f7d3a), 0, 0.23, 0, g); at(cone(0.04, 0.12, 0x2f7d3a), 0, 0.33, 0, g);
+    const fl = Array.from({ length: 12 }, (_, i) => at(sph(0.012, 0xffffff, { emissive: 0xffffff, emissiveIntensity: 0.6 }), 0, 0.4, 0, g));
+    g.userData.tick = () => { const t = performance.now() / 1000; fl.forEach((f, i) => { const u = (t * 0.25 + i * 0.083) % 1; const a = i * 2.4 + t * 0.8; f.position.set(Math.cos(a) * 0.12 * (1 - u * 0.2), 0.52 - u * 0.28, Math.sin(a) * 0.12 * (1 - u * 0.2)); }); };
+  });
+  const buildPetRock = (name, x = 0, z = 0) => makeObject(name, x, z, 0.36, 0.3, 0.3, 'light', (g) => {
+    at(sph(0.15, 0x8c8c94, { roughness: 1 }), 0, 0.13, 0, g).scale.set(1.2, 0.85, 1); const eyes = [-0.05, 0.05].map((sx) => { const e = at(sph(0.035, 0xffffff), sx, 0.2, 0.13, g); const pu = sph(0.015, 0x111111); pu.position.set(0, 0, 0.025); e.add(pu); return e; });
+    box(0.1, 0.012, 0.01, mat(0x333333), 0, 0.1, 0.15, g);
+    g.userData.tick = () => { const t = performance.now() / 900; eyes.forEach((e) => { e.children[0].position.x = Math.sin(t) * 0.012; e.children[0].position.y = Math.cos(t * 0.7) * 0.01; }); };
+  });
   // A bookshelf GUY or GAL built is a clone of the skill bookshelf: the same shelf (looks, size, weight) holding the books and records
   // that did not fit on the others, and used the same way (read from it, long-press for its book and record lists).
   const buildBookshelf2 = (name, x = 0, z = 0) => {
@@ -1152,6 +1221,16 @@ export function buildRoom(scene) {
     mirrorball: { build: buildMirrorBall, pref: { x: -3.6, z: -2.6 } },
     trophy: { build: buildTrophy, pref: { x: 3.9, z: -2.9 } },
     lavalamp: { build: buildLavaLamp, pref: { x: -4.0, z: 0.4 } },
+    crystalball: { build: buildCrystalBall, pref: { x: 3.9, z: 0.2 } },
+    rubberduck: { build: buildRubberDuck, pref: { x: -1.0, z: -3.0 } },
+    gnome: { build: buildGnome, pref: { x: 1.2, z: -3.0 } },
+    toyrocket: { build: buildToyRocket, pref: { x: 4.0, z: 2.5 } },
+    arcade: { build: buildArcade, pref: { x: -4.0, z: -1.4 } },
+    piggybank: { build: buildPiggyBank, pref: { x: -1.6, z: 3.0 } },
+    grandfatherclock: { build: buildGrandfatherClock, pref: { x: 4.0, z: -1.2 } },
+    bubblemachine: { build: buildBubbleMachine, pref: { x: 0.2, z: 3.1 } },
+    snowglobe: { build: buildSnowGlobe, pref: { x: 4.1, z: 1.4 } },
+    petrock: { build: buildPetRock, pref: { x: 2.8, z: 3.0 } },
     bookshelf2: { build: buildBookshelf2, pref: { x: 4.1, z: -2.2 } },
     // the foot stool stands in front of a window whose top is out of reach (the owner's rule: built where it is needed), right by the wall
     footstool: { build: buildFootStool, pref: () => {

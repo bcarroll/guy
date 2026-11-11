@@ -144,7 +144,7 @@ export function install(T, h) {
       return { data: capture() };
     });
     // the easter eggs, each up close (they are built only when their ingredients stand in the room: the QA adds them directly)
-    for (const [kind, ingredients] of [['mirrorball', []], ['trophy', []], ['lavalamp', []]]) {
+    for (const [kind, ingredients] of [['mirrorball', []], ['trophy', []], ['lavalamp', []], ['crystalball', []], ['rubberduck', []], ['gnome', []], ['toyrocket', []], ['arcade', []], ['piggybank', []], ['grandfatherclock', []], ['bubblemachine', []], ['snowglobe', []], ['petrock', []]]) {
       add(`egg-${kind}`, 'rooms', async () => {
         await clean(43);
         for (const id of ingredients) T.addObject(id);
