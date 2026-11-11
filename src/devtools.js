@@ -15,6 +15,7 @@ import { lampLooks, LAMP_LOOKS } from './brain.js';
 import { BAND } from './gal.js';
 import { wants } from './needs.js';
 import { ROOM_CATALOG } from './rooms.js';
+import { ROOM as ROOM_MAIN } from './room.js';
 import { initLayout } from './layout.js';
 import { RECIPES as RECIPES_DEF } from './workshop.js';
 import { DISHES } from './restobjects.js';
@@ -1789,6 +1790,22 @@ T.sweepRooms = () => {
   const clearOfCatalog = Object.values(w.doors).every((d) => d.wall !== 'left' || d.u - w.DOOR.w / 2 >= w.MACHINE_RECT.u1 || d.u + w.DOOR.w / 2 <= w.MACHINE_RECT.u0);
   out.push(result('rooms: four rooms get a door each on all four walls, the left one clear of the Catalog, and the Restaurant is not on the left',
     four.every((r) => r.ok) && sides === 'back,front,left,right' && clearOfCatalog && w.doors.restaurant.wall !== 'left' && Object.values(w.doors).every((d) => !doorProblems(d.id).length), { sides, four: four.map((r) => r.ok) }));
+  // more than four rooms: each room hangs off a wall of GUY's room and only one room fits a wall, so a fifth has no place. It must be
+  // refused cleanly (a message, nothing added, nothing moved) and no two rooms may overlap. The four corner areas beside the rooms stay
+  // empty ground: no room is built there, so there is no room with two neighbours and no door between two added rooms.
+  {
+    const bs = Object.values(w.doors).map((d) => ({ id: d.id, ...d.shell.bounds }));
+    const overlap = [];
+    for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) { const a = bs[i], c = bs[j]; if (a.minX < c.maxX && c.minX < a.maxX && a.minZ < c.maxZ && c.minZ < a.maxZ) overlap.push([a.id, c.id]); }
+    const mainHalf = { x: ROOM_MAIN.w / 2, z: ROOM_MAIN.d / 2 };
+    const inCorner = bs.filter((b) => (b.minX > mainHalf.x - 1e-6 || b.maxX < -mainHalf.x + 1e-6) && (b.minZ > mainHalf.z - 1e-6 || b.maxZ < -mainHalf.z + 1e-6)).map((b) => b.id);
+    out.push(result('rooms: four rooms never overlap and none is built in a corner area (there are no corner rooms)', !overlap.length && !inCorner.length, { overlap, inCorner }));
+    ROOM_CATALOG.push({ ...ROOM_CATALOG[0], id: 'qa-fifth', name: 'QA Fifth' });
+    const doorsBefore = Object.keys(w.doors).join(), toastBefore = document.getElementById('toast').textContent;
+    const fifth = R().add('qa-fifth');
+    ROOM_CATALOG.pop();
+    out.push(result('rooms: a fifth room is refused with a message, and no door is added or moved', !fifth.ok && fifth.messages.length === 1 && /No clear wall/.test(fifth.messages[0]) && Object.keys(w.doors).join() === doorsBefore && !w.doors['qa-fifth'], { fifth, doorsBefore, now: Object.keys(w.doors).join() }));
+  }
   T.resetRooms(); putBackSince(before); machine().hidden = true;
   out.push(result('rooms: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
