@@ -1119,6 +1119,12 @@ export class Brain {
         const w = this.w, id = this.visitId && w.doors[this.visitId] ? this.visitId : Object.keys(w.doors).find((d) => !this.doorLockedFor(d)), door = w.doors[id];
         this.visitId = null;
         if (!door || this.doorLockedFor(id)) return ['the door is locked', this.play('idle', 0.5)];
+        if (this.parentOf(id) !== 'main') {                                    // a corner room: in through the room beside it, a look round, and back out
+          const cb = door.shell.bounds, direct = (p) => ({ ...this.walk(p.x, p.z), direct: true });
+          const look = [];
+          for (let i = 0; i < 3; i++) look.push(direct({ x: rand(cb.minX + 1.2, cb.maxX - 1.2), z: rand(cb.minZ + 1.2, cb.maxZ - 1.2) }), this.play('idle', rand(1.5, 3)));
+          return [`having a look in the ${door.name}`, ...this.tripSteps(this.hereId(), id), ...look, ...this.tripSteps(id, 'main', true)];
+        }
         const out = this.doorStand(id), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false), b = door.shell.bounds;
         const direct = (p, yaw = null) => ({ ...this.walk(p.x, p.z, yaw), direct: true });
         const steps = [this.walk(out.x, out.z, face),
@@ -1142,7 +1148,7 @@ export class Brain {
       },
       leave: () => {
         if (this.stuckIn()) return ['shut in (the door is locked)', this.play('idle', 0.5)];
-        const w = this.w, p = this.g.pos, id = Object.keys(w.doors).sort((a, c) => {
+        const w = this.w, p = this.g.pos, here = this.hereId(), id = here !== 'main' && w.doors[here] ? here : Object.keys(w.doors).sort((a, c) => {
           const f = (d) => { const bb = w.doors[d].shell.bounds; return Math.hypot((bb.minX + bb.maxX) / 2 - p.x, (bb.minZ + bb.maxZ) / 2 - p.z); };
           return f(a) - f(c);
         })[0];
@@ -2217,7 +2223,7 @@ export class Brain {
       }
     }
     if (act === 'putback' || act === 'dropball' || act === 'yardtidy' || act === 'putguitar' || act === 'leave' || act === 'hangpaint' || act === 'putcanvas') return false;
-    if (act === 'visit') return this.inMain() && Object.keys(this.w.doors).some((id) => !this.doorLockedFor(id));
+    if (act === 'visit') return (this.inMain() || (!!this.visitId && this.parentOf(this.visitId) === this.hereId())) && Object.keys(this.w.doors).some((id) => !this.doorLockedFor(id));
     // the Workshop: it has to be added (and its door unlocked), and for building there has to be something to build
     if (['tidytools', 'build'].includes(act)) {
       if (!this.w.doors.workshop || this.doorLockedFor('workshop')) return false;
@@ -2286,8 +2292,9 @@ export class Brain {
     this.unlock(false);
     this.skip();
     this.visitId = id;
-    this.pendingActivity = inside ? 'leave' : 'visit';
-    return { ok: true, message: inside ? 'GUY is coming back.' : `GUY is going into the ${d.name}.` };
+    const through = inside && this.parentOf(id) === this.hereId();            // a corner room, asked for while he is in the room beside it: straight in
+    this.pendingActivity = inside && !through ? 'leave' : 'visit';
+    return { ok: true, message: inside && !through ? 'GUY is coming back.' : `GUY is going into the ${d.name}.` };
   }
 
   // ---- Lock in: keep using one object until the user says stop ----
@@ -2448,7 +2455,7 @@ export class Brain {
     if (!this.stuckIn() && where !== here && !OWN_ROOM_ACTS.includes(name)) {
       // (the yard, Workshop and Restaurant jobs go in through their own door themselves: they only need him out of the room he is in)
       const ownTrip = YARD_ACTS.includes(name) || WORK_ACTS.includes(name) || REST_JOBS.includes(name) || REST_ACTS.includes(name);
-      const trip = [...(here !== 'main' ? this.doorOut(here) : []), ...(where !== 'main' && !ownTrip ? this.doorIn(where) : [])];
+      const trip = this.tripSteps(here, where, ownTrip);
       steps = [...trip, ...steps];
     }
     this.ui(this.lock ? `🔒 ${label}` : label);
@@ -2714,7 +2721,7 @@ export class Brain {
         if (!finished) {
           // the grid of the room he is walking in: his own, or an added room when he and his goal are both in it
           const ra = this.w.roomIdAt(root.position.x, root.position.z), rb = this.w.roomIdAt(s.x, s.z);
-          const fr = ra === rb && ra !== 'main' && ra !== 'door' ? this.w.frameOf(ra) : MAIN_FRAME;
+          const fr = s.frameRoom ? this.w.frameOf(s.frameRoom) : ra === rb && ra !== 'main' && ra !== 'door' ? this.w.frameOf(ra) : MAIN_FRAME;
           // He is inside an added room and the spot is in his own: the grid of his own room knows nothing of the other one, so he goes out through the door first (not into its wall)
           if (ra !== rb && ra !== 'main' && ra !== 'door' && rb === 'main' && !s.viaDoor && !s.direct && !s.push && !s.drive && this.w.doors[ra] && !this.stuckIn()) {
             const [, ...out] = this.activities().leave();

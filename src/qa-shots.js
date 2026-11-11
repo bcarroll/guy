@@ -178,6 +178,37 @@ export function install(T, h) {
       T.freeze(); window.guy.root.visible = false; T.frameRoom('range'); await settleFrames(3);
       return { data: capture() };
     });
+    // The corner rooms: seen from beyond their far wall (the camera is outside, so the walls between it and the room do not hide it)
+    const frameCorner = (id) => {
+      const b = window.brain.w.doors[id].shell.bounds, cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2, away = Math.sign(cz) || 1;
+      window.controls.dispatchEvent({ type: 'start' });
+      window.camera.position.set(cx, 6.2, cz + away * 13);
+      window.controls.target.set(cx, 0.6, cz);
+      window.controls.update();
+    };
+    for (const [id, stuff] of [['library', [['piano', 0, -1.2], ['armchair', -2.6, 1.6], ['lamp', 3.4, 2.4]]], ['bedroom', [['easel', 0.5, 0.5], ['plant', -3.5, 2.8], ['nightstand', 3.2, -2.2]]]]) {
+      add(`room-corner-${id}`, 'rooms', async () => {
+        await clean(id === 'library' ? 48 : 49);
+        const w = window.brain.w;
+        w.rooms.add('workshop', { walls: ['right'] });
+        w.rooms.add('library'); w.rooms.add('bedroom');
+        const b = w.doors[id].shell.bounds, cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2;
+        for (const [kind, dx, dz] of stuff) { T.addObject(kind); if (w.objects[kind]) w.objects[kind].set(cx + dx, cz + dz); }
+        T.freeze(); window.guy.root.visible = false; frameCorner(id); await settleFrames(3);
+        return { data: capture() };
+      });
+    }
+    add('room-corners', 'rooms', async () => {                      // the Workshop with a corner room at each side wall: both doors, both rooms
+      await clean(50);
+      const w = window.brain.w;
+      w.rooms.add('workshop', { walls: ['right'] });
+      w.rooms.add('library'); w.rooms.add('bedroom');
+      T.freeze(); window.guy.root.visible = false;
+      window.controls.dispatchEvent({ type: 'start' });
+      window.camera.position.set(8, 20, 0.5); window.controls.target.set(10, 0, 0); window.controls.update();
+      await settleFrames(3);
+      return { data: capture() };
+    });
     add('room-restaurant', 'rooms', async () => {
       await clean(43);
       T.prep('takeorder');

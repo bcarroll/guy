@@ -64,7 +64,7 @@ export const MANIFEST = {
     shed: { room: 'backyard', skills: ['outdoor'], premium: true }, mower: { room: 'backyard', skills: ['outdoor'], premium: true },
   },
   // rooms the user can add from the Catalog's Rooms tab (tested by sweepRooms / sweepDoors / sweepGating / sweepSaves)
-  rooms: { workshop: {}, restaurant: {}, backyard: {}, range: {} },
+  rooms: { workshop: {}, restaurant: {}, backyard: {}, range: {}, library: {}, bedroom: {}, garage: {}, gameroom: {} },
   // activities: objects that must be in the room, skills needed, `music` = needs the stereo already playing,
   // touches = objects GUY's arms may legitimately be inside the bounding box of (hands on keys, pushing, ...)
   activities: {
@@ -1367,7 +1367,8 @@ const putBackSince = (before) => { for (const name of Object.keys(W().removed)) 
 const doorProblems = (id) => {
   const w = W(), d = w.doors[id], bad = [];
   if (!d) return ['no door'];
-  if (!ROOM_CATALOG.find((r) => r.id === id).doorWalls.includes(d.wall)) bad.push(`wall ${d.wall} is not allowed`);
+  if (d.parent !== 'main') { if (!w.doors[d.parent] || d.wall.split(':')[0] !== d.parent) bad.push(`door is not in the side wall of ${d.parent}`); }
+  else if (!ROOM_CATALOG.find((r) => r.id === id).doorWalls.includes(d.wall)) bad.push(`wall ${d.wall} is not allowed`);
   for (const [n, o] of Object.entries(w.objects)) if (rectsOv(d.rect, o.obstacle)) bad.push(`${n} is in the doorway`);
   for (const dc of Object.values(w.decor)) {
     if (dc.wall === d.wall && dc.u + dc.hw > d.u - w.DOOR.w / 2 && dc.u - dc.hw < d.u + w.DOOR.w / 2 && dc.v - dc.hh < w.DOOR.h) bad.push(`${dc.name} hangs over the door`);
@@ -1804,7 +1805,7 @@ T.sweepRooms = () => {
     for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) { const a = bs[i], c = bs[j]; if (a.minX < c.maxX && c.minX < a.maxX && a.minZ < c.maxZ && c.minZ < a.maxZ) overlap.push([a.id, c.id]); }
     const mainHalf = { x: ROOM_MAIN.w / 2, z: ROOM_MAIN.d / 2 };
     const inCorner = bs.filter((b) => (b.minX > mainHalf.x - 1e-6 || b.maxX < -mainHalf.x + 1e-6) && (b.minZ > mainHalf.z - 1e-6 || b.maxZ < -mainHalf.z + 1e-6)).map((b) => b.id);
-    out.push(result('rooms: four rooms never overlap and none is built in a corner area (there are no corner rooms)', !overlap.length && !inCorner.length, { overlap, inCorner }));
+    out.push(result('rooms: four rooms never overlap and none is built in a corner area (a corner room is only there when it is added: see sweepCorners)', !overlap.length && !inCorner.length, { overlap, inCorner }));
     ROOM_CATALOG.push({ ...ROOM_CATALOG[0], id: 'qa-fifth', name: 'QA Fifth' });
     const doorsBefore = Object.keys(w.doors).join(), toastBefore = document.getElementById('toast').textContent;
     const fifth = R().add('qa-fifth');
@@ -2092,6 +2093,127 @@ T.sweepShelf = () => {
 };
 
 // ---- 17. Doors: long-press a door and GUY goes in (src/room.js doors, brain.js visit / leave) -------------------------------------
+// ---- Corner rooms: no wall of GUY's room of their own, a door in the side wall of the room beside them (room.js planCorner, rooms.js) ----
+T.sweepCorners = () => {
+  const out = [], base = errors.length, w = W(), b = B(), g = G();
+  T.resetRooms(); T.removeAll(); T.settle(); T.home();
+  const before = new Set(Object.keys(w.removed));
+  const overlaps = () => {
+    const bs = [{ id: 'main', minX: -ROOM_MAIN.w / 2, maxX: ROOM_MAIN.w / 2, minZ: -ROOM_MAIN.d / 2, maxZ: ROOM_MAIN.d / 2 }, ...Object.values(w.doors).map((d) => ({ id: d.id, ...d.shell.bounds }))], bad = [];
+    for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) { const p = bs[i], q = bs[j]; if (p.minX < q.maxX - 1e-6 && q.minX < p.maxX - 1e-6 && p.minZ < q.maxZ - 1e-6 && q.minZ < p.maxZ - 1e-6) bad.push([p.id, q.id]); }
+    return bad;
+  };
+  // 1. a corner has no wall of its own: with no room beside it there is nowhere for the door, so it is refused, kindly, and nothing changes
+  const lone = R().add('library');
+  out.push(result('corners: with no room beside a corner it is refused with a message and nothing is added', !lone.ok && friendly(lone.messages) && !Object.keys(w.doors).length && Object.keys(w.removed).length === before.size, { lone }));
+  // 2. the Workshop on the right wall touches two corners: each gets its door in the side wall of the Workshop
+  const wk = R().add('workshop', { walls: ['right'] });
+  const lib = R().add('library'), bed = R().add('bedroom');
+  const dw = w.doors.workshop, dl = w.doors.library, db = w.doors.bedroom;
+  out.push(result('corners: the Library and the Bedroom are added in the two corners beside the Workshop', wk.ok && lib.ok && bed.ok && !!dl && !!db && dl.parent === 'workshop' && db.parent === 'workshop', { wk: wk.ok, lib, bed }));
+  if (!dl || !db) { T.resetRooms(); return out; }
+  const eq = (p, q) => Math.abs(p - q) < 1e-6;
+  out.push(result('corners: each corner room fills its whole corner, 10 x 8 like the others, and no room overlaps another', eq(dl.shell.bounds.minX, 5) && eq(dl.shell.bounds.maxX, 15) && eq(dl.shell.bounds.minZ, -12) && eq(dl.shell.bounds.maxZ, -4)
+    && eq(db.shell.bounds.minX, 5) && eq(db.shell.bounds.maxX, 15) && eq(db.shell.bounds.minZ, 4) && eq(db.shell.bounds.maxZ, 12) && !overlaps().length, { l: dl.shell.bounds, b: db.shell.bounds, overlaps: overlaps() }));
+  out.push(result('corners: each door is in the Workshop\'s side wall, in the middle stretch the two rooms share, with nothing in the way', !doorProblems('library').length && !doorProblems('bedroom').length && dl.wall !== db.wall && w.doors.workshop.shell.sides[dl.wall.split(':')[1]].visible === false && w.doors.workshop.shell.sides[db.wall.split(':')[1]].visible === false, { l: dl.wall, b: db.wall, pl: doorProblems('library'), pb: doorProblems('bedroom') }));
+  // 3. the doorway: the way through only while the door is open
+  const probe = { w: 0.5, d: 0.5, obstacle: null };
+  for (const id of ['library', 'bedroom']) {
+    const d = w.doors[id], at = (n, lat = 0) => { const p = w.doorPoint(id, n); const t = w.shellAxes(id).lat; return { x: p.x + t.x * lat, z: p.z + t.z * lat }; };
+    const mid = at(0), off = at(0, 2.5), inRoom = at(-3), beside = at(0.9);
+    out.push(result(`corners: ${id}: a thing can be moved through the doorway but not through the wall beside it`, w.canTransit(probe, mid.x, mid.z) && !w.canTransit(probe, off.x, off.z) && w.canTransit(probe, inRoom.x, inRoom.z) && w.canTransit(probe, beside.x, beside.z), { mid, off }));
+    out.push(result(`corners: ${id}: the doorway is walkable only when the door is open`, !w.walkable(mid.x, mid.z) && (w.setDoorOpen(id, true), step(1.2), w.walkable(mid.x, mid.z)) && (w.setDoorOpen(id, false), step(1.2), !w.walkable(mid.x, mid.z)), { open: d.open }));
+    out.push(result(`corners: ${id}: a point inside is in that room, and the doorway is neither room`, w.roomIdAt(inRoom.x, inRoom.z) === id && w.roomIdAt(beside.x, beside.z) === 'workshop' && w.roomIdAt(mid.x, mid.z) === 'door', { a: w.roomIdAt(inRoom.x, inRoom.z), b: w.roomIdAt(beside.x, beside.z), c: w.roomIdAt(mid.x, mid.z) }));
+  }
+  // 4. the others have no neighbour that can have a door (they are refused, nothing changes)
+  const n0 = Object.keys(w.doors).join();
+  const gar = R().add('garage'), gm = R().add('gameroom');
+  out.push(result('corners: the corners beside no room that can have a door are refused with a message', !gar.ok && !gm.ok && friendly([...gar.messages, ...gm.messages]) && Object.keys(w.doors).join() === n0, { gar, gm }));
+  // 5. GUY goes in through the Workshop, looks round and comes back, shutting both doors behind him
+  const trip = (id) => {
+    const rooms = [], bad = [];
+    const msg = b.visitRoom(id);
+    let t = 0, inside = false;
+    while (t < 200) {
+      step(0.25); t += 0.25;
+      const r = w.roomIdAt(g.pos.x, g.pos.z);
+      if (rooms[rooms.length - 1] !== r) rooms.push(r);
+      if (!w.walkable(g.pos.x, g.pos.z) && !w.inMain(g.pos.x, g.pos.z)) bad.push(`${g.pos.x.toFixed(1)},${g.pos.z.toFixed(1)}`);
+      if (r === id) inside = true;
+      if (inside && r === 'main' && Object.values(w.doors).every((d) => d.open === 0)) break;               // (back in his own room with both doors shut: before he thinks of anything else)
+    }
+    return { msg, rooms, bad, t, inside };
+  };
+  for (const id of ['library', 'bedroom']) {
+    const tr = trip(id);
+    const order = tr.rooms.filter((r) => r !== 'door');
+    out.push(result(`corners: ${id}: he goes in through the Workshop (main, Workshop, ${id}), looks round and comes back by the same way`, tr.msg.ok && order.join() === ['main', 'workshop', id, 'workshop', 'main'].join() && b.inMain(), { rooms: tr.rooms, t: tr.t }));
+    out.push(result(`corners: ${id}: both doors are shut behind him and he never stood where he should not`, Object.values(w.doors).every((d) => d.open === 0) && !tr.bad.length, { open: Object.values(w.doors).map((d) => `${d.id}:${d.open}`), bad: tr.bad.slice(0, 5) }));
+  }
+  // 6. asked for from inside the Workshop: straight in, not out and in again
+  b.visitRoom('workshop');
+  { let t = 0; while (t < 80 && b.hereId() !== 'workshop') { step(0.25); t += 0.25; } step(1); }
+  const direct = b.visitRoom('library');
+  { let t = 0, seen = new Set(); while (t < 80) { step(0.25); t += 0.25; seen.add(w.roomIdAt(g.pos.x, g.pos.z)); if (b.hereId() === 'library') break; } out.push(result('corners: asked for the Library while he is in the Workshop, he goes straight in without going home first', direct.ok && /going into/i.test(direct.message) && seen.has('library') && !seen.has('main'), { direct, seen: [...seen] })); }
+  // 7. locked doors: the Library door locked keeps him out; shut in, he is shut in the Library, not the Workshop
+  b.visitRoom('library'); step(0.5);
+  b.skip(); T.home();
+  R().setDoorLocked('library', true);
+  const refused = b.visitRoom('library');
+  out.push(result('corners: a locked corner door keeps him out and says so', !refused.ok && /locked/i.test(refused.message), { refused }));
+  R().setDoorLocked('library', false);
+  b.visitRoom('library');
+  { let t = 0; while (t < 120 && b.hereId() !== 'library') { step(0.25); t += 0.25; } }
+  step(2);
+  R().setDoorLocked('library', true);
+  out.push(result('corners: locked while he is inside, he is shut in the Library (and not the Workshop)', b.stuckIn() === 'library', { stuck: b.stuckIn(), here: b.hereId() }));
+  R().setDoorLocked('library', false);
+  { let t = 0; while (t < 200 && !b.inMain()) { step(0.25); t += 0.25; } }
+  out.push(result('corners: unlocked, he leaves through the Workshop to his own room', b.inMain(), { here: b.hereId() }));
+  // the Workshop's own door locked while he is in the Library: he can get as far as the Workshop, and is shut in there
+  b.visitRoom('library');
+  { let t = 0; while (t < 120 && b.hereId() !== 'library') { step(0.25); t += 0.25; } }
+  step(2);
+  R().setDoorLocked('workshop', true);
+  out.push(result('corners: with only the Workshop door locked he is not shut in the Library (the way to the Workshop is open)', b.stuckIn() === null, { stuck: b.stuckIn() }));
+  b.skip(); b.pendingActivity = 'leave';
+  { let t = 0; while (t < 200 && b.hereId() !== 'workshop') { step(0.25); t += 0.25; } step(3); }
+  out.push(result('corners: he comes out of the Library into the Workshop and is shut in there', b.stuckIn() === 'workshop', { stuck: b.stuckIn(), here: b.hereId() }));
+  R().setDoorLocked('workshop', false);
+  { let t = 0; while (t < 200 && !b.inMain()) { step(0.25); t += 0.25; } }
+  out.push(result('corners: unlocked, he gets home', b.inMain(), { here: b.hereId() }));
+  // 8. something that stands in the Library: he goes in through the Workshop to use it, and comes back out
+  T.addObject('piano');
+  const pi = w.objects.piano, lb = dl.shell.bounds, PIANO = ['plink', 'piano', 'sitpiano'];
+  pi.set((lb.minX + lb.maxX) / 2, (lb.minZ + lb.maxZ) / 2 - 0.8);
+  b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; b.stayRoom = null; T.home(); T.settle();
+  const ri = b.interact('piano');
+  let tt = 0, played = false; const went = new Set();
+  while (tt < 200) { step(0.25); tt += 0.25; const r = w.roomIdAt(g.pos.x, g.pos.z); went.add(r); if (r === 'library' && PIANO.includes(b.last) && b.step) { played = true; break; } }
+  out.push(result('corners: a piano in the Library: he goes in through the Workshop and plays it there', ri.ok && played && went.has('workshop'), { ri, went: [...went], last: b.last }));
+  b.skip(); b.queue = []; b.step = null; b.pendingActivity = 'leave';
+  let home = false;
+  { let t = 0; while (t < 200 && !home) { step(0.25); t += 0.25; home = w.roomIdAt(g.pos.x, g.pos.z) === 'main' && Object.values(w.doors).every((d) => d.open === 0); } }
+  out.push(result('corners: he comes back out through both doors and shuts them', home && Object.values(w.doors).every((d) => d.open === 0), { here: b.hereId(), open: Object.values(w.doors).map((d) => `${d.id}:${d.open}`) }));
+  pi.set(-2.5, -2.4);
+  // 9. saved with the rooms, and a corner room comes back whatever order they are read in
+  const snap = R().snapshot();
+  out.push(result('corners: the save records the corner and the room its door is in', snap.rooms.library && snap.rooms.library.parent === 'workshop' && snap.rooms.library.corner === 'right-back' && snap.rooms.bedroom.corner === 'right-front' && !snap.rooms.workshop.parent, { snap }));
+  const dlWall = dl.wall, dlU = dl.u;
+  T.resetRooms();
+  out.push(result('corners: taking the Workshop away takes the rooms behind it too (and their walls whole again)', !Object.keys(w.doors).length, { doors: Object.keys(w.doors) }));
+  const reversed = { rooms: { bedroom: snap.rooms.bedroom, library: snap.rooms.library, workshop: snap.rooms.workshop } };
+  const res = R().restoreFrom(reversed);
+  const back = w.doors.library;
+  out.push(result('corners: restoring puts the Workshop back first, then both corner rooms where they were', res.every((r) => r.ok) && !!back && back.wall === dlWall && back.u === dlU && !!w.doors.bedroom && !overlaps().length, { res }));
+  // 10. taking only a corner room away puts the Workshop's wall back whole
+  R().reset('library');
+  out.push(result('corners: taking a corner room away puts the side wall back whole', !w.doors.library && w.doors.workshop.shell.sides[dlWall.split(':')[1]].visible === true && !!w.doors.bedroom, { visible: w.doors.workshop.shell.sides[dlWall.split(':')[1]].visible }));
+  T.resetRooms(); T.home(); T.removeAll(); putBackSince(before); T.settle(); machine().hidden = true;
+  out.push(result('corners: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 T.sweepVisit = () => {
   const out = [], base = errors.length, w = W(), b = B(), g = G();
   for (const wall of ['right', 'front', 'back']) {
@@ -4392,6 +4514,7 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.workstation = S(T.sweepWorkstation);
   report.arrange = S(T.sweepArrange);
   report.paintings = S(T.sweepPaintings);
+  report.corners = S(T.sweepCorners);
   if (seed && T.unseed) T.unseed();
   window.__qaPaused = wasPaused;
   T.lastReport = report;

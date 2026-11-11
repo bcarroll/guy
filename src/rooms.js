@@ -25,6 +25,21 @@ export const ROOM_CATALOG = [
   { id: 'range', name: 'Shooting Range', icon: '🎯', unlocked: true, shootingRange: true, size: { w: 10, d: 8 }, doorWalls: ['right', 'front', 'back', 'left'],
     desc: 'A shooting range with three lanes. Holographic bullseyes and enemies pop up down the range, and the robots take shots at them: from their own lane, and across the screens when the line is clear.',
     look: { frame: 0x3b4150, door: 0x3d4a63, panel: 0x5ef2ff, floor: 0x9a9fa6, wall: 0xc9ccd2 } },
+  // Corner rooms: empty rooms for whatever the user wants to put in them (the Catalog's Rooms list, and every piece of furniture can be moved
+  // in). A corner has no wall of GUY's room to put a door in, so it opens through the side wall of the room beside it: the Workshop, or another
+  // room with one. `corner: true` rooms are put in the first free corner (`corners`) that has such a neighbour: see world.planCorner.
+  { id: 'library', name: 'Library', icon: '📚', unlocked: true, corner: true, doorWalls: [], corners: ['right-back', 'right-front', 'left-back', 'left-front'],
+    desc: 'A quiet room in a corner of your home, reached through the room beside it.',
+    look: { frame: 0x5a3b22, door: 0x7a3b2e, panel: 0x93503f, floor: 0x9b7653, wall: 0xcdbfa6 } },
+  { id: 'bedroom', name: 'Bedroom', icon: '🛏️', unlocked: true, corner: true, doorWalls: [], corners: ['right-front', 'right-back', 'left-front', 'left-back'],
+    desc: 'A cosy room in a corner of your home, reached through the room beside it.',
+    look: { frame: 0x6b4a2b, door: 0x5b6fa8, panel: 0x7b8fc8, floor: 0xb9a58a, wall: 0xd9cfe3 } },
+  { id: 'garage', name: 'Garage', icon: '🚗', unlocked: true, corner: true, doorWalls: [], corners: ['left-back', 'left-front', 'right-back', 'right-front'],
+    desc: 'A roomy garage in a corner of your home, reached through the room beside it.',
+    look: { frame: 0x4a4f57, door: 0x8a8f98, panel: 0xa6abb3, floor: 0x7d8186, wall: 0xb9bcc1 } },
+  { id: 'gameroom', name: 'Game Room', icon: '🎮', unlocked: true, corner: true, doorWalls: [], corners: ['left-front', 'left-back', 'right-front', 'right-back'],
+    desc: 'A room for fun in a corner of your home, reached through the room beside it.',
+    look: { frame: 0x3b3f66, door: 0x6a3fa0, panel: 0x8a5fc8, floor: 0x55587a, wall: 0xaab0d6 } },
 ];
 
 const KEY = 'guy.rooms.v1';
@@ -42,7 +57,8 @@ export function initRooms({ world, remove, persist, refit }) {
   };
 
   const snapshot = () => ({ rooms: Object.fromEntries(Object.entries(state).filter(([id, s]) => s.added && world.doors[id])
-    .map(([id, s]) => [id, { added: true, wall: s.wall, u: s.u, ...(s.unlocked !== undefined ? { unlocked: s.unlocked } : {}), ...(s.doorLocked ? { doorLocked: true } : {}) }])) });
+    
+    .map(([id, s]) => [id, { added: true, wall: s.wall, u: s.u, ...(s.parent && s.parent !== 'main' ? { parent: s.parent, corner: s.corner } : {}), ...(s.unlocked !== undefined ? { unlocked: s.unlocked } : {}), ...(s.doorLocked ? { doorLocked: true } : {}) }])) });
   const save = () => {
     if (!persist) return;
     try { localStorage.setItem(KEY, JSON.stringify(snapshot())); } catch { /* no storage */ }
@@ -50,12 +66,12 @@ export function initRooms({ world, remove, persist, refit }) {
   const changed = () => { save(); refit(); listeners.forEach((f) => f()); };
 
   // Take the pieces in a door's way out of the room (they go to the Catalog, like any removal) and build the door.
-  function place(r, wall, u) {
+  function place(r, wall, u, corner = null) {
     const b = world.doorBlockers(wall, u);
     if (b.fixed) return null;
     for (const name of b.hit) remove(name);
-    world.addDoor(r, wall, u);
-    state[r.id] = { ...(state[r.id] || {}), id: r.id, added: true, wall, u };
+    world.addDoor(r, wall, u, corner ? { parent: corner.parent, cell: corner.cell } : {});
+    state[r.id] = { ...(state[r.id] || {}), id: r.id, added: true, wall, u, ...(corner ? { parent: corner.parent, corner: corner.corner } : {}) };
     world.setDoorLocked(r.id, !!state[r.id].doorLocked);             // (a saved room comes back locked if it was)
     return b.hit;
   }
@@ -66,6 +82,7 @@ export function initRooms({ world, remove, persist, refit }) {
     if (!r) return { ok: false, messages: ['That room is not available.'] };
     if (!unlocked(id)) return { ok: false, messages: ['That room is not ready yet.'] };
     if (added(id)) return { ok: false, already: true, messages: [`The ${r.name} is already part of your home.`] };
+    if (r.corner) return addCorner(r, opts);
     const spot = opts.at || world.planDoor(opts.walls || r.doorWalls);
     const hit = spot ? place(r, spot.wall, spot.u) : null;
     if (!spot || !hit) return { ok: false, messages: ['No clear wall for a door right now. Try moving something.'] };
@@ -76,15 +93,40 @@ export function initRooms({ world, remove, persist, refit }) {
     return { ok: true, wall: spot.wall, u: spot.u, displaced: hit, messages };
   }
 
+  // A corner room: a free corner with a room beside it that can have a door (opts.at: the corner and door it had when it was saved).
+  function addCorner(r, opts) {
+    let spot = null;
+    if (opts.at && opts.at.corner) {
+      const cell = world.cornerCell(opts.at.corner);
+      if (world.doors[opts.at.parent]) spot = { wall: opts.at.wall, u: opts.at.u, parent: opts.at.parent, corner: opts.at.corner, cell };
+    } else {
+      const plan = world.planCorner(opts.corners || r.corners);
+      if (plan.none) {
+        return { ok: false, messages: [plan.why === 'taken' ? 'No free corner left for another room.'
+          : 'A corner room needs the Workshop beside it first.'] };
+      }
+      spot = plan;
+    }
+    const hit = spot ? place(r, spot.wall, spot.u, spot) : null;
+    if (!spot || !hit) return { ok: false, messages: ['No clear wall for a door right now. Try moving something.'] };
+    changed();
+    const messages = [`${r.name} added! There is a new door in the ${world.doors[spot.parent].name}.`];
+    if (hit.length === 1) messages.push(`Moved the ${label(hit[0])} to make space for the door.`);
+    else if (hit.length > 1) messages.push(`Moved ${hit.length} things to make space. Find them in the Catalog.`);
+    return { ok: true, wall: spot.wall, u: spot.u, parent: spot.parent, corner: spot.corner, displaced: hit, messages };
+  }
+
   // Bring back the rooms saved earlier (before the Catalog's extras, so the door strip is already clear for them).
   function restoreFrom(data) {
     const out = [];
-    for (const [id, s] of Object.entries((data && data.rooms) || {})) {
+    // (a corner room opens into the room beside it: that one comes back first)
+    const entries = Object.entries((data && data.rooms) || {}).sort(([, a], [, b]) => (a.parent ? 1 : 0) - (b.parent ? 1 : 0));
+    for (const [id, s] of entries) {
       const r = def(id);
       if (!r || !s.added) continue;
       if (s.unlocked !== undefined) state[id] = { ...(state[id] || {}), id, unlocked: s.unlocked };
       if (s.doorLocked) state[id] = { ...(state[id] || {}), id, doorLocked: true };
-      const res = add(id, { at: { wall: s.wall, u: s.u } });
+      const res = add(id, { at: { wall: s.wall, u: s.u, ...(s.parent ? { parent: s.parent, corner: s.corner } : {}) } });
       out.push({ id, ok: res.ok || !!res.already, displaced: res.displaced || [] });
       if (!res.ok && !res.already) {                       // the saved spot is taken by something fixed: find a new one
         const again = add(id);
@@ -102,6 +144,7 @@ export function initRooms({ world, remove, persist, refit }) {
 
   // Test aids: take a room away again, or lock / unlock it, without going through the Catalog.
   function reset(id) {
+    for (const k of Object.values(world.doors)) if (k.parent === id) reset(k.id);          // the rooms that open into it go first
     const d = world.doors[id], b = d && d.shell.bounds;
     const inRoom = (x, z) => !!b && x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ;
     for (const [name, o] of Object.entries(world.objects)) if (inRoom(o.x, o.z)) { remove(name); delete world.removed[name]; }     // its furniture goes with it

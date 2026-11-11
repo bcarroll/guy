@@ -112,7 +112,7 @@ export class GalBrain extends Brain {
         const steps = [];
         const gr = lead.g.root.position, room = w.roomIdAt(gr.x, gr.z);
         if (!this.inMain() && room !== w.roomIdAt(this.g.root.position.x, this.g.root.position.z)) steps.push(...acts.leave().slice(1));
-        if (this.inMain() && room !== 'main' && room !== 'door' && w.doors[room]) steps.push(...this.doorIn(room));
+        if (this.inMain() && room !== 'main' && room !== 'door' && w.doors[room]) steps.push(...this.tripSteps('main', room));
         steps.push({
           type: 'plan',
           fn: () => {

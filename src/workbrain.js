@@ -60,6 +60,17 @@ export function installWorkshop(Brain, POSES, H) {
     },
     // The doors out of room `id` (an added room has the one door; with more, any that is unlocked lets him out).
     exitsOf(id) { const d = this.w.doors[id]; return d ? [d] : []; },
+    // The room a room's door opens into: his own ('main'), or the room beside a corner room.
+    parentOf(id) { const d = this.w.doors[id]; return d && d.parent ? d.parent : 'main'; },
+    // The rooms from `id` out to his own, `id` first (not including his own room).
+    roomChain(id) { const c = []; for (let r = id; r && r !== 'main' && this.w.doors[r]; r = this.parentOf(r)) c.push(r); return c; },
+    // The doors to go through from room `here` to room `where` (through every room between: a corner room is entered through the room beside it).
+    // `outOnly`: just out of the room he is in, as far as his own (the Workshop, Yard and Restaurant jobs go in through their own door).
+    tripSteps(here, where, outOnly = false) {
+      const a = this.roomChain(here), b = outOnly ? [] : this.roomChain(where);
+      while (!outOnly && a.length && b.length && a[a.length - 1] === b[b.length - 1]) { a.pop(); b.pop(); }          // (the rooms they share are not left)
+      return [...a.flatMap((r) => this.doorOut(r)), ...b.reverse().flatMap((r) => this.doorIn(r))];
+    },
     // The added room he is shut in: he is in it and every door out of it is locked (a locked door works both ways). He can only do what can
     // be done in there, until somebody unlocks a door. null when he is not shut in.
     stuckIn() {
@@ -77,20 +88,22 @@ export function installWorkshop(Brain, POSES, H) {
         { type: 'plan', fn: () => (w.isDoorOpen(id) ? [] : [      // (a door that is already open is simply walked through)
           this.play('reach', 1.6, { at: [0.8, () => { w.setDoorOpen(id, true); sfx('click'); }], target: () => w.doorKnob(id) }),
           this.play('idle', 0.7)]) },
-        { ...this.walk(inn.x, inn.z), direct: true }];
+        { ...this.walk(inn.x, inn.z), direct: true, ...this.doorFrame(id) }];
     },
+    // A walk through the door of a corner room is on the floor of the room beside it (the grid of his own room knows nothing of it).
+    doorFrame(id) { const p = this.parentOf(id); return p === 'main' ? {} : { frameRoom: p }; },
     doorOut(id) {
       const w = this.w, out = this.doorStand(id), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false);
       // (locked while he is on his way out: he stays in, and what he was doing there is dropped)
       return [{ type: 'plan', fn: () => { if (!this.stuckIn()) return []; this.queue.length = 0; this.ui(`shut in the ${w.doors[id].name} (the door is locked)`); return []; } },
         this.play('idle', 0.05, { at: [0, () => w.setDoorOpen(id, true)] }),            // (the other robot may have shut it behind her while he was inside)
-        this.walk(inn.x, inn.z), { ...this.walk(out.x, out.z), direct: true }, this.walk(out.x, out.z, face),
+        this.walk(inn.x, inn.z), { ...this.walk(out.x, out.z), direct: true, ...this.doorFrame(id) }, this.walk(out.x, out.z, face),
         this.play('reach', 1.6, { at: [0.8, () => this.closeDoor(id)], target: () => w.doorKnob(id) })];
     },
     // the door is shut behind whoever leaves, unless the other robot is still in there (or in the doorway)
     closeDoor(id) {
       const o = this.other, r = o && o.g ? this.w.roomIdAt(o.g.root.position.x, o.g.root.position.z) : null;
-      if (r === id || r === 'door') return;
+      if (r === 'door' || this.roomChain(r).includes(id)) return;                      // (still in there, or in a room beyond it)
       this.w.setDoorOpen(id, false);
     },
     // A trip: in through the door (unless he is already inside), the steps, and out again (unless he is locked on something in here).

@@ -487,8 +487,18 @@ export function buildRoom(scene) {
   // cover the doorway. u runs along the wall like a wall piece's u (z on the right wall, x on the front and back walls).
   const DOOR = { w: 1.0, h: 2.2, zone: 1.0, margin: 0.15 };
   const doors = {};                                                    // room id -> { id, wall, u, group, shell, rect }
+  // The strip of floor between `from` and `to` metres along the way into the room from a door at (wall, u): for the doors on the
+  // walls of an added room (a corner room's door), where the main walls' own cases below do not apply.
+  const stripOf = (wall, u, from, to) => {
+    const W = WALL[wall], p = W.at(u, 0), q = W.at(u + 1, 0), hw = DOOR.w / 2 + DOOR.margin;
+    const tx = q.x - p.x, tz = q.z - p.z, xs = [], zs = [];
+    for (const a of [-hw, hw]) for (const d of [from, to]) { xs.push(p.x + tx * a + W.n.x * d); zs.push(p.z + tz * a + W.n.z * d); }
+    const r6 = (v) => Math.round(v * 1e6) / 1e6;
+    return { x0: r6(Math.min(...xs)), x1: r6(Math.max(...xs)), z0: r6(Math.min(...zs)), z1: r6(Math.max(...zs)) };
+  };
   const doorRect = (wall, u) => {                                       // the floor strip in front of a door at (wall, u)
     const hw = DOOR.w / 2 + DOOR.margin;
+    if (wall.includes(':')) return stripOf(wall, u, 0, DOOR.zone);
     if (wall === 'right') return { x0: ROOM.w / 2 - DOOR.zone, x1: ROOM.w / 2, z0: u - hw, z1: u + hw };
     if (wall === 'left') return { x0: -ROOM.w / 2, x1: -ROOM.w / 2 + DOOR.zone, z0: u - hw, z1: u + hw };
     if (wall === 'front') return { x0: u - hw, x1: u + hw, z0: ROOM.d / 2 - DOOR.zone, z1: ROOM.d / 2 };
@@ -496,6 +506,7 @@ export function buildRoom(scene) {
   };
   const doorRectIn = (wall, u) => {                                     // the same strip on the other side of the wall, inside the added room
     const hw = DOOR.w / 2 + DOOR.margin;
+    if (wall.includes(':')) return stripOf(wall, u, -DOOR.zone, 0);
     if (wall === 'right') return { x0: ROOM.w / 2, x1: ROOM.w / 2 + DOOR.zone, z0: u - hw, z1: u + hw };
     if (wall === 'left') return { x0: -ROOM.w / 2 - DOOR.zone, x1: -ROOM.w / 2, z0: u - hw, z1: u + hw };
     if (wall === 'front') return { x0: u - hw, x1: u + hw, z0: ROOM.d / 2, z1: ROOM.d / 2 + DOOR.zone };
@@ -1328,6 +1339,12 @@ export function buildRoom(scene) {
       // straddling the wall line of a door: through the doorway only
       const through = Object.values(doors).some((dr) => {
         const b = dr.shell.bounds, hw = DOOR.w / 2, wall = dr.wall;
+        if (wall.includes(':')) {                                         // a corner room's door, in the side wall of the room beside it
+          const W = WALL[wall], p = W.at(dr.u, 0), q = W.at(dr.u + 1, 0), pb = doors[dr.parent].shell.bounds;
+          const cs = [[x0, z0], [x0, z1], [x1, z0], [x1, z1]].map(([x, z]) => ({ x, z, d: (x - p.x) * W.n.x + (z - p.z) * W.n.z, l: (x - p.x) * (q.x - p.x) + (z - p.z) * (q.z - p.z) }));
+          const within = (bb, c) => c.x >= bb.minX - 1e-6 && c.x <= bb.maxX + 1e-6 && c.z >= bb.minZ - 1e-6 && c.z <= bb.maxZ + 1e-6;
+          return cs.some((c) => c.d > 1e-6) && cs.some((c) => c.d < -1e-6) && cs.every((c) => Math.abs(c.l) <= hw + 1e-6 && (within(pb, c) || within(b, c)));
+        }
         if (wall === 'right') return x0 < MAIN_BOUNDS.maxX && x1 > MAIN_BOUNDS.maxX && x0 >= MAIN_BOUNDS.minX && x1 <= b.maxX && z0 >= dr.u - hw && z1 <= dr.u + hw;
         if (wall === 'left') return x1 > MAIN_BOUNDS.minX && x0 < MAIN_BOUNDS.minX && x1 <= MAIN_BOUNDS.maxX && x0 >= b.minX && z0 >= dr.u - hw && z1 <= dr.u + hw;
         if (wall === 'front') return z0 < MAIN_BOUNDS.maxZ && z1 > MAIN_BOUNDS.maxZ && z0 >= MAIN_BOUNDS.minZ && z1 <= b.maxZ && x0 >= dr.u - hw && x1 <= dr.u + hw;
@@ -1413,9 +1430,62 @@ export function buildRoom(scene) {
     return best && { wall: best.wall, u: best.u, displace: best.hit };
   };
 
+  // ---- Corner rooms ----
+  // The floor around GUY's room is a 3 x 3 grid of rooms: his own in the middle, one room on each wall (the rooms on the four walls) and
+  // four corners. A corner room has no wall of GUY's room to put a door in: it opens through a door in the side wall of the room beside it
+  // (the Workshop, say), and everybody goes through that room to reach it. A corner is as big as the rooms it touches make it (a room of
+  // GUY's room's size where nothing is beside it), and it must not overlap any room.
+  const CORNERS = { 'right-front': [1, 1], 'right-back': [1, -1], 'left-front': [-1, 1], 'left-back': [-1, -1] };
+  const cornerCell = (key) => {
+    const [sx, sz] = CORNERS[key];
+    const nx = Object.values(doors).find((d) => d.parent === 'main' && d.wall === (sx > 0 ? 'right' : 'left'));
+    const nz = Object.values(doors).find((d) => d.parent === 'main' && d.wall === (sz > 0 ? 'front' : 'back'));
+    const wx = nx ? nx.shell.bounds.maxX - nx.shell.bounds.minX : ROOM.w, dz = nz ? nz.shell.bounds.maxZ - nz.shell.bounds.minZ : ROOM.d;
+    return {
+      minX: sx > 0 ? ROOM.w / 2 : -ROOM.w / 2 - wx, maxX: sx > 0 ? ROOM.w / 2 + wx : -ROOM.w / 2,
+      minZ: sz > 0 ? ROOM.d / 2 : -ROOM.d / 2 - dz, maxZ: sz > 0 ? ROOM.d / 2 + dz : -ROOM.d / 2,
+    };
+  };
+  const cellFree = (c) => ![MAIN_BOUNDS, ...Object.values(doors).map((d) => d.shell.bounds)].some((b) => c.maxX > b.minX + 0.01 && c.minX < b.maxX - 0.01 && c.maxZ > b.minZ + 0.01 && c.minZ < b.maxZ - 0.01);
+  // Where a door for a corner room could go: the doors it could have, best first. `why` says what is missing when there are none.
+  const planCorner = (corners = Object.keys(CORNERS)) => {
+    let why = 'corner';
+    for (const key of corners) {
+      const cell = cornerCell(key);
+      if (!cellFree(cell)) { why = why === 'corner' ? 'taken' : why; continue; }
+      const mid = { x: (cell.minX + cell.maxX) / 2, z: (cell.minZ + cell.maxZ) / 2 }, pts = [[cell.minX, cell.minZ], [cell.minX, cell.maxZ], [cell.maxX, cell.minZ], [cell.maxX, cell.maxZ]];
+      let best = null;
+      for (const pd of Object.values(doors)) {
+        if (!pd.shell.linkable || !pd.shell.sides) continue;
+        for (const side of ['a', 'b']) {
+          const wall = `${pd.id}:${side}`, W = WALL[wall];
+          if (!W || Object.values(doors).some((o) => o.wall === wall)) continue;
+          const dist = (x, z) => (x - W.p0.x) * W.n.x + (z - W.p0.z) * W.n.z;
+          if (dist(mid.x, mid.z) >= 0) continue;                                    // the corner must be on the far side of this wall
+          const on = pts.filter(([x, z]) => Math.abs(dist(x, z)) < 1e-3).map(([x, z]) => W.uv({ x, y: 0, z }).u);
+          if (on.length < 2) continue;
+          const lo = Math.max(W.lo, Math.min(...on)), hi = Math.min(W.hi, Math.max(...on));
+          if (hi - lo < DOOR.w + 2 * DOOR.margin + 0.6) continue;                   // the walls must really share a stretch to put a door in
+          const steps = Math.floor((hi - lo - 1.8) / 0.1 + 1e-6);
+          for (let i = 0; i <= steps; i++) {
+            const u = +(lo + 0.9 + i * 0.1).toFixed(2), r = doorRect(wall, u);
+            if (Object.values(doors).some((d) => rectsOverlap(d.rect, r) || rectsOverlap(d.rectIn, r))) continue;
+            const b = doorBlockers(wall, u);
+            if (b.fixed) continue;
+            const off = Math.abs(u - (lo + hi) / 2);
+            if (!best || b.hit.length < best.hit.length || (b.hit.length === best.hit.length && off < best.off - 1e-6)) best = { wall, u, parent: pd.id, corner: key, cell, hit: b.hit, off };
+          }
+        }
+      }
+      if (best) return { wall: best.wall, u: best.u, parent: best.parent, corner: key, cell, displace: best.hit };
+      why = 'neighbour';
+    }
+    return { none: true, why };
+  };
+
   // A closed door in a wooden frame with the room's name above it. Both faces are drawn: the right and front walls are not
   // drawn from the default camera, so the door is often seen from the other side.
-  const buildDoor = (def, wall, u) => {
+  const buildDoor = (def, wall, u, otherName = "🏠 GUY's Room") => {
     const g = new THREE.Group();
     g.position.copy(WALL[wall].at(u, 0));
     g.rotation.y = WALL[wall].rotY;
@@ -1466,7 +1536,7 @@ export function buildRoom(scene) {
       tex.colorSpace = THREE.SRGBColorSpace;
       return tex;
     };
-    for (const [z, ry, label] of [[0.145, 0, `${def.icon} ${def.name}`], [-0.005, Math.PI, "🏠 GUY's Room"]]) {
+    for (const [z, ry, label] of [[0.145, 0, `${def.icon} ${def.name}`], [-0.005, Math.PI, otherName]]) {
       const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.225), new THREE.MeshBasicMaterial({ map: signTex(label) }));
       sign.position.set(0, DOOR.h + 0.3, z);
       sign.rotation.y = ry;
@@ -1475,12 +1545,56 @@ export function buildRoom(scene) {
     return g;
   };
 
+  // The floor, the three walls (far, `a` at local x = -L/2 and `b` at +L/2) and the ceiling of an indoor room, in the frame of `g`
+  // (the door wall at z = 0, the room going back to z = -N). Returns the wall meshes, so a doorway can be cut in one of them.
+  const buildRoomBox = (def, g, L, N) => {
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(L, N), new THREE.MeshStandardMaterial({ color: def.look.floor, roughness: 0.9 }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(0, 0.002, -N / 2);
+    floor.receiveShadow = true;
+    g.add(floor);
+    const wm = new THREE.MeshStandardMaterial({ color: def.look.wall, roughness: 0.95 });
+    wm.userData.shared = true;                       // (a doorway cut in one of these walls reuses it)
+    const side = (len, x, z, ry) => {
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(len, ROOM.h), wm);
+      p.position.set(x, ROOM.h / 2, z);
+      p.rotation.y = ry;
+      p.receiveShadow = true;
+      g.add(p);
+      return p;
+    };
+    const sides = {
+      far: side(L, 0, -N, 0),
+      a: side(N, -L / 2, -N / 2, Math.PI / 2),
+      b: side(N, L / 2, -N / 2, -Math.PI / 2),
+    };
+    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(L, N), mat(0xeeeeee));
+    ceil.rotation.x = Math.PI / 2;
+    ceil.position.set(0, ROOM.h, -N / 2);
+    g.add(ceil);
+    return sides;
+  };
+  // A corner room: its footprint is the `cell` it stands in, and its door is in the side wall of a room beside it (`wall`, a key of
+  // WALL such as 'workshop:b'). Laid out like any other room, with its door wall facing the room it opens from.
+  const buildCornerShell = (def, wall, cell) => {
+    const W = WALL[wall], n = W.n, ew = Math.abs(n.x) > 0.5;
+    const N = ew ? cell.maxX - cell.minX : cell.maxZ - cell.minZ, L = ew ? cell.maxZ - cell.minZ : cell.maxX - cell.minX;
+    const mid = { x: (cell.minX + cell.maxX) / 2, z: (cell.minZ + cell.maxZ) / 2 };
+    const c = W.uv({ x: mid.x, y: 0, z: mid.z }).u;                      // where along the wall the middle of the room is
+    const g = new THREE.Group();
+    g.position.copy(W.at(c, 0));
+    g.rotation.y = W.rotY;
+    const sides = buildRoomBox(def, g, L, N);
+    return { group: g, bounds: { ...cell }, N, L, sides, range: null, corner: true };
+  };
+
   // The room behind a door: a floor and three walls (the main room's own wall closes the fourth side) that open to the sky like
   // the main room. It sits just outside the door wall, kept within that wall's length. `bounds` is its footprint on the floor.
   // Every added room is as big as GUY's room (same floor area, same depth) unless its catalog entry gives a `size` (depth away
   // from the door x width along the wall): a room that is cramped cannot hold what is built in it.
-  const buildShell = (def, wall, u) => {
+  const buildShell = (def, wall, u, cell = null) => {
     const W = WALL[wall];
+    if (cell) return buildCornerShell(def, wall, cell);
     const N = def.size ? def.size.w : (wall === 'right' || wall === 'left' ? ROOM.w : ROOM.d);          // away from the door wall
     const L = def.size ? def.size.d : W.hi - W.lo;                                    // along the door wall
     const c = Math.max(W.lo + L / 2, Math.min(W.hi - L / 2, u));
@@ -1495,32 +1609,13 @@ export function buildRoom(scene) {
       const yard = buildYardShell(g, L, N, ROOM.h);
       return { group: g, bounds: bounds0, N, L, outdoor: true, yard };
     }
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(L, N), new THREE.MeshStandardMaterial({ color: def.look.floor, roughness: 0.9 }));
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.set(0, 0.002, -N / 2);
-    floor.receiveShadow = true;
-    g.add(floor);
-    const wm = new THREE.MeshStandardMaterial({ color: def.look.wall, roughness: 0.95 });
-    const side = (len, x, z, ry) => {
-      const p = new THREE.Mesh(new THREE.PlaneGeometry(len, ROOM.h), wm);
-      p.position.set(x, ROOM.h / 2, z);
-      p.rotation.y = ry;
-      p.receiveShadow = true;
-      g.add(p);
-    };
-    side(L, 0, -N, 0);                       // the far wall, facing the door
-    side(N, -L / 2, -N / 2, Math.PI / 2);
-    side(N, L / 2, -N / 2, -Math.PI / 2);
-    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(L, N), mat(0xeeeeee));
-    ceil.rotation.x = Math.PI / 2;
-    ceil.position.set(0, ROOM.h, -N / 2);
-    g.add(ceil);
+    const sides = buildRoomBox(def, g, L, N);
     const bounds = wall === 'right' ? { minX: ROOM.w / 2, maxX: ROOM.w / 2 + N, minZ: c - L / 2, maxZ: c + L / 2 }
       : wall === 'left' ? { minX: -ROOM.w / 2 - N, maxX: -ROOM.w / 2, minZ: c - L / 2, maxZ: c + L / 2 }
       : wall === 'front' ? { minX: c - L / 2, maxX: c + L / 2, minZ: ROOM.d / 2, maxZ: ROOM.d / 2 + N }
         : { minX: c - L / 2, maxX: c + L / 2, minZ: -ROOM.d / 2 - N, maxZ: -ROOM.d / 2 };
     // the Shooting Range: its lanes, screens, bullseyes and enemies go in the room (src/rangeobjects.js); the screens are attached in addDoor
-    return { group: g, bounds, N, L, range: def.shootingRange ? buildRangeShell(g, L, N) : null };
+    return { group: g, bounds, N, L, sides, range: def.shootingRange ? buildRangeShell(g, L, N) : null, linkable: !def.shootingRange && !def.elevator };
   };
 
   // The three walls of an added room as places to hang things: `<id>:far` (facing the door) and `<id>:a`, `<id>:b` (the sides).
@@ -1541,15 +1636,16 @@ export function buildRoom(scene) {
 
   // A real doorway: the wall is left out and put back in three pieces (left of the door, right of it, and above it), so an open
   // door shows the way through and GUY can walk through it. Built in the door's own frame (local x along the wall).
-  const buildDoorway = (wall, u) => {
-    const W = WALL[wall], sgn = W.rotY === Math.PI || W.rotY === Math.PI / 2 ? -1 : 1;
+  const buildDoorway = (wall, u, material = wallMat) => {
+    const W = WALL[wall], p0 = W.at(u, 0), p1 = W.at(u + 1, 0);
+    const sgn = (p1.x - p0.x) * Math.cos(W.rotY) - (p1.z - p0.z) * Math.sin(W.rotY) < 0 ? -1 : 1;       // does u grow the way the door's own x does?
     const g = new THREE.Group();
     g.position.copy(W.at(u, 0));
     g.rotation.y = W.rotY;
     const a = sgn > 0 ? W.lo - u : u - W.hi, b = sgn > 0 ? W.hi - u : u - W.lo;     // the ends of the wall, in the door's x
     const piece = (x0, x1, y0, y1) => {
       if (x1 - x0 < 0.01 || y1 - y0 < 0.01) return;
-      const p = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, y1 - y0), wallMat);
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, y1 - y0), material);
       p.position.set((x0 + x1) / 2, (y0 + y1) / 2, 0);
       p.receiveShadow = true;
       g.add(p);
@@ -1562,7 +1658,7 @@ export function buildRoom(scene) {
 
   const disposeTree = (g) => g.traverse((n) => {
     if (n.geometry) n.geometry.dispose();
-    if (n.material && n.material !== wallMat) { if (n.material.map) n.material.map.dispose(); n.material.dispose(); }     // the wall material is shared with the room's own walls
+    if (n.material && n.material !== wallMat && !(n.material.userData && n.material.userData.shared)) { if (n.material.map) n.material.map.dispose(); n.material.dispose(); }     // the wall material is shared with the room's own walls
   });
 
   const world = {
@@ -1594,16 +1690,26 @@ export function buildRoom(scene) {
       return d;
     },
     // ---- doors and the rooms behind them (see src/rooms.js) ----
-    doors, DOOR, planDoor, doorBlockers, findWallSpot, canTransit, dragTo, beginDrag, dropObject,
+    doors, DOOR, planDoor, planCorner, cornerCell, CORNER_KEYS: Object.keys(CORNERS), doorBlockers, findWallSpot, canTransit, dragTo, beginDrag, dropObject,
     // Put a door for room `def` at (wall, u). The caller has already cleared whatever was in its way.
-    addDoor(def, wall, u) {
+    // A corner room (opts.parent, opts.cell) has its door in the side wall `wall` of the room beside it (`parent`), and stands in `cell`.
+    addDoor(def, wall, u, opts = {}) {
       if (doors[def.id]) return doors[def.id];
-      const group = buildDoor(def, wall, u), shell = buildShell(def, wall, u), cut = buildDoorway(wall, u);
-      wallMeshes[wall].visible = false;                       // the wall is rebuilt round the doorway
+      const parent = opts.parent || 'main', pd = doors[parent];
+      const group = buildDoor(def, wall, u, parent === 'main' ? undefined : `${pd.shell.icon || ''} ${pd.name}`.trim()), shell = buildShell(def, wall, u, opts.cell || null);
+      shell.icon = def.icon;
+      let cut, hidden = null;
+      if (parent === 'main') { cut = buildDoorway(wall, u); wallMeshes[wall].visible = false; }      // the wall is rebuilt round the doorway
+      else {                                                  // the side wall of the room beside it is rebuilt round the doorway
+        hidden = pd.shell.sides[wall.split(':')[1]];
+        hidden.visible = false;
+        cut = buildDoorway(wall, u, hidden.material);
+        pd.shell.group.updateWorldMatrix(true, false);
+      }
       room.add(group);
       room.add(shell.group);
       room.add(cut);
-      doors[def.id] = { id: def.id, name: def.name, wall, u, group, leaf: group.userData.leaf, shell, cut, rect: doorRect(wall, u), rectIn: doorRectIn(wall, u), open: 0, openTo: 0, locked: false };
+      doors[def.id] = { id: def.id, name: def.name, wall, u, parent, hidden, group, leaf: group.userData.leaf, shell, cut, rect: doorRect(wall, u), rectIn: doorRectIn(wall, u), open: 0, openTo: 0, locked: false };
       if (!shell.outdoor) Object.assign(WALL, roomWalls(def.id, shell));           // its walls can hold wall pieces (GUY's paintings); a fence cannot
       if (shell.outdoor && world.yard) world.yard.attach(doors[def.id]);
       if (shell.range) {                                        // the range's screens stop the robots and block the line of fire
@@ -1640,7 +1746,8 @@ export function buildRoom(scene) {
         for (const [name, dc] of Object.entries(decor)) if (dc.wall === key) { room.remove(dc.group); delete decor[name]; world.removed[name] = dc; }
         delete WALL[key];
       }
-      if (!Object.values(doors).some((o) => o !== d && o.wall === d.wall)) wallMeshes[d.wall].visible = true;
+      if (d.hidden) d.hidden.visible = true;                    // the wall of the room beside it is whole again
+      else if (!Object.values(doors).some((o) => o !== d && o.wall === d.wall)) wallMeshes[d.wall].visible = true;
       delete doors[id];
       return true;
     },
@@ -1726,7 +1833,7 @@ export function buildRoom(scene) {
     // How big an added room is: `n` away from the door wall, `l` along it. And its two directions in the world (unit vectors): towards
     // the door (out of the room) and the way `lat` grows along the wall.
     shellSize(id) {
-      const d = doors[id], b = d.shell.bounds, ew = d.wall === 'right' || d.wall === 'left', deep = ew ? b.maxX - b.minX : b.maxZ - b.minZ;
+      const d = doors[id], b = d.shell.bounds, ew = Math.abs(WALL[d.wall].n.x) > 0.5, deep = ew ? b.maxX - b.minX : b.maxZ - b.minZ;
       return { n: deep, l: ew ? b.maxZ - b.minZ : b.maxX - b.minX };
     },
     shellAxes(id) {

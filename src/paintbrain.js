@@ -58,7 +58,7 @@ export function installPaintings(Brain) {
     toRoom(room) {
       const here = this.w.roomIdAt(this.g.root.position.x, this.g.root.position.z);
       if (here === room) return [];
-      return [...(here !== 'main' && here !== 'door' ? this.doorOut(here) : []), ...(room !== 'main' ? this.doorIn(room) : [])];
+      return this.tripSteps(here === 'door' ? 'main' : here, room);
     },
 
     // At the wall: hang it (or, if the wall changed under him, find another place; with none, it goes to the Catalog).
