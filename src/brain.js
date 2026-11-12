@@ -9,6 +9,7 @@ import { installHobbies } from './hobbybrain.js';
 import { installWorkshop } from './workbrain.js';
 import { installYard, YARD_ACTS } from './yardbrain.js';
 import { installRange, RANGE_ACTS, RANGE_PIECES } from './rangebrain.js';
+import { installBowl, BOWL_ACTS, BOWL_PIECES } from './bowlbrain.js';
 import { installRestaurant, REST_OBJECTS, REST_JOBS } from './restbrain.js';
 import { installApproach } from './approach.js';
 import { installArrange } from './arrange.js';
@@ -951,6 +952,7 @@ export class Brain {
       ...this.workActivities(),
       ...this.yardActivities(),
       ...this.rangeActivities(),                                    // the Shooting Range (rangebrain.js)
+      ...this.bowlActivities(),                                     // the Bowling Alley (bowlbrain.js)
       ...this.restActivities(),
       ...(this.galActivities ? this.galActivities() : {}),       // working with GAL (gal.js)
       ...this.paintActivities(),
@@ -1941,6 +1943,7 @@ export class Brain {
     if (ACT_OBJ[name]) return this.roomOfObj(ACT_OBJ[name]) || 'main';
     if (YARD_ACTS.includes(name)) return 'backyard';
     if (RANGE_ACTS.includes(name)) return 'range';
+    if (BOWL_ACTS.includes(name)) return 'bowling';
     if (WORK_ACTS.includes(name)) return 'workshop';
     if (REST_JOBS.includes(name) || REST_ACTS.includes(name)) return 'restaurant';
     if (FREE_ACTS.includes(name) || OWN_ROOM_ACTS.includes(name)) return this.hereId();
@@ -2130,6 +2133,10 @@ export class Brain {
       if (!this.rangeOpen()) return 'the Shooting Range door is locked';
       if (act === 'rangeshoot' && !this.rangeKnown().length) return 'he has not read a blaster book yet (the Pulse Pistol or the Arc Carbine)';
     }
+    if (BOWL_ACTS.includes(act)) {
+      if (!this.w.doors.bowling) return 'there is no Bowling Alley';
+      if (!this.bowlOpen()) return 'the Bowling Alley door is locked';
+    }
     if (YARD_ACTS.includes(act)) {
       if (!this.w.doors.backyard) return 'there is no Backyard';
       if (!this.yardOpen()) return 'the Backyard door is locked';
@@ -2162,12 +2169,13 @@ export class Brain {
     if (TOGETHER[act] && !TOGETHER[act].every((n) => this.sameRoom(n, ACT_OBJ[act]))) return false;
     // shut in a room by a locked door: only what can be done in that room
     const shut = this.stuckIn();
-    if (shut) return shut === 'workshop' ? WORK_ACTS.includes(act) && this.availableIn(act) : shut === 'backyard' ? YARD_ACTS.includes(act) && this.availableIn(act) : shut === 'range' ? RANGE_ACTS.includes(act) && this.availableIn(act) : shut === 'restaurant' ? (REST_JOBS.includes(act) || act === 'rwait') && this.availableIn(act) : false;
+    if (shut) return shut === 'workshop' ? WORK_ACTS.includes(act) && this.availableIn(act) : shut === 'backyard' ? YARD_ACTS.includes(act) && this.availableIn(act) : shut === 'range' ? RANGE_ACTS.includes(act) && this.availableIn(act) : shut === 'bowling' ? BOWL_ACTS.includes(act) && this.availableIn(act) : shut === 'restaurant' ? (REST_JOBS.includes(act) || act === 'rwait') && this.availableIn(act) : false;
     return this.availableIn(act);
   }
   availableIn(act) {
     if (act === 'arrange') return !!this.obj('workstation') && !!this.arrangePlan;                // (only when he wants something, or somebody asks: arrange.js)
     if (act === 'learn') return !!this.obj('workstation');                      // the Learning Workstation (only when somebody asks: it has no weight; from another room he walks back to it first)
+    if (BOWL_ACTS.includes(act)) return this.bowlOpen();                  // the Bowling Alley: the door is open (a beginner can bowl too)
     if (RANGE_ACTS.includes(act)) return act === 'rangeshoot' ? this.rangeAvailable() : this.rangeOpen();     // shooting needs a blaster; hanging about and fooling about do not                // the Shooting Range: the door is open and there is a target he can hit from his lane
     if (this.galBlocks && this.galBlocks(act)) return false;                // (GAL does not do some things; GUY needs GAL for others)
     if (this.busyElsewhere(this.exclusiveFor(act))) return false;           // the other robot is using it
@@ -2310,7 +2318,7 @@ export class Brain {
       stove: REST_ACTS, kitchencounter: REST_ACTS, register: REST_ACTS, diningtable: REST_ACTS, diningtable2: REST_ACTS,
       workbench: ['build'], toolbox: ['tidytools'], woodfactory: ['build'], metalfactory: ['build'],
       soccergoal: ['goalshot', 'soccertoss'], basketballhoop: ['hoopshoot', 'hoopdribble'], lawnchair: ['yardsit'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], shed: ['mow'], mower: ['mow'],
-      blasterrack: ['rangeshoot'], rangecontroller: ['rangeshoot'], scoreboard: ['rangehang', 'rangeshoot'],
+      blasterrack: ['rangeshoot'], rangecontroller: ['rangeshoot'], scoreboard: ['rangehang', 'rangeshoot'], ballrack: ['bowl'], bowlscore: ['bowl', 'bowlwatch'],
     }[name] || (this.obj(name) && this.obj(name).seats ? REST_ACTS : this.obj(name) && this.obj(name).guitar ? ['guitar', 'riff', 'jamguitar'] : this.obj(name) && this.obj(name).heldBooks ? ['read'] : this.obj(name) && this.obj(name).sit ? ['read', 'sit', 'sitguitar'] : []);
     return list.filter((a) => this.available(a));
   }
@@ -2374,7 +2382,7 @@ export class Brain {
       bang: 1.3, drums: 1.6, drumsolo: 1.2, jamdrums: 1.5, scribble: 1.3, paint: 1.6, mixpaint: 1.3, portrait: 1.4,
       peek: 1.3, stargaze: 1.6, darkstargaze: 1.3, scopecare: 0.6, dust: 0.9, dusttop: 1.0,
       yardsit: 0.9, birdbath: 0.7, skyswitch: 0.6, mow: 0.5, yardpoke: 1.1, goalshot: 1.4, soccertoss: 0.8, hoopshoot: 1.4, hoopdribble: 0.9,
-      rangeshoot: 1.2, rangehang: 0.9, rangefool: 0.9,
+      rangeshoot: 1.2, rangehang: 0.9, rangefool: 0.9, bowl: 1.3, bowlwatch: 0.6,
     };
     if (this.extraWeights) Object.assign(weights, this.extraWeights());      // working with GAL, or (for GAL) inviting GUY
     // a skill that is being forgotten is used less and less
@@ -2390,7 +2398,7 @@ export class Brain {
       sit: ['rest'], sitguitar: ['guitar'], slouch: ['drums', 'rest'],
       scribble: ['paint'], paint: ['paint'], mixpaint: ['paint'], portrait: ['paint'],
       peek: ['scope'], stargaze: ['scope'], darkstargaze: ['scope'], scopecare: ['scope', 'fidget'], dust: ['fidget'], dusttop: ['fidget'],
-      rangeshoot: ['range'], rangehang: ['range'], rangefool: ['range'], yardsit: ['rest'], birdbath: ['fidget'], skyswitch: ['fidget'], mow: ['chore'], yardpoke: ['yardball'], goalshot: ['yardball'], soccertoss: ['yardball'], hoopshoot: ['yardball'], hoopdribble: ['yardball'],
+      rangeshoot: ['range'], rangehang: ['range'], rangefool: ['range'], bowl: ['range'], bowlwatch: ['range'], yardsit: ['rest'], birdbath: ['fidget'], skyswitch: ['fidget'], mow: ['chore'], yardpoke: ['yardball'], goalshot: ['yardball'], soccertoss: ['yardball'], hoopshoot: ['yardball'], hoopdribble: ['yardball'],
     };
     // the last two activities count, so he doesn't drift back to the same theme straight away
     const lastTags = [this.last, this.prev].flatMap((n) => tags[n] || []);
@@ -2401,7 +2409,7 @@ export class Brain {
     if (!name && this.ballHeld && this.inYard()) name = 'dropball';        // out in the yard with a ball in his hands: set it down before anything else
     // He is in an added room: back through the door before anything else, unless he went there to use something that stands in it (a piano
     // dragged into the Workshop ...): then it is his room for now, and free activities happen there too.
-    if (!name && !this.inMain() && this.hereId() !== this.stayRoom && !this.lockedInside() && !this.lockedInRange() && !this.restStays() && !this.stuckIn()) name = 'leave';
+    if (!name && !this.inMain() && this.hereId() !== this.stayRoom && !this.lockedInside() && !this.lockedInRange() && !this.lockedInBowl() && !this.restStays() && !this.stuckIn()) name = 'leave';
     if (!name && this.carry === 'canvas') name = 'putcanvas';                  // cut short with a painting in his hands: back to the easel with it
     if (!name && this.gtr.held && this.obj('guitar') && !this.guitarLocked()) name = 'putguitar'; // still holding the guitar: back on its stand (not while locked in on it)
     if (!name && this.lampOffByMe && this.obj('lamp') && !this.obj('lamp').on) name = 'lighton'; // he switched it off for the stars and never put it back
@@ -2413,7 +2421,7 @@ export class Brain {
     // Locked in on an object (long-press > Lock in): he keeps going back to it until the user tells him to stop. The chores above
     // (put the guitar back, drop the ball) still come first.
     if (!name && this.lock) {
-      const L = this.lock, gone = L.name === 'ball' ? this.w.ballGone : RANGE_PIECES.includes(L.name) ? !this.w.range : !this.obj(L.name);
+      const L = this.lock, gone = L.name === 'ball' ? this.w.ballGone : RANGE_PIECES.includes(L.name) ? !this.w.range : BOWL_PIECES.includes(L.name) ? !this.w.bowl : !this.obj(L.name);
       const opts = gone ? [] : this.lockActs(L.name);
       if (!opts.length) { this.unlock(false); this.ui(gone ? `wondering where the ${L.name} went` : 'nothing more to do there'); }
       else {
@@ -2526,7 +2534,7 @@ export class Brain {
       workbench: ['build'], toolbox: ['tidytools'], woodfactory: ['build'], metalfactory: ['build'],
       botprinter: ['buildbot'], workstation: ['learn'],
       soccergoal: ['goalshot', 'soccertoss'], basketballhoop: ['hoopshoot', 'hoopdribble'], lawnchair: ['yardsit'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], shed: ['mow'], mower: ['mow'],
-      blasterrack: ['rangeshoot'], rangecontroller: ['rangeshoot'], scoreboard: ['rangehang', 'rangeshoot'],
+      blasterrack: ['rangeshoot'], rangecontroller: ['rangeshoot'], scoreboard: ['rangehang', 'rangeshoot'], ballrack: ['bowl'], bowlscore: ['bowl', 'bowlwatch'],
     }[name] || (this.obj(name) && this.obj(name).kind === 'footstool' ? ['dusttop'] : this.obj(name) && this.obj(name).guitar ? (k('guitar') ? (this.music ? ['jamguitar'] : ['guitar']) : []) : undefined);
     if (this.obj(name) && this.obj(name).guitar) this.wantGuitar = name;
     if (name === 'botprinter') {
@@ -2817,6 +2825,7 @@ export class Brain {
     const ballState = this.computeBall(s);
     const guitarState = this.computeGuitar(s);
     const rangeState = s.type === 'play' ? this.rangeCtx(s) : null;     // the aim at the range (rangebrain.js)
+    const bowlState = s.type === 'play' ? this.bowlCtx(s) : null;       // the delivery at the alley (bowlbrain.js)
     const hobState = this.computeHobby(s, dt);
     // how much room his arms have: distance from him to the nearest piece of furniture
     let near = 9;
@@ -2842,7 +2851,7 @@ export class Brain {
       walkPhase: this.walkPhase, beat, hit: this.hit, sway: this.sway, music: !!this.music,
       carry: !!s.push, strain: s.push && s.push.obj.weight === 'medium' ? 1 : 0,
       dive: s.type === 'play' && s.fx && s.fx.dive || 0,
-      range: rangeState,
+      range: rangeState, bowl: bowlState,
     };
 
     this.lastCtx = ctx;   // read by the QA pose-sanity sweep (src/devtools.js)
@@ -2963,6 +2972,7 @@ export class Brain {
       else if (yb.userData.holder === this) { yb.userData.kinematic = false; yb.userData.holder = null; }
     }
     this.rangeLate();                                       // the blaster in his hand at the range (rangebrain.js)
+    this.bowlLate();                                        // the ball in his hand at the alley (bowlbrain.js)
     if (!this.g.loaded) return;
     this.lateHobbies();
     if (this.albumMesh.visible) {
@@ -3525,6 +3535,7 @@ installHobbies(Brain, POSES, { sitLegs, env, smooth, clamp, lerp, rand, pick, ma
 installWorkshop(Brain, POSES, { smooth, clamp, lerp, rand, pick });
 installYard(Brain, POSES, { clamp, rand, pick, makeGrid, cellBlocked, INFLATE, findPath });
 installRange(Brain, POSES, { pick });
+installBowl(Brain, POSES, { pick });
 installRestaurant(Brain, POSES, { smooth, clamp, lerp, rand, pick });
 installArrange(Brain, { pick });
 installApproach(Brain);                                      // stations are used from whichever side is free (approach.js)

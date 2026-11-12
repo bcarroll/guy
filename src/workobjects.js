@@ -50,6 +50,12 @@ export function makeWorkshopBuilders({ makeObject, box, mat }) {
       const c = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.045, 0.16, 12), mat(0xff5a8a, { transparent: true, opacity: 0.7 })); c.position.set(0, 0.2, 0); g.add(c);
     } else if (EGG_KINDS.includes(kind)) {                                       // (the other easter eggs: a small wrapped box on the tray)
       box(0.14, 0.12, 0.14, mat(0xe0453b), 0, 0.06, 0, g); box(0.15, 0.025, 0.03, mat(0xffd23f), 0, 0.13, 0, g); box(0.03, 0.025, 0.15, mat(0xffd23f), 0, 0.13, 0, g);
+    } else if (kind === 'bowlingpins') {
+      for (const [x, z] of [[0, -0.07], [-0.04, 0], [0.04, 0], [-0.08, 0.07], [0, 0.07], [0.08, 0.07]]) box(0.03, 0.14, 0.03, light, x, 0.07, z, g);
+    } else if (kind === 'bowlingball') {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(0.07, 14, 10), mat(0x5a3a22)); b.position.set(0, 0.07, 0); g.add(b);
+    } else if (kind === 'pinsetter') {
+      box(0.3, 0.14, 0.1, mat(0x363c46), 0, 0.1, 0, g); box(0.31, 0.02, 0.11, mat(0xf2c200), 0, 0.03, 0, g);
     } else if (kind === 'footstool') {
       box(0.26, 0.03, 0.2, light, 0, 0.19, 0, g);
       for (const sx of [-0.1, 0.1]) for (const sz of [-0.07, 0.07]) box(0.035, 0.18, 0.035, wd, sx, 0.09, sz, g);

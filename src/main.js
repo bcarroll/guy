@@ -134,7 +134,7 @@ const toast = document.getElementById('toast');
 let toastTimer = 0;
 // Tapping a learned skill asks GUY to use the thing it is about (the same order as choosing it from an object's menu).
 const SKILL_OBJECT = { workshop: 'workbench', 'workshop.materials': 'woodfactory', 'workshop.furniture': 'workbench', 'workshop.metal': 'metalfactory', restaurant: 'stove',
-  outdoor: 'lawnchair', 'outdoor.soccer': 'soccergoal', 'outdoor.basketball': 'basketballhoop', 'range.pistol': 'blasterrack', 'range.carbine': 'blasterrack',
+  outdoor: 'lawnchair', 'outdoor.soccer': 'soccergoal', 'outdoor.basketball': 'basketballhoop', 'range.pistol': 'blasterrack', 'range.carbine': 'blasterrack', bowling: 'ballrack',
   stereo: 'table', piano: 'piano', 'piano.advanced': 'piano', ball: 'ball', lighting: 'lamp', guitar: 'guitar', speedreading: 'shelf',
   drums: 'drums', 'drums.solo': 'drums', 'drums.band': 'drums', easel: 'easel', 'easel.colour': 'easel', 'easel.portrait': 'easel',
   telescope: 'telescope', 'telescope.dark': 'telescope', 'telescope.care': 'telescope' };
@@ -412,7 +412,7 @@ function pick(e) {
   for (const d of Object.values(world.decor)) targets.push(d.group);
   for (const d of Object.values(world.doors)) targets.push(d.group);
   if (!world.ballGone) targets.push(world.ball);
-  const rg = world.range, rangeParts = rg ? { blasterrack: rg.display.group, rangecontroller: rg.panel.group, scoreboard: rg.board.group } : {};
+  const rg = world.range, bw = world.bowl, rangeParts = { ...(rg ? { blasterrack: rg.display.group, rangecontroller: rg.panel.group, scoreboard: rg.board.group } : {}), ...(bw ? { ballrack: bw.rack.group, bowlscore: bw.board.group } : {}) };   // (the Bowling Alley's rack and scoreboard are picked the same way)
   targets.push(...Object.values(rangeParts));
   const hit = raycaster.intersectObjects(targets, true)[0];
   if (!hit) return null;
@@ -594,6 +594,8 @@ function interactLabel(name) {
     case 'blasterrack': return '🔫 Shoot the Target';
     case 'rangecontroller': return '🎯 Start a Round';
     case 'scoreboard': return '👀 Watch the Range';
+    case 'ballrack': return '🎳 Go Bowling';
+    case 'bowlscore': return '👀 Watch the Bowling';
     case 'piano': case 'bench': return '🎹 Play Piano';
     case 'table': return brain.music ? '🔊 Turn Stereo Off' : '🔊 Turn Stereo On';
     case 'guitar': return '🎸 Play Guitar';
@@ -651,7 +653,7 @@ function openMenu(hit, x, y) {
     return;
   }
   if (hit.range) {                                       // the Shooting Range's blaster rack, round controller and scoreboard: Interact / Lock in only
-    menuTitle.textContent = { blasterrack: 'blaster rack', rangecontroller: 'round controller', scoreboard: 'scoreboard' }[hit.range];
+    menuTitle.textContent = { blasterrack: 'blaster rack', rangecontroller: 'round controller', scoreboard: 'scoreboard', ballrack: 'ball rack', bowlscore: 'bowling scoreboard' }[hit.range];
     menuNote.textContent = '';
     menu.querySelectorAll('[data-act]').forEach((b) => { b.hidden = b.dataset.act !== 'interact' && b.dataset.act !== 'lock'; });
     menu.querySelector('[data-act="interact"]').textContent = interactLabel(hit.range);
@@ -766,7 +768,7 @@ menu.addEventListener('click', (e) => {
 addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
 window.__guyOpenBooks = (name = 'shelf') => openBookMenu(world.objects[name], 200, 100);          // the long-press book list, for the QA harness
 window.__guyOpenDoorMenu = (id, side = 'main') => openMenu({ door: world.doors[id], side }, 120, 120);     // for the QA harness (side: the face pressed)
-window.__guyOpenMenu = (name) => openMenu(name === 'ball' ? { ball: true } : ['blasterrack', 'rangecontroller', 'scoreboard'].includes(name) ? { range: name } : { obj: brain.obj(name) }, 120, 120);     // for the QA harness
+window.__guyOpenMenu = (name) => openMenu(name === 'ball' ? { ball: true } : ['blasterrack', 'rangecontroller', 'scoreboard', 'ballrack', 'bowlscore'].includes(name) ? { range: name } : { obj: brain.obj(name) }, 120, 120);     // for the QA harness
 addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') { setSoundMuted(!soundMuted); showToast(soundMuted ? 'Sound muted (M or the speaker to turn it back on)' : 'Sound on'); } });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -926,7 +928,7 @@ window.sim = (sec, dt = 1 / 30) => {
   if (window.__simNow === undefined) window.__simNow = performance.now() / 1000;      // (the music's clock now follows simulated time: see nowSec in brain.js)
   for (let t = 0; t < sec; t += dt) {
     window.__simNow += dt;
-    brain.safeUpdate(dt); guy.apply(dt); brain.safeLate(); world.lamp.tick(brain.currentBeat()); updateBall(dt); for (const o of Object.values(world.objects)) o.update(dt); world.yard.update(dt); if (world.range) world.range.update(dt);
+    brain.safeUpdate(dt); guy.apply(dt); brain.safeLate(); world.lamp.tick(brain.currentBeat()); updateBall(dt); for (const o of Object.values(world.objects)) o.update(dt); world.yard.update(dt); if (world.range) world.range.update(dt); if (world.bowl) world.bowl.update(dt);
   }
   if (follow) { controls.target.copy(guy.pos).setY(1.1); controls.update(); }
 };
@@ -1059,7 +1061,7 @@ renderer.setAnimationLoop(() => {
   space.position.copy(camera.position);
   world.lamp.tick(brain.currentBeat());
   world.skillMachine.userData.update(performance.now() / 1000);
-  for (const o of Object.values(world.objects)) o.update(dt); world.yard.update(dt); if (world.range) world.range.update(dt);
+  for (const o of Object.values(world.objects)) o.update(dt); world.yard.update(dt); if (world.range) world.range.update(dt); if (world.bowl) world.bowl.update(dt);
   updateBall(dt);
   if (follow && guy.loaded) {
     camGoal.copy(guy.pos).setY(1.1);

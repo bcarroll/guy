@@ -12,7 +12,7 @@ export const setMuted = (m) => { muted = !!m; if (muted) dragOff(); };
 export const isMuted = () => muted;
 
 const last = {};
-const MIN_GAP = { bounce: 40, knock: 60, thud: 60, page: 250, step: 150, tick: 70, brush: 120, wipe: 450, leaf: 220, click: 40, sit: 400, kick: 60, machine: 500, lid: 150, sizzle: 400, plate: 150, ding: 200, splash: 300, swish: 300, motor: 260 };
+const MIN_GAP = { bounce: 40, knock: 60, thud: 60, page: 250, step: 150, tick: 70, brush: 120, wipe: 450, leaf: 220, click: 40, sit: 400, kick: 60, machine: 500, lid: 150, sizzle: 400, plate: 150, ding: 200, splash: 300, swish: 300, motor: 260, rumble: 600, pinhit: 150, strike: 400, gutter: 400, pins: 300 };
 
 let noise = null;
 const noiseBuf = (ctx) => {
@@ -113,6 +113,19 @@ const SOUNDS = {
   // the Shooting Range: a blaster shot (a sharp crack and a falling thump) and a hologram being hit (an electronic zap)
   shot(ctx, out) { burst(ctx, out, { dur: 0.08, type: 'highpass', f: 2500, gain: 0.3, attack: 0.001 }); tone(ctx, out, { f0: 900, f1: 180, dur: 0.18, type: 'sawtooth', gain: 0.16, attack: 0.002 }); },
   holo(ctx, out) { tone(ctx, out, { f0: 1400, f1: 3200, dur: 0.22, type: 'sine', gain: 0.14, attack: 0.005 }); burst(ctx, out, { dur: 0.12, type: 'highpass', f: 5000, gain: 0.08, delay: 0.04 }); },
+  // the Bowling Alley: a ball rolling down the lane (a low rumble), pins clattering (a few, and all ten), a ball in the gutter, pins set by hand
+  rumble(ctx, out, v = 0.7) { burst(ctx, out, { dur: 0.7, type: 'lowpass', f: 380, f2: 260, q: 0.7, gain: 0.16 * v + 0.05, attack: 0.05 }); tone(ctx, out, { f0: 90, f1: 70, dur: 0.6, gain: 0.08, attack: 0.05 }); },
+  pinhit(ctx, out, v = 0.5) {
+    burst(ctx, out, { dur: 0.05, type: 'highpass', f: 1800, gain: 0.22, attack: 0.001 });
+    const n = 2 + Math.round(v * 5);
+    for (let k = 0; k < n; k++) { tone(ctx, out, { f0: 700 + Math.random() * 900, f1: 400 + Math.random() * 200, dur: 0.07, type: 'triangle', gain: 0.08, delay: 0.03 + k * 0.06 + Math.random() * 0.04 }); burst(ctx, out, { dur: 0.05, type: 'bandpass', f: 2200 + Math.random() * 1500, q: 2, gain: 0.07, delay: 0.04 + k * 0.06 }); }
+  },
+  strike(ctx, out) {
+    burst(ctx, out, { dur: 0.08, type: 'highpass', f: 1500, gain: 0.3, attack: 0.001 }); tone(ctx, out, { f0: 160, f1: 60, dur: 0.25, gain: 0.2, attack: 0.002 });
+    for (let k = 0; k < 11; k++) { tone(ctx, out, { f0: 600 + Math.random() * 1100, f1: 350 + Math.random() * 200, dur: 0.07, type: 'triangle', gain: 0.07, delay: 0.04 + k * 0.05 + Math.random() * 0.03 }); burst(ctx, out, { dur: 0.05, type: 'bandpass', f: 2000 + Math.random() * 2000, q: 2, gain: 0.07, delay: 0.05 + k * 0.05 }); }
+  },
+  gutter(ctx, out) { burst(ctx, out, { dur: 0.5, type: 'lowpass', f: 300, f2: 180, gain: 0.12, attack: 0.04 }); tone(ctx, out, { f0: 110, f1: 55, dur: 0.18, gain: 0.14, delay: 0.45 }); },
+  pins(ctx, out) { for (let k = 0; k < 4; k++) tone(ctx, out, { f0: 520 + Math.random() * 300, f1: 300, dur: 0.06, type: 'triangle', gain: 0.1, delay: k * 0.09 }); burst(ctx, out, { dur: 0.1, type: 'bandpass', f: 1800, q: 1.5, gain: 0.08, delay: 0.02 }); },
 };
 
 export { SOUNDS };                                     // QA only (src/qa-audio.js renders each one to numbers)

@@ -25,6 +25,9 @@ export const RECIPES = {
   metalchair: { name: 'Metal Chair', icon: '🪑', skill: 'workshop.metal', line: 'metal', run: 4.4, object: 'metalchair', cap: 3, serves: 'seat' },
   diningtable4: { name: 'Metal Dining Table', icon: '🍽️', skill: 'workshop.metal', line: 'metal', run: 5.0, object: 'diningtable4', cap: 2, serves: 'diners', to: 'restaurant' },
   eguitar: { name: 'Electric Guitar', icon: '🎸', skill: ['workshop.metal', 'workshop.materials'], line: 'both', run: 3.6, object: 'eguitar', cap: 1, serves: 'band' },
+  // Bowling Alley equipment (the Wood & Metal Basics book, chapters 4 and 5: pins and a ball turned from maple). They end up in the alley.
+  bowlingpins: { name: 'Maple Bowling Pins', icon: '🎳', skill: 'workshop.materials.ch4', line: 'wood', run: 5.0, object: 'bowlingpins', cap: 1, serves: 'bowl.pins', to: 'bowling' },
+  bowlingball: { name: 'Wooden Bowling Ball', icon: '🎳', skill: 'workshop.materials.ch5', line: 'wood', run: 4.4, object: 'bowlingball', cap: 1, serves: 'bowl.ball', to: 'bowling' },
   // Easter eggs: in no book. GUY builds one on his own once everything in `egg` stands in his room (see needs.js), with the basic Workshop book.
   mirrorball: { name: 'Mirror Ball', icon: '🪩', skill: 'workshop', line: 'metal', run: 4.0, object: 'mirrorball', cap: 1, serves: 'egg.mirrorball', egg: ['table', 'drums'] },
   trophy: { name: 'Golden Trophy', icon: '🏆', skill: 'workshop', line: 'metal', run: 4.6, object: 'trophy', cap: 1, serves: 'egg.trophy', egg: ['piano', 'guitar', 'drums'] },
@@ -39,6 +42,9 @@ export const RECIPES = {
   bubblemachine: { name: 'Bubble Machine', icon: '🫧', skill: 'workshop', line: 'metal', run: 4.0, object: 'bubblemachine', cap: 1, serves: 'egg.bubblemachine', egg: ['lamp', 'drums', 'easel'] },
   snowglobe: { name: 'Snow Globe', icon: '❄️', skill: 'workshop', line: 'both', run: 4.0, object: 'snowglobe', cap: 1, serves: 'egg.snowglobe', egg: ['lamp', 'armchair', 'nightstand'] },
   petrock: { name: 'Pet Rock', icon: '🪨', skill: 'workshop', line: 'wood', run: 2.6, object: 'petrock', cap: 1, serves: 'egg.petrock', egg: ['plant', 'guitar', 'easel'] },
+  // The Automatic Pinsetter: an easter egg for the Bowling Alley. In no book: GUY builds it once the Metal Factory stands anywhere in the house
+  // and the alley has been added (`eggWhere: 'house'`; it ends up in the alley, `eggRoom`).
+  pinsetter: { name: 'Automatic Pinsetter', icon: '🤖', skill: 'workshop', line: 'metal', run: 6.0, object: 'pinsetter', cap: 1, serves: 'egg.pinsetter', egg: ['metalfactory'], eggWhere: 'house', eggRoom: 'bowling', to: 'bowling' },
 };
 // older saves may hold these: they are still shown and can be put back, but nothing builds them any more
 export const LEGACY_KINDS = ['woodshelves'];

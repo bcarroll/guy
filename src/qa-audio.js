@@ -25,6 +25,7 @@ const SPEC = {
   splash: { dur: [0.1, 0.6], bright: 'high' }, swish: { dur: [0.1, 0.6], bright: 'high' }, motor: { dur: [0.1, 0.5], bright: 'low' },
   chime: { dur: [0.4, 1.2], bright: 'mid' }, pop: { dur: [0.03, 0.3], bright: 'any' }, whoosh: { dur: [0.1, 0.6], bright: 'high' },
   shot: { dur: [0.05, 0.4], bright: 'high' }, holo: { dur: [0.1, 0.5], bright: 'high' },
+  rumble: { dur: [0.3, 1.0], bright: 'low' }, pinhit: { dur: [0.1, 0.8], bright: 'high' }, strike: { dur: [0.3, 1.0], bright: 'high' }, gutter: { dur: [0.3, 1.0], bright: 'low' }, pins: { dur: [0.1, 0.6], bright: 'high' },
 };
 // the instruments: how to play one note / hit
 const INSTRUMENTS = {

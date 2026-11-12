@@ -25,6 +25,11 @@ export const ROOM_CATALOG = [
   { id: 'range', name: 'Shooting Range', icon: '🎯', unlocked: true, shootingRange: true, size: { w: 10, d: 8 }, doorWalls: ['right', 'front', 'back', 'left'],
     desc: 'A shooting range with three lanes. Holographic bullseyes and enemies pop up down the range, and the robots take shots at them: from their own lane, and across the screens when the line is clear.',
     look: { frame: 0x3b4150, door: 0x3d4a63, panel: 0x5ef2ff, floor: 0x9a9fa6, wall: 0xc9ccd2 } },
+  // The Bowling Alley: three lanes with ten pins each, ball returns, a rack of house balls and a scoreboard (src/bowlobjects.js, src/bowlbrain.js,
+  // rules and physics in src/bowlrules.js). Same size as the Range.
+  { id: 'bowling', name: 'Bowling Alley', icon: '🎳', unlocked: true, bowlingAlley: true, size: { w: 10, d: 8 }, doorWalls: ['right', 'front', 'back', 'left'],
+    desc: 'A bowling alley with three lanes. The robots roll balls at ten pins, keep score on the board, and set the pins up again by hand (or with an Automatic Pinsetter, if the Metal Factory can build one).',
+    look: { frame: 0x3a2a55, door: 0x6a2a7a, panel: 0xff3fa4, floor: 0x1c1745, wall: 0x2b2a4a } },
   // Corner rooms: empty rooms for whatever the user wants to put in them (the Catalog's Rooms list, and every piece of furniture can be moved
   // in). A corner has no wall of GUY's room to put a door in, so it opens through the side wall of the room beside it: the Workshop, or another
   // room with one. `corner: true` rooms are put in the first free corner (`corners`) that has such a neighbour: see world.planCorner.

@@ -24,6 +24,7 @@ import { invent, judge, GOOD, STEPS as RIFF_STEPS, keepRiff, loadRiffs, nextRiff
 import { ALBUM_CATALOG } from './albums.js';
 import { TRACKS, trackSeconds } from './audio.js';
 import { POSES } from './brain.js';
+import { bowlSkill } from './bowlbrain.js';
 import { install as installCharacters } from './qa-characters.js';
 import { install as installAudio } from './qa-audio.js';
 import { install as installShots } from './qa-shots.js';
@@ -54,6 +55,7 @@ export const MANIFEST = {
     botprinter: { skills: [] },       // the Build a Bot machine (premium, one use): tested by sweepGal
     workstation: { skills: [] },      // the Learning Workstation (premium): tested by sweepWorkstation
     footstool: { room: 'workshop', built: true }, woodshelves: { room: 'workshop', built: true }, builtchair: { room: 'workshop', built: true }, metalchair: { room: 'workshop', built: true }, bookshelf2: { room: 'workshop', built: true }, eguitar: { room: 'workshop', built: true },
+    bowlingpins: { room: 'workshop', built: true, alsoRoom: 'bowling' }, bowlingball: { room: 'workshop', built: true, alsoRoom: 'bowling' }, pinsetter: { room: 'workshop', built: true, alsoRoom: 'bowling' },      // (the Bowling Alley's equipment: it goes in the alley, so that has to be there; the pinsetter is an easter egg)
     diningtable3: { room: 'workshop', built: true, alsoRoom: 'restaurant' }, diningtable4: { room: 'workshop', built: true, alsoRoom: 'restaurant' },       // (they go in the Restaurant, so it has to be there)
     // the Restaurant (another added room): the kitchen and the dining room
     stove: { room: 'restaurant', skills: ['restaurant'] }, kitchencounter: { room: 'restaurant', skills: ['restaurant'] }, register: { room: 'restaurant', skills: ['restaurant'] },
@@ -64,7 +66,7 @@ export const MANIFEST = {
     shed: { room: 'backyard', skills: ['outdoor'], premium: true }, mower: { room: 'backyard', skills: ['outdoor'], premium: true },
   },
   // rooms the user can add from the Catalog's Rooms tab (tested by sweepRooms / sweepDoors / sweepGating / sweepSaves)
-  rooms: { workshop: {}, restaurant: {}, backyard: {}, range: {}, library: {}, bedroom: {}, garage: {}, gameroom: {} },
+  rooms: { workshop: {}, restaurant: {}, backyard: {}, range: {}, bowling: {}, library: {}, bedroom: {}, garage: {}, gameroom: {} },
   // activities: objects that must be in the room, skills needed, `music` = needs the stereo already playing,
   // touches = objects GUY's arms may legitimately be inside the bounding box of (hands on keys, pushing, ...)
   activities: {
@@ -72,6 +74,8 @@ export const MANIFEST = {
     // the Shooting Range (rangebrain.js): shots from his lane at the bullseyes and enemies (no objects of its own)
     rangeshoot: { room: 'range', max: 150, touches: ['round controller', 'blaster case'], skills: ['range.pistol'] },
     rangehang: { room: 'range', max: 60, touches: [] },
+    bowl: { room: 'bowling', max: 260, touches: ['ball rack', 'scoreboard', 'ball return 1', 'ball return 2', 'ball return 3'] },
+    bowlwatch: { room: 'bowling', max: 60, touches: [] },
     rangefool: { room: 'range', max: 90, touches: [] },
     piano: { objects: ['piano'], skills: ['piano'], touches: ['piano'] },
     sitpiano: { objects: ['piano', 'bench'], skills: ['piano'], touches: ['piano', 'bench'] },
@@ -144,6 +148,7 @@ export const MANIFEST = {
   },
   // what to do after reading each book: an activity that should now be possible
   books: { stereo: { then: 'dance' }, piano: { then: 'piano' }, ball: { then: 'dribble' }, lighting: { then: 'mood' }, piano2: { then: 'piano' }, guitar: { then: 'guitar' },
+    bowling: { then: null },       // (the alley is not added here: sweepBowl tests the bowling and what the book changes)
     pulsepistol: { then: null }, arcrifle: { then: null },      // (the range is not added here: it takes a wall and moves the other rooms; sweepRange tests the blasters)
     speedread: { then: 'read' }, dancemoves: { then: 'dancemoves' }, ballroom: { then: 'ballroom' },
     drumming: { then: 'drums' }, drumsolo: { then: 'drumsolo' }, drumband: { then: 'jamdrums' },
@@ -172,6 +177,7 @@ export const MANIFEST = {
     'ball.ch2': { content: 'steps' }, 'ball.ch3': { content: 'steps' }, 'outdoor.ch2': { content: 'steps' }, 'outdoor.ch3': { content: 'steps' },
     'outdoor.soccer.ch2': { content: 'steps' }, 'outdoor.soccer.ch3': { content: 'steps' }, 'outdoor.basketball.ch2': { content: 'steps' }, 'outdoor.basketball.ch3': { content: 'steps' },
     'workshop.ch2': { content: 'steps' }, 'workshop.ch3': { content: 'steps' }, 'workshop.materials.ch2': { content: 'steps' }, 'workshop.materials.ch3': { content: 'steps' },
+    'workshop.materials.ch4': { content: 'steps' }, 'workshop.materials.ch5': { content: 'steps' }, 'bowling.ch2': { content: 'steps' }, 'bowling.ch3': { content: 'steps' },       // (ch4 and ch5 unlock the recipes for the alley's pins and ball, ch2 and ch3 the hook and spares: sweepBowl)
     'workshop.furniture.ch2': { content: 'steps' }, 'workshop.furniture.ch3': { content: 'steps' }, 'workshop.metal.ch2': { content: 'steps' }, 'workshop.metal.ch3': { content: 'steps' },
     'drums.ch2': { content: 'drums', styles: ['reggae', 'funk'] }, 'drums.ch3': { content: 'drums', styles: ['paradiddle'] }, 'drums.solo.ch2': { content: 'drums', styles: ['solo2'] },
   },
@@ -225,6 +231,10 @@ export const MANIFEST = {
     { id: 'range-carry', activity: 'rangeshoot', pose: 'walk', t: 0.8, view: 'front', room: 'range', range: 'carry', expect: 'walking with the blaster carried low: right hand by his hip, fingers round the grip, barrel pointing forward and down (not out at the target), left arm swinging free' },
     { id: 'range-press', activity: 'rangeshoot', pose: 'aim', t: 0.5, view: 'side', room: 'range', range: 'press', expect: 'facing the side wall, one arm out and the hand on the green START ROUND button of the round controller (the other arm hanging), not through the panel' },
     { id: 'range-take', activity: 'rangeshoot', pose: 'aim', t: 0.5, view: 'back', room: 'range', range: 'take', expect: 'seen from behind, facing the glass blaster case on the side wall, one arm out reaching for the blaster on the shelf, the other arm hanging, standing clear of the case' },
+    { id: 'bowl-backswing', activity: 'bowl', pose: 'bowl', t: 0.5, view: 'side', room: 'bowling', expect: 'standing upright on the approach, the red bowling ball (three finger holes) held in the right hand swung back behind him, the left arm out for balance' },
+    { id: 'bowl-release', activity: 'bowl', pose: 'bowl', t: 1.25, view: 'side', room: 'bowling', expect: 'a deep lunge towards the pins: left leg forward and bent, right leg trailing, the back leaning, the arm swung down and forward to knee height with the hand open as the ball leaves it' },
+    { id: 'bowl-follow', activity: 'bowl', pose: 'bowl', t: 1.55, view: 'side', room: 'bowling', expect: 'the follow-through: the arm up and forward, legs still in the lunge, the ball rolling away down the lane' },
+    { id: 'bowl-reach', activity: 'bowl', pose: 'bowlreach', t: 0.5, view: 'side', room: 'bowling', expect: 'one hand out and down to the ball rack (taking a house ball), bending at the knees for it, the other arm hanging, standing clear of the rack' },
     { id: 'scope-care', activity: 'scopecare', pose: 'scopeCare', t: 13, view: 'front', expect: 'squatting beside the tripod with a hand on one leg' },
     { id: 'stool-dust', activity: 'dusttop', pose: 'reach', t: 4, view: 'front', dist: 3.6, expect: 'standing ON the foot stool (feet on top of it, not in the floor), right hand wiping along the top of the window frame, the stool not passing through him' },
     { id: 'dust-frame', activity: 'dust', pose: 'reach', t: 2.5, view: 'front', expect: 'facing the wall, right hand wiping along the lower edge of a frame (not inside the wall or his own head)' },
@@ -701,6 +711,7 @@ T.sweepBooks = () => {
   T.addObject('table'); T.addObject('piano'); T.addObject('bench'); T.addObject('guitar'); T.addObject('lamp');
   for (const def of BOOK_CATALOG) {
     if (def.locked) { out.push(result(`book:${def.id}`, true, { skipped: 'locked (premium)' })); continue; }
+    if (def.room && !def.requires && !W().rooms.isAdded(def.room)) { unlockRoom(def.room); W().rooms.add(def.room); }       // (a book of a room with no equipment: the Bowling Alley)
     if (def.requires && def.requires.object) T.addObject(def.requires.object);
     if (def.requires && def.requires.anyObject) T.addObject(def.requires.anyObject[0]);
     const added = T.addBook(def.id);
@@ -2064,15 +2075,15 @@ T.sweepShelf = () => {
   const top = sh.stackTop(), topY = top.mesh.position.y;
   b.forgetBook && skillsOf().known.delete(top.def.teaches);
   b.requestRead(top.def.id);
-  let t = 0, held = false, squatted = false;
+  let t = 0, held = false, squatted = false, deepest = 0;
   while (t < 120) {
     step(0.25); t += 0.25;
     if (b.held === top) held = true;
-    if (b.held === top && b.pose === 'grab' && b.step && b.step.t > 0.6 && b.step.t < 1.2) { const lg = b.g.bones.RightLeg && b.g.bones.RightLeg.rotation.x; if (Math.abs(lg) > 0.3) squatted = true; }      // (0.3: the stack is taller with the blaster books on it, so the top one needs less squatting)
+    if (b.held === top && b.pose === 'grab' && b.step && b.step.t > 0.6 && b.step.t < 1.2) { const lg = b.g.bones.RightLeg && b.g.bones.RightLeg.rotation.x; deepest = Math.max(deepest, Math.abs(lg) || 0); if (Math.abs(lg) > 0.15) squatted = true; }      // (0.15: the stack is taller with the blaster and bowling books on it, so the top one needs less squatting)
     if (held && !b.held && top.mesh.visible && t > 15) break;
   }
   out.push(result('shelf: GUY reads the top book of the stack and puts it back where it was', held && top.mesh.visible && Math.abs(top.mesh.position.y - topY) < 0.005 && b.skills.has(top.def.teaches), { held, back: top.mesh.visible, t }));
-  out.push(result('shelf: he squats down to take it from the floor stack', squatted));
+  out.push(result('shelf: he squats down to take it from the floor stack', squatted, { deepest }));
   T.settle();
   // the book list: all of them, on the screen, and scrolls when it is long
   window.__guyOpenBooks();
@@ -2983,7 +2994,7 @@ T.sweepNeeds = () => {
   {
     const bad = [];
     for (const [id, r] of Object.entries(RECIPES_DEF)) {
-      if (!r.egg) continue;
+      if (!r.egg || r.eggRoom) continue;                                   // (the Automatic Pinsetter lives in the Bowling Alley: sweepBowl)
       needSetup('right', ['workshop'], { metal: true, chair: false });
       for (const k of r.egg.slice(0, -1)) T.addObject(k);
       const partial = eggs().includes(r.serves);
@@ -3475,7 +3486,7 @@ T.sweepChapters = () => {
       out.push(result('chapters: Matching Sets — one more wooden chair and table with workshop.furniture.ch3, one more metal ones with workshop.metal.ch3, nothing else changes',
         cap('builtchair', []) === 3 && cap('builtchair', ['workshop.furniture.ch3']) === 4 && cap('diningtable3', ['workshop.furniture.ch3']) === 3 && cap('bookshelf2', ['workshop.furniture.ch3']) === 1 && cap('footstool', ['workshop.furniture.ch3']) === 1
         && cap('metalchair', ['workshop.furniture.ch3']) === 3 && cap('metalchair', ['workshop.metal.ch3']) === 4 && cap('diningtable4', ['workshop.metal.ch3']) === 3 && cap('builtchair', ['workshop.metal.ch3']) === 3 && cap('eguitar', ['workshop.metal.ch3']) === 1));
-      for (const id of ['workshop.ch2', 'workshop.ch3', 'workshop.materials.ch2', 'workshop.materials.ch3', 'workshop.furniture.ch2', 'workshop.furniture.ch3', 'workshop.metal.ch2', 'workshop.metal.ch3']) covered.add(id);
+      for (const id of ['workshop.ch2', 'workshop.ch3', 'workshop.materials.ch2', 'workshop.materials.ch3', 'workshop.furniture.ch2', 'workshop.furniture.ch3', 'workshop.metal.ch2', 'workshop.metal.ch3', 'workshop.materials.ch4', 'workshop.materials.ch5', 'bowling.ch2', 'bowling.ch3']) covered.add(id);      // (the last four: sweepBowl)
     }
     const missing = CHAPTER_IDS.filter((id) => MANIFEST.chapters[id].content === 'steps' && !covered.has(id));
     out.push(result('chapters: every chapter whose content is in an activity\'s steps has a check above', !missing.length, { missing }));
@@ -4455,6 +4466,127 @@ T.sweepRange = () => {
   return out;
 };
 
+// ---- 12e. The Bowling Alley (src/bowlobjects.js, src/bowlbrain.js, rules in src/bowlrules.js): the room, a game, the pins, the book, what GUY builds for it --
+T.sweepBowl = () => {
+  const out = [], base = errors.length, w = W(), b = B();
+  T.settle(); T.resetRooms(); T.removeAll(); T.forget(); T.settle(); T.home();
+  unlockRoom('bowling');
+  const before = w.obstacles.length;
+  const added = R().add('bowling');
+  const bw = w.bowl, kindOf = (k) => Object.values(w.objects).find((o) => o.kind === k);
+  out.push(result('bowling: the room is added with three lanes, ball returns, a rack and a scoreboard (all pathing obstacles)', added.ok && !!bw && bw.lanes.length === 3 && w.obstacles.length === before + bw.obstacles.length && bw.obstacles.length === 5, { added: added.ok, lanes: bw && bw.lanes.length, obstacles: bw && bw.obstacles.length }));
+  if (!bw) { R().reset('bowling'); return out; }
+  // the equipment is inside the room and the robot has somewhere to stand for each piece
+  {
+    const bounds = w.doors.bowling.shell.bounds, inRoom = bw.obstacles.every((o) => o.x0 >= bounds.minX - 0.01 && o.x1 <= bounds.maxX + 0.01 && o.z0 >= bounds.minZ - 0.01 && o.z1 <= bounds.maxZ + 0.01);
+    const free = (p) => w.walkable(p.x, p.z) && !w.obstacles.some((o) => o.active !== false && p.x > o.x0 && p.x < o.x1 && p.z > o.z0 && p.z < o.z1);
+    const spots = [bw.rack.standSpot(), bw.boardStand(), bw.watchSpot(), ...[0, 1, 2].flatMap((i) => [bw.startSpot(i), bw.standSpot(i), bw.returnStand(i), bw.deckStand(i)])];
+    out.push(result('bowling: the equipment is inside the room, and he can stand at the rack, the board, each ball return, the line and the pin deck', inRoom && spots.every(free), { inRoom, bad: spots.map((p, i) => [i, free(p)]).filter(([, ok]) => !ok).map(([i]) => i) }));
+  }
+  // the rules: a perfect game, spares, and the pins that a ball can knock over
+  {
+    const r = (a) => bw.laneState(0) && a;
+    const lane = bw.laneState(1);
+    lane.game = { rolls: [] }; for (let i = 0; i < 12; i++) bw.record(1, 10);
+    const sc = [lane.game.rolls.length, bw.needsReset(1)];
+    bw.startGame(1, 'T');
+    out.push(result('bowling: twelve strikes make a game, and starting a game clears the card and sets all ten pins', sc[0] === 12 && bw.standing(1).length === 10 && bw.laneState(1).game.rolls.length === 0 && r(true)));
+  }
+  // the physics: a straight ball at the pocket knocks pins down and they lie where they fell; a gutter ball does nothing; the sweep and rack work
+  {
+    const from = bw.group.localToWorld(new window.THREE.Vector3(0.03, 0.3, -2.2));
+    const res = bw.roll(0, { from, aim: 0.035, hook: 0, noise: 0, power: 1.1 });
+    for (let i = 0; i < 60 * (res.tHit + 5); i++) bw.update(1 / 60);
+    const down = res.count, left = bw.standing(0).length;
+    out.push(result('bowling: a ball at the pocket knocks pins over, the others stay up, and everything comes to rest', down >= 5 && down + left === 10 && !bw.busy(0), { down, left }));
+    const a = bw.record(0, down);
+    bw.manualReset(0);
+    out.push(result('bowling: after the first roll the pins that fell are swept away (the others stand), after the second all ten are set again', (down === 10 ? a.next === 'rack' : a.next === 'sweep') && bw.standing(0).length === 10 - (down === 10 ? 10 : down) + (down === 10 ? 10 : 0), { next: a.next, standing: bw.standing(0).length }));
+    bw.startGame(0, 'T');
+    const gut = bw.roll(0, { from, aim: 0.6, hook: 0, noise: 0, power: 1 });
+    for (let i = 0; i < 60 * (gut.tHit + 5); i++) bw.update(1 / 60);
+    out.push(result('bowling: a ball thrown wide goes in the gutter and leaves every pin standing', gut.gutter !== 0 && gut.count === 0 && bw.standing(0).length === 10, { gutter: gut.gutter, count: gut.count }));
+    bw.startGame(0, 'T');
+  }
+  // the skills: each chapter makes him steadier (the more he has read, the more pins he knocks over in a game)
+  {
+    const sk = (ids) => { T.forget(); T.learn(ids); return bowlSkill(b.skills); };
+    const n = sk([]).noise, bk = sk(['bowling']).noise, h = sk(['bowling', 'bowling.ch2']), s = sk(['bowling', 'bowling.ch2', 'bowling.ch3']);
+    out.push(result('bowling: the book and each chapter make him steadier (a hook with chapter 2, spares with chapter 3)', n > bk && bk > h.noise && h.noise > s.noise && h.hook > 0 && s.spares && !h.spares, { n, bk, h, s }));
+    T.forget();
+  }
+  // a trip: in, a ball from the rack, rolls down his own lane with the card filling in, the pins set again between frames, the ball back in the rack
+  {
+    let rolls0 = bw.laneState(0).game.rolls.length, sawHeld = false, sawBoard = 0, maxY = 0, resetsSeen = 0, tenAtFrame = true;
+    bw.startGame(0, null); T.settle(); T.home(); b.queue = []; b.step = null; b.choose('bowl');
+    let guard = 0;
+    for (let i = 0; i < 260 * 30; i++) {
+      step(1 / 30);
+      if (bw.held(false).visible) sawHeld = true;
+      maxY = Math.max(maxY, G().root.position.y);
+      const L = bw.laneState(0), rs = L.game.rolls;
+      if (b.last !== 'bowl' && i > 300 && b.hereId() === 'main') break;
+      guard = i;
+    }
+    const L = bw.laneState(0), rolls = L.game.rolls.length || (L.game.done ? 11 : 0);
+    out.push(result('bowling: a trip rolls at least three balls down his lane and the scoreboard has them', rolls >= 3 && L.owner === 'GUY', { rolls: L.game.rolls, owner: L.owner }));
+    out.push(result('bowling: the ball is in his hand when he delivers it (not on the floor), and he never leaves the ground', sawHeld && maxY < 0.03, { sawHeld, maxY }));
+    out.push(result('bowling: every house ball is back in the rack when he leaves, and none is in his hand', bw.rack.balls.every((x) => !x.out) && !bw.held(false).visible, { out: bw.rack.balls.filter((x) => x.out).length }));
+    b.queue = []; b.step = null; b.skip(); T.settle(); T.home();
+  }
+  // by hand he goes down the lane to set the pins; with an Automatic Pinsetter in the house the machine does it
+  {
+    bw.startGame(0, 'T'); const from = bw.group.localToWorld(new window.THREE.Vector3(0.03, 0.3, -2.2));
+    const res = bw.roll(0, { from, aim: 0.035, noise: 0, power: 1.1 });
+    for (let i = 0; i < 60 * (res.tHit + 5); i++) bw.update(1 / 60);
+    bw.record(0, res.count);
+    const pend = bw.needsReset(0);
+    out.push(result('bowling: with no pinsetter the pins stay down until somebody resets them', !!pend && bw.supplies().setter === false && (() => { for (let i = 0; i < 300; i++) bw.update(1 / 60); return bw.needsReset(0) === pend; })(), { pend }));
+    T.addObject('pinsetter');
+    out.push(result('bowling: the Automatic Pinsetter is built into the alley (a machine over each lane) and the alley knows it is there', bw.supplies().setter === true && !!kindOf('pinsetter'), { setter: bw.supplies().setter }));
+    for (let i = 0; i < 60 * 8; i++) bw.update(1 / 60);
+    out.push(result('bowling: with the pinsetter the pins are swept away by themselves, and a whole new frame sets all ten again', bw.needsReset(0) === null && !bw.busy(0), { pend: bw.needsReset(0) }));
+    bw.startGame(0, 'T');
+    bw.laneState(0).pending = 'rack'; for (let i = 0; i < 60 * 8; i++) bw.update(1 / 60);
+    out.push(result('bowling: the pinsetter racks all ten pins when a frame is over', bw.standing(0).length === 10 && bw.needsReset(0) === null, { standing: bw.standing(0).length }));
+  }
+  // what GUY builds for the alley: maple pins and a wooden ball (chapters 4 and 5 of the Wood & Metal book), and the pinsetter egg
+  {
+    T.removeAll(); T.forget(); T.settle();
+    for (const k of ['pinsetter', 'bowlingpins', 'bowlingball']) delete w.stock.items[k];                 // (what the tests above put away in storage counts as built)
+    R().isAdded('workshop') || (unlockRoom('workshop'), R().add('workshop'));
+    T.addObject('woodfactory');
+    const can = (id) => b.canBuild(id);
+    T.learn(['workshop', 'workshop.materials']);
+    const locked = !can('bowlingpins') && !can('bowlingball');
+    T.learn(['workshop.materials.ch4']); const pins = can('bowlingpins') && !can('bowlingball');
+    T.learn(['workshop.materials.ch5']); const ball = can('bowlingball');
+    out.push(result('bowling: the pins need chapter 4 of the Wood & Metal book and the ball chapter 5 (not before)', locked && pins && ball, { locked, pins, ball }));
+    const wantsNow = wants(b).map((x) => x.serves);
+    out.push(result('bowling: with the alley added he wants wooden pins and a wooden ball, and no pinsetter yet (no Metal Factory)', wantsNow.includes('bowl.pins') && wantsNow.includes('bowl.ball') && !wantsNow.includes('egg.pinsetter'), { wantsNow }));
+    T.addObject('metalfactory');
+    out.push(result('bowling: the Metal Factory anywhere in the house makes him want the Automatic Pinsetter (the easter egg)', wants(b).some((x) => x.serves === 'egg.pinsetter'), { wants: wants(b).map((x) => x.serves) }));
+  }
+  // the equipment built for the alley changes it: maple pins on the lanes, a wooden ball in the rack
+  {
+    T.addObject('bowlingpins'); T.addObject('bowlingball');
+    for (let i = 0; i < 5; i++) bw.update(1 / 30);
+    out.push(result('bowling: built pins put maple pins on the lanes and a built ball puts a wooden ball in the rack', bw.state.maple && bw.state.woodBall && bw.rack.balls[8].mesh.visible && !!kindOf('bowlingpins') && w.roomIdAt(kindOf('bowlingpins').x, kindOf('bowlingpins').z) === 'bowling', { maple: bw.state.maple, wood: bw.state.woodBall }));
+  }
+  // a press on the rack asks him to bowl; the menu says so
+  {
+    T.removeAll(); T.settle(); T.home();
+    const r = b.interact('ballrack');
+    out.push(result('bowling: Go Bowling on the ball rack sends him to bowl', r.ok && (b.pendingActivity === 'bowl' || b.last === 'bowl'), { r }));
+    b.pendingActivity = null; b.queue = []; b.step = null; b.skip(); T.settle(); T.home();
+  }
+  R().reset('bowling');
+  T.settle();
+  out.push(result('bowling: removing the room takes the equipment out of the pathing again, and the alley with it', !w.bowl && w.obstacles.length === before, { obstacles: w.obstacles.length, before }));
+  out.push(result('bowling: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   const wasPaused = window.__qaPaused;
   if (seed) window.__qaPaused = true;                     // (the page's own animation loop would move the game between sweeps, by however long the page has been open: a seeded run is the simulation alone)      // (`upTo`: stop after that sweep: to replay a failure with everything that ran before it)
@@ -4502,6 +4634,7 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.mowerShed = S(T.sweepMowerShed);
   report.shed = S(T.sweepShed);
   report.range = S(T.sweepRange);
+  report.bowl = S(T.sweepBowl);
   report.doorMoves = S(T.sweepDoorMoves);
   report.allRooms = S(T.sweepAllRooms);
   report.needs = S(T.sweepNeeds);
