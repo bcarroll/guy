@@ -71,6 +71,9 @@ export const BOOK_CATALOG = [
     blurb: 'a fictional pulse pistol for the range', desc: 'A fictional sidearm for the Shooting Range: quick, light pulses, one at a time.' },
   { id: 'arcrifle', title: 'Arc Carbine Field Guide', teaches: 'range.carbine', color: 0x5a3c8f, thick: 0.06, height: 0.32,
     blurb: 'a fictional arc carbine for the range', desc: 'A fictional long gun for the Shooting Range: a steadier aim and a longer hold before each shot.' },
+  // The Bowling Alley (listed only once the alley has been added). Without it the robots bowl wildly; with it they are steadier.
+  { id: 'bowling', title: 'Bowling for Robots', teaches: 'bowling', color: 0x8e24aa, thick: 0.06, height: 0.31, room: 'bowling',
+    blurb: 'how to roll a ball down a lane', desc: 'The approach, the release, and keeping score. A reader bowls steadier; later chapters teach a hook ball and spare shooting.' },
 ];
 export const BOOK_DEFS = BOOK_CATALOG.filter((b) => b.start);
 
@@ -85,7 +88,7 @@ export const SKILL_INFO = {
   },
   'workshop.materials': {
     name: 'Wood & Metal Basics', book: 'Wood & Metal Basics',
-    unlocks: ['Build a bookshelf and wooden dining tables at the Wood Factory', 'Make the wooden body of an electric guitar'],
+    unlocks: ['Build a bookshelf and wooden dining tables at the Wood Factory', 'Make the wooden body of an electric guitar', 'Chapters 4 and 5: maple bowling pins and a wooden bowling ball for the Bowling Alley'],
   },
   'workshop.furniture': {
     name: 'Furniture for Robots', book: 'Furniture for Robots',
@@ -106,6 +109,10 @@ export const SKILL_INFO = {
   'outdoor.basketball': {
     name: 'Basketball', book: 'Basketball for Robots',
     unlocks: ['Dribble the basketball', 'Shoot at the hoop with a proper set shot (some go in)'],
+  },
+  bowling: {
+    name: 'Bowling', book: 'Bowling for Robots',
+    unlocks: ['Steadier aim at the Bowling Alley', 'Chapter 2: a hook ball. Chapter 3: aims at the pins that are left (spares)'],
   },
   'range.pistol': {
     name: 'Pulse pistol', book: 'Pulse Pistol Handbook',
@@ -229,6 +236,12 @@ export const CHAPTERS = {
   'workshop.materials': [
     { id: 'workshop.materials.ch2', title: 'Chapter 2: Joints and Glue', after: 3, unlocks: ['Looks the wooden piece over on the tray before taking it'] },
     { id: 'workshop.materials.ch3', title: 'Chapter 3: Sanding and Finishing', after: 8, unlocks: ['Sands the wooden piece smooth before taking it'] },
+    { id: 'workshop.materials.ch4', title: 'Chapter 4: Turning Bowling Pins', after: 9, unlocks: ['Turns ten maple bowling pins at the Wood Factory for the Bowling Alley (once it has been added)'] },
+    { id: 'workshop.materials.ch5', title: 'Chapter 5: The Wooden Ball', after: 10, unlocks: ['Makes a wooden bowling ball for the alley rack'] },
+  ],
+  bowling: [
+    { id: 'bowling.ch2', title: 'Chapter 2: The Hook', after: 4, unlocks: ['Puts a hook on the ball so it curves into the pocket'] },
+    { id: 'bowling.ch3', title: 'Chapter 3: Spare Shooting', after: 9, unlocks: ['Aims at the pins left standing for a spare'] },
   ],
   'workshop.furniture': [
     { id: 'workshop.furniture.ch2', title: 'Chapter 2: Comfortable Chairs', after: 3, unlocks: ['Presses down on the new chair or table to test it'] },
@@ -269,6 +282,7 @@ export const PRACTICE_ACTS = {
   easel: ['paint'], 'easel.colour': ['mixpaint'], 'easel.portrait': ['portrait'], decorate: ['dust'],
   workshop: ['tidytools', 'build'], 'workshop.materials': ['build'], 'workshop.furniture': ['build'], 'workshop.metal': ['build'],
   ball: ['ball', 'dribble', 'toss'], outdoor: ['goalshot', 'soccertoss', 'hoopshoot', 'hoopdribble'], 'outdoor.soccer': ['goalshot', 'soccertoss'], 'outdoor.basketball': ['hoopshoot', 'hoopdribble'],
+  bowling: ['bowl'],
   telescope: ['stargaze'], 'telescope.dark': ['darkstargaze'], 'telescope.care': ['scopecare'],
 };
 export const CHAPTER_IDS = Object.values(CHAPTERS).flat().map((c) => c.id);

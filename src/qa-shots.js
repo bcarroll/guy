@@ -178,6 +178,12 @@ export function install(T, h) {
       T.freeze(); window.guy.root.visible = false; T.frameRoom('range'); await settleFrames(3);
       return { data: capture() };
     });
+    add('room-bowling', 'rooms', async () => {                    // three lanes with pins, the ball returns, the rack, the scoreboard and the neon
+      await clean(48);
+      window.brain.w.rooms.add('bowling');
+      T.freeze(); window.guy.root.visible = false; T.frameRoom('bowling'); await settleFrames(3);
+      return { data: capture() };
+    });
     // The corner rooms: seen from beyond their far wall (the camera is outside, so the walls between it and the room do not hide it)
     const frameCorner = (id) => {
       const b = window.brain.w.doors[id].shell.bounds, cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2, away = Math.sign(cz) || 1;

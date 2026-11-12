@@ -7,6 +7,7 @@ import { makeBotBuilders } from './botobjects.js';
 import { buildYardShell, makeYardBuilders } from './yardobjects.js';
 import { makeYard } from './yardballs.js';
 import { buildRangeShell } from './rangeobjects.js';
+import { buildBowlShell, makeBowlBuilders } from './bowlobjects.js';
 
 export const ROOM = { w: 10, d: 8, h: 3.2 }; // x in [-5,5], z in [-4,4]
 
@@ -1253,6 +1254,24 @@ export function buildRoom(scene) {
     builtchair: { build: (name, x, z) => buildWoodenChair(name, x, z), pref: { x: -2.4, z: 2.6 } },
     metalchair: { build: (name, x, z) => buildWoodenChair(name, x, z, true), pref: { x: -2.9, z: 2.6 } },
   };
+  // ---- Bowling Alley equipment built in the Workshop (src/bowlobjects.js): placed in the alley's own frame (x across the lanes as the room's
+  // own x, `n` metres in from the door wall)
+  const bowlB = makeBowlBuilders({ makeObject, box, mat });
+  const BOWL_LAYOUT = {
+    bowlingpins: { x: -3.3, n: 1.0, face: 'door' },
+    bowlingball: { x: 3.3, n: 6.9, face: 'door' },
+    pinsetter: { x: 0, n: 9.5, face: 'door', exact: true },
+  };
+  const bowlSpot = (id) => (w) => {
+    if (!w.doors.bowling) return null;
+    const d = w.doors.bowling, ax = w.shellAxes('bowling'), s = BOWL_LAYOUT[id];
+    d.shell.group.updateWorldMatrix(true, false);
+    const p = d.shell.group.localToWorld(V3(s.x, 0, -s.n));                   // (the alley's own frame: its middle, `n` metres in from the door wall)
+    return { x: p.x, z: p.z, rot: w.rotFacing(ax.toDoor.x, ax.toDoor.z), exact: !!s.exact };
+  };
+  INSTANCE_KINDS.bowlingpins = { build: (name, x, z) => bowlB.bowlingpins(name, x, z), pref: (w) => bowlSpot('bowlingpins')(w) };
+  INSTANCE_KINDS.bowlingball = { build: (name, x, z) => bowlB.bowlingball(name, x, z), pref: (w) => bowlSpot('bowlingball')(w) };
+  INSTANCE_KINDS.pinsetter = { build: (name, x, z) => bowlB.pinsetter(name, x, z), pref: (w) => bowlSpot('pinsetter')(w) };
   // (the restaurant's extra tables are further instance kinds, added below once the restaurant's layout is known)
 
   // ---- Restaurant furniture (src/restobjects.js), placed the same way in the Restaurant's own frame
@@ -1615,7 +1634,7 @@ export function buildRoom(scene) {
       : wall === 'front' ? { minX: c - L / 2, maxX: c + L / 2, minZ: ROOM.d / 2, maxZ: ROOM.d / 2 + N }
         : { minX: c - L / 2, maxX: c + L / 2, minZ: -ROOM.d / 2 - N, maxZ: -ROOM.d / 2 };
     // the Shooting Range: its lanes, screens, bullseyes and enemies go in the room (src/rangeobjects.js); the screens are attached in addDoor
-    return { group: g, bounds, N, L, sides, range: def.shootingRange ? buildRangeShell(g, L, N) : null, linkable: !def.shootingRange && !def.elevator };
+    return { group: g, bounds, N, L, sides, range: def.shootingRange ? buildRangeShell(g, L, N) : null, bowl: def.bowlingAlley ? buildBowlShell(g, L, N) : null, linkable: !def.shootingRange && !def.bowlingAlley && !def.elevator };
   };
 
   // The three walls of an added room as places to hang things: `<id>:far` (facing the door) and `<id>:a`, `<id>:b` (the sides).
@@ -1717,6 +1736,17 @@ export function buildRoom(scene) {
         obstacles.push(...shell.range.obstacles);
         world.range = shell.range;
       }
+      if (shell.bowl) {                                         // the alley's ball returns, rack and scoreboard stop the robots
+        shell.bowl.attach();
+        obstacles.push(...shell.bowl.obstacles);
+        shell.bowl.sound = (n, v) => sfx(n, v);
+        shell.bowl.supplies = () => ({
+          pins: Object.values(world.objects).some((o) => o.name === 'bowlingpins' || o.kind === 'bowlingpins'),
+          ball: Object.values(world.objects).some((o) => o.name === 'bowlingball' || o.kind === 'bowlingball'),
+          setter: Object.values(world.objects).some((o) => o.name === 'pinsetter' || o.kind === 'pinsetter'),
+        });
+        world.bowl = shell.bowl;
+      }
       if (def.elevator) {                                       // a room with an elevator (the Restaurant): a cabin against the far wall
         const b = shell.bounds, sgn = WALL[wall].rotY === Math.PI ? -1 : 1;
         const ew = wall === 'right' || wall === 'left', N = ew ? b.maxX - b.minX : b.maxZ - b.minZ, Lw = ew ? b.maxZ - b.minZ : b.maxX - b.minX;
@@ -1741,6 +1771,10 @@ export function buildRoom(scene) {
       if (d.shell.range) {                                      // the range's screens go with it
         for (let i = obstacles.length - 1; i >= 0; i--) if (d.shell.range.obstacles.includes(obstacles[i])) obstacles.splice(i, 1);
         if (world.range === d.shell.range) world.range = null;
+      }
+      if (d.shell.bowl) {                                       // the alley's equipment goes with it
+        for (let i = obstacles.length - 1; i >= 0; i--) if (d.shell.bowl.obstacles.includes(obstacles[i])) obstacles.splice(i, 1);
+        if (world.bowl === d.shell.bowl) world.bowl = null;
       }
       for (const key of Object.keys(WALL).filter((k) => k.startsWith(`${id}:`))) {         // what hung on its walls is put away (GUY's paintings go to the Catalog)
         for (const [name, dc] of Object.entries(decor)) if (dc.wall === key) { room.remove(dc.group); delete decor[name]; world.removed[name] = dc; }
@@ -2039,6 +2073,7 @@ export function buildRoom(scene) {
     },
   };
   world.yard = makeYard({ world, room, objects, obstacles });
+  world.bowl = null;                                        // the Bowling Alley, while it is added (see addDoor)
   world.range = null;                                       // the Shooting Range, while it is added (see addDoor)
   return world;
 }
