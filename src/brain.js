@@ -110,6 +110,8 @@ function guitarChordAt(trackId, beat) {
   return { notes: [...new Set(notes)].sort((a, c) => a - c), fret: [0, 0.07, -0.01, 0.1][bar % 4] };
 }
 
+// the fretting hand in the guitar's own frame (neck along +x, soundboard +z): finger direction, palm normal, knuckle spot
+const GL_FINGERS = [0.1, 0.85, 0.5], GL_PALM = [0, -0.5, 0.85], GL_KNUCKLE = [0.42, 0.026, -0.01];
 const GUITAR_RIGHT_POLE = new THREE.Vector3(-0.4, 0.5, -0.9); // elbow stays up and back so the forearm clears the guitar
 const GUITAR_CHORDS = [
   { notes: [45, 52, 57, 60, 64], fret: 0.0 },        // Am
@@ -131,7 +133,7 @@ function guitarHands(g, ctx, fade) {
     g.curl('Right', 0.2);
   }
   // fretting hand: wrist under the neck, fingers pointing up and curling over it, thumb behind
-  if (b.wL > 0) { g.reach('Left', b.L, b.wL * fade, 0, b.wL > 0.9 ? { hand: b.leftHand } : null); g.curl('Left', 0.8); }   // exact hand orientation only once the hand is on the neck (a wrist blended through it bends past 120 degrees)
+  if (b.wL > 0) { g.reach('Left', b.L, b.wL * fade, 0, b.wL > 0.9 ? { hand: b.leftHand } : null); g.curl('Left', 1.0); }   // exact hand orientation only once the hand is on the neck (a wrist blended through it bends past 120 degrees)
   g.set('Spine1', Q('x', 0.05));
 }
 
@@ -1284,12 +1286,15 @@ export class Brain {
 
     const neckRest = this.gp(rest, 0.36, 0, 0.03);
     const neckNow = this.gp(cur, 0.36, 0, 0.03);
-    // left hand: fingers angled up along the neck, palm to the neck. The WRIST is placed so the knuckles sit on the neck (a fixed
-    // offset left the hand 8-14 cm away from it, floating; 0.124 m is wrist-to-knuckle on this model).
-    const axZ = new THREE.Vector3(0, 0, 1).applyQuaternion(cur.q), axX = new THREE.Vector3(1, 0, 0).applyQuaternion(cur.q);
-    const leftFingers = new THREE.Vector3(0, 1, 0).applyQuaternion(cur.q).multiplyScalar(0.4).addScaledVector(axX, 0.8).addScaledVector(axZ, -0.35).normalize();
-    const leftPalm = axZ.clone().multiplyScalar(-1);                                                             // palm normal: towards the neck
-    const knuckle = this.gp(cur, 0.46 + st.fret, 0, 0).addScaledVector(leftPalm, -0.01);          // where the knuckles rest
+    // left hand (the fretting hand): the forearm comes from his side, so the hand is BEHIND the neck (the side facing him), wrist below it,
+    // thumb on the back of the neck, fingers reaching up past the neck's top edge and curling over it so the pads press the strings from the front.
+    // (It used to sit on the soundboard side with the palm to the fretboard: the fingers curled round to the back of the neck, through it.)
+    // The WRIST is placed so the knuckles sit at the neck's top edge (0.124 m is wrist-to-knuckle on this model).
+    const gl = (x, y, z) => new THREE.Vector3(x, y, z).applyQuaternion(cur.q);
+    const axZ = gl(0, 0, 1), axX = gl(1, 0, 0);
+    const leftFingers = gl(GL_FINGERS[0], GL_FINGERS[1], GL_FINGERS[2]).normalize();
+    const leftPalm = gl(GL_PALM[0], GL_PALM[1], GL_PALM[2]).normalize();                                          // palm normal: towards the back of the neck, and up
+    const knuckle = this.gp(cur, GL_KNUCKLE[0] + st.fret, GL_KNUCKLE[1], GL_KNUCKLE[2]);                           // where the knuckles rest
     const fretPt = knuckle.addScaledVector(leftFingers, -0.124);
     const fingersDir = new THREE.Vector3(0, -1, 0).applyQuaternion(cur.q).multiplyScalar(0.9).addScaledVector(new THREE.Vector3(0, 0, 1).applyQuaternion(cur.q), -0.4).normalize();
     const tip = this.gp(cur, 0.05, st.y * 0.5, 0.07);                       // right FINGERTIPS just above the strings by the sound hole

@@ -188,7 +188,7 @@ export const MANIFEST = {
     { id: 'read-stand-shelf', activity: 'read', pose: 'readStand', t: 8, view: 'side', skills: ['speedreading'], expect: 'speed reading standing a step back from the bookshelf: the open book floats in front of his chest, clear of the shelf, both hands on its lower edges' },
     { id: 'read-sit', activity: 'read', pose: 'readSit', t: 8, view: 'front', expect: 'book open with pages facing GUY, both hands on the lower edges, seated in the chair with legs clear of it' },
     { id: 'read-turn', activity: 'read', pose: 'readSit', t: 0, view: 'front', turning: true, expect: 'right hand on the reader side of the page while a page flips' },
-    { id: 'guitar-play', activity: 'guitar', pose: 'guitar', t: 7, view: 'front', expect: 'guitar rests on his belly on a strap; right fingers hang over the strings; left wrist under the neck, fingers up, thumb to the headstock; nothing passes through the body' },
+    { id: 'guitar-play', activity: 'guitar', pose: 'guitar', t: 7, view: 'front', expect: 'guitar rests on his belly on a strap; right fingers hang over the strings; left hand behind the neck, thumb on its back, fingers curled over the top edge of the neck with the tips on the strings (not through the neck); nothing passes through the body' },
     { id: 'piano-sit', activity: 'sitpiano', pose: 'pianoSit', t: 6, view: 'side', expect: 'seated on the bench, hands on the keys, knees under the key shelf' },
     { id: 'piano-stand', activity: 'piano', pose: 'piano', t: 5, view: 'side', expect: 'standing at the keys, both hands on keys, leaning in' },
     { id: 'stereo-button', activity: 'dance', pose: 'reach', t: 1.1, view: 'front', expect: 'index finger on the boombox button, LED lit when music starts' },
@@ -247,7 +247,7 @@ export const MANIFEST = {
     { id: 'dance-waltz', activity: 'ballroom', pose: 'waltz', t: 5, view: 'front', expect: 'dance hold: left arm out and bent, right arm curved as if round a partner, slowly turning' },
     { id: 'dance-swing', activity: 'ballroom', pose: 'swing', t: 4, view: 'front', expect: 'arms swinging wide in opposition, alternate knee kicks on the beat' },
     { id: 'sit-rest', activity: 'sit', pose: 'sitRest', t: 5, view: 'side', expect: 'sitting on the seat (not hovering), thighs level, hands resting on the knees, head turning slowly' },
-    { id: 'sit-guitar', activity: 'sitguitar', pose: 'sitGuitar', t: 6, view: 'front', expect: 'seated, the guitar held on the lap and chest, left hand on the neck, right hand strumming; the chair does not pass through the guitar' },
+    { id: 'sit-guitar', activity: 'sitguitar', pose: 'sitGuitar', t: 6, view: 'front', expect: 'seated, the guitar held on the lap and chest, left thumb behind the neck and fingertips curled over it onto the strings, right hand strumming; the chair does not pass through the guitar' },
     { id: 'slouch', activity: 'slouch', pose: 'slouch', t: 6, view: 'side', expect: 'on the drum stool, round-shouldered, knees apart, hands hanging between the knees' },
     { id: 'paint-takedown', activity: 'hangpaint', pose: 'reach', t: 1.5, view: 'side', expect: 'at the easel, one hand on the canvas as he lifts it off (the easel goes blank at that moment), then he carries it held up in front of him' },
     { id: 'cook-stir', activity: 'cook', pose: 'workTap', t: 4, view: 'front', expect: 'standing at the stove, lid off the pot, a wooden spoon in the right hand circling in the pot, left hand resting on the hob, steam rising' },
@@ -592,17 +592,22 @@ T.poseStats = (name, max = 150) => {
     if (frames % 2 || !b.step) continue;
     const pose = b.pose, ctx = b.lastCtx || {};
     for (const side of ['Left', 'Right']) {
-      const st = (stats[pose] ||= { behind: -9, wrist: 0, err: 0, neck: 0, n: 0, errs: [], necks: [] });
+      const st = (stats[pose] ||= { behind: -9, wrist: 0, err: 0, neck: 0, grip: -9, n: 0, errs: [], necks: [], thumbs: [], tips: [] });
       const hand = g.root.worldToLocal(g.boneWorld(`${side}Hand`));
       st.behind = Math.max(st.behind, -hand.z);
       // wrist bend: angle between the forearm (elbow -> wrist) and the hand (wrist -> knuckle), degrees; 0 = straight
       const fa = g.boneWorld(`${side}ForeArm`), wr = g.boneWorld(`${side}Hand`), kn = g.boneWorld(`${side}HandMiddle1`);
       st.wrist = Math.max(st.wrist, Math.acos(Math.max(-1, Math.min(1, wr.clone().sub(fa).normalize().dot(kn.clone().sub(wr).normalize())))) * 57.3);
       st.n++;
-      if (side === 'Left' && pose === 'guitar' && ctx.guitar && ctx.guitar.cur) {      // fretting hand on the neck?
+      if (side === 'Left' && (pose === 'guitar' || pose === 'sitGuitar') && ctx.guitar && ctx.guitar.cur) {      // fretting hand on the neck?
         const F = ctx.guitar.cur, a0 = b.gp(F, 0.2, 0, 0), ab = b.gp(F, 0.8, 0, 0).sub(a0), p = g.boneWorld('LeftHandMiddle2');
         const u = Math.max(0, Math.min(1, p.clone().sub(a0).dot(ab) / ab.lengthSq()));
         st.necks.push(a0.clone().addScaledVector(ab, u).distanceTo(p));
+        // ...and the right way round: the thumb behind the neck (towards him), the fingertips over the neck's edge on the strings side
+        // (in the guitar's own frame the soundboard is +z; the hand once wrapped the other way and its fingers went through the neck)
+        const Fi = F.q.clone().invert(), loc = (n) => g.boneWorld(n).sub(F.pos).applyQuaternion(Fi).z;
+        st.thumbs.push(loc('LeftHandThumb3'));
+        st.tips.push((loc('LeftHandIndex3') + loc('LeftHandMiddle3') + loc('LeftHandRing3') + loc('LeftHandPinky3')) / 4);
       }
       // intended wrist position, where the game computed one
       const k = side === 'Left' ? 'L' : 'R';
@@ -621,7 +626,12 @@ T.poseStats = (name, max = 150) => {
     s.necks.sort((a, c) => a - c);
     s.neck = s.necks.length ? s.necks[Math.floor(s.necks.length * 0.9)] : 0;
     delete s.necks;
-    for (const k of ['behind', 'wrist', 'err', 'neck']) s[k] = +s[k].toFixed(k === 'wrist' ? 0 : 3);
+    if (s.tips.length) {                              // the thumb's usual place (90th percentile) minus the fingertips' (10th): negative when the thumb is behind and the fingers in front
+      s.thumbs.sort((a, c) => a - c); s.tips.sort((a, c) => a - c);
+      s.grip = s.thumbs[Math.floor(s.thumbs.length * 0.9)] - s.tips[Math.floor(s.tips.length * 0.1)];
+    }
+    delete s.thumbs; delete s.tips;
+    for (const k of ['behind', 'wrist', 'err', 'neck', 'grip']) s[k] = +s[k].toFixed(k === 'wrist' ? 0 : 3);
   }
   return stats;
 };
@@ -629,8 +639,9 @@ T.poseStats = (name, max = 150) => {
 // Limits for the pose-sanity sweep. `behind`: m behind his body (a hand reaching a world point behind him once measured 0.53;
 // walking and waltzing peak at ~0.35). `wrist`: degrees of wrist bend (a real wrist manages ~90). `err`: m between the hand and the
 // wrist position the game asked for (90th percentile; drum, brush and guitar poses expose one). `neck`: m between the fretting
-// hand's middle finger joint and the guitar neck (90th percentile; the hand must be on the neck).
-export const POSE_LIMITS = { behind: 0.45, wrist: 110, err: 0.32, neck: 0.05 };
+// hand's middle finger joint and the guitar neck (90th percentile; the hand must be on the neck). `grip`: m (guitar's z axis)
+// from the fingertips (10th percentile) to the thumb (90th): at most -0.02, the thumb behind the neck and the fingers over it.
+export const POSE_LIMITS = { behind: 0.45, wrist: 110, err: 0.32, neck: 0.055, grip: -0.02 };
 T.sweepPoses = () => {
   const out = [];
   for (const [name, m] of Object.entries(MANIFEST.activities)) {
