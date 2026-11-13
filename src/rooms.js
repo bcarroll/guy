@@ -30,6 +30,11 @@ export const ROOM_CATALOG = [
   { id: 'bowling', name: 'Bowling Alley', icon: '🎳', unlocked: true, bowlingAlley: true, size: { w: 10, d: 8 }, doorWalls: ['right', 'front', 'back', 'left'],
     desc: 'A bowling alley with three lanes. The robots roll balls at ten pins, keep score on the board, and set the pins up again by hand (or with an Automatic Pinsetter, if the Metal Factory can build one).',
     look: { frame: 0x3a2a55, door: 0x6a2a7a, panel: 0xff3fa4, floor: 0x1c1745, wall: 0x2b2a4a } },
+  // The Studio: a stage with lights and a curtain, a dance floor, a DJ booth, a Studio Machine (the skill machine for this room) and a wall of
+  // sixty records that play on the booth's decks (src/studioobjects.js, src/studiobrain.js). Guitars hang on its walls.
+  { id: 'studio', name: 'Studio', icon: '🎤', unlocked: true, studio: true, size: { w: 10, d: 8 }, doorWalls: ['right', 'front', 'back', 'left'],
+    desc: 'A music studio with a stage, a dance floor, a DJ booth and a big wall of records. The robots put on shows, throw dance parties and spin records. Its Studio Machine manages the room, and guitars can hang on its walls.',
+    look: { frame: 0x2a2233, door: 0x7a2a4a, panel: 0xffb43f, floor: 0x241f2e, wall: 0x3b2f4a } },
   // Corner rooms: empty rooms for whatever the user wants to put in them (the Catalog's Rooms list, and every piece of furniture can be moved
   // in). A corner has no wall of GUY's room to put a door in, so it opens through the side wall of the room beside it: the Workshop, or another
   // room with one. `corner: true` rooms are put in the first free corner (`corners`) that has such a neighbour: see world.planCorner.

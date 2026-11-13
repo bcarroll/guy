@@ -8,6 +8,7 @@ import { buildYardShell, makeYardBuilders } from './yardobjects.js';
 import { makeYard } from './yardballs.js';
 import { buildRangeShell } from './rangeobjects.js';
 import { buildBowlShell, makeBowlBuilders } from './bowlobjects.js';
+import { buildStudioShell } from './studioobjects.js';
 
 export const ROOM = { w: 10, d: 8, h: 3.2 }; // x in [-5,5], z in [-4,4]
 
@@ -809,7 +810,7 @@ export function buildRoom(scene) {
   // so GUY can lift it off; `obj.rest` is where it sits on the stand.
   const buildGuitar = (x = 0, z = 0, name = 'guitar', electric = false) => {
     const wood = mat(electric ? 0xb02a2a : 0xb5772f, { roughness: 0.45 }), dark = mat(0x1b120a, { roughness: 0.6 }), metal = mat(0x2a2a2a, { roughness: 0.4 });
-    let gtr = null;
+    let gtr = null, standParts = [];
     const obj = makeObject(name, x, z, 0.5, 0.45, 1.05, 'light', (g) => {
       box(0.5, 0.03, 0.05, metal, 0, 0.015, 0.0, g);                     // base bar
       box(0.03, 0.03, 0.4, metal, -0.2, 0.015, 0.0, g);                   // feet
@@ -817,6 +818,7 @@ export function buildRoom(scene) {
       box(0.025, 0.4, 0.025, metal, -0.1, 0.22, -0.02, g);               // uprights
       box(0.025, 0.4, 0.025, metal, 0.1, 0.22, -0.02, g);
       box(0.3, 0.03, 0.04, metal, 0, 0.42, 0.03, g);                      // cradle
+      standParts = g.children.slice();                                    // (the stand: hidden while the guitar hangs on a wall)
       gtr = new THREE.Group();
       const lower = new THREE.Mesh(new THREE.CylinderGeometry(0.185, 0.185, 0.09, 28), wood);
       lower.rotation.x = Math.PI / 2; lower.position.x = -0.09;
@@ -857,7 +859,56 @@ export function buildRoom(scene) {
     obj.guitar = gtr;
     obj.rest = { pos: gtr.position.clone(), quat: gtr.quaternion.clone() };
     if (electric) obj.electric = true;
+    // ---- hanging on a wall of the Studio. A guitar dragged against one of its walls hangs there on a wooden board (the stand goes away, the
+    // footprint shrinks to the board); dragged off again it is back on its stand. GUY and GAL take it down and hang it back the same way
+    // (the rest pose moves with it). See hangCheck below, which decides.
+    const plaque = new THREE.Group();
+    box(0.34, 1.3, 0.02, mat(0x5b3a24), 0, 1.3, -0.04, plaque);
+    for (const y of [0.78, 1.82]) box(0.05, 0.03, 0.06, mat(0xc9d0d8, { metalness: 0.7, roughness: 0.3 }), 0, y, -0.005, plaque);       // the hooks it hangs from
+    plaque.visible = false;
+    obj.group.add(plaque);
+    obj.stand = standParts; obj.hung = false;
+    obj.standDz = () => (obj.hung ? 0.55 : 0.62);                       // how far in front of it GUY stands to take it down
+    obj.setHung = (on) => {
+      on = !!on;
+      if (obj.hung === on) return;
+      obj.hung = on;
+      for (const m of standParts) m.visible = !on;
+      plaque.visible = on;
+      obj.bd = on ? 0.1 : 0.45;
+      obj.rest.pos.set(0, on ? 1.0 : 0.62, on ? 0.02 : 0.07);
+      if (!obj.guitarMoved || !obj.guitarMoved()) gtr.position.copy(obj.rest.pos);
+      obj.set(obj.x, obj.z);
+    };
+    const baseUpdate = obj.update;
+    obj.update = function (dt) { baseUpdate.call(this, dt); hangCheck(this); };
     return obj;
+  };
+  // Is a guitar flush against a wall of the Studio (not the door wall)? Hang it facing into the room; away from the wall, put it back on its stand.
+  const STAND_HALF = 0.225;
+  const HANG_SIDES = [['minX', -1, 0], ['maxX', 1, 0], ['minZ', 0, -1], ['maxZ', 0, 1]];
+  const hangCheck = (o) => {
+    const d = doors.studio;
+    if (!d) { if (o.hung) o.setHung(false); return; }
+    if (o.hauled || (o.heldNow && o.heldNow())) return;                  // (in somebody's hands)
+    const b = d.shell.bounds, doorSide = { right: 'minX', left: 'maxX', front: 'minZ', back: 'maxZ' }[d.wall];
+    const inside = o.x > b.minX && o.x < b.maxX && o.z > b.minZ && o.z < b.maxZ;
+    if (!inside) { if (o.hung) o.setHung(false); return; }
+    let best = null;
+    for (const [side, nx, nz] of HANG_SIDES) {
+      if (side === doorSide) continue;
+      const P = b[side], c = nx ? o.x : o.z, gap = (P - c) * (nx || nz) - STAND_HALF;        // (how far the stand's back edge is from the wall: the same whether it hangs or stands)
+      if (!best || Math.abs(gap) < Math.abs(best.gap)) best = { side, nx, nz, P, gap };
+    }
+    // (the other axis has to be inside the wall too, so a corner or the neighbour's strip is no wall)
+    const along = best.nx ? o.z : o.x, lo = best.nx ? b.minZ : b.minX, hi = best.nx ? b.maxZ : b.maxX;
+    const flush = best.gap >= -0.25 && best.gap <= (o.hung ? 0.3 : 0.12) && along > lo + 0.3 && along < hi - 0.3;     // (it takes a real pull to get it off the hook)
+    if (flush) {
+      const rot = world.rotFacing(-best.nx, -best.nz);
+      if (!o.hung) o.setHung(true);
+      const nxp = best.nx ? best.P - best.nx * 0.0505 : o.x, nzp = best.nz ? best.P - best.nz * 0.0505 : o.z;
+      if (o.rot !== rot || Math.abs(o.x - nxp) > 1e-3 || Math.abs(o.z - nzp) > 1e-3) { o.rot = rot; o.set(nxp, nzp); }
+    } else if (o.hung) o.setHung(false);                                     // pulled away from the wall: back on its stand
   };
 
   // ---- Drum kit: the kit faces local -z and the stool is at +z, so the drummer sits at the +z end looking at the kit. ----
@@ -1634,7 +1685,7 @@ export function buildRoom(scene) {
       : wall === 'front' ? { minX: c - L / 2, maxX: c + L / 2, minZ: ROOM.d / 2, maxZ: ROOM.d / 2 + N }
         : { minX: c - L / 2, maxX: c + L / 2, minZ: -ROOM.d / 2 - N, maxZ: -ROOM.d / 2 };
     // the Shooting Range: its lanes, screens, bullseyes and enemies go in the room (src/rangeobjects.js); the screens are attached in addDoor
-    return { group: g, bounds, N, L, sides, range: def.shootingRange ? buildRangeShell(g, L, N) : null, bowl: def.bowlingAlley ? buildBowlShell(g, L, N) : null, linkable: !def.shootingRange && !def.bowlingAlley && !def.elevator };
+    return { group: g, bounds, N, L, sides, range: def.shootingRange ? buildRangeShell(g, L, N) : null, bowl: def.bowlingAlley ? buildBowlShell(g, L, N) : null, studio: def.studio ? buildStudioShell(g, L, N) : null, linkable: !def.shootingRange && !def.bowlingAlley && !def.studio && !def.elevator };
   };
 
   // The three walls of an added room as places to hang things: `<id>:far` (facing the door) and `<id>:a`, `<id>:b` (the sides).
@@ -1747,6 +1798,11 @@ export function buildRoom(scene) {
         });
         world.bowl = shell.bowl;
       }
+      if (shell.studio) {                                       // the Studio's stage gear, PA, record wall, booth and machine stop the robots
+        shell.studio.attach();
+        obstacles.push(...shell.studio.obstacles);
+        world.studio = shell.studio;
+      }
       if (def.elevator) {                                       // a room with an elevator (the Restaurant): a cabin against the far wall
         const b = shell.bounds, sgn = WALL[wall].rotY === Math.PI ? -1 : 1;
         const ew = wall === 'right' || wall === 'left', N = ew ? b.maxX - b.minX : b.maxZ - b.minZ, Lw = ew ? b.maxZ - b.minZ : b.maxX - b.minX;
@@ -1775,6 +1831,10 @@ export function buildRoom(scene) {
       if (d.shell.bowl) {                                       // the alley's equipment goes with it
         for (let i = obstacles.length - 1; i >= 0; i--) if (d.shell.bowl.obstacles.includes(obstacles[i])) obstacles.splice(i, 1);
         if (world.bowl === d.shell.bowl) world.bowl = null;
+      }
+      if (d.shell.studio) {                                     // the Studio's gear goes with it
+        for (let i = obstacles.length - 1; i >= 0; i--) if (d.shell.studio.obstacles.includes(obstacles[i])) obstacles.splice(i, 1);
+        if (world.studio === d.shell.studio) world.studio = null;
       }
       for (const key of Object.keys(WALL).filter((k) => k.startsWith(`${id}:`))) {         // what hung on its walls is put away (GUY's paintings go to the Catalog)
         for (const [name, dc] of Object.entries(decor)) if (dc.wall === key) { room.remove(dc.group); delete decor[name]; world.removed[name] = dc; }
@@ -2074,6 +2134,7 @@ export function buildRoom(scene) {
   };
   world.yard = makeYard({ world, room, objects, obstacles });
   world.bowl = null;                                        // the Bowling Alley, while it is added (see addDoor)
+  world.studio = null;                                      // the Studio, while it is added (see addDoor)
   world.range = null;                                       // the Shooting Range, while it is added (see addDoor)
   return world;
 }
