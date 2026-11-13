@@ -755,6 +755,9 @@ T.sweepBooks = () => {
     if (r) r.click();
     out.push(result('skills panel: a learned skill is clickable (Guitar) and the click orders GUY to use that object', !!r && r.classList.contains('do') && !!b.pendingActivity && b.pendingActivity !== was, { has: !!r, cls: r && r.className, pending: b.pendingActivity, toast: document.getElementById('toast').textContent, music: b.music }));
     out.push(result('skills panel: a skill with no object (Decorating) is not clickable', !plain || !plain.classList.contains('do')));
+    // only learned skills are listed, and each is only its heading
+    const rows = [...panel.querySelectorAll('.skill')];
+    out.push(result('skills panel: only learned skills are listed, each as just its heading (no book, unlocks or chapters)', rows.length > 0 && rows.every((x) => x.classList.contains('known') && !x.querySelector('.book, ul, .chapters') && x.children.length === 1), { rows: rows.map((x) => x.dataset.skill) }));
   }
   return out;
 };
