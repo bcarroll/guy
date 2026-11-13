@@ -50,7 +50,7 @@ export const ROOM_CATALOG = [
 const KEY = 'guy.rooms.v1';
 const WALL_ORDER = ['right', 'front', 'back', 'left'];
 
-export function initRooms({ world, remove, persist, refit }) {
+export function initRooms({ world, remove, persist, refit, evict = () => {} }) {
   const state = {};                  // room id -> { added, wall, u, unlocked? }
   const listeners = [];
   const def = (id) => ROOM_CATALOG.find((r) => r.id === id);
@@ -150,6 +150,28 @@ export function initRooms({ world, remove, persist, refit }) {
     return restoreFrom(data);
   }
 
+  // Take a room away for good (the Catalog's Rooms tab): everything in it goes back to the Catalog (things GUY built, back into storage),
+  // the robots inside are walked out, and its door is taken off the wall. Rooms that open through it go too, with their things.
+  // The room can be added again later; nothing is lost.
+  function removeRoom(id) {
+    const r = def(id);
+    if (!r || !added(id)) return { ok: false, messages: ['That room is not part of your home.'] };
+    const kids = Object.values(world.doors).filter((k) => k.parent === id).map((k) => k.id);
+    const messages = [];
+    let count = 0;
+    for (const k of kids) { const res = removeRoom(k); count += res.returned || 0; messages.push(...res.messages); }
+    const d = world.doors[id], b = d.shell.bounds;
+    const inRoom = (x, z) => x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ;
+    evict(id);                                                                          // the robots first: nobody is left standing in a room that is going
+    for (const [name, o] of Object.entries(world.objects)) if (inRoom(o.x, o.z)) { remove(name); count++; }
+    for (const [name, o] of Object.entries(world.decor)) if (!o.wall && inRoom(o.u, o.v)) { remove(name); count++; }       // (rugs; what hangs on its walls goes with removeDoor)
+    world.removeDoor(id);
+    delete state[id];
+    changed();
+    messages.push(`${r.name} removed. ${count ? `${count} thing${count === 1 ? '' : 's'} went back to the Catalog. ` : ''}Its door is gone.`.trim());
+    return { ok: true, returned: count, messages };
+  }
+
   // Test aids: take a room away again, or lock / unlock it, without going through the Catalog.
   function reset(id) {
     for (const k of Object.values(world.doors)) if (k.parent === id) reset(k.id);          // the rooms that open into it go first
@@ -175,7 +197,7 @@ export function initRooms({ world, remove, persist, refit }) {
   }
 
   return {
-    catalog: ROOM_CATALOG, def, add, restore, restoreFrom, snapshot, reset, setUnlocked, setDoorLocked,
+    catalog: ROOM_CATALOG, def, add, remove: removeRoom, restore, restoreFrom, snapshot, reset, setUnlocked, setDoorLocked,
     isAdded: added, isUnlocked: unlocked, isDoorLocked: (id) => added(id) && !!(state[id] && state[id].doorLocked),
     // a catalog entry is listed when it has no room, or its room is added and unlocked
     isLive: (roomId) => !roomId || (added(roomId) && unlocked(roomId)),

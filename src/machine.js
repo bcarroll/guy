@@ -266,6 +266,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
 
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+  let confirmRemoveRoom = null;                                           // the room whose Remove button was tapped once
   let confirmDestroy = null;                                              // the painting whose Destroy button was tapped once
   function card({ icon, name, desc, status, label, action, note, danger, extra }) {
     const btn = action !== undefined
@@ -365,7 +366,12 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
       for (const r of rooms ? rooms.catalog : []) {
         const base = { icon: r.icon, name: r.name, desc: r.desc, status: 'room' };
         if (!rooms.isUnlocked(r.id)) { if (r.premium) roomGroups['Premium · coming soon'].push(card({ ...base, status: 'locked', label: '🔒 Premium' })); continue; }
-        if (rooms.isAdded(r.id)) roomGroups['In your home'].push(card({ ...base, status: 'inroom', label: '✓ In your home' }));
+        if (rooms.isAdded(r.id)) {
+          // two taps, in the Catalog itself (no browser dialog): everything in the room goes back to the Catalog and its door comes off
+          const sure = confirmRemoveRoom === r.id;
+          const i = handlers.push(() => { if (!sure) { confirmRemoveRoom = r.id; render(); return; } confirmRemoveRoom = null; notify(rooms.remove(r.id).messages.join(' ')); render(); }) - 1;
+          roomGroups['In your home'].push(card({ ...base, status: 'inroom', label: sure ? 'Really remove?' : 'Remove room', action: i, danger: true, note: sure ? 'Everything in it goes back to the Catalog and its door is removed.' : '' }));
+        }
         else { const i = handlers.push(() => addRoom(r)) - 1; roomGroups['Add a room'].push(card({ ...base, label: 'Add to my home', action: i, note: r.corner ? 'Goes in a free corner beside another room when there is one, otherwise gets a door on a wall. Anything in the way goes back to the Catalog.' : 'Puts a door on a wall. Anything in the way goes back to the Catalog.' })); }
       }
     } else {

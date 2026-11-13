@@ -191,6 +191,7 @@ lockBtn.addEventListener('click', () => { brain.unlock(true); showToast('GUY is 
 // Rooms the user adds from the Catalog: a door on a wall, and a room behind it. Frame the camera round all of them.
 const rooms = initRooms({
   world, persist: !params.has('fresh'), remove: (id) => removeById(id),
+  evict: (id) => evictFromRoom(id),
   refit: () => {
     const e = world.extent();
     roomBox.length = 0;
@@ -430,6 +431,22 @@ function removeById(id) {
   if (id === 'ball') { world.removeBall(); brain.ballRemoved && brain.ballRemoved(); }
   else if (world.objects[id] && world.objects[id].kind) { world.storeInstance(id); brain.objectRemoved(id); machineUI.save(); machineUI.refresh(); }     // something GUY built goes back into storage
   else { world.removeObject(id); brain.objectRemoved(id); }
+}
+
+// A room is being taken away: GUY and GAL inside it stop what they are doing and stand just inside the door on the way out.
+function evictFromRoom(id) {
+  const b = world.doors[id] && world.doors[id].shell.bounds;
+  if (!b) return;
+  const p = world.doorPoint(id, 1.2);
+  for (const br of [brain, world.gal && world.gal.brain]) {
+    const g = br && br.g;
+    if (!g) continue;
+    const { x, z } = g.root.position;
+    if (x < b.minX || x > b.maxX || z < b.minZ || z > b.maxZ) continue;
+    if (br.visitId === id) br.visitId = null;
+    br.queue = []; br.step = null;
+    g.root.position.set(p.x, 0, p.z);
+  }
 }
 
 function floorAt(e, y = 0) {

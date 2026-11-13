@@ -1373,7 +1373,7 @@ const BANNED = /\b(fail|failed|error|wrong|can't|cannot|lost|broken|dangerous)\b
 const friendly = (msgs) => msgs.length > 0 && msgs.every((m) => m.length < 80 && !BANNED.test(m));    // short, kind wording (section 16 of the plan)
 const openTab = (tab) => { const m = machine(); m.hidden = false; m.querySelector(`[data-tab=${tab}]`).click(); return m; };
 const rectsOv = (a, b) => a.x1 > b.x0 && a.x0 < b.x1 && a.z1 > b.z0 && a.z0 < b.z1;
-// Take every added room away again (a test-only reset: the game never removes a room).
+// Take every added room away again (a test-only reset: it also deletes the furniture; the game's own removal is rooms.remove, tested by sweepRoomRemoval).
 T.resetRooms = () => {
   const b = B();
   for (const r of ROOM_CATALOG) R().reset(r.id);                                  // its furniture goes with it
@@ -1798,7 +1798,7 @@ T.sweepRooms = () => {
   out.push(result('rooms: the toast says the Workshop was added', /Workshop added/.test(toast), { toast }));
   m = openTab('rooms');
   const after = machineCard('Workshop');
-  out.push(result('rooms: the Workshop then shows "In your home" with no Add button', !!after && !after.querySelector('.act') && /In your home/.test(after.textContent)));
+  out.push(result('rooms: the Workshop then shows "In your home" with a Remove button and no Add button', !!after && after.classList.contains('inroom') && [...after.querySelectorAll('.act')].every((a) => a.textContent === 'Remove room') && !/Add to my home/.test(after.textContent)));
   const e = w.extent(), v = new THREE.Vector3();
   let inView = true;
   for (const x of [e.minX, e.maxX]) for (const y of [0, 3.2]) for (const z of [e.minZ, e.maxZ]) { v.set(x, y, z).project(window.camera); if (Math.abs(v.x) > 1.001 || Math.abs(v.y) > 1.001) inView = false; }
@@ -1839,6 +1839,44 @@ T.sweepRooms = () => {
   }
   T.resetRooms(); putBackSince(before); machine().hidden = true;
   out.push(result('rooms: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
+// ---- 10b. Removing a room from the Rooms tab (rooms.remove): its things go back to the Catalog and its door comes off ----
+T.sweepRoomRemoval = () => {
+  const out = [], base = errors.length, w = W(), b = B();
+  T.resetRooms(); T.settle(); T.home();
+  const before = new Set(Object.keys(w.removed));
+  unlockRoom('workshop'); R().add('workshop');
+  for (const id of ['workbench', 'toolbox']) T.addObject(id);
+  R().add('library');                                                                  // (opens through the Workshop when it is beside one)
+  const kid = w.doors.library && w.doors.library.parent === 'workshop';
+  const inside = Object.keys(w.objects).filter((n) => ['workbench', 'toolbox'].includes(n));
+  const p = w.doorPoint('workshop', -2); b.g.root.position.set(p.x, 0, p.z);            // GUY is standing in the room when it goes
+  const door = w.doors.workshop;
+  let m = openTab('rooms');
+  let card = machineCard('Workshop'), btn = card && card.querySelector('.act');
+  out.push(result('room removal: a room in the home has a "Remove room" button', !!btn && btn.textContent === 'Remove room', { text: btn && btn.textContent }));
+  if (btn) btn.click();
+  step(0.5);
+  m = openTab('rooms'); card = machineCard('Workshop'); btn = card && card.querySelector('.act');
+  out.push(result('room removal: the first tap only asks "Really remove?" and changes nothing', R().isAdded('workshop') && !!btn && btn.textContent === 'Really remove?' && !!w.doors.workshop, { text: btn && btn.textContent }));
+  if (btn) btn.click();
+  step(1);
+  const toast = document.getElementById('toast').textContent;
+  out.push(result('room removal: the second tap takes the room away: door, walls and room are gone', !R().isAdded('workshop') && !w.doors.workshop && !w.room.children.includes(door.group) && !w.room.children.includes(door.shell.group) && w.extent().maxX === 5, { doors: Object.keys(w.doors) }));
+  out.push(result('room removal: everything that was in it is back in the Catalog, none of it left standing', inside.length === 2 && inside.every((n) => !w.objects[n] && !!w.removed[n]), { inside }));
+  out.push(result('room removal: GUY was walked out and stands in his own room', b.inMain() && w.roomIdAt(b.g.root.position.x, b.g.root.position.z) !== 'workshop', { room: b.hereId() }));
+  if (kid) out.push(result('room removal: the Library that opened through it goes too', !w.doors.library && !R().isAdded('library')));
+  out.push(result('room removal: the toast says so kindly', /Workshop removed/.test(toast) && toast.length < 120 && !BANNED.test(toast), { toast }));
+  out.push(result('room removal: the Rooms tab offers the Workshop again ("Add to my home")', (() => { openTab('rooms'); const c = machineCard('Workshop'); return !!c && /Add to my home/.test(c.textContent); })()));
+  const gone = R().remove('workshop');
+  out.push(result('room removal: removing a room that is not in the home does nothing', !gone.ok && !Object.keys(w.doors).length));
+  R().add('workshop');
+  const back = ['workbench', 'toolbox'].map((id) => T.addObject(id));
+  out.push(result('room removal: adding the room again works, and its things can be put back from the Catalog', R().isAdded('workshop') && ['workbench', 'toolbox'].every((n) => !!w.objects[n]), { back }));
+  T.resetRooms(); putBackSince(before); machine().hidden = true;
+  out.push(result('room removal: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
 };
 
@@ -4665,6 +4703,7 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.arrange = S(T.sweepArrange);
   report.paintings = S(T.sweepPaintings);
   report.corners = S(T.sweepCorners);
+  report.roomRemoval = S(T.sweepRoomRemoval);        // (last: each sweep's seed is its number, so a new one goes at the end and leaves the others' seeds alone)
   if (seed && T.unseed) T.unseed();
   window.__qaPaused = wasPaused;
   T.lastReport = report;
