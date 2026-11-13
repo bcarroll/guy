@@ -282,7 +282,8 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`, `
 - The right and front walls face away from the default camera, so the door is built from solid parts and the sign is drawn on both sides: the room's name facing GUY's room, "GUY's Room" facing the added room.
 - Saved in `guy.rooms.v1` (separate from `guy.room.v1`). A new visit starts with the core pieces back on the walls, so the saved door is placed again first and anything in its way is taken out again; if its saved spot is now taken by something fixed it finds a new one.
 - Entries with `room: '<id>'` are not listed (not even as locked) until that room is added and unlocked.
-- Test aids: `T.resetRooms()`, `R().add(id, { at, walls })`, `R().setUnlocked(id, bool)`, `R().snapshot()` / `R().restoreFrom()` (`R()` is `window.brain.w.rooms`).
+- **Removing a room** (Rooms tab, "Remove room", two taps: the first asks "Really remove?"; `rooms.remove`, tested by `T.sweepRoomRemoval`): the door, walls and room go; everything standing in it goes back to the Catalog like any removal (things GUY built back into storage, rugs and wall pieces included, nothing deleted); GUY or GAL inside are stopped and put just inside the door on the way out (`evictFromRoom` in `main.js`); corner rooms that open through it go too, with their things. The room can be added again later.
+- Test aids: `T.resetRooms()` (deletes furniture too: it is a test-only reset, not the game's removal), `R().add(id, { at, walls })`, `R().setUnlocked(id, bool)`, `R().snapshot()` / `R().restoreFrom()` (`R()` is `window.brain.w.rooms`).
 
 ## Saved layout and automatic updates (`src/layout.js`, `src/update.js`)
 
@@ -365,6 +366,8 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`, `
 - **Speed** (the dropdown beside Follow, `#speed-sel`, 1x / 2x / 3x / 4x, remembered in `guy.speed.v1`, always 1x under `?fresh`): scales his walking (and turning and pushing furniture) and the idle pauses between interactions (`brain.speed`). The interactions themselves (playing, reading, painting, waving ...) run at normal speed. Tested by `T.sweepLock` and `T.sweepSpeed`.
 
 ## Regression watch (bugs found and fixed; make sure they stay fixed)
+
+- Rooms could not be removed at all (only the test-only `reset` could). `rooms.remove` + the Rooms tab's Remove room button; `sweepRoomRemoval` fails without them.
 
 - **Fixed: a body and arm inside furniture** (seed 42, `build` and the four book sweeps: GUY walked into the drum kit): `moveBy` let him walk in any direction once he was inside an obstacle's 20 cm margin, even into it. Now inside the margin he may only walk out or along it (never closer than 1 cm; the other robot's body, pushing, driving the mower and a goal inside the margin are exempt), slides round it toward his goal, and drifts away from it while walking close along it with his goal elsewhere, so his arms swing clear. Test: bot rules 3d. Wider limits (3 to 12 cm) were tried and each froze someone: GAL in the doorway behind GUY's body box, GUY pressed to the mower beside the fence, the wall tests along the easel. A small movable piece of furniture that blocks a walk for 3 s is moved aside first (`makeRoomFor`, not while carrying a book, ball or guitar, never what the plan still uses; no test of its own yet).
 
