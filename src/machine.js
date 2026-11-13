@@ -366,7 +366,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
         const base = { icon: r.icon, name: r.name, desc: r.desc, status: 'room' };
         if (!rooms.isUnlocked(r.id)) { if (r.premium) roomGroups['Premium · coming soon'].push(card({ ...base, status: 'locked', label: '🔒 Premium' })); continue; }
         if (rooms.isAdded(r.id)) roomGroups['In your home'].push(card({ ...base, status: 'inroom', label: '✓ In your home' }));
-        else { const i = handlers.push(() => addRoom(r)) - 1; roomGroups['Add a room'].push(card({ ...base, label: 'Add to my home', action: i, note: r.corner ? 'Goes in a free corner, with a door in the room beside it. Anything in the way goes back to the Catalog.' : 'Puts a door on a wall. Anything in the way goes back to the Catalog.' })); }
+        else { const i = handlers.push(() => addRoom(r)) - 1; roomGroups['Add a room'].push(card({ ...base, label: 'Add to my home', action: i, note: r.corner ? 'Goes in a free corner beside another room when there is one, otherwise gets a door on a wall. Anything in the way goes back to the Catalog.' : 'Puts a door on a wall. Anything in the way goes back to the Catalog.' })); }
       }
     } else {
       for (const b of BOOK_CATALOG.filter(live)) {

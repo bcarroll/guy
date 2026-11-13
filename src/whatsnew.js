@@ -2,6 +2,7 @@
 // telling the player about is deployed: new rooms, objects, books, things GUY can do. The update notice (src/update.js) lists the
 // entries the running page has not seen yet, and vite.config.js writes the whole list into version.json.
 export const WHATS_NEW = [
+  { id: 'rooms-stand-alone', items: ['No room needs another one now: the Library, Bedroom, Garage and Game Room go in a free corner beside a room when there is one, and otherwise just get a door on your room.'] },
   { id: 'bowling-alley', items: ['A new room: the Bowling Alley. Three lanes, ten pins each, a ball return beside every lane, a rack of house balls and a scoreboard. GUY and GAL bowl on their own lanes and keep score, and walk down the lane to set the pins up again.', 'A new book, "Bowling for Robots": a steadier aim, then a hook ball and spare shooting as they practise.', 'The Wood & Metal book has two more chapters: turning maple bowling pins and a wooden bowling ball for the alley.', 'Psst: with a Metal Factory in the house, GUY may build an Automatic Pinsetter for the alley.'] },
   { id: 'corner-rooms', items: ['Rooms can go in the corners now: the Library, Bedroom, Garage and Game Room. A corner room opens through a door in the side wall of the room beside it (the Workshop), so GUY and GAL walk through that room to get there.'] },
   { id: 'chapters-workshop', items: ['The four workshop books have more chapters: sorting the toolbox, a safety look-round, inspecting and sanding wood, knocking on metal to hear it ring, and one more chair and table of each kind for the house.'] },
