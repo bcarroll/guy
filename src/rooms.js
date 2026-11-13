@@ -48,6 +48,7 @@ export const ROOM_CATALOG = [
 ];
 
 const KEY = 'guy.rooms.v1';
+const WALL_ORDER = ['right', 'front', 'back', 'left'];
 
 export function initRooms({ world, remove, persist, refit }) {
   const state = {};                  // room id -> { added, wall, u, unlocked? }
@@ -87,8 +88,13 @@ export function initRooms({ world, remove, persist, refit }) {
     if (!r) return { ok: false, messages: ['That room is not available.'] };
     if (!unlocked(id)) return { ok: false, messages: ['That room is not ready yet.'] };
     if (added(id)) return { ok: false, already: true, messages: [`The ${r.name} is already part of your home.`] };
-    if (r.corner) return addCorner(r, opts);
-    const spot = opts.at || world.planDoor(opts.walls || r.doorWalls);
+    if (r.corner && !(opts.at && !opts.at.corner)) return addCorner(r, opts);       // (a corner room saved on a wall of GUY's room comes back there)
+    return addOnWall(r, opts);
+  }
+
+  // A room with a door on a wall of GUY's room. A corner room with nowhere in a corner ends up here too: no room needs another one.
+  function addOnWall(r, opts) {
+    const spot = opts.at || world.planDoor(opts.walls || (r.doorWalls && r.doorWalls.length ? r.doorWalls : WALL_ORDER));
     const hit = spot ? place(r, spot.wall, spot.u) : null;
     if (!spot || !hit) return { ok: false, messages: ['No clear wall for a door right now. Try moving something.'] };
     changed();
@@ -106,10 +112,7 @@ export function initRooms({ world, remove, persist, refit }) {
       if (world.doors[opts.at.parent]) spot = { wall: opts.at.wall, u: opts.at.u, parent: opts.at.parent, corner: opts.at.corner, cell };
     } else {
       const plan = world.planCorner(opts.corners || r.corners);
-      if (plan.none) {
-        return { ok: false, messages: [plan.why === 'taken' ? 'No free corner left for another room.'
-          : 'A corner room needs the Workshop beside it first.'] };
-      }
+      if (plan.none) return addOnWall(r, {});             // no corner with a room beside it: an ordinary door on GUY's room, nothing else needed
       spot = plan;
     }
     const hit = spot ? place(r, spot.wall, spot.u, spot) : null;

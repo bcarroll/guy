@@ -2125,9 +2125,12 @@ T.sweepCorners = () => {
     for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) { const p = bs[i], q = bs[j]; if (p.minX < q.maxX - 1e-6 && q.minX < p.maxX - 1e-6 && p.minZ < q.maxZ - 1e-6 && q.minZ < p.maxZ - 1e-6) bad.push([p.id, q.id]); }
     return bad;
   };
-  // 1. a corner has no wall of its own: with no room beside it there is nowhere for the door, so it is refused, kindly, and nothing changes
+  // 1. a corner has no wall of its own, but no room needs another: with no room beside a corner the room gets an ordinary door on GUY's room
   const lone = R().add('library');
-  out.push(result('corners: with no room beside a corner it is refused with a message and nothing is added', !lone.ok && friendly(lone.messages) && !Object.keys(w.doors).length && Object.keys(w.removed).length === before.size, { lone }));
+  const ld = w.doors.library;
+  out.push(result('corners: with no room beside a corner the room is still added, on a wall of GUY\'s room (it does not need the Workshop)', lone.ok && !!ld && ld.parent === 'main' && !lone.parent && !/workshop/i.test(lone.messages.join(' ')), { lone }));
+  R().reset('library'); T.settle();
+  out.push(result('corners: taking that room away leaves nothing behind', !Object.keys(w.doors).length, { doors: Object.keys(w.doors) }));
   // 2. the Workshop on the right wall touches two corners: each gets its door in the side wall of the Workshop
   const wk = R().add('workshop', { walls: ['right'] });
   const lib = R().add('library'), bed = R().add('bedroom');
@@ -2147,10 +2150,10 @@ T.sweepCorners = () => {
     out.push(result(`corners: ${id}: the doorway is walkable only when the door is open`, !w.walkable(mid.x, mid.z) && (w.setDoorOpen(id, true), step(1.2), w.walkable(mid.x, mid.z)) && (w.setDoorOpen(id, false), step(1.2), !w.walkable(mid.x, mid.z)), { open: d.open }));
     out.push(result(`corners: ${id}: a point inside is in that room, and the doorway is neither room`, w.roomIdAt(inRoom.x, inRoom.z) === id && w.roomIdAt(beside.x, beside.z) === 'workshop' && w.roomIdAt(mid.x, mid.z) === 'door', { a: w.roomIdAt(inRoom.x, inRoom.z), b: w.roomIdAt(beside.x, beside.z), c: w.roomIdAt(mid.x, mid.z) }));
   }
-  // 4. the others have no neighbour that can have a door (they are refused, nothing changes)
-  const n0 = Object.keys(w.doors).join();
+  // 4. the others have no neighbour that can have a door: each still gets an ordinary door on a free wall of GUY's room
   const gar = R().add('garage'), gm = R().add('gameroom');
-  out.push(result('corners: the corners beside no room that can have a door are refused with a message', !gar.ok && !gm.ok && friendly([...gar.messages, ...gm.messages]) && Object.keys(w.doors).join() === n0, { gar, gm }));
+  out.push(result('corners: the Garage (no room beside a free corner) gets a door on GUY\'s room, and the Game Room is added too (in a corner beside the Garage)', gar.ok && gm.ok && !!w.doors.garage && !!w.doors.gameroom && w.doors.garage.parent === 'main' && !overlaps().length, { gar, gm }));
+  R().reset('garage'); R().reset('gameroom'); T.settle();
   // 5. GUY goes in through the Workshop, looks round and comes back, shutting both doors behind him
   const trip = (id) => {
     const rooms = [], bad = [];
