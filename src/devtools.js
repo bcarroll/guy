@@ -66,7 +66,7 @@ export const MANIFEST = {
     shed: { room: 'backyard', skills: ['outdoor'], premium: true }, mower: { room: 'backyard', skills: ['outdoor'], premium: true },
   },
   // rooms the user can add from the Catalog's Rooms tab (tested by sweepRooms / sweepDoors / sweepGating / sweepSaves)
-  rooms: { workshop: {}, restaurant: {}, backyard: {}, range: {}, bowling: {}, library: {}, bedroom: {}, garage: {}, gameroom: {} },
+  rooms: { workshop: {}, restaurant: {}, backyard: {}, range: {}, bowling: {}, studio: {}, library: {}, bedroom: {}, garage: {}, gameroom: {} },
   // activities: objects that must be in the room, skills needed, `music` = needs the stereo already playing,
   // touches = objects GUY's arms may legitimately be inside the bounding box of (hands on keys, pushing, ...)
   activities: {
@@ -76,6 +76,11 @@ export const MANIFEST = {
     rangehang: { room: 'range', max: 60, touches: [] },
     bowl: { room: 'bowling', max: 260, touches: ['ball rack', 'scoreboard', 'ball return 1', 'ball return 2', 'ball return 3'] },
     bowlwatch: { room: 'bowling', max: 60, touches: [] },
+    // the Studio (studiobrain.js): records off the wall onto the decks, shows on the stage, dance parties on the floor (no objects of its own)
+    studiodj: { room: 'studio', max: 120, touches: ['record wall', 'DJ booth'] },
+    studioshow: { room: 'studio', max: 160, touches: ['record wall', 'DJ booth'] },
+    studioparty: { room: 'studio', max: 160, touches: ['record wall', 'DJ booth'] },
+    studiowatch: { room: 'studio', max: 60, touches: [] },
     rangefool: { room: 'range', max: 90, touches: [] },
     piano: { objects: ['piano'], skills: ['piano'], touches: ['piano'] },
     sitpiano: { objects: ['piano', 'bench'], skills: ['piano'], touches: ['piano', 'bench'] },
@@ -234,6 +239,9 @@ export const MANIFEST = {
     { id: 'bowl-backswing', activity: 'bowl', pose: 'bowl', t: 0.5, view: 'side', room: 'bowling', expect: 'standing upright on the approach, the red bowling ball (three finger holes) held in the right hand swung back behind him, the left arm out for balance' },
     { id: 'bowl-release', activity: 'bowl', pose: 'bowl', t: 1.25, view: 'side', room: 'bowling', expect: 'a deep lunge towards the pins: left leg forward and bent, right leg trailing, the back leaning, the arm swung down and forward to knee height with the hand open as the ball leaves it' },
     { id: 'bowl-follow', activity: 'bowl', pose: 'bowl', t: 1.55, view: 'side', room: 'bowling', expect: 'the follow-through: the arm up and forward, legs still in the lunge, the ball rolling away down the lane' },
+    { id: 'studio-sing', activity: 'studioshow', pose: 'sing', t: 1.0, view: 'front', room: 'studio', expect: 'standing at a microphone on the stage, one hand up at the microphone, the other arm out, swaying a little' },
+    { id: 'studio-dj', activity: 'studiodj', pose: 'studiodj', t: 0.8, view: 'side', room: 'studio', expect: 'standing behind the DJ booth with the right hand on the turntable platter and the left hand on the mixer' },
+    { id: 'studio-bow', activity: 'studioshow', pose: 'bow', t: 0.9, view: 'side', room: 'studio', expect: 'bowing from the hips with both arms hanging, the head down' },
     { id: 'bowl-reach', activity: 'bowl', pose: 'bowlreach', t: 0.5, view: 'side', room: 'bowling', expect: 'one hand out and down to the ball rack (taking a house ball), bending at the knees for it, the other arm hanging, standing clear of the rack' },
     { id: 'scope-care', activity: 'scopecare', pose: 'scopeCare', t: 13, view: 'front', expect: 'squatting beside the tripod with a hand on one leg' },
     { id: 'stool-dust', activity: 'dusttop', pose: 'reach', t: 4, view: 'front', dist: 3.6, expect: 'standing ON the foot stool (feet on top of it, not in the floor), right hand wiping along the top of the window frame, the stool not passing through him' },
@@ -4483,6 +4491,83 @@ T.sweepRange = () => {
   return out;
 };
 
+// ---- 12f. The Studio (src/studioobjects.js, src/studiobrain.js): the room, the record wall, a DJ trip, a show, a party, hanging guitars -----------------
+T.sweepStudio = () => {
+  const out = [], base = errors.length, w = W(), b = B();
+  T.settle(); T.resetRooms(); T.removeAll(); T.forget(); T.settle(); T.home();
+  unlockRoom('studio');
+  const before = w.obstacles.length;
+  const added = R().add('studio');
+  const sw = w.studio;
+  out.push(result('studio: the room is added with its stage gear, record wall, booth and machine (all pathing obstacles)', added.ok && !!sw && w.obstacles.length === before + sw.obstacles.length && sw.obstacles.length > 4, { added: added.ok, obstacles: sw && sw.obstacles.length }));
+  if (!sw) { R().reset('studio'); return out; }
+  const bounds = w.doors.studio.shell.bounds;
+  out.push(result('studio: the wall holds an album and a single for every song, sixty in all', sw.onWall().length === 60 && sw.onWall().filter((r) => r.kind === 'album').length === 12, { n: sw.onWall().length }));
+  // somewhere to stand for each place
+  {
+    const free = (p) => !!p && p.x > bounds.minX && p.x < bounds.maxX && p.z > bounds.minZ && p.z < bounds.maxZ && w.walkable(p.x, p.z) && !w.obstacles.some((o) => o.active !== false && p.x > o.x0 && p.x < o.x1 && p.z > o.z0 && p.z < o.z1);
+    const rec = sw.onWall()[5];
+    const spots = [sw.stageSpot(0), sw.stageSpot(1), sw.stageFront(0), sw.floorSpot(0), sw.floorSpot(30), sw.crowdSpot(0), sw.deckStand(), sw.wallStand(rec), sw.machineStand()];
+    out.push(result('studio: he can stand at the stage, on the floor, at the decks, the wall and the machine', spots.every(free), { bad: spots.map((p, i) => [i, free(p)]).filter(([, ok]) => !ok).map(([i]) => i) }));
+  }
+  // a DJ trip: a record off the wall, onto the deck, the music on; the last one out switches it off and the record goes home
+  {
+    T.settle(); T.home(); b.queue = []; b.step = null; b.musicOff(); b.choose('studiodj');
+    let sawHeld = false, sawDeck = false, playing = false, maxY = 0;
+    for (let i = 0; i < 120 * 30; i++) {
+      step(1 / 30);
+      if (sw.held(false).visible) sawHeld = true;
+      if (sw.deckRecord()) sawDeck = true;
+      if (b.music) playing = true;
+      maxY = Math.max(maxY, G().root.position.y);
+      if (b.last !== 'studiodj' && i > 300 && b.hereId() === 'main') break;
+    }
+    b.queue = []; b.step = null; b.skip(); b.choose('wander'); for (let i = 0; i < 60; i++) step(1 / 30);
+    out.push(result('studio: a DJ trip takes a record off the wall (it is in his hand), puts it on the deck and the music plays', sawHeld && sawDeck && playing, { sawHeld, sawDeck, playing }));
+    out.push(result('studio: when he is out the music is off, the deck is empty, no record is out and none is in his hand, and he never leaves the ground', !b.music && !sw.deckRecord() && sw.records.every((r) => !r.out) && !sw.held(false).visible && maxY < 0.1, { music: !!b.music, deck: !!sw.deckRecord(), out: sw.records.filter((r) => r.out).length, maxY }));
+    T.settle(); T.home();
+  }
+  // a show and a party: the lights get their mood while it lasts and let go afterwards
+  for (const [act, mode] of [['studioshow', 'show'], ['studioparty', 'party']]) {
+    T.settle(); T.home(); b.queue = []; b.step = null; b.musicOff(); b.choose(act);
+    let saw = false;
+    for (let i = 0; i < 200 * 30; i++) {
+      step(1 / 30);
+      if (sw.mode() === mode) saw = true;
+      if (b.last !== act && i > 300 && b.hereId() === 'main') break;
+    }
+    b.queue = []; b.step = null; b.skip(); b.choose('wander'); for (let i = 0; i < 60; i++) step(1 / 30);
+    out.push(result(`studio: ${act} puts the lights in ${mode} mode and lets go of it afterwards, and the music is off when he leaves`, saw && sw.mode() === 'idle' && !b.music, { saw, mode: sw.mode(), music: !!b.music }));
+    T.settle(); T.home();
+  }
+  // a guitar pushed against a Studio wall hangs there, and comes off its hook when it is moved away again
+  {
+    const g = Object.values(w.objects).find((o) => o.guitar) || (w.addNew('guitar', { x: 0, z: 0 }), Object.values(w.objects).find((o) => o.guitar));
+    if (!g) out.push(result('studio: there is a guitar to hang', false, {}));
+    else {
+      const doorSide = { right: 'minX', left: 'maxX', front: 'minZ', back: 'maxZ' }[w.doors.studio.wall];
+      const side = ['minX', 'maxX', 'minZ', 'maxZ'].find((k) => k !== doorSide && (k === 'minZ' || k === 'maxZ' ? true : false)) || 'minZ';
+      const nz = side === 'minZ' ? 1 : -1, wz = bounds[side];
+      const cx = (bounds.minX + bounds.maxX) / 2;
+      g.set(cx + 1.5, wz + nz * 0.7); g.rot = 0;
+      for (let i = 0; i < 10; i++) step(1 / 30);
+      const far = !g.hung;
+      g.set(cx + 1.5, wz + nz * (0.225 + 0.04));
+      for (let i = 0; i < 10; i++) step(1 / 30);
+      const hung = g.hung, stand = g.stand.every((m) => !m.visible), flush = Math.abs(Math.abs(g.z - wz) - 0.05) < 0.03;
+      out.push(result('studio: a guitar away from the walls stays on its stand, and one pushed against a Studio wall hangs there (stand hidden, flat on the wall)', far && hung && stand && flush, { far, hung, stand, z: g.z, wz }));
+      g.set(cx + 1.5, wz + nz * 0.7);
+      for (let i = 0; i < 10; i++) step(1 / 30);
+      out.push(result('studio: moved away from the wall the guitar is back on its stand', !g.hung && g.stand.every((m) => m.visible), { hung: g.hung }));
+    }
+  }
+  b.queue = []; b.step = null; T.settle(); T.home();
+  R().reset('studio');
+  out.push(result('studio: taking the room away takes the gear with it', !w.studio && w.obstacles.length === before, { studio: !!w.studio }));
+  out.push(result('studio: no errors in the console', errors.length === base, { errs: errors.slice(base, base + 3) }));
+  return out;
+};
+
 // ---- 12e. The Bowling Alley (src/bowlobjects.js, src/bowlbrain.js, rules in src/bowlrules.js): the room, a game, the pins, the book, what GUY builds for it --
 T.sweepBowl = () => {
   const out = [], base = errors.length, w = W(), b = B();
@@ -4652,6 +4737,7 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.shed = S(T.sweepShed);
   report.range = S(T.sweepRange);
   report.bowl = S(T.sweepBowl);
+  report.studio = S(T.sweepStudio);
   report.doorMoves = S(T.sweepDoorMoves);
   report.allRooms = S(T.sweepAllRooms);
   report.needs = S(T.sweepNeeds);

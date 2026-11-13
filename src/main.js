@@ -399,7 +399,7 @@ function pick(e) {
   for (const d of Object.values(world.decor)) targets.push(d.group);
   for (const d of Object.values(world.doors)) targets.push(d.group);
   if (!world.ballGone) targets.push(world.ball);
-  const rg = world.range, bw = world.bowl, rangeParts = { ...(rg ? { blasterrack: rg.display.group, rangecontroller: rg.panel.group, scoreboard: rg.board.group } : {}), ...(bw ? { ballrack: bw.rack.group, bowlscore: bw.board.group } : {}) };   // (the Bowling Alley's rack and scoreboard are picked the same way)
+  const rg = world.range, bw = world.bowl, rangeParts = { ...(rg ? { blasterrack: rg.display.group, rangecontroller: rg.panel.group, scoreboard: rg.board.group } : {}), ...(bw ? { ballrack: bw.rack.group, bowlscore: bw.board.group } : {}), ...(world.studio ? { recordwall: world.studio.wall.group, djbooth: world.studio.deck.group, studiomachine: world.studio.machine.group } : {}) };   // (the Bowling Alley's rack and scoreboard are picked the same way)
   targets.push(...Object.values(rangeParts));
   const hit = raycaster.intersectObjects(targets, true)[0];
   if (!hit) return null;
@@ -408,6 +408,7 @@ function pick(e) {
     if (n === world.skillMachine) return { machine: true };
     if (n === world.ball) return { ball: true };
     const part = Object.keys(rangeParts).find((k) => rangeParts[k] === n);
+    if (part === 'studiomachine') return { machine: 'studio' };               // the Studio Machine: the Catalog, for the Studio
     if (part) return { range: part, point };
     const obj = Object.values(world.objects).find((o) => o.group === n);
     if (obj) return { obj, point };
@@ -583,6 +584,8 @@ function interactLabel(name) {
     case 'scoreboard': return '👀 Watch the Range';
     case 'ballrack': return '🎳 Go Bowling';
     case 'bowlscore': return '👀 Watch the Bowling';
+    case 'recordwall': return '💿 Spin a Record';
+    case 'djbooth': return '🎧 Put on a Show';
     case 'piano': case 'bench': return '🎹 Play Piano';
     case 'table': return brain.music ? '🔊 Turn Stereo Off' : '🔊 Turn Stereo On';
     case 'guitar': return '🎸 Play Guitar';
@@ -640,7 +643,7 @@ function openMenu(hit, x, y) {
     return;
   }
   if (hit.range) {                                       // the Shooting Range's blaster rack, round controller and scoreboard: Interact / Lock in only
-    menuTitle.textContent = { blasterrack: 'blaster rack', rangecontroller: 'round controller', scoreboard: 'scoreboard', ballrack: 'ball rack', bowlscore: 'bowling scoreboard' }[hit.range];
+    menuTitle.textContent = { blasterrack: 'blaster rack', rangecontroller: 'round controller', scoreboard: 'scoreboard', ballrack: 'ball rack', bowlscore: 'bowling scoreboard', recordwall: 'record wall', djbooth: 'DJ booth' }[hit.range];
     menuNote.textContent = '';
     menu.querySelectorAll('[data-act]').forEach((b) => { b.hidden = b.dataset.act !== 'interact' && b.dataset.act !== 'lock'; });
     menu.querySelector('[data-act="interact"]').textContent = interactLabel(hit.range);
@@ -755,7 +758,7 @@ menu.addEventListener('click', (e) => {
 addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
 window.__guyOpenBooks = (name = 'shelf') => openBookMenu(world.objects[name], 200, 100);          // the long-press book list, for the QA harness
 window.__guyOpenDoorMenu = (id, side = 'main') => openMenu({ door: world.doors[id], side }, 120, 120);     // for the QA harness (side: the face pressed)
-window.__guyOpenMenu = (name) => openMenu(name === 'ball' ? { ball: true } : ['blasterrack', 'rangecontroller', 'scoreboard', 'ballrack', 'bowlscore'].includes(name) ? { range: name } : { obj: brain.obj(name) }, 120, 120);     // for the QA harness
+window.__guyOpenMenu = (name) => openMenu(name === 'ball' ? { ball: true } : ['blasterrack', 'rangecontroller', 'scoreboard', 'ballrack', 'bowlscore', 'recordwall', 'djbooth', 'studiomachine'].includes(name) ? { range: name } : { obj: brain.obj(name) }, 120, 120);     // for the QA harness
 addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') { setSoundMuted(!soundMuted); showToast(soundMuted ? 'Sound muted (M or the speaker to turn it back on)' : 'Sound on'); } });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -792,7 +795,7 @@ canvas.addEventListener('pointerdown', (e) => {
   if (!menu.hidden || !albumMenu.hidden) closeMenu();
   const hit = pick(e);
   if (!hit) return;
-  if (hit.machine) { machinePress = { x: e.clientX, y: e.clientY, t: performance.now() }; return; } // a tap, not draggable or removable
+  if (hit.machine) { machinePress = { x: e.clientX, y: e.clientY, t: performance.now(), scope: hit.machine === 'studio' ? 'studio' : null }; return; } // a tap, not draggable or removable
   // Rugs cover the middle of the floor, where people drag to orbit, so a quick drag on one still orbits (we do not stop the event).
   // Hold on a rug for half a second and it is picked up: drag to move it, or let go without moving for its menu (Turn / Remove).
   if (hit.decor && !hit.decor.wall) {
@@ -901,7 +904,7 @@ const endPress = (e) => {
   canvas.style.cursor = '';
 };
 canvas.addEventListener('pointerup', (e) => {
-  if (machinePress && Math.hypot(e.clientX - machinePress.x, e.clientY - machinePress.y) < 8 && performance.now() - machinePress.t < 600) machineUI.open();
+  if (machinePress && Math.hypot(e.clientX - machinePress.x, e.clientY - machinePress.y) < 8 && performance.now() - machinePress.t < 600) machineUI.open(machinePress.scope);
   machinePress = null;
 });
 canvas.addEventListener('pointerup', endPress);
@@ -915,7 +918,7 @@ window.sim = (sec, dt = 1 / 30) => {
   if (window.__simNow === undefined) window.__simNow = performance.now() / 1000;      // (the music's clock now follows simulated time: see nowSec in brain.js)
   for (let t = 0; t < sec; t += dt) {
     window.__simNow += dt;
-    brain.safeUpdate(dt); guy.apply(dt); brain.safeLate(); world.lamp.tick(brain.currentBeat()); updateBall(dt); for (const o of Object.values(world.objects)) o.update(dt); world.yard.update(dt); if (world.range) world.range.update(dt); if (world.bowl) world.bowl.update(dt);
+    brain.safeUpdate(dt); guy.apply(dt); brain.safeLate(); world.lamp.tick(brain.currentBeat()); updateBall(dt); for (const o of Object.values(world.objects)) o.update(dt); world.yard.update(dt); if (world.range) world.range.update(dt); if (world.bowl) world.bowl.update(dt); if (world.studio) world.studio.update(dt, !!brain.music);
   }
   if (follow) { controls.target.copy(guy.pos).setY(1.1); controls.update(); }
 };
@@ -1048,7 +1051,7 @@ renderer.setAnimationLoop(() => {
   space.position.copy(camera.position);
   world.lamp.tick(brain.currentBeat());
   world.skillMachine.userData.update(performance.now() / 1000);
-  for (const o of Object.values(world.objects)) o.update(dt); world.yard.update(dt); if (world.range) world.range.update(dt); if (world.bowl) world.bowl.update(dt);
+  for (const o of Object.values(world.objects)) o.update(dt); world.yard.update(dt); if (world.range) world.range.update(dt); if (world.bowl) world.bowl.update(dt); if (world.studio) world.studio.update(dt, !!brain.music);
   updateBall(dt);
   if (follow && guy.loaded) {
     camGoal.copy(guy.pos).setY(1.1);
