@@ -10,9 +10,12 @@ import { TRACKS } from './audio.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const ID = 'studio';
-export const STUDIO_ACTS = ['studiodj', 'studioshow', 'studioparty', 'studiowatch'];
+// the instruments (src/instruments.js): one activity for each, named for what it plays
+export const STUDIO_INSTR_ACTS = { playbass: 'bass', playkeys: 'keyboard', playxylo: 'xylophone', playbongos: 'bongos' };
+export const STUDIO_ACTS = ['studiodj', 'studioshow', 'studioparty', 'studiowatch', ...Object.keys(STUDIO_INSTR_ACTS)];
 // What a long-press can point at in the Studio: the wall of records, the DJ booth and the Studio Machine
 export const STUDIO_PIECES = ['recordwall', 'djbooth', 'studiomachine'];
+export const STUDIO_INSTRUMENTS = Object.values(STUDIO_INSTR_ACTS);
 const clamp = THREE.MathUtils.clamp;
 const smooth = (x) => x * x * (3 - 2 * x);
 const pickOf = (a) => a[Math.floor(Math.random() * a.length)];
@@ -53,6 +56,18 @@ export function installStudio(Brain, POSES, H) {
     g.hipsOffset.y = Math.abs(Math.sin(t * 2.4)) * 0.02;
     g.set('Spine', new THREE.Quaternion().setFromAxisAngle(V(0, 0, 1), 0.06 * sway));
   };
+  // at an instrument: both hands go where the player (below) sends them, the body bobbing to the beat
+  POSES.studioplay = (g, t, dur, ctx) => {
+    const s = ctx.studio;
+    if (!s || !s.hand) return;
+    const R = s.hand('Right'), L = s.hand('Left');
+    const sh = g.boneWorld('RightArm'), low = clamp((sh.y - Math.min(R.y, L.y) - 0.3) / 0.5, 0, 1);
+    g.hipsOffset.y = -0.15 * low + Math.sin(t * 5.2) * 0.012;
+    g.set('Spine', new THREE.Quaternion().setFromAxisAngle(V(1, 0, 0), 0.5 * low));                  // (leaning over the keys)
+    g.reach('Right', R, 1, true);
+    g.reach('Left', L, 1, true);
+    g.set('Head', new THREE.Quaternion().setFromAxisAngle(V(1, 0, 0), 0.05 * Math.sin(t * 5.2)));
+  };
   // a bow: from the hips, both arms down, and up again
   POSES.bow = (g, t, dur) => {
     const k = clamp(t / dur, 0, 1), d = smooth(clamp(k / 0.35, 0, 1)) * (1 - smooth(clamp((k - 0.65) / 0.35, 0, 1)));
@@ -62,7 +77,7 @@ export function installStudio(Brain, POSES, H) {
 
   Object.assign(Brain.prototype, {
     inStudio() { return this.w.roomIdAt(this.g.root.position.x, this.g.root.position.z) === ID; },
-    lockedInStudio() { return !!this.lock && STUDIO_PIECES.includes(this.lock.name) && this.inStudio(); },
+    lockedInStudio() { return !!this.lock && (STUDIO_PIECES.includes(this.lock.name) || STUDIO_INSTRUMENTS.includes(this.lock.name)) && this.inStudio(); },
     studioOpen() { return !!this.w.doors[ID] && !!this.w.studio && !this.doorLockedFor(ID); },
     studioSlot() { return this.isGal ? 1 : 0; },
     studioTrip(label, inner) {
@@ -144,6 +159,7 @@ export function installStudio(Brain, POSES, H) {
     studioCleanup() {
       const W = this.w.studio;
       if (!W) { this.studioHold = false; this.studioRec = null; return; }
+      this.sp = null;
       if (W.state.deckBy === this) W.state.deckBy = null;                    // (cleanup runs when he picks something new: the deck is free)
       if (this.studioHold && this.studioRec && !this.inStudio()) { W.giveBack(this.studioRec); this.studioHold = false; }
       if (!this.inStudio() && this.studioHolds) { W.clearHolds(this); this.studioHolds = false; }
@@ -212,7 +228,14 @@ export function installStudio(Brain, POSES, H) {
 
     // ------------------------------------------------------------------ the activities
     studioActivities() {
+      const play = (act) => () => this.studioTrip('playing the ' + STUDIO_INSTR_ACTS[act], [{ type: 'plan', fn: () => {
+        const name = STUDIO_INSTR_ACTS[act], o = this.studioInst(act);
+        if (!o) { this.queue.length = 0; return []; }
+        const st = o.stand;
+        return [this.walkAt(name, st.x, st.dz, Math.PI), this.play('studioplay', 16 + Math.random() * 10, { needs: [name], studio: { inst: name } }), this.play('bow', 2, { needs: [name] })];
+      } }]);
       return {
+        ...Object.fromEntries(Object.keys(STUDIO_INSTR_ACTS).map((a) => [a, play(a)])),
         studiodj: () => this.studioTrip('spinning records', this.studioDjSteps()),
         studioshow: () => this.studioTrip('putting on a show', this.studioShowSteps()),
         studioparty: () => this.studioTrip('dancing in the Studio', this.studioPartySteps()),
@@ -222,8 +245,70 @@ export function installStudio(Brain, POSES, H) {
       };
     },
 
+    // ------------------------------------------------------------------ playing an instrument
+    // The instrument he is at (in the Studio, where he can stand at it), or null
+    studioInst(act) {
+      const o = this.obj(STUDIO_INSTR_ACTS[act]);
+      return o && this.w.roomIdAt(o.x, o.z) === ID ? o : null;
+    },
+    // what each instrument's player does on each beat: [{ side, idx, hit }] (idx: the place that hand goes to, see obj.reach / obj.hand)
+    studioBeat(kind, n, P) {
+      const walk = (a, lo, hi) => clamp(a + pickOf([-2, -1, -1, 0, 1, 1, 2]), lo, hi);
+      if (kind === 'keyboard') {
+        const out = [];
+        if (n % 4 !== 3) { P.r = walk(P.r ?? 3, 0, 6); out.push({ side: 'Right', idx: P.r, hit: true }); }
+        if (n % 2 === 0) out.push({ side: 'Left', idx: [0, 2, 3, 4][(n >> 1) % 4], hit: true });
+        return out;
+      }
+      if (kind === 'xylophone') {
+        const m = n % 22, idx = m < 12 ? m : 22 - m;
+        return [{ side: idx < 6 ? 'Left' : 'Right', idx, hit: true }];
+      }
+      if (kind === 'bongos') {
+        const c = 'LRRLRLRR'[n % 8];
+        return n % 8 === 7 && Math.random() < 0.5 ? [] : [{ side: c === 'L' ? 'Left' : 'Right', idx: 0, hit: true }];
+      }
+      if (kind === 'bass') {
+        const out = [];
+        if (n % 2 === 0) out.push({ side: 'Left', idx: [0, 0, 2, 3, 0, 2, 4, 1][(n >> 1) % 8], hit: false });
+        out.push({ side: 'Right', idx: [0, 0, 1, 0, 2, 2, 1, 0][n % 8], hit: true });
+        return out;
+      }
+      return [];
+    },
+    // the player: a beat clock, and where each hand is (it travels to its next place and touches it on the way down: that is when it sounds)
+    studioPlayer(s) {
+      const name = s.fx.studio.inst, o = this.obj(name);
+      if (!o || !o.hand) return null;
+      let P = this.sp;
+      if (!P || P.step !== s) {
+        const period = { bass: 0.42, keyboard: 0.36, xylophone: 0.3, bongos: 0.22 }[name] || 0.4;
+        P = this.sp = { step: s, name, t0: this.time, beat: -1, period, hands: {} };
+        for (const side of ['Left', 'Right']) P.hands[side] = { from: 0, idx: 0, t0: this.time, hit: true, pos: o.hand(side, 0) };
+      }
+      const now = this.time, beat = Math.floor((now - P.t0) / P.period);
+      while (P.beat < beat) {
+        P.beat++;
+        for (const m of this.studioBeat(name, P.beat, P)) {
+          const h = P.hands[m.side];
+          h.from = h.idx; h.idx = m.idx; h.t0 = P.t0 + P.beat * P.period; h.hit = !m.hit;
+        }
+      }
+      for (const side of ['Left', 'Right']) {
+        const h = P.hands[side], k = clamp((now - h.t0) / (P.period * 0.95), 0, 1), a = o.hand(side, h.from), b = o.hand(side, h.idx);
+        if (!h.hit && k >= 0.7) { h.hit = true; o.hit(side, h.idx, P.hands.Left.idx); }
+        const move = smooth(Math.min(1, k / 0.7));
+        h.pos = a.lerp(b, move);
+        if (k < 0.7 && h.from !== h.idx || k < 0.7 && !h.hit) h.pos.y += Math.sin(Math.PI * Math.min(1, k / 0.7)) * 0.1;
+      }
+      return { hand: (side) => P.hands[side].pos };
+    },
     // the context the poses read
-    studioCtx(s) { return s.fx && s.fx.studio ? s.fx.studio : null; },
+    studioCtx(s) {
+      const st = s.fx && s.fx.studio;
+      if (st && st.inst) return this.studioPlayer(s);
+      return st || null;
+    },
     // after the arm is solved: the sleeve in his right hand while he carries it (and only in the Studio)
     studioLate() {
       const W = this.w.studio;

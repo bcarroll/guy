@@ -103,6 +103,11 @@ export const OBJECT_CATALOG = [
   { id: 'botprinter', cat: 'robots', name: 'Build a Bot Machine', icon: '🤖', desc: 'A 3D printer that can be used once: it prints a second robot, GAL, and folds itself away into her. Heavy: only you can move it.', locked: true },
   // Learning Workstation: premium. GUY taps the screen and a panel lists the books on the shelf; Learn teaches him at once, no reading. The book stays on the shelf.
   { id: 'workstation', cat: 'robots', name: 'Learning Workstation', icon: '🖥️', desc: 'A desk and screen that lists every book on the shelf. Press Learn and GUY knows what is in it at once, with no reading. The book stays on the shelf so GAL can read it too. Heavy: only you can move it.', locked: true },
+  // The Studio's instruments (src/instruments.js): listed only while the Studio is added. GUY and GAL play them on the stage.
+  { id: 'bass', cat: 'music', name: 'Electric Bass', icon: '🎸', desc: 'A bass on its stand with a little amp. Plucked and fretted.', free: true, room: 'studio' },
+  { id: 'keyboard', cat: 'music', name: 'Electric Keyboard', icon: '🎹', desc: 'Two octaves on an X stand, with a synth sound.', free: true, room: 'studio' },
+  { id: 'xylophone', cat: 'music', name: 'Xylophone', icon: '🎶', desc: 'Twelve coloured bars played with mallets.', free: true, room: 'studio' },
+  { id: 'bongos', cat: 'music', name: 'Bongos', icon: '🪘', desc: 'A pair of bongo drums, slapped by hand.', free: true, room: 'studio' },
   { id: 'drums', cat: 'music', name: 'Drum Kit', icon: '🥁', desc: 'Kick, snare, hi-hat and cymbals on a stool. Comes with the book "Drumming for Robots".', free: true, book: 'drumming' },
   { id: 'easel', cat: 'hobbies', name: 'Painting Easel', icon: '🎨', desc: 'A canvas that really gets painted. Comes with the book "Painting for Robots".', free: true, book: 'painting' },
   { id: 'telescope', cat: 'hobbies', name: 'Telescope', icon: '🔭', desc: 'On a tripod by the window. Comes with the book "Stargazing for Robots".', free: true, book: 'stars' },

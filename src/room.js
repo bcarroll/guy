@@ -9,6 +9,7 @@ import { makeYard } from './yardballs.js';
 import { buildRangeShell } from './rangeobjects.js';
 import { buildBowlShell, makeBowlBuilders } from './bowlobjects.js';
 import { buildStudioShell } from './studioobjects.js';
+import { makeInstrumentBuilders } from './instruments.js';
 
 export const ROOM = { w: 10, d: 8, h: 3.2 }; // x in [-5,5], z in [-4,4]
 
@@ -1348,6 +1349,14 @@ export function buildRoom(scene) {
   INSTANCE_KINDS.diningtable3 = { build: (name, x, z) => rest.diningtable(name, x, z), pref: (w) => restSpot('diningtable3')(w) };
   INSTANCE_KINDS.diningtable4 = { build: (name, x, z) => rest.diningtable(name, x, z, true), pref: (w) => restSpot('diningtable4')(w) };
 
+  // ---- The Studio's instruments (src/instruments.js): they stand on the stage facing the room (`n` metres in from the door wall, `lat` along it)
+  const instB = makeInstrumentBuilders({ makeObject, box, mat });
+  const INSTR_LAYOUT = { bass: { n: 8.8, lat: -2.5 }, keyboard: { n: 8.8, lat: 2.5 }, xylophone: { n: 9.2, lat: 0 }, bongos: { n: 9.0, lat: 1.5 } };
+  const studioSpot = (id) => (w) => {
+    if (!w.doors.studio) return null;
+    const ax = w.shellAxes('studio'), s = INSTR_LAYOUT[id], p = w.shellPoint('studio', s.n, s.lat);
+    return { x: p.x, z: p.z, rot: w.rotFacing(-ax.toDoor.x, -ax.toDoor.z) };       // (the player stands at its +z, so that is the stage side: he faces the audience at the door)
+  };
   const NEW_OBJECTS = {            // object id -> [builder, preferred spot (or a function of the world that works it out)]
     botprinter: [bots.botprinter, { x: -3.5, z: 2.5 }],
     workstation: [bots.workstation, { x: -3.6, z: -0.6 }],
@@ -1374,6 +1383,7 @@ export function buildRoom(scene) {
     tree: [buildTree, { x: 4.3, z: -2.0 }],
     coffeetable: [buildCoffeeTable, { x: 3.2, z: 1.9 }],
     nightstand: [buildNightstand, { x: 4.4, z: 3.3 }],
+    bass: [instB.bass, studioSpot('bass')], keyboard: [instB.keyboard, studioSpot('keyboard')], xylophone: [instB.xylophone, studioSpot('xylophone')], bongos: [instB.bongos, studioSpot('bongos')],
     guitar: [buildGuitar, { x: 1.5, z: -1.5 }],
     drums: [buildDrums, { x: 1.4, z: -2.2 }],
     easel: [buildEasel, { x: -0.4, z: -2.8 }],

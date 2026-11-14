@@ -10,7 +10,7 @@ import { installWorkshop } from './workbrain.js';
 import { installYard, YARD_ACTS } from './yardbrain.js';
 import { installRange, RANGE_ACTS, RANGE_PIECES } from './rangebrain.js';
 import { installBowl, BOWL_ACTS, BOWL_PIECES } from './bowlbrain.js';
-import { installStudio, STUDIO_ACTS, STUDIO_PIECES } from './studiobrain.js';
+import { installStudio, STUDIO_ACTS, STUDIO_PIECES, STUDIO_INSTR_ACTS } from './studiobrain.js';
 import { installRestaurant, REST_OBJECTS, REST_JOBS } from './restbrain.js';
 import { installApproach } from './approach.js';
 import { installArrange } from './arrange.js';
@@ -2152,6 +2152,7 @@ export class Brain {
       if (!this.studioOpen()) return 'the Studio door is locked';
       if (act === 'studiodj' && !this.studioDeckFree()) return 'the other robot is at the decks';
       if (act === 'studiodj' && this.music && this.userMusic) return 'the music was put on from the playback controls';
+      if (STUDIO_INSTR_ACTS[act] && !this.studioInst(act)) return `there is no ${STUDIO_INSTR_ACTS[act]} in the Studio`;
     }
     if (YARD_ACTS.includes(act)) {
       if (!this.w.doors.backyard) return 'there is no Backyard';
@@ -2192,7 +2193,7 @@ export class Brain {
     if (act === 'arrange') return !!this.obj('workstation') && !!this.arrangePlan;                // (only when he wants something, or somebody asks: arrange.js)
     if (act === 'learn') return !!this.obj('workstation');                      // the Learning Workstation (only when somebody asks: it has no weight; from another room he walks back to it first)
     if (BOWL_ACTS.includes(act)) return this.bowlOpen();                  // the Bowling Alley: the door is open (a beginner can bowl too)
-    if (STUDIO_ACTS.includes(act)) return this.studioOpen() && (act !== 'studiodj' || (this.studioDeckFree() && !(this.music && this.userMusic)));   // the Studio: the door is open (the decks are free for records)
+    if (STUDIO_ACTS.includes(act)) return this.studioOpen() && (act !== 'studiodj' || (this.studioDeckFree() && !(this.music && this.userMusic))) && (!STUDIO_INSTR_ACTS[act] || !!this.studioInst(act));   // the Studio: the door is open (the decks are free for records)
     if (RANGE_ACTS.includes(act)) return act === 'rangeshoot' ? this.rangeAvailable() : this.rangeOpen();     // shooting needs a blaster; hanging about and fooling about do not                // the Shooting Range: the door is open and there is a target he can hit from his lane
     if (this.galBlocks && this.galBlocks(act)) return false;                // (GAL does not do some things; GUY needs GAL for others)
     if (this.busyElsewhere(this.exclusiveFor(act))) return false;           // the other robot is using it
@@ -2265,6 +2266,7 @@ export class Brain {
     const piano = ['sitpiano', 'piano', 'jam', 'jampiano', 'jamsit', 'plink'], drums = ['bang', 'drums', 'drumsolo', 'jamdrums', 'slouch'];
     const guitar = ['guitar', 'riff', 'jamguitar', 'sitguitar'], easel = ['scribble', 'paint', 'mixpaint', 'portrait'], scope = ['peek', 'stargaze', 'darkstargaze', 'scopecare'];
     if (act === 'dusttop') return ['stool'];
+    if (STUDIO_INSTR_ACTS[act]) return [STUDIO_INSTR_ACTS[act]];            // one player at an instrument
     if (act === 'arrange') return ['workstation'];                 // one at the screen at a time
     if (piano.includes(act)) return act === 'sitpiano' || act === 'jamsit' ? ['piano', 'bench'] : ['piano'];
     if (drums.includes(act)) return ['drums'];
@@ -2334,6 +2336,7 @@ export class Brain {
       easel: ['scribble', 'paint', 'mixpaint', 'portrait'], telescope: ['peek', 'stargaze', 'darkstargaze', 'scopecare'],
       stove: REST_ACTS, kitchencounter: REST_ACTS, register: REST_ACTS, diningtable: REST_ACTS, diningtable2: REST_ACTS,
       workbench: ['build'], toolbox: ['tidytools'], woodfactory: ['build'], metalfactory: ['build'],
+      bass: ['playbass'], keyboard: ['playkeys'], xylophone: ['playxylo'], bongos: ['playbongos'],
       soccergoal: ['goalshot', 'soccertoss'], basketballhoop: ['hoopshoot', 'hoopdribble'], lawnchair: ['yardsit'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], shed: ['mow'], mower: ['mow'],
       blasterrack: ['rangeshoot'], rangecontroller: ['rangeshoot'], scoreboard: ['rangehang', 'rangeshoot'], ballrack: ['bowl'], bowlscore: ['bowl', 'bowlwatch'],
       recordwall: ['studiodj'], djbooth: ['studiodj', 'studioshow', 'studioparty'], studiomachine: ['studiowatch'],
@@ -2400,7 +2403,7 @@ export class Brain {
       bang: 1.3, drums: 1.6, drumsolo: 1.2, jamdrums: 1.5, scribble: 1.3, paint: 1.6, mixpaint: 1.3, portrait: 1.4,
       peek: 1.3, stargaze: 1.6, darkstargaze: 1.3, scopecare: 0.6, dust: 0.9, dusttop: 1.0,
       yardsit: 0.9, birdbath: 0.7, skyswitch: 0.6, mow: 0.5, yardpoke: 1.1, goalshot: 1.4, soccertoss: 0.8, hoopshoot: 1.4, hoopdribble: 0.9,
-      rangeshoot: 1.2, rangehang: 0.9, rangefool: 0.9, bowl: 1.3, bowlwatch: 0.6, studiodj: 1.2, studioshow: 1.1, studioparty: 1.3, studiowatch: 0.5,
+      rangeshoot: 1.2, rangehang: 0.9, rangefool: 0.9, bowl: 1.3, bowlwatch: 0.6, studiodj: 1.2, studioshow: 1.1, studioparty: 1.3, studiowatch: 0.5, playbass: 1.1, playkeys: 1.1, playxylo: 1.0, playbongos: 1.0,
     };
     if (this.extraWeights) Object.assign(weights, this.extraWeights());      // working with GAL, or (for GAL) inviting GUY
     // a skill that is being forgotten is used less and less
@@ -2416,7 +2419,7 @@ export class Brain {
       sit: ['rest'], sitguitar: ['guitar'], slouch: ['drums', 'rest'],
       scribble: ['paint'], paint: ['paint'], mixpaint: ['paint'], portrait: ['paint'],
       peek: ['scope'], stargaze: ['scope'], darkstargaze: ['scope'], scopecare: ['scope', 'fidget'], dust: ['fidget'], dusttop: ['fidget'],
-      rangeshoot: ['range'], rangehang: ['range'], rangefool: ['range'], bowl: ['range'], bowlwatch: ['range'], studiodj: ['stereo'], studioshow: ['stereo'], studioparty: ['stereo'], studiowatch: ['fidget'], yardsit: ['rest'], birdbath: ['fidget'], skyswitch: ['fidget'], mow: ['chore'], yardpoke: ['yardball'], goalshot: ['yardball'], soccertoss: ['yardball'], hoopshoot: ['yardball'], hoopdribble: ['yardball'],
+      rangeshoot: ['range'], rangehang: ['range'], rangefool: ['range'], bowl: ['range'], bowlwatch: ['range'], studiodj: ['stereo'], playbass: ['studiomusic'], playkeys: ['studiomusic'], playxylo: ['studiomusic'], playbongos: ['studiomusic'], studioshow: ['stereo'], studioparty: ['stereo'], studiowatch: ['fidget'], yardsit: ['rest'], birdbath: ['fidget'], skyswitch: ['fidget'], mow: ['chore'], yardpoke: ['yardball'], goalshot: ['yardball'], soccertoss: ['yardball'], hoopshoot: ['yardball'], hoopdribble: ['yardball'],
     };
     // the last two activities count, so he doesn't drift back to the same theme straight away
     const lastTags = [this.last, this.prev].flatMap((n) => tags[n] || []);
@@ -2555,6 +2558,7 @@ export class Brain {
       soccergoal: ['goalshot', 'soccertoss'], basketballhoop: ['hoopshoot', 'hoopdribble'], lawnchair: ['yardsit'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], shed: ['mow'], mower: ['mow'],
       blasterrack: ['rangeshoot'], rangecontroller: ['rangeshoot'], scoreboard: ['rangehang', 'rangeshoot'], ballrack: ['bowl'], bowlscore: ['bowl', 'bowlwatch'],
       recordwall: ['studiodj'], djbooth: ['studiodj', 'studioshow', 'studioparty'], studiomachine: ['studiowatch'],
+      bass: ['playbass'], keyboard: ['playkeys'], xylophone: ['playxylo'], bongos: ['playbongos'],
     }[name] || (this.obj(name) && this.obj(name).kind === 'footstool' ? ['dusttop'] : this.obj(name) && this.obj(name).guitar ? (k('guitar') ? (this.music ? ['jamguitar'] : ['guitar']) : []) : undefined);
     if (this.obj(name) && this.obj(name).guitar) this.wantGuitar = name;
     if (name === 'botprinter') {
