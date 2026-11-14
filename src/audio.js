@@ -38,6 +38,37 @@ export function playNote(midi, dur = 0.8, gain = 0.25) {
   }
 }
 
+// A xylophone bar: a short bright ping with a ring a few octaves up (struck wood)
+export function playMallet(midi, delay = 0, gain = 0.2) {
+  if (!ctx) return;
+  const t = ctx.currentTime + delay, out = ctx.createGain();
+  out.gain.setValueAtTime(0, t);
+  out.gain.linearRampToValueAtTime(gain, t + 0.004);
+  out.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+  out.connect(master);
+  for (const [mult, g, dec] of [[1, 1, 0.7], [3.9, 0.35, 0.18], [9.2, 0.12, 0.08]]) {
+    const o = ctx.createOscillator(), og = ctx.createGain();
+    o.type = 'sine'; o.frequency.value = midiToHz(midi) * mult;
+    og.gain.setValueAtTime(g, t); og.gain.exponentialRampToValueAtTime(0.001, t + dec);
+    o.connect(og).connect(out); o.start(t); o.stop(t + 0.8);
+  }
+}
+// An electric keyboard patch: a saw and a square through a low-pass that closes, a soft attack and a short tail
+export function playSynth(midi, dur = 0.7, gain = 0.15) {
+  if (!ctx) return;
+  const t = ctx.currentTime, out = ctx.createGain(), f = ctx.createBiquadFilter();
+  f.type = 'lowpass'; f.frequency.setValueAtTime(3200, t); f.frequency.exponentialRampToValueAtTime(700, t + dur);
+  out.gain.setValueAtTime(0, t);
+  out.gain.linearRampToValueAtTime(gain, t + 0.015);
+  out.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  f.connect(out); out.connect(master);
+  for (const [type, det, g] of [['sawtooth', 0, 0.6], ['square', 5, 0.35]]) {
+    const o = ctx.createOscillator(), og = ctx.createGain();
+    o.type = type; o.frequency.value = midiToHz(midi); o.detune.value = det; og.gain.value = g;
+    o.connect(og).connect(f); o.start(t); o.stop(t + dur + 0.05);
+  }
+}
+
 function kick(t) {
   const o = ctx.createOscillator();
   const g = ctx.createGain();
@@ -937,4 +968,6 @@ export function drumHit(kind, vel = 1, delay = 0) {
   else if (kind === 'floor') tomAt(t, 100, vel);
   else if (kind === 'crash') cymbalAt(t, 1.5, 4500, 0.22 * vel);
   else if (kind === 'ride') cymbalAt(t, 0.6, 7000, 0.12 * vel);
+  else if (kind === 'bongoHi') tomAt(t, 420, vel * 0.8);
+  else if (kind === 'bongoLo') tomAt(t, 300, vel * 0.8);
 }

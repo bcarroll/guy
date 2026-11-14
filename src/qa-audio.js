@@ -5,7 +5,7 @@
 // and measured: is it audible, is it clipping, how long does it last, does it start at once, is it as bright or as deep as it should
 // be, is it about as loud as its neighbours, is it silent afterwards (no stuck notes, no DC offset). A sound with no entry in SPEC
 // fails, so a new sound cannot be added without saying what it should be like.
-import { useAudio, playNote, playPluck, drumHit } from './audio.js';
+import { useAudio, playNote, playPluck, playMallet, playSynth, drumHit } from './audio.js';
 import { SOUNDS } from './sfx.js';
 import { makeStrum, PATTERNS, PROGRESSIONS } from './strum.js';
 
@@ -36,6 +36,11 @@ const INSTRUMENTS = {
   'drum snare': { play: () => drumHit('snare'), dur: [0.05, 0.5], bright: 'any' },
   'drum hat': { play: () => drumHit('hat'), dur: [0.02, 0.4], bright: 'high' },
   'drum tom': { play: () => drumHit('tom1'), dur: [0.05, 0.6], bright: 'low' },
+  'bass E1': { play: () => playPluck(28, 0, 1.3, 0.2, true), dur: [0.4, 2.2], bright: 'any' },
+  'synth C4': { play: () => playSynth(60, 0.7, 0.15), dur: [0.3, 1.2], bright: 'mid' },
+  'xylophone C6': { play: () => playMallet(84, 0, 0.2), dur: [0.2, 1.0], bright: 'mid' },
+  'bongo hi': { play: () => drumHit('bongoHi'), dur: [0.03, 0.6], bright: 'any' },
+  'bongo lo': { play: () => drumHit('bongoLo'), dur: [0.03, 0.6], bright: 'any' },
   'drum crash': { play: () => drumHit('crash'), dur: [0.3, 2.5], bright: 'high' },
 };
 
