@@ -3,7 +3,7 @@
 // lane by default, but he can also shoot into another lane when the line of fire clears the top of the screens in between: `clearShot`
 // checks that line in 3D, and `candidates` lists what a robot in a lane can hit right now.
 //
-// The room is as wide as GUY's room (8 m): the three lanes take the middle 6 m and a 1 m bay on each side holds the equipment: a
+// The room is as wide as its door wall (8 or 10 m): the three lanes take the middle 6 m and a bay on each side holds the equipment: a
 // display case of blasters on one side wall (a robot takes his blaster from it and puts it back) and, on the other side wall, a round
 // controller (he presses the button to start a round: the targets reset) and a scoreboard (he looks at the score when he is done).
 //

@@ -66,7 +66,7 @@ export class Restaurant {
   roomOn() { return !!this.w.doors[ID]; }
   // Can customers come? The room is there (and its door is not locked: a locked restaurant is closed) with its kitchen, a till and a table, and GUY knows how to run it.
   isOpen() {
-    return this.roomOn() && !this.w.doors[ID].locked && !!this.obj('stove') && !!this.obj('kitchencounter') && !!this.obj('register') && this.tables().length > 0 && this.skillOk();
+    return this.roomOn() && !this.w.doors[ID].locked && !this.w.doors[ID].closing && !!this.obj('stove') && !!this.obj('kitchencounter') && !!this.obj('register') && this.tables().length > 0 && this.skillOk();
   }
   grid() { return makeGrid(this.w.obstacles, 0.2, 0, null, this.w.frameOf(ID)); }
   seatFree() {

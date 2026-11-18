@@ -1798,7 +1798,8 @@ T.sweepRooms = () => {
   out.push(result('rooms: the toast says the Workshop was added', /Workshop added/.test(toast), { toast }));
   m = openTab('rooms');
   const after = machineCard('Workshop');
-  out.push(result('rooms: the Workshop then shows "In your home" with no Add button', !!after && !after.querySelector('.act') && /In your home/.test(after.textContent)));
+  const rmBtn = after && after.querySelector('.act');
+  out.push(result('rooms: the Workshop then shows "In your home" with a Remove room button and no Add button', !!after && /In your home/.test(after.textContent) && !!rmBtn && rmBtn.textContent === 'Remove room', { text: after && after.textContent }));
   const e = w.extent(), v = new THREE.Vector3();
   let inView = true;
   for (const x of [e.minX, e.maxX]) for (const y of [0, 3.2]) for (const z of [e.minZ, e.maxZ]) { v.set(x, y, z).project(window.camera); if (Math.abs(v.x) > 1.001 || Math.abs(v.y) > 1.001) inView = false; }
@@ -1809,6 +1810,59 @@ T.sweepRooms = () => {
   R().reset('workshop');
   out.push(result('rooms: taking the room away removes the door and its room, and the camera frames the main room again',
     !Object.keys(w.doors).length && !w.room.children.includes(door.group) && !w.room.children.includes(door.shell.group) && w.extent().maxX === 5 && w.extent().minZ === -4));
+  // the Shooting Range and the Bowling Alley are as wide as any other room on the same wall (a wall of GUY's room is 10 m or 8 m long)
+  {
+    const widths = {};
+    for (const wall of ['front', 'right']) for (const id of ['workshop', 'range', 'bowling']) {
+      T.resetRooms(); R().add(id, { walls: [wall] });
+      widths[`${id}@${wall}`] = w.doors[id] && +w.doors[id].shell.L.toFixed(2);
+    }
+    T.resetRooms();
+    out.push(result('rooms: the Shooting Range and the Bowling Alley are as wide as the Workshop on the same wall',
+      ['front', 'right'].every((wl) => widths[`workshop@${wl}`] > 0 && widths[`range@${wl}`] === widths[`workshop@${wl}`] && widths[`bowling@${wl}`] === widths[`workshop@${wl}`]), widths));
+  }
+  // taking a room away from the Catalog: two taps (the first asks), the room and its door go, its furniture goes back to the Catalog
+  {
+    unlockRoom('workshop'); R().add('workshop'); T.settle(); T.home();
+    T.addObject('toolbox');
+    const tb = w.objects.toolbox, bd = w.doors.workshop.shell.bounds;
+    if (tb) tb.set((bd.minX + bd.maxX) / 2, (bd.minZ + bd.maxZ) / 2);
+    m = openTab('rooms');
+    machineCard('Workshop').querySelector('.act').click();
+    const asked = machineCard('Workshop').querySelector('.act');
+    const still = !!w.doors.workshop;
+    asked.click(); step(0.1);
+    const toastRm = document.getElementById('toast').textContent;
+    messages.push(toastRm);
+    m = openTab('rooms');
+    const back = machineCard('Workshop'), backBtn = back && back.querySelector('.act');
+    out.push(result('rooms: Remove room asks first (Tap to confirm), then takes the room and its door away and says so',
+      still && asked.textContent === 'Tap to confirm' && !w.doors.workshop && !R().isAdded('workshop') && /removed/.test(toastRm) && !!backBtn && backBtn.textContent === 'Add to my home', { asked: asked.textContent, toastRm }));
+    out.push(result('rooms: the furniture of a removed room goes back to the Catalog, not lost', !w.objects.toolbox && !!w.removed.toolbox, { inRoom: !!w.objects.toolbox, removed: !!w.removed.toolbox }));
+    R().add('workshop'); T.settle();
+    out.push(result('rooms: added again, its furniture can be put back from the Catalog', !!w.removed.toolbox && W().catalogOps.status('toolbox') === 'removed', { status: W().catalogOps.status('toolbox') }));
+    // GUY is in the room when it is removed: he walks out through the door first (nobody is moved by magic), then it goes
+    const b = window.brain;
+    b.unlock(false); b.queue = []; b.step = null;
+    b.visitRoom('workshop');
+    let t = 0; while (t < 60 && b.hereId() !== 'workshop') { step(0.25); t += 0.25; }
+    const wasIn = b.hereId() === 'workshop';
+    const res = R().remove('workshop');
+    messages.push(...res.messages);
+    const waiting = res.waiting && !!w.doors.workshop && R().isClosing('workshop') && !R().snapshot().rooms.workshop;
+    let t2 = 0, jump = 0; const path = [], door = w.doorPoint('workshop', 0);
+    let near = 9, last = b.g.root.position.clone();
+    while (t2 < 90 && w.doors.workshop) {
+      step(0.1); t2 += 0.1;
+      const p = b.g.root.position;
+      path.push(w.roomIdAt(p.x, p.z)); jump = Math.max(jump, p.distanceTo(last)); last = p.clone();
+      near = Math.min(near, Math.hypot(p.x - door.x, p.z - door.z));
+    }
+    out.push(result('rooms: removed while GUY is in it, he walks out through the door first and then the room goes', wasIn && waiting && /coming out/.test(res.messages[0]) && !w.doors.workshop && b.inMain() && near < 0.4 && jump < 0.3, { wasIn, waiting, res, t2, near, jump, room: b.hereId() }));
+    T.settle(); T.home();
+    delete w.removed.toolbox;                                       // (the room is gone: the toolbox is not kept for later tests)
+  }
+  T.resetRooms();
   const none = R().add('workshop', { walls: [] });
   messages.push(...none.messages);
   out.push(result('rooms: with no wall free it explains, and nothing changes', !none.ok && friendly(none.messages) && !Object.keys(w.doors).length && Object.keys(w.removed).length === before.size, { none }));

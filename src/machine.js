@@ -250,6 +250,17 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
     render();
   }
 
+  // Take a room away (tapped twice: the first tap asks). Its furniture comes back to the Catalog; a robot in it walks out first.
+  let confirmRoom = null;
+  function removeRoom(r) {
+    if (confirmRoom !== r.id) { confirmRoom = r.id; render(); return; }
+    confirmRoom = null;
+    const res = rooms.remove(r.id);
+    notify(res.messages.join(' '));
+    save();
+    render();
+  }
+
   function addAlbum(a) {
     const ok = addAlbumDef(a);
     notify(ok ? `"${a.title}" is on the top shelf` : 'Could not add the record');
@@ -365,7 +376,13 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
       for (const r of rooms ? rooms.catalog : []) {
         const base = { icon: r.icon, name: r.name, desc: r.desc, status: 'room' };
         if (!rooms.isUnlocked(r.id)) { if (r.premium) roomGroups['Premium · coming soon'].push(card({ ...base, status: 'locked', label: '🔒 Premium' })); continue; }
-        if (rooms.isAdded(r.id)) roomGroups['In your home'].push(card({ ...base, status: 'inroom', label: '✓ In your home' }));
+        if (rooms.isAdded(r.id) && rooms.isClosing(r.id)) roomGroups['In your home'].push(card({ ...base, status: 'inroom', label: 'Removing…', note: 'It goes as soon as GUY and GAL are out of it.' }));
+        else if (rooms.isAdded(r.id)) {
+          const sure = confirmRoom === r.id, kids = rooms.corners(r.id);
+          const i = handlers.push(() => removeRoom(r)) - 1;
+          const note = sure ? `Tap again to remove the ${r.name}${kids.length ? ` and the ${kids.join(' and the ')}` : ''}. Its furniture goes back to the Catalog.` : '✓ In your home';
+          roomGroups['In your home'].push(card({ ...base, status: 'inroom', label: sure ? 'Tap to confirm' : 'Remove room', action: i, danger: true, note }));
+        }
         else { const i = handlers.push(() => addRoom(r)) - 1; roomGroups['Add a room'].push(card({ ...base, label: 'Add to my home', action: i, note: r.corner ? 'Goes in a free corner beside another room when there is one, otherwise gets a door on a wall. Anything in the way goes back to the Catalog.' : 'Puts a door on a wall. Anything in the way goes back to the Catalog.' })); }
       }
     } else {

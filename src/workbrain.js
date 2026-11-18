@@ -54,7 +54,7 @@ export function installWorkshop(Brain, POSES, H) {
     // The door of room `id` is locked and he is not already in there (or in the doorway): he cannot go in. (He can always come out.)
     doorLockedFor(id) {
       const d = this.w.doors[id];
-      if (!d || !d.locked) return false;
+      if (!d || !(d.locked || d.closing)) return false;                // (a room the user is taking away: nobody goes in)
       const here = this.w.roomIdAt(this.g.root.position.x, this.g.root.position.z);
       return here !== id && here !== 'door';
     },
