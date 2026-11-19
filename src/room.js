@@ -8,6 +8,7 @@ import { buildYardShell, makeYardBuilders } from './yardobjects.js';
 import { makeYard } from './yardballs.js';
 import { buildRangeShell } from './rangeobjects.js';
 import { buildBowlShell, makeBowlBuilders } from './bowlobjects.js';
+import { makeHomeBuilders } from './homeobjects.js';
 
 export const ROOM = { w: 10, d: 8, h: 3.2 }; // x in [-5,5], z in [-4,4]
 
@@ -1272,6 +1273,30 @@ export function buildRoom(scene) {
   INSTANCE_KINDS.bowlingpins = { build: (name, x, z) => bowlB.bowlingpins(name, x, z), pref: (w) => bowlSpot('bowlingpins')(w) };
   INSTANCE_KINDS.bowlingball = { build: (name, x, z) => bowlB.bowlingball(name, x, z), pref: (w) => bowlSpot('bowlingball')(w) };
   INSTANCE_KINDS.pinsetter = { build: (name, x, z) => bowlB.pinsetter(name, x, z), pref: (w) => bowlSpot('pinsetter')(w) };
+  // ---- Bedroom and Library furniture (src/homeobjects.js), placed in the added room's own frame like the rest: `n` metres in from the door wall,
+  // `lat` along the wall from the middle of the room. `face`: 'door' (its +z towards the door) or 'away' (towards the far wall).
+  const homeB = makeHomeBuilders({ makeObject, box, mat });
+  const HOME_LAYOUT = {
+    bed: ['bedroom', (N, L) => ({ n: N - 1.3, lat: L * 0.15, face: 'away' })],               // the head against the far wall
+    bedside: ['bedroom', (N, L) => ({ n: N - 0.5, lat: L * 0.15 + 1.1, face: 'door' })],      // beside the head of the bed
+    wardrobe: ['bedroom', (N, L) => ({ n: N - 0.4, lat: -(L / 2 - 1.1), face: 'door' })],     // in the far corner
+    libshelf: ['library', (N, L) => ({ n: N - 0.4, lat: -L * 0.22, face: 'door' })],
+    libshelf2: ['library', (N, L) => ({ n: N - 0.4, lat: L * 0.22, face: 'door' })],
+    readingchair: ['library', (N, L) => ({ n: N * 0.55, lat: 0, face: 'door' })],             // (an armchair faces its local -z: so it faces the shelves)
+  };
+  const homeSpot = (id) => (w) => {
+    const [room, f] = HOME_LAYOUT[id];
+    if (!w.doors[room]) return null;
+    const { n: N, l: L } = w.shellSize(room), ax = w.shellAxes(room);
+    const s = f(N, L), p = w.shellPoint(room, s.n, s.lat), face = s.face === 'door' ? ax.toDoor : ax.toDoor.clone().negate();
+    return { x: p.x, z: p.z, rot: w.rotFacing(face.x, face.z), exact: true };
+  };
+  INSTANCE_KINDS.bed = { build: (name, x, z) => homeB.bed(name, x, z), pref: (w) => homeSpot('bed')(w) };
+  INSTANCE_KINDS.bedside = { build: (name, x, z) => homeB.bedside(name, x, z), pref: (w) => homeSpot('bedside')(w) };
+  INSTANCE_KINDS.wardrobe = { build: (name, x, z) => homeB.wardrobe(name, x, z), pref: (w) => homeSpot('wardrobe')(w) };
+  // (a second bookshelf goes in the other half of the wall)
+  INSTANCE_KINDS.libshelf = { build: (name, x, z) => homeB.libshelf(name, x, z), pref: (w) => homeSpot(Object.values(w.objects).some((o) => o.kind === 'libshelf' && w.roomIdAt(o.x, o.z) === 'library') ? 'libshelf2' : 'libshelf')(w) };
+  INSTANCE_KINDS.readingchair = { build: (name, x, z) => { const o = buildArmchair(name, x, z, 0x2f6b4f); o.homeSeat = true; return o; }, pref: (w) => homeSpot('readingchair')(w) };
   // (the restaurant's extra tables are further instance kinds, added below once the restaurant's layout is known)
 
   // ---- Restaurant furniture (src/restobjects.js), placed the same way in the Restaurant's own frame

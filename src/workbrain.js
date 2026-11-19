@@ -228,11 +228,11 @@ export function installWorkshop(Brain, POSES, H) {
       if (this.carry !== 'flat' && this.carry !== 'mflat') return [];
       const site = this.siteFor(id);
       if (!site) return [{ type: 'plan', fn: () => [this.play('idle', 0.3, { at: [0.1, () => this.setUp(id, null)] })] }];
-      const steps = [...(this.inWorkshop() ? this.doorOut(ID) : [])];
-      if (site.room !== 'main' && site.room !== 'door') steps.push(...this.doorIn(site.room));
-      steps.push({ type: 'plan', fn: () => this.setupSteps(id) });
-      if (site.room !== 'main' && site.room !== 'door') steps.push(...this.doorOut(site.room));
-      return steps;
+      // (through every door between here and there: a corner room (the Bedroom, the Library) is entered through the Workshop itself, so he does not leave it first)
+      const away = site.room !== 'main' && site.room !== 'door';
+      return [{ type: 'plan', fn: () => this.tripSteps(this.hereId(), away ? site.room : 'main') },
+        { type: 'plan', fn: () => this.setupSteps(id) },
+        ...(away ? [{ type: 'plan', fn: () => this.tripSteps(site.room, 'main') }] : [])];
     },
     setupSteps(id) {
       const site = this.siteFor(id);

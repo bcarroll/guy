@@ -204,6 +204,18 @@ export function install(T, h) {
         return { data: capture() };
       });
     }
+    // The furnished corner rooms: what the bots build for them (a bed, a wardrobe and a bedside table; two bookshelves and a reading chair)
+    for (const [id, kinds] of [['bedroom', ['bed', 'wardrobe', 'bedside']], ['library', ['libshelf', 'libshelf', 'readingchair']]]) {
+      add(`room-corner-${id}-furnished`, 'rooms', async () => {
+        await clean(id === 'library' ? 48 : 49);
+        const w = window.brain.w;
+        w.rooms.add('workshop', { walls: ['right'] });
+        w.rooms.add('library'); w.rooms.add('bedroom');
+        for (const k of kinds) w.addInstance(k, null, null, true);
+        T.freeze(); window.guy.root.visible = false; frameCorner(id); await settleFrames(3);
+        return { data: capture() };
+      });
+    }
     add('room-corners', 'rooms', async () => {                      // the Workshop with a corner room at each side wall: both doors, both rooms
       await clean(50);
       const w = window.brain.w;

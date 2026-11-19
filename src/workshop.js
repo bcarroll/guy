@@ -28,6 +28,13 @@ export const RECIPES = {
   // Bowling Alley equipment (the Wood & Metal Basics book, chapters 4 and 5: pins and a ball turned from maple). They end up in the alley.
   bowlingpins: { name: 'Maple Bowling Pins', icon: '🎳', skill: 'workshop.materials.ch4', line: 'wood', run: 5.0, object: 'bowlingpins', cap: 1, serves: 'bowl.pins', to: 'bowling' },
   bowlingball: { name: 'Wooden Bowling Ball', icon: '🎳', skill: 'workshop.materials.ch5', line: 'wood', run: 4.4, object: 'bowlingball', cap: 1, serves: 'bowl.ball', to: 'bowling' },
+  // Furniture for the Bedroom and the Library (wooden, from the furniture books). Wanted once the room has been added and is still empty of it (needs.js); each
+  // is carried flat-packed into its room and put together there. The bookshelves are not the skill bookshelf: they are only for the Library.
+  bed: { name: 'Bed', icon: '🛏️', skill: ['workshop.materials', 'workshop.furniture'], line: 'wood', run: 5.2, object: 'bed', cap: 1, serves: 'home.bed', to: 'bedroom' },
+  wardrobe: { name: 'Wardrobe', icon: '🚪', skill: ['workshop.materials', 'workshop.furniture'], line: 'wood', run: 5.4, object: 'wardrobe', cap: 1, serves: 'home.wardrobe', to: 'bedroom' },
+  bedside: { name: 'Bedside Table', icon: '🗄️', skill: 'workshop.furniture', line: 'wood', run: 3.8, object: 'bedside', cap: 1, serves: 'home.bedside', to: 'bedroom' },
+  libshelf: { name: 'Library Bookshelf', icon: '📚', skill: ['workshop.materials', 'workshop.furniture'], line: 'wood', run: 5.0, object: 'libshelf', cap: 2, serves: 'home.shelf', to: 'library' },
+  readingchair: { name: 'Reading Chair', icon: '🛋️', skill: 'workshop.furniture', line: 'wood', run: 4.4, object: 'readingchair', cap: 1, serves: 'home.readchair', to: 'library' },
   // Easter eggs: in no book. GUY builds one on his own once everything in `egg` stands in his room (see needs.js), with the basic Workshop book.
   mirrorball: { name: 'Mirror Ball', icon: '🪩', skill: 'workshop', line: 'metal', run: 4.0, object: 'mirrorball', cap: 1, serves: 'egg.mirrorball', egg: ['table', 'drums'] },
   trophy: { name: 'Golden Trophy', icon: '🏆', skill: 'workshop', line: 'metal', run: 4.6, object: 'trophy', cap: 1, serves: 'egg.trophy', egg: ['piano', 'guitar', 'drums'] },

@@ -56,6 +56,9 @@ export const MANIFEST = {
     workstation: { skills: [] },      // the Learning Workstation (premium): tested by sweepWorkstation
     footstool: { room: 'workshop', built: true }, woodshelves: { room: 'workshop', built: true }, builtchair: { room: 'workshop', built: true }, metalchair: { room: 'workshop', built: true }, bookshelf2: { room: 'workshop', built: true }, eguitar: { room: 'workshop', built: true },
     bowlingpins: { room: 'workshop', built: true, alsoRoom: 'bowling' }, bowlingball: { room: 'workshop', built: true, alsoRoom: 'bowling' }, pinsetter: { room: 'workshop', built: true, alsoRoom: 'bowling' },      // (the Bowling Alley's equipment: it goes in the alley, so that has to be there; the pinsetter is an easter egg)
+    // furniture GUY and GAL build for the Bedroom and the Library once those rooms are added (they go into the room, so it has to be there)
+    bed: { room: 'workshop', built: true, alsoRoom: 'bedroom' }, wardrobe: { room: 'workshop', built: true, alsoRoom: 'bedroom' }, bedside: { room: 'workshop', built: true, alsoRoom: 'bedroom' },
+    libshelf: { room: 'workshop', built: true, alsoRoom: 'library' }, readingchair: { room: 'workshop', built: true, alsoRoom: 'library' },
     diningtable3: { room: 'workshop', built: true, alsoRoom: 'restaurant' }, diningtable4: { room: 'workshop', built: true, alsoRoom: 'restaurant' },       // (they go in the Restaurant, so it has to be there)
     // the Restaurant (another added room): the kitchen and the dining room
     stove: { room: 'restaurant', skills: ['restaurant'] }, kitchencounter: { room: 'restaurant', skills: ['restaurant'] }, register: { room: 'restaurant', skills: ['restaurant'] },
@@ -99,6 +102,11 @@ export const MANIFEST = {
     tidytools: { objects: ['toolbox'], skills: ['workshop'], room: 'workshop', touches: ['toolbox'] },
     dusttop: { objects: ['window', 'window2', 'footstool'], skills: ['decorate'], room: 'workshop', max: 90, touches: ['footstool'] },
     build: { objects: ['woodfactory', 'metalfactory'], skills: ['workshop', 'decorate'], room: 'workshop', recipe: 'footstool', max: 260, touches: ['woodfactory', 'metalfactory', 'tree', 'telescope', 'flowerplant', 'plant', 'footstool', 'chair', 'chair2', 'armchair', 'armchair2', 'builtchair', 'metalchair'] },
+    // the Bedroom and the Library (corner rooms): the furniture they built there (homebrain.js)
+    makebed: { objects: ['bed'], room: 'bedroom', max: 120, touches: ['bed'] },
+    homesit: { objects: ['bed', 'readingchair'], room: 'bedroom', max: 120, touches: ['bed', 'readingchair'] },
+    wardrobe: { objects: ['wardrobe', 'bedside'], room: 'bedroom', max: 120, touches: ['wardrobe', 'bedside'] },
+    browse: { objects: ['libshelf'], room: 'library', max: 120, touches: ['libshelf'] },
     // the Restaurant: `customer` is the state of a customer set up before it starts (customers.js stage()); the rest as for the Workshop
     takeorder: { objects: ['stove', 'kitchencounter', 'register', 'diningtable'], skills: ['restaurant'], room: 'restaurant', customer: 'waiting', touches: ['diningtable'] },
     cook: { objects: ['stove', 'kitchencounter', 'register', 'diningtable'], skills: ['restaurant'], room: 'restaurant', customer: 'ordered', max: 200, touches: ['stove', 'kitchencounter'] },
@@ -184,6 +192,11 @@ export const MANIFEST = {
   tracks: ['default', ...ALBUM_CATALOG.flatMap((a) => a.tracks)],     // every track on every record; coverage fails for a track no record lists
   // the visual checkpoints: freeze GUY at (activity, pose, t) and look from `view`. See assets.md for the full checklist.
   visual: [
+    // the Bedroom and the Library (homebrain.js)
+    { id: 'makebed-smooth', activity: 'makebed', pose: 'reach', t: 2.4, view: 'front', expect: 'standing at the side of the bed, one hand flat on the blanket smoothing it, the other arm down, the blanket flat and the pillows plump' },
+    { id: 'homesit-bed', activity: 'homesit', pose: 'sitRest', t: 6, view: 'side', expect: 'seated on the foot of the bed, thighs on the mattress, shins over the edge, feet on the floor, hands on his knees' },
+    { id: 'wardrobe-reach', activity: 'wardrobe', pose: 'reach', t: 2.0, view: 'front', expect: 'both wardrobe doors swung open, one hand reaching in among the hanging clothes (or the bedside drawer pulled out with his hand in it)' },
+    { id: 'browse-shelf', activity: 'browse', pose: 'reach', t: 1.8, view: 'front', expect: 'standing at the library shelf, one hand touching the spines of the books on a shelf, no hand through the shelf' },
     { id: 'read-grab-mid', activity: 'read', pose: 'grab', t: 1.2, view: 'hand:Right', expect: 'palm on the book spine, fingers pointing in and a little up (never the back of the hand towards the book), arm in front of him' },
     { id: 'read-stand-shelf', activity: 'read', pose: 'readStand', t: 8, view: 'side', skills: ['speedreading'], expect: 'speed reading standing a step back from the bookshelf: the open book floats in front of his chest, clear of the shelf, both hands on its lower edges' },
     { id: 'read-sit', activity: 'read', pose: 'readSit', t: 8, view: 'front', expect: 'book open with pages facing GUY, both hands on the lower edges, seated in the chair with legs clear of it' },
@@ -4658,6 +4671,88 @@ T.sweepBowl = () => {
   return out;
 };
 
+// ---- The Bedroom and the Library: the furniture GUY and GAL build to furnish them, and how it is used (src/homeobjects.js, homebrain.js) ----
+const HOME_RECIPES = ['bed', 'wardrobe', 'bedside', 'libshelf', 'readingchair'];
+const HOME_ROOM = { bed: 'bedroom', wardrobe: 'bedroom', bedside: 'bedroom', libshelf: 'library', readingchair: 'library' };
+T.sweepHome = () => {
+  const out = [], base = errors.length, w = W(), b = B(), g = G();
+  const FURN = ['workshop', 'workshop.materials', 'workshop.furniture'];
+  const homeWants = () => wants(b).map((x) => x.serves).filter((s) => s.startsWith('home.'));
+  const built = (k) => kindIn(w, k);
+  // 1. nothing is wanted before the rooms are added; then the Bedroom wants a bed, a wardrobe and a bedside table, the Library two shelves and a chair
+  needSetup('right', FURN);
+  const none = homeWants().length === 0 && b.pickRecipe() === null;
+  R().add('bedroom');
+  const bw = homeWants();
+  R().add('library');
+  const lw = homeWants();
+  out.push(result('home: nothing is wanted before the rooms are added; the Bedroom wants a bed, a wardrobe and a bedside table, the Library two bookshelves and a reading chair',
+    none && ['home.bed', 'home.wardrobe', 'home.bedside'].every((s) => bw.includes(s)) && !bw.includes('home.shelf') && ['home.shelf', 'home.readchair'].every((s) => lw.includes(s)), { none, bw, lw }));
+  out.push(result('home: the Bedroom and the Library are in the corners beside the Workshop', !!w.doors.bedroom && !!w.doors.library && w.doors.bedroom.parent === 'workshop' && w.doors.library.parent === 'workshop', { b: w.doors.bedroom && w.doors.bedroom.parent, l: w.doors.library && w.doors.library.parent }));
+  // 2. without the furniture book none of it is built
+  T.forget(); T.learn(['workshop']);
+  const locked = HOME_RECIPES.every((id) => !b.canBuild(id));
+  T.learn(['workshop.materials', 'workshop.furniture']);
+  out.push(result('home: it needs the furniture books (and the Wood Factory): without them none of it can be built, with them all of it can', locked && HOME_RECIPES.every((id) => b.canBuild(id)), { locked }));
+  // 3. he builds all of it, one piece after another, and carries each into its room
+  const times = [];
+  for (let i = 0; i < 9 && homeWants().length; i++) times.push(buildToEnd(b, 1300));
+  const where = Object.fromEntries(HOME_RECIPES.map((k) => [k, built(k).map((o) => w.roomIdAt(o.x, o.z))]));
+  out.push(result('home: he builds a bed, a wardrobe and a bedside table for the Bedroom, two bookshelves and a reading chair for the Library, and puts each together in its own room',
+    times.every((t) => t > 0) && HOME_RECIPES.every((k) => where[k].length === (k === 'libshelf' ? 2 : 1) && where[k].every((r) => r === HOME_ROOM[k])), { times, where }));
+  out.push(result('home: every piece fits where it stands, none is left in the Workshop or in storage, and then nothing more is wanted', HOME_RECIPES.every((k) => built(k).every((o) => w.fits(o, o.x, o.z))) && HOME_RECIPES.every((k) => !w.stock.items[k]) && homeWants().length === 0 && b.pickRecipe() === null, { wants: homeWants(), stock: { ...w.stock.items } }));
+  out.push(result('home: the heavy pieces (the bed, the wardrobe, the bookshelves) stay where they are put', ['bed', 'wardrobe', 'libshelf'].every((k) => built(k).every((o) => o.weight === 'heavy'))));
+  // 4. the bed has its head to the far wall, away from the door
+  {
+    const bed = built('bed')[0], head = bed.local(0, 1.0), q = w.doorPoint('bedroom', 0);
+    const far = (p) => Math.hypot(p.x - q.x, p.z - q.z);
+    out.push(result('home: the bed has its head against the far wall, away from the door', far({ x: bed.x + head.x, z: bed.z + head.z }) > far(bed), { head: far({ x: bed.x + head.x, z: bed.z + head.z }), bed: far(bed) }));
+  }
+  // 5. he uses it: pointed at each piece he goes in through the Workshop and does the right thing there, and comes out again
+  {
+    const cases = [['bed', ['makebed', 'homesit']], ['wardrobe', ['wardrobe']], ['bedside', ['wardrobe']], ['libshelf', ['browse']], ['readingchair', ['homesit']]];
+    const res = {};
+    for (const [k, acts] of cases) {
+      const o = built(k)[0];
+      T.home(); T.settle(); b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; b.stayRoom = null;
+      const r = b.interact(o.name);
+      let t = 0, did = false, inRoom = false;
+      while (t < 240 && !did) { step(0.25); t += 0.25; const st = b.step; if (acts.includes(b.last) && st && st.type === 'play' && st.fx && (st.fx.needs || st.fx.chairSit)) { did = true; inRoom = b.hereId() === HOME_ROOM[k]; } }
+      res[k] = { ok: r.ok, did, inRoom, last: b.last };
+      b.skip(); b.queue = []; b.step = null; b.pendingActivity = 'leave';
+      { let t2 = 0; while (t2 < 240 && !(b.inMain() && Object.values(w.doors).every((d) => d.open === 0))) { step(0.25); t2 += 0.25; } }
+    }
+    out.push(result('home: pointed at the bed, the wardrobe, the bedside table, a bookshelf or the reading chair he goes in through the Workshop and uses it there', Object.values(res).every((x) => x.ok && x.did && x.inRoom), res));
+    out.push(result('home: afterwards he is back in his own room with the doors shut', b.inMain() && Object.values(w.doors).every((d) => d.open === 0), { here: b.hereId() }));
+  }
+  // 5b. the bed and the reading chair are not chairs of his own room: sitting there is its own activity, and the plain 'sit' never uses them
+  {
+    const names = b.chairs().map((c) => c.name);
+    out.push(result('home: the bed and the reading chair are for the Bedroom and the Library only: the plain Sit Down never picks them', !names.some((n) => /^(bed|readingchair)_/.test(n)), { names }));
+  }
+  // 6. the layout is saved: turned about and moved, the pieces come back where they were after a reload
+  {
+    built('readingchair')[0].rotate(1);
+    const snap = JSON.parse(JSON.stringify(w.layout.snapshot()));
+    const pos = Object.fromEntries(HOME_RECIPES.flatMap((k) => built(k).map((o) => [o.name, [o.x, o.z, o.rot]])));
+    T.removeAll();
+    const gone = HOME_RECIPES.every((k) => !built(k).length) && HOME_RECIPES.every((k) => w.stock.items[k] > 0);
+    w.layout.apply(snap);
+    const same = Object.entries(pos).every(([n, p]) => w.objects[n] && Math.abs(w.objects[n].x - p[0]) < 0.02 && Math.abs(w.objects[n].z - p[1]) < 0.02 && w.objects[n].rot === p[2] && w.roomIdAt(w.objects[n].x, w.objects[n].z) === HOME_ROOM[w.objects[n].kind]);
+    out.push(result('home: taken out of the rooms they go to storage, and a restored layout puts every piece back in its room where, and turned the way, it was', gone && same && HOME_RECIPES.every((k) => !w.stock.items[k]), { gone, same, stock: { ...w.stock.items } }));
+  }
+  // 7. taking a room away takes its furniture with it, and adding it again makes him want it all again
+  R().reset('bedroom');
+  const lost = !built('bed').length && !built('wardrobe').length && !built('bedside').length && built('libshelf').length === 2 && homeWants().length === 0;
+  const kept = ['bed', 'wardrobe', 'bedside'].every((k) => w.stock.items[k] === 1);
+  R().add('bedroom');
+  const again = ['bed', 'wardrobe', 'bedside'].map((k) => w.addInstance(k, null, null)).map((n) => n && w.roomIdAt(w.objects[n].x, w.objects[n].z));
+  out.push(result('home: taking the Bedroom away takes its furniture out of it into storage (nothing is lost, the Library is untouched), and adding it again puts it back in the room', lost && kept && again.every((r) => r === 'bedroom'), { lost, kept, again, stock: { ...w.stock.items } }));
+  T.resetRooms(); T.removeAll(); T.settle(); machine().hidden = true;
+  out.push(result('home: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   const wasPaused = window.__qaPaused;
   if (seed) window.__qaPaused = true;                     // (the page's own animation loop would move the game between sweeps, by however long the page has been open: a seeded run is the simulation alone)      // (`upTo`: stop after that sweep: to replay a failure with everything that ran before it)
@@ -4719,6 +4814,7 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.arrange = S(T.sweepArrange);
   report.paintings = S(T.sweepPaintings);
   report.corners = S(T.sweepCorners);
+  report.home = S(T.sweepHome);
   if (seed && T.unseed) T.unseed();
   window.__qaPaused = wasPaused;
   T.lastReport = report;

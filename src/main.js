@@ -607,7 +607,11 @@ function interactLabel(name) {
     case 'birdbath': return '🐦 Look at the Bird Bath';
     case 'skyswitch': return w.yard && w.yard.isNight() ? '☀️ Switch to Day' : '🌙 Switch to Night';
     case 'shed': case 'mower': return '🚜 Mow the Lawn';
-    default: return brain.obj(name) && brain.obj(name).heldBooks ? '📖 Read a Book' : brain.obj(name) && brain.obj(name).guitar ? '🎸 Play Guitar' : brain.obj(name) && brain.obj(name).kind === 'footstool' ? '🪜 Stand on It to Clean' : brain.obj(name) && brain.obj(name).sit ? '🪑 Sit Down' : '▶ Use';
+    default: if (brain.obj(name) && brain.obj(name).kind === 'bed') return '🛏️ Make the Bed or Sit';
+      if (brain.obj(name) && brain.obj(name).kind === 'readingchair') return '🛋️ Sit Down';
+      if (brain.obj(name) && ['wardrobe', 'bedside'].includes(brain.obj(name).kind)) return brain.obj(name).kind === 'wardrobe' ? '🚪 Sort the Wardrobe' : '🗄️ Tidy the Drawer';
+      if (brain.obj(name) && brain.obj(name).kind === 'libshelf') return '📚 Browse the Shelves';
+      return brain.obj(name) && brain.obj(name).heldBooks ? '📖 Read a Book' : brain.obj(name) && brain.obj(name).guitar ? '🎸 Play Guitar' : brain.obj(name) && brain.obj(name).kind === 'footstool' ? '🪜 Stand on It to Clean' : brain.obj(name) && brain.obj(name).sit ? '🪑 Sit Down' : '▶ Use';
   }
 }
 
