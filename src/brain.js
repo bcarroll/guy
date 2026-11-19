@@ -1087,7 +1087,7 @@ export class Brain {
             const b = w.ball.position;
             // try directions until GUY has somewhere free to stand behind the ball (with room for his legs and arms to swing)
             for (let i = 0; i < 60; i++) {
-              const grid = makeGrid(w.obstacles, i < 40 ? 0.55 : INFLATE);
+              const grid = makeGrid(w.obstacles, 0.55);       // never tighter: his hips and arms swing into furniture, so with no free spot he leaves the ball alone
               const dir = new THREE.Vector3(rand(-3.5, 3.5) - b.x, 0, rand(-2, 3) - b.z).normalize();
               const from = b.clone().addScaledVector(dir, -0.5);
               if (!this.onFloor(from.x, from.z, 0.1) || cellBlocked(grid, from.x, from.z)) continue;
