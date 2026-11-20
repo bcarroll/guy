@@ -197,10 +197,12 @@ export function installHobbies(Brain, POSES, H) {
     // ------------------------------------------------------------------ per-step state
     computeHobby(s, dt) {
       this.hobProps = {};
+      // The kit's resting sticks and the easel's palette are shared by both robots: only the one holding them may put them back,
+      // or the idle robot shows the sticks on the snare again while the other is drumming with them.
       const d = this.obj('drums');
-      if (d && d.restSticks) d.restSticks.forEach((m) => (m.visible = true));
+      if (d && d.restSticks && d.sticksBy === this) { d.sticksBy = null; d.restSticks.forEach((m) => (m.visible = true)); }
       const e = this.obj('easel');
-      if (e && e.restPalette) e.restPalette.visible = true;
+      if (e && e.restPalette && e.paletteBy === this) { e.paletteBy = null; e.restPalette.visible = true; }
       if (s.type !== 'play' || !s.fx) return null;
       if (s.fx.work) return this.computeWork(s, dt);                    // hands at work (the stove: restbrain.js)
       if (s.fx.drums) return this.computeDrums(s);
@@ -231,9 +233,10 @@ export function installHobbies(Brain, POSES, H) {
       root.rotation.y = d.yaw + Math.PI;
     },
 
-    stickDir(hand) {
+    // pitch: how far the tip points down (0.3 rad onto the drums; about level for a cymbal, which is struck with the shaft from below)
+    stickDir(hand, pitch = 0.3) {
       const sgn = hand === 'L' ? 1 : -1;      // GUY's left is +x in his own frame
-      return this.fwdVec().multiplyScalar(Math.cos(0.3)).addScaledVector(UPV, -Math.sin(0.3)).addScaledVector(this.leftVec(), -sgn * 0.12).normalize();
+      return this.fwdVec().multiplyScalar(Math.cos(pitch)).addScaledVector(UPV, -Math.sin(pitch)).addScaledVector(this.leftVec(), -sgn * 0.12).normalize();
     },
 
     computeDrums(s) {
@@ -257,7 +260,7 @@ export function installHobbies(Brain, POSES, H) {
       const start = fx.startAt ?? 2.4, endGap = 2.0;
       const holding = T >= start - 0.6 && T < D - endGap + 0.8;
       this.hobProps.sticks = holding;
-      d.restSticks.forEach((m) => (m.visible = !holding));
+      if (holding) { d.sticksBy = this; d.restSticks.forEach((m) => (m.visible = false)); }
       // Timing comes with the advanced books (Fills & Solos, Playing in the Band): such a drummer locks onto the stereo's beat, or
       // onto the tempo the other robot is playing, wherever the song is. With only the basic book the beat is steady but her own.
       const f = fx.sync && this.music ? { bl: this.beatLen, beat: this.currentBeat() } : this.tempoToFollow('drums');
@@ -292,19 +295,24 @@ export function installHobbies(Brain, POSES, H) {
       for (const hd of ['L', 'R']) {
         const sgn = hd === 'L' ? -1 : 1;
         const rest = pads.snare.clone().addScaledVector(lat, sgn * 0.04).add(V(0, 0.016, 0));
-        let pos;
+        let pos, cym = 0;
+        // how much the hand is on a cymbal (crash, ride: up at shoulder height). A drummer reaches one with the stick about level and
+        // the wrist below it; keeping the stick tipped down as for the snare put the fist over her head with the wrist bent back.
+        const cymOf = (k) => (k === 'crash' || k === 'ride' ? 1 : 0);
         if (!playing) pos = rest;
         else {
           const last = dr.last[hd], next = dr.q[hd][0];
           const from = last ? pads[last.pad] : rest;
-          if (!next) pos = from.clone().add(V(0, 0.07 + 0.02 * Math.sin(T * 3), 0));
+          const c0 = last ? cymOf(last.pad) : 0;
+          if (!next) { pos = from.clone().add(V(0, 0.07 + 0.02 * Math.sin(T * 3), 0)); cym = c0; }
           else {
             const bh = b + 0.1 / bl, t0 = last ? last.time : next.time - 1, gap = Math.max(0.25, next.time - t0), u = clamp((bh - t0) / gap, 0, 1);   // the arm leads the beat a little: the skeleton follows with a lag
+            cym = lerp(c0, cymOf(next.pad), sm(u / 0.7));
             pos = from.clone().lerp(pads[next.pad], sm(u / 0.7));
-            pos.y += clamp(gap * bl * 0.45, 0.04, 0.2) * Math.sin(Math.PI * u);
+            pos.y += clamp(gap * bl * 0.45, 0.04, 0.2) * Math.sin(Math.PI * u) * (1 - 0.7 * cym);   // (a cymbal is not hit from high above)
           }
         }
-        const f = this.stickDir(hd);
+        const f = this.stickDir(hd, lerp(0.3, -0.12, cym));
         out[hd] = { wrist: pos.clone().addScaledVector(f, -tipLen), f, palm: V(0, -1, 0).addScaledVector(lat, -sgn * 0.25), tip: pos };
       }
       return out;
@@ -349,7 +357,7 @@ export function installHobbies(Brain, POSES, H) {
       this.hobProps.brush = !finger;
       this.hobProps.palette = paletteHeld;
       this.hobProps.paletteFrame = { lf, up: UPV };
-      e.restPalette.visible = !paletteHeld;
+      if (paletteHeld) { e.paletteBy = this; e.restPalette.visible = false; }
       if (this.hobProps.brush && pp.brushT === undefined) pp.brushT = T;
 
       const out = { finger, palette: paletteHeld };

@@ -3213,6 +3213,26 @@ T.sweepGal = () => {
   gb.skills.learn('drums.band');
   const plan2 = gal.planDuo();
   out.push(result('gal: when she already has the skills there is nothing to read: GUY just asks her to come and play', !plan2 || plan2.galInst !== 'drums' || plan2.books.every((id) => id !== 'drumband')));
+  // 5b. she plays a solo on her own while GUY does something else. The kit's resting sticks are shared: GUY's brain used to put them
+  // back on the snare every frame while hers held them (sticks on the kit and in her hands), and on a crash hit her fist went over
+  // her head with the wrist bent back (the stick kept the snare's downward tilt for a cymbal at shoulder height).
+  {
+    galReset(); galBuild(); gb = gal.brain;
+    T.addObject('drums'); skillsOf().known.clear();
+    for (const s of ['drums', 'drums.solo']) gb.skills.learn(s);
+    b.queue = []; b.step = null; gb.queue = []; gb.step = null; gb.choose('drumsolo');
+    const kit = w.objects.drums, e5b = errors.length;
+    let held = 0, both = 0, high = -9, tb = 0;
+    while (tb < 60 && !(held && gb.last !== 'drumsolo')) {
+      step(0.05); tb += 0.05;
+      if (gb.last !== 'drumsolo' || b.pose === 'drumSit' || !gb.hobProps.sticks) continue;
+      held++;
+      if (kit.restSticks && kit.restSticks.some((m) => m.visible)) both++;
+      for (const side of ['Left', 'Right']) high = Math.max(high, gb.handFrame(side).wrist.y - gal.g.boneWorld(`${side}Arm`).y);
+    }
+    out.push(result('gal: while she drums (GUY busy elsewhere) the sticks are in her hands only, not also lying on the snare', held > 40 && both === 0 && errors.length === e5b, { held, both }));
+    out.push(result('gal: drumming, crash included, her wrists stay below her head (at most 15 cm above the shoulder)', held > 40 && high < 0.15, { high: +high.toFixed(2) }));
+  }
   // 6. her own idea: switch the stereo on, ask GUY to dance, dance, and the last one to stop switches the music off
   galReset(); galBuild(); gb = gal.brain;
   for (const id of ['table']) T.addObject(id);
