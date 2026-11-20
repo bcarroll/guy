@@ -144,12 +144,12 @@ export function installHobbies(Brain, POSES, H) {
             if (this.w.obstacles.some((o) => o !== t.obstacle && o.active !== false && tip.x > o.x0 - 0.45 && tip.x < o.x1 + 0.45 && tip.z > o.z0 - 0.45 && tip.z < o.z1 + 0.45)) continue;
             // where he will stand to look through it (behind the eyepiece for 'sky', in front of the lens for 'room')
             const spot = c.clone().addScaledVector(dir, mode === 'room' ? 1.25 : -1.15);
-            if (!this.onFloor(spot.x, spot.z, 0.2) || cellBlocked(grid, spot.x, spot.z)) continue;
+            if (!this.onFloorOf('telescope', spot.x, spot.z, 0.2) || cellBlocked(grid, spot.x, spot.z)) continue;
             // stand beside the tube to swing it: the side that is free
             const perp = V(-dir.z, 0, dir.x);
             for (const sgn of [1, -1]) {
               const side = c.clone().addScaledVector(perp, sgn * 0.78);
-              if (!this.onFloor(side.x, side.z, 0.1) || cellBlocked(sideGrid, side.x, side.z)) continue;
+              if (!this.onFloorOf('telescope', side.x, side.z, 0.1) || cellBlocked(sideGrid, side.x, side.z)) continue;
               const cd = V(Math.sin(wy0), 0, Math.cos(wy0));
               const toHand = V(cd.x, 0, cd.z);
               // swing with whichever hand is on the tube's front end side
@@ -164,24 +164,31 @@ export function installHobbies(Brain, POSES, H) {
         }
       }
     },
+    // Where he stands to look through the telescope (or to clean it) for the current aim, and the way he faces; null when there is no room.
+    scopeStandFor(kind) {
+      const t = this.obj('telescope'), grid = makeGrid(this.w.obstacles, kind === 'care' ? 0.55 : 0.62, 0, t.obstacle);
+      const E = t.eyepiece(), O = t.objective();
+      const d = O.clone().sub(E).normalize(), dh = V(d.x, 0, d.z).normalize();
+      const c = t.tube.localToWorld(V(0, 0, 0));
+      const ok = (p) => this.onFloorOf('telescope', p.x, p.z, 0.1) && !cellBlocked(grid, p.x, p.z);
+      const cands = [];
+      if (kind === 'peer') for (const back of [0.3, 0.4, 0.5, 0.6]) cands.push([E.clone().addScaledVector(dh, -back), dh.clone()]);
+      else if (kind === 'wrong') for (const out of [0.55, 0.65, 0.8]) cands.push([O.clone().addScaledVector(dh, out), dh.clone().negate()]);
+      else {
+        // beside the tube, level with its middle or a little along it either way (a tube against a wall has no room on the wall side)
+        const perp = V(-dh.z, 0, dh.x);
+        for (const along of [0.15, 0, -0.15, -0.3]) for (const sgn of [1, -1]) cands.push([c.clone().addScaledVector(perp, sgn * 0.74).addScaledVector(dh, along), perp.clone().multiplyScalar(-sgn)]);
+      }
+      for (const [p, face] of cands) if (ok(p)) return { p, face };
+      return null;
+    },
     // Walk to where he looks through the telescope (or to where he cleans it) for the current aim.
     scopeSpot(kind) {
       return {
         type: 'plan',
         fn: () => {
-          const t = this.obj('telescope'), grid = makeGrid(this.w.obstacles, kind === 'care' ? 0.55 : 0.62, 0, t.obstacle);
-          const E = t.eyepiece(), O = t.objective();
-          const d = O.clone().sub(E).normalize(), dh = V(d.x, 0, d.z).normalize();
-          const c = t.tube.localToWorld(V(0, 0, 0));
-          const ok = (p) => this.onFloor(p.x, p.z, 0.1) && !cellBlocked(grid, p.x, p.z);
-          const cands = [];
-          if (kind === 'peer') for (const back of [0.3, 0.4, 0.5, 0.6]) cands.push([E.clone().addScaledVector(dh, -back), dh.clone()]);
-          else if (kind === 'wrong') for (const out of [0.55, 0.65, 0.8]) cands.push([O.clone().addScaledVector(dh, out), dh.clone().negate()]);
-          else {
-            const perp = V(-dh.z, 0, dh.x);
-            for (const sgn of [1, -1]) cands.push([c.clone().addScaledVector(perp, sgn * 0.74).addScaledVector(dh, 0.15), perp.clone().multiplyScalar(-sgn)]);
-          }
-          for (const [p, face] of cands) if (ok(p)) return [{ ...this.walk(p.x, p.z, Math.atan2(face.x, face.z)), tol: 0.2 }];       // (pressed against the wall a few centimetres short is close enough)
+          const r = this.scopeStandFor(kind);
+          if (r) return [{ ...this.walk(r.p.x, r.p.z, Math.atan2(r.face.x, r.face.z)), tol: 0.2 }];       // (pressed against the wall a few centimetres short is close enough)
           this.queue.length = 0; this.ui("can't get at the telescope"); return [];
         },
       };

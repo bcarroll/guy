@@ -25,12 +25,14 @@ import { ALBUM_CATALOG } from './albums.js';
 import { TRACKS, trackSeconds } from './audio.js';
 import { POSES } from './brain.js';
 import { bowlSkill } from './bowlbrain.js';
+import { throwBall } from './bowlrules.js';
 import { install as installCharacters } from './qa-characters.js';
 import { install as installAudio } from './qa-audio.js';
 import { install as installShots } from './qa-shots.js';
 import { counts as sfxCounts } from './sfx.js';
 import { BARKS, NO_BARK, resetBarks } from './barks.js';
 import { WHATS_NEW } from './whatsnew.js';
+const lcg = (seed) => { let a = seed | 0; return () => { a = (Math.imul(a, 1664525) + 1013904223) | 0; return (a >>> 0) / 4294967296; }; };      // (a small seeded generator: for a check that must not depend on the sweep's seed)
 
 // ---------------------------------------------------------------------------------------------------------------
 // MANIFEST: what the test knows about each asset. Keep in sync with the game (T.coverage() tells you what is missing).
@@ -1361,7 +1363,7 @@ T.sweepSounds = () => {
     for (let attempt = 0; attempt < 4; attempt++) {
       T.prep(activity); T.run(activity, { prep: false });
       if ((sfxCounts[name] || 0) - c0 >= min) return;
-      const obj = { stargaze: 'telescope', sit: 'armchair' }[activity];
+      const obj = { stargaze: 'telescope', scopecare: 'telescope', sit: 'armchair' }[activity];
       if (!obj || !w.objects[obj]) return;
       w.removeObject(obj); b.objectRemoved(obj); T.addObject(obj); T.settle();
     }
@@ -4579,10 +4581,16 @@ T.sweepBowl = () => {
   // the physics: a straight ball at the pocket knocks pins down and they lie where they fell; a gutter ball does nothing; the sweep and rack work
   {
     const from = bw.group.localToWorld(new window.THREE.Vector3(0.03, 0.3, -2.2));
-    const res = bw.roll(0, { from, aim: 0.035, hook: 0, noise: 0, power: 1.1 });
+    const res = bw.roll(0, { from, aim: 0.035, hook: 0, noise: 0, power: 1.1, rnd: lcg(7) });      // (a fixed throw: how many pins a ball at the pocket knocks over is a chance, tested below over many throws)
     for (let i = 0; i < 60 * (res.tHit + 5); i++) bw.update(1 / 60);
     const down = res.count, left = bw.standing(0).length;
     out.push(result('bowling: a ball at the pocket knocks pins over, the others stay up, and everything comes to rest', down >= 5 && down + left === 10 && !bw.busy(0), { down, left }));
+    {
+      const rnd = lcg(11), n = 400, counts = [];
+      for (let k = 0; k < n; k++) counts.push(throwBall([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], { x0: 0.03, aim: 0.035, hook: 0, noise: 0, power: 1.1 }, rnd).down.length);
+      const mean = counts.reduce((a, c) => a + c, 0) / n, few = counts.filter((c) => c < 5).length;
+      out.push(result('bowling: a ball at the pocket knocks over 8 or more pins on average, and fewer than 5 only rarely (it is a chance: many throws, not one)', mean >= 8 && few / n < 0.03, { mean: +mean.toFixed(2), few }));
+    }
     const a = bw.record(0, down);
     bw.manualReset(0);
     out.push(result('bowling: after the first roll the pins that fell are swept away (the others stand), after the second all ten are set again', (down === 10 ? a.next === 'rack' : a.next === 'sweep') && bw.standing(0).length === 10 - (down === 10 ? 10 : down) + (down === 10 ? 10 : 0), { next: a.next, standing: bw.standing(0).length }));

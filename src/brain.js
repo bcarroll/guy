@@ -1945,6 +1945,13 @@ export class Brain {
   // The room an object stands in ('main' for his own and for a doorway), or null when there is no such object.
   roomOfObj(name) { const o = this.obj(name); if (!o) return null; const r = this.w.roomIdAt(o.x, o.z); return this.w.doors[r] ? r : 'main'; }
   sameRoom(a, b) { const x = this.roomOfObj(a); return !!x && x === this.roomOfObj(b); }
+  // Is (x, z) on the floor of the room the object `name` is in? An object against a wall can have a spot "on a floor" just beyond that
+  // wall, in the next room, where he can never walk to.
+  onFloorOf(name, x, z, m = 0, mz = m) {
+    if (!this.onFloor(x, z, m, mz)) return false;
+    const id = this.w.roomIdAt(x, z), r = id === 'door' || !this.w.doors[id] ? 'main' : id;
+    return r === this.roomOfObj(name);
+  }
   // The room an activity happens in: where its object is; the yard, Workshop and Restaurant jobs in their own rooms; the rest in his own.
   roomForAct(name) {
     if (ACT_OBJ[name]) return this.roomOfObj(ACT_OBJ[name]) || 'main';
@@ -1970,7 +1977,8 @@ export class Brain {
   waveSpot() { const id = this.spotRoom(); if (id === 'main') return { x: 0, z: 2.2 }; const b = this.roomBox(id); return { x: b.cx, z: b.cz }; }
 
   // where he dances (GAL dances beside him, not on him)
-  danceSpot() { const id = this.spotRoom(); if (id === 'main') return { x: 0, z: 0.4 }; const b = this.roomBox(id); return { x: b.cx, z: b.cz }; }
+  // (the middle of the floor, or the nearest clear spot to it when something stands there: his arms and legs swing wide)
+  danceSpot() { const id = this.spotRoom(); const b = id === 'main' ? { cx: 0, cz: 0.4 } : this.roomBox(id); return this.openSpotNear(b.cx, b.cz, 0.9); }
 
   freeSpot() {
     const b = this.roomBox();
@@ -2221,6 +2229,8 @@ export class Brain {
     if (act === 'dust' && !Object.values(this.w.decor).some((d) => d.wall)) return false;
     if (act === 'dusttop' && !this.stoolJob()) return false;
     if (['stargaze', 'darkstargaze'].includes(act) && this.obj('telescope') && !this.scopeAimPlan('sky')) return false;      // (no room to swing the tube round: not worth starting)
+    if (act === 'peek' && this.obj('telescope') && !this.scopeAimPlan('room')) return false;      // (the same for peering in the wrong end, which turns the tube into the room)
+    if (act === 'scopecare' && this.obj('telescope') && !this.scopeStandFor('care')) return false;      // (and for looking after it: there has to be a spot beside the tube)
     if (['ball', 'dribble', 'toss'].includes(act) && this.w.ballGone) return false;
     // both hands go out to the sides of the ball: not while it is jammed against furniture (he kicks it free first)
     if (['dribble', 'toss'].includes(act) && this.w.ball) {
@@ -2754,7 +2764,7 @@ export class Brain {
           this.grid = makeGrid(this.w.obstacles, INFLATE, 0, null, fr);
           if (s.fx && s.fx.guitar) {                               // carrying the guitar sticks his hands out: give furniture more room when the way is clear
             const wide = makeGrid(this.w.obstacles, INFLATE + 0.14, 0, null, fr);
-            if (!cellBlocked(wide, s.x, s.z) && !cellBlocked(wide, root.position.x, root.position.z)) this.grid = wide;
+            if (!cellBlocked(wide, s.x, s.z)) { s.plainGrid = this.grid; this.grid = wide; }      // (he may start close to furniture: the path leaves it by the nearest free cell)
           }
           // a direct walk goes straight there only when the straight line is clear: otherwise he goes round (the screens of the range, say)
           const inDoorway = (x, z) => !(Math.abs(x) <= 4.5 && z >= -3.5 && z <= 3.6) && this.w.walkable(x, z);
@@ -2762,6 +2772,7 @@ export class Brain {
           const doorwayWalk = ra === 'main' && inDoorway(root.position.x, root.position.z) && inDoorway(s.x, s.z) && [0.25, 0.5, 0.75].every((t) => this.w.walkable(lerp(root.position.x, s.x, t), lerp(root.position.z, s.z, t)));
           const straight = doorwayWalk || (s.direct && lineClear(this.grid, root.position, { x: s.x, z: s.z }));
           s.path = straight ? [{ x: s.x, z: s.z }] : findPath(this.grid, root.position.x, root.position.z, s.x, s.z, true);
+          if (!s.path && s.plainGrid) { this.grid = s.plainGrid; s.path = findPath(this.grid, root.position.x, root.position.z, s.x, s.z, true); }      // (no way with the wider clearance: the usual one)
           if (!s.path) {                                           // no way with the usual clearance (a gap between two pieces a little too narrow): through the middle of the gap, not in a straight line that grazes both
             const tight = makeGrid(this.w.obstacles, 0.14, 0, null, fr);
             s.path = findPath(tight, root.position.x, root.position.z, s.x, s.z, true) || findPath(this.grid, root.position.x, root.position.z, s.x, s.z);

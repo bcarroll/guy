@@ -347,11 +347,11 @@ export function buildBowlShell(g, L, N) {
     clearFallen(i) { for (const p of laneObjs[i].pins) if (p.state !== 'up') { p.state = 'gone'; p.mesh.visible = false; } },
     // the ball is thrown: it leaves `from` (world) for the head pin; `aim` is where it is meant to arrive across the lane. Returns what will
     // happen: { tHit, down: [..], count, gutter, pins } (the pins fall when the ball arrives, `tHit` seconds from now)
-    roll(i, { from, aim = 0, hook = 0, noise = 0.2, power = 1, look = null }) {
+    roll(i, { from, aim = 0, hook = 0, noise = 0.2, power = 1, look = null, rnd = undefined }) {
       const l = laneObjs[i], loc = g.worldToLocal(from.clone());
       const x0 = clamp(loc.x - lanes[i], -LANE.half, LANE.half), z0 = Math.min(loc.z, LANE.foulZ + 0.02), y0 = Math.max(LANE.ballR, loc.y);
       const standing = bowl.standing(i);
-      const res = throwBall(standing, { x0, aim, hook, noise, power });
+      const res = throwBall(standing, { x0, aim, hook, noise, power }, rnd);      // (rnd: a seeded generator, for the tests)
       const v = BOWL.speed[0] + (BOWL.speed[1] - BOWL.speed[0]) * clamp((power - 0.6) / 0.8, 0, 1);
       l.roll = { t: 0, v, x0, z0, y0, res, hit: false, dist: 0, tHit: (z0 - LANE.headZ) / v };
       l.thrown++;
