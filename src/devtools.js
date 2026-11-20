@@ -5017,6 +5017,25 @@ T.sweepWorkstation = () => {
     out.push(result('workstation: the book is not used up: it stays on the shelf', !!rec && w.objects.shelf.books.length === shelfBooks));
     const before = skillsOf().known.size; btnOf('stars').click();
     out.push(result('workstation: a disabled row does nothing', skillsOf().known.size === before));
+    // 4b. dragged into another room he still uses it: he walks there through the door (he used to give up at once: 'learn' and
+    // 'arrange' were planned as if the workstation were always in his own room)
+    ws.close();
+    if (!w.rooms.isAdded('workshop')) { unlockRoom('workshop'); w.rooms.add('workshop'); }
+    T.settle();
+    const home0 = { x: m.x, z: m.z }, along = (p) => { for (let i = 1; i <= 40; i++) w.dragTo(m, m.x + (p.x - m.x) * i / 40, m.z + (p.z - m.z) * i / 40); };
+    along(w.doorPoint('workshop', 1.4)); along(w.doorPoint('workshop', -2.4)); w.dropObject(m);
+    const inWs = b.roomOfObj('workstation') === 'workshop';
+    b.queue = []; b.step = null; T.home();
+    const r4 = b.interact('workstation');
+    const t4 = runUntil(() => ws.isOpen(), 90);
+    const sp4 = m.screenPoint(), gp4 = G().root.position;
+    out.push(result('workstation: dragged into the Workshop, GUY walks through the door to it and the panel opens', inWs && r4.ok && ws.isOpen() && Math.hypot(sp4.x - gp4.x, sp4.z - gp4.z) < 1.6, { inWs, at: { x: m.x, z: m.z }, msg: r4.message, t: t4, label: label() }));
+    ws.close(); b.queue = []; b.step = null; T.home();
+    const ro = b.arrangeOrder({ add: [{ id: 'plant', room: 'main' }], remove: [] });
+    const t4b = runUntil(() => !!w.objects.plant, 90);
+    out.push(result('workstation: in the Workshop, an order (add a plant) is still carried out there', ro.ok && !!w.objects.plant, { msg: ro.message, t: t4b, label: label() }));
+    if (w.objects.plant) { w.removeObject('plant'); b.objectRemoved('plant'); }
+    along(w.doorPoint('workshop', 1.4)); along(home0); w.dropObject(m); b.queue = []; b.step = null; T.home(); T.settle();
     // 5. the other robot: the book is still there for her, and she can use the workstation too
     ws.close(); out.push(result('workstation: the panel closes', !ws.isOpen()));
     const gb = galBuild();

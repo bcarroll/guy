@@ -31,6 +31,7 @@ const ACT_OBJ = {
   peek: 'telescope', stargaze: 'telescope', darkstargaze: 'telescope', scopecare: 'telescope',
   lamp: 'lamp', mood: 'lamp', read: 'shelf', lighton: 'lamp', putback: 'shelf', putguitar: 'guitar', putcanvas: 'easel',
   dance: 'table', dancemoves: 'table', ballroom: 'table', stereoon: 'table', stereooff: 'table',
+  learn: 'workstation', arrange: 'workstation', buildbot: 'botprinter',          // (the user can drag these into another room: he goes there)
 };
 // what an activity needs to have in the same room as its main object (else it cannot be done, or is done without it)
 const TOGETHER = { jam: ['table'], jampiano: ['table'], jamsit: ['table'], jamguitar: ['table'], jamdrums: ['table'] };
