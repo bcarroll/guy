@@ -8,6 +8,7 @@ import { randomSong, makeJam, plinkSong } from './songs.js';
 import { installHobbies } from './hobbybrain.js';
 import { installWorkshop } from './workbrain.js';
 import { installHome, HOME_ACTS, HOME_KIND_ACTS } from './homebrain.js';
+import { installLibrary } from './librarybrain.js';
 import { installYard, YARD_ACTS } from './yardbrain.js';
 import { installRange, RANGE_ACTS, RANGE_PIECES } from './rangebrain.js';
 import { installBowl, BOWL_ACTS, BOWL_PIECES } from './bowlbrain.js';
@@ -36,7 +37,7 @@ const ACT_OBJ = {
 // what an activity needs to have in the same room as its main object (else it cannot be done, or is done without it)
 const TOGETHER = { jam: ['table'], jampiano: ['table'], jamsit: ['table'], jamguitar: ['table'], jamdrums: ['table'] };
 const FREE_ACTS = ['wander', 'lookaround', 'sway', 'akimbo', 'ponder', 'wave'];           // done wherever he happens to be
-const OWN_ROOM_ACTS = ['leave', 'stuck', 'visit', 'dropball', 'hangpaint'];      // (they plan their own way: dropping a ball where he stands, hanging a painting on whichever wall)
+const OWN_ROOM_ACTS = ['leave', 'stuck', 'visit', 'dropball', 'hangpaint', 'moveshelf'];      // (they plan their own way: dropping a ball where he stands, hanging a painting on whichever wall)
 import { sfx, drag as sfxDrag } from './sfx.js';
 import { findBooks, learnBooks } from './learn.js';
 import { nextRiff, keepRiff, riffAt, STEPS as RIFF_STEPS } from './riffs.js';
@@ -269,7 +270,14 @@ export const POSES = {
     const poke = Math.sin(clamp((t - 0.55) / 0.5, 0, 1) * Math.PI);
     const target = ctx.tgt.reach.clone();
     if (ctx.tgt.reachDir) target.addScaledVector(ctx.tgt.reachDir, 0.035 * poke);
-    g.reachAssist(target, e);
+    const low = clamp((0.5 - target.y) / 0.3, 0, 1) * e;                   // down by his feet (dust on the floor): he squats down to it, like to the book stack
+    if (low > 0) {
+      const k = 1.5 * low;                                                    // (a deep squat: the floor is a long way down)
+      squat(g, k);
+      g.hipsOffset.y -= 0.84 * (1 - Math.cos(0.75 * k));                    // (the hips go down as the knees bend, so his feet stay on the floor)
+      g.set('Spine', Q('x', 0.35 * low)); g.set('Spine1', Q('x', 0.45 * low));         // and he leans out over his knees
+    }
+    g.reachAssist(target, e * (1 - 0.6 * low));
     g.reach('Right', target, e);
     if (e > 0.2) g.pointFinger('Right');
     g.set('Head', Q('x', 0.12 * e));
@@ -955,6 +963,7 @@ export class Brain {
       ...this.hobbyActivities(),
       ...this.workActivities(),
       ...this.homeActivities(),                                     // the Bedroom and the Library (homebrain.js)
+      ...this.libraryActivities(),                                  // moving the bookshelves into the Library, cleaning it (librarybrain.js)
       ...this.yardActivities(),
       ...this.rangeActivities(),                                    // the Shooting Range (rangebrain.js)
       ...this.bowlActivities(),                                     // the Bowling Alley (bowlbrain.js)
@@ -1763,6 +1772,13 @@ export class Brain {
         type: 'plan',
         fn: () => {
           if (atShelf) return [...this.readBack(book), ...quick];
+          const here = this.hereId();
+          if (here !== 'main') {                           // (the shelf is in the Library: the reading chair there if it is free, otherwise he reads standing; the chairs of his own room are through a door)
+            const taken = this.other && (this.other.chairClaim || (this.other.step && this.other.step.fx && this.other.step.fx.chair));
+            const seat = Object.values(this.w.objects).find((o) => o.sit && o.homeSeat && o.kind !== 'bed' && o.name !== taken && this.w.roomIdAt(o.x, o.z) === here);
+            if (seat) { this.chairClaim = seat.name; return sitting(seat); }
+            return [...this.readBack(book), ...standing];
+          }
           const c = this.pickChair();                     // any chair in the room he can get to
           return c ? sitting(c) : [...this.readBack(book), ...standing];
         },
@@ -1963,6 +1979,7 @@ export class Brain {
   roomForAct(name) {
     if (ACT_OBJ[name]) return this.roomOfObj(ACT_OBJ[name]) || 'main';
     if (HOME_ACTS[name]) { const o = this.homeObj(name); return o ? this.roomOfObj(o.name) || 'main' : 'main'; }
+    if (name === 'libclean') return 'library';
     if (YARD_ACTS.includes(name)) return 'backyard';
     if (RANGE_ACTS.includes(name)) return 'range';
     if (BOWL_ACTS.includes(name)) return 'bowling';
@@ -2199,6 +2216,7 @@ export class Brain {
   availableIn(act) {
     if (act === 'arrange') return !!this.obj('workstation') && !!this.arrangePlan;                // (only when he wants something, or somebody asks: arrange.js)
     if (HOME_ACTS[act]) return this.homeAvailable(act) && !(this.galBlocks && this.galBlocks(act));       // the Bedroom and the Library: their furniture, built for them
+    if (act === 'moveshelf' || act === 'libclean') return this.libAvailable(act);           // the Library: its shelves carried in, its dust (librarybrain.js)
     if (act === 'learn') return !!this.obj('workstation');                      // the Learning Workstation (only when somebody asks: it has no weight; from another room he walks back to it first)
     if (BOWL_ACTS.includes(act)) return this.bowlOpen();                  // the Bowling Alley: the door is open (a beginner can bowl too)
     if (RANGE_ACTS.includes(act)) return act === 'rangeshoot' ? this.rangeAvailable() : this.rangeOpen();     // shooting needs a blaster; hanging about and fooling about do not                // the Shooting Range: the door is open and there is a target he can hit from his lane
@@ -2265,6 +2283,7 @@ export class Brain {
       if (act === 'build') return !!this.pickRecipe();
     }
     if (REST_JOBS.includes(act) || act === 'rwait') return this.restAvailable(act);
+    if ((act === 'read' || act === 'books') && (this.obj('shelf') && this.obj('shelf').packed || (this.other && this.other.shelfMove))) return false;     // (the shelf is on its way to the Library: no reading until it stands again)
     if (act === 'read' && !this.readableBooks().length && !Object.values(this.w.objects).some((o) => o.heldBooks && this.readableBooks(o.name).length)) return false;      // nothing on any shelf he has not read (or is forgetting)
     if (act === 'rearrange' && !Object.values(this.w.objects).some((o) => o.weight !== 'heavy' && o.name !== 'bench')) return false;
     return need.every((n) => this.obj(n));
@@ -2283,6 +2302,7 @@ export class Brain {
     if (easel.includes(act)) return ['easel'];
     if (scope.includes(act)) return ['telescope'];
     if (act === 'read' || act === 'books') return ['shelf'];                // one at a time at the bookshelf
+    if (act === 'moveshelf') return Object.values(this.w.objects).filter((o) => o.name === 'shelf' || o.kind === 'bookshelf2').map((o) => o.name);     // (nobody reads at a shelf that is about to be carried off)
     if (act === 'goalshot' || act === 'soccertoss') return ['soccergoal'];
     if (act === 'hoopshoot' || act === 'hoopdribble') return ['basketballhoop'];
     if (act === 'yardpoke') return ['yardpoke'];
@@ -2407,7 +2427,7 @@ export class Brain {
       wander: 3, sit: 0.7, sitguitar: 1.1, slouch: 0.5, dancemoves: 1.5, ballroom: 1.5, piano: 1, sitpiano: 1.2, plink: 1.4, dance: 1.8, jam: 0.9, jampiano: 0.5, jamsit: 0.9, lamp: 1.2, mood: 1.1,
       read: 1.8 + unread * 1.8, lookaround: 0.8, sway: 0.7, akimbo: 0.5, ponder: 0.6, wave: 0.7, ball: 2, dribble: 1.1, toss: 1.1, rearrange: 0.7, guitar: 1.6, riff: 1.0, plant: 0.6, jamguitar: 1.5, visit: 0.4,
       takeorder: 40, cook: 35, serve: 45, takepay: 50,
-      build: 2.0, tidytools: 0.4, makebed: 0.6, homesit: 0.8, wardrobe: 0.5, browse: 0.8,
+      build: 2.0, tidytools: 0.4, makebed: 0.6, homesit: 0.8, wardrobe: 0.5, browse: 0.8, study: 0.7, spinglobe: 0.6, libclean: 1.0,
       bang: 1.3, drums: 1.6, drumsolo: 1.2, jamdrums: 1.5, scribble: 1.3, paint: 1.6, mixpaint: 1.3, portrait: 1.4,
       peek: 1.3, stargaze: 1.6, darkstargaze: 1.3, scopecare: 0.6, dust: 0.9, dusttop: 1.0,
       yardsit: 0.9, birdbath: 0.7, skyswitch: 0.6, mow: 0.5, yardpoke: 1.1, goalshot: 1.4, soccertoss: 0.8, hoopshoot: 1.4, hoopdribble: 0.9,
@@ -2424,7 +2444,7 @@ export class Brain {
       dance: ['stereo'], dancemoves: ['stereo'], ballroom: ['stereo'], lamp: ['fidget'], mood: ['fidget'], plant: ['fidget'], rearrange: ['fidget'], plink: ['piano'],
       ball: ['ball'], dribble: ['ball'], toss: ['ball'], guitar: ['guitar'], riff: ['guitar'], jamguitar: ['guitar', 'stereo'],
       bang: ['drums'], drums: ['drums'], drumsolo: ['drums'], jamdrums: ['drums', 'stereo'],
-      sit: ['rest'], homesit: ['rest'], makebed: ['fidget'], wardrobe: ['fidget'], browse: ['fidget'], sitguitar: ['guitar'], slouch: ['drums', 'rest'],
+      sit: ['rest'], homesit: ['rest'], makebed: ['fidget'], wardrobe: ['fidget'], browse: ['fidget'], study: ['rest'], spinglobe: ['fidget'], libclean: ['chore'], sitguitar: ['guitar'], slouch: ['drums', 'rest'],
       scribble: ['paint'], paint: ['paint'], mixpaint: ['paint'], portrait: ['paint'],
       peek: ['scope'], stargaze: ['scope'], darkstargaze: ['scope'], scopecare: ['scope', 'fidget'], dust: ['fidget'], dusttop: ['fidget'],
       rangeshoot: ['range'], rangehang: ['range'], rangefool: ['range'], bowl: ['range'], bowlwatch: ['range'], yardsit: ['rest'], birdbath: ['fidget'], skyswitch: ['fidget'], mow: ['chore'], yardpoke: ['yardball'], goalshot: ['yardball'], soccertoss: ['yardball'], hoopshoot: ['yardball'], hoopdribble: ['yardball'],
@@ -2432,6 +2452,7 @@ export class Brain {
     // the last two activities count, so he doesn't drift back to the same theme straight away
     const lastTags = [this.last, this.prev].flatMap((n) => tags[n] || []);
     this.restCleanup();                                      // cut short in the Restaurant: the dish goes back, the order waits again
+    this.shelfCleanup();                                     // cut short carrying a bookshelf to the Library: it is put together again (before workCleanup drops the flat pack)
     this.workCleanup();                                      // cut short in the Workshop: what he carries goes back in the stock
     this.yardCleanup();                                      // cut short mowing: the shed door is shut again
     let name = force;
@@ -2464,6 +2485,7 @@ export class Brain {
     }
     if (!name && this.restStays()) name = this.restNext();             // customers about: he stays and looks after them
     if (!name && !this.restStays()) name = this.arrangeNext();         // something he wants is missing: he orders it at the workstation (arrange.js)
+    if (!name && !this.restStays()) name = this.shelfMoveNext();       // a bookshelf still in his room while there is a Library: he carries it in (librarybrain.js)
     if (!name) {
       const entries = Object.entries(weights)
         .filter(([k]) => this.available(k))
@@ -3566,6 +3588,7 @@ function angDiff(a, b) {
 installHobbies(Brain, POSES, { sitLegs, env, smooth, clamp, lerp, rand, pick, makeGrid, cellBlocked, INFLATE });
 installWorkshop(Brain, POSES, { smooth, clamp, lerp, rand, pick });
 installHome(Brain, POSES, { rand, pick });
+installLibrary(Brain);
 installYard(Brain, POSES, { clamp, rand, pick, makeGrid, cellBlocked, INFLATE, findPath });
 installRange(Brain, POSES, { pick });
 installBowl(Brain, POSES, { pick });

@@ -35,6 +35,8 @@ export const RECIPES = {
   bedside: { name: 'Bedside Table', icon: '🗄️', skill: 'workshop.furniture', line: 'wood', run: 3.8, object: 'bedside', cap: 1, serves: 'home.bedside', to: 'bedroom' },
   libshelf: { name: 'Library Bookshelf', icon: '📚', skill: ['workshop.materials', 'workshop.furniture'], line: 'wood', run: 5.0, object: 'libshelf', cap: 2, serves: 'home.shelf', to: 'library' },
   readingchair: { name: 'Reading Chair', icon: '🛋️', skill: 'workshop.furniture', line: 'wood', run: 4.4, object: 'readingchair', cap: 1, serves: 'home.readchair', to: 'library' },
+  libdesk: { name: 'Reading Desk', icon: '🪔', skill: ['workshop.materials', 'workshop.furniture'], line: 'wood', run: 4.8, object: 'libdesk', cap: 1, serves: 'home.desk', to: 'library' },
+  globe: { name: 'Globe', icon: '🌐', skill: 'workshop.furniture', line: 'wood', run: 3.6, object: 'globe', cap: 1, serves: 'home.globe', to: 'library' },
   // Easter eggs: in no book. GUY builds one on his own once everything in `egg` stands in his room (see needs.js), with the basic Workshop book.
   mirrorball: { name: 'Mirror Ball', icon: '🪩', skill: 'workshop', line: 'metal', run: 4.0, object: 'mirrorball', cap: 1, serves: 'egg.mirrorball', egg: ['table', 'drums'] },
   trophy: { name: 'Golden Trophy', icon: '🏆', skill: 'workshop', line: 'metal', run: 4.6, object: 'trophy', cap: 1, serves: 'egg.trophy', egg: ['piano', 'guitar', 'drums'] },

@@ -61,6 +61,7 @@ export const MANIFEST = {
     // furniture GUY and GAL build for the Bedroom and the Library once those rooms are added (they go into the room, so it has to be there)
     bed: { room: 'workshop', built: true, alsoRoom: 'bedroom' }, wardrobe: { room: 'workshop', built: true, alsoRoom: 'bedroom' }, bedside: { room: 'workshop', built: true, alsoRoom: 'bedroom' },
     libshelf: { room: 'workshop', built: true, alsoRoom: 'library' }, readingchair: { room: 'workshop', built: true, alsoRoom: 'library' },
+    libdesk: { room: 'workshop', built: true, alsoRoom: 'library' }, globe: { room: 'workshop', built: true, alsoRoom: 'library' },
     diningtable3: { room: 'workshop', built: true, alsoRoom: 'restaurant' }, diningtable4: { room: 'workshop', built: true, alsoRoom: 'restaurant' },       // (they go in the Restaurant, so it has to be there)
     // the Restaurant (another added room): the kitchen and the dining room
     stove: { room: 'restaurant', skills: ['restaurant'] }, kitchencounter: { room: 'restaurant', skills: ['restaurant'] }, register: { room: 'restaurant', skills: ['restaurant'] },
@@ -109,6 +110,11 @@ export const MANIFEST = {
     homesit: { objects: ['bed', 'readingchair'], room: 'bedroom', max: 120, touches: ['bed', 'readingchair'] },
     wardrobe: { objects: ['wardrobe', 'bedside'], room: 'bedroom', max: 120, touches: ['wardrobe', 'bedside'] },
     browse: { objects: ['libshelf'], room: 'library', max: 120, touches: ['libshelf'] },
+    study: { objects: ['libdesk'], room: 'library', max: 120, touches: ['libdesk'] },
+    spinglobe: { objects: ['globe'], room: 'library', max: 120, touches: ['globe'] },
+    // the Library (librarybrain.js): its dust and cobwebs wiped away; the bookshelf carried in from his room (the skill shelf: it is always there)
+    libclean: { room: 'library', max: 150, touches: [] },
+    moveshelf: { objects: ['shelf'], room: 'library', max: 200, touches: ['shelf'] },
     // the Restaurant: `customer` is the state of a customer set up before it starts (customers.js stage()); the rest as for the Workshop
     takeorder: { objects: ['stove', 'kitchencounter', 'register', 'diningtable'], skills: ['restaurant'], room: 'restaurant', customer: 'waiting', touches: ['diningtable'] },
     cook: { objects: ['stove', 'kitchencounter', 'register', 'diningtable'], skills: ['restaurant'], room: 'restaurant', customer: 'ordered', max: 200, touches: ['stove', 'kitchencounter'] },
@@ -199,6 +205,10 @@ export const MANIFEST = {
     { id: 'homesit-bed', activity: 'homesit', pose: 'sitRest', t: 6, view: 'side', expect: 'seated on the foot of the bed, thighs on the mattress, shins over the edge, feet on the floor, hands on his knees' },
     { id: 'wardrobe-reach', activity: 'wardrobe', pose: 'reach', t: 2.0, view: 'front', expect: 'both wardrobe doors swung open, one hand reaching in among the hanging clothes (or the bedside drawer pulled out with his hand in it)' },
     { id: 'browse-shelf', activity: 'browse', pose: 'reach', t: 1.8, view: 'front', expect: 'standing at the library shelf, one hand touching the spines of the books on a shelf, no hand through the shelf' },
+    { id: 'study-page', on: 'libdesk', activity: 'study', pose: 'reach', t: 1.4, view: 'front', expect: 'standing at the reading desk, the green banker lamp lit, fingertips on the open book turning a page over; no hand through the desk' },
+    { id: 'spinglobe-hand', on: 'globe', activity: 'spinglobe', pose: 'reach', t: 0.7, view: 'front', expect: 'standing at the globe, the flat of his hand on the front of the globe, sweeping it round; the globe on its tripod, tilted in its brass ring' },
+    { id: 'libclean-floor', inRoom: 'library', dist: 3.4, activity: 'libclean', pose: 'reach', t: 2.0, view: 'side', expect: 'squatting with both feet flat on the floor, leaning out over his knees, one hand down at a grey patch of dust on the Library floor (not floating, not kneeling through the floor)' },
+    { id: 'moveshelf-setup', inRoom: 'library', activity: 'moveshelf', pose: 'reach', t: 2.2, view: 'side', expect: 'crouched beside a side wall of the Library where the bookshelf he carried in is growing back into place, its books on it; the flat pack gone from his hands' },
     { id: 'read-grab-mid', activity: 'read', pose: 'grab', t: 1.2, view: 'hand:Right', expect: 'palm on the book spine, fingers pointing in and a little up (never the back of the hand towards the book), arm in front of him' },
     { id: 'read-stand-shelf', activity: 'read', pose: 'readStand', t: 8, view: 'side', skills: ['speedreading'], expect: 'speed reading standing a step back from the bookshelf: the open book floats in front of his chest, clear of the shelf, both hands on its lower edges' },
     { id: 'read-sit', activity: 'read', pose: 'readSit', t: 8, view: 'front', expect: 'book open with pages facing GUY, both hands on the lower edges, seated in the chair with legs clear of it' },
@@ -1186,7 +1196,8 @@ T.moment = (activity, pose, t = 0, view = 'front', opts = {}) => {
   if (opts.album) b.forceAlbum = (W().objects.shelf.albums[0] || { def: {} }).def.id;
   b.queue = []; b.step = null; b.choose(activity);
   let guard = 0;
-  const ok = () => b.step && b.pose === pose && b.step.t >= t && (!opts.turning || (b.read && b.read.turning && b.read.turnT > 0.8)) && (!opts.push || b.step.push) && (!opts.range || (opts.range === 'carry' ? (b.rangeHold && b.step.type === 'walk') : opts.range === 'fired' ? (b.step.fx && b.step.fx.range && b.step.fx.range.fired) : (b.step.fx && b.step.fx.range && (opts.range === 'shoot' ? !b.step.fx.range.single : b.step.fx.range.tag === opts.range)))) && (!opts.yard || (b.inYard() && b.step.t >= t)) && (!opts.album || (b.held && b.held.kind === 'album'));
+  const ok = () => b.step && b.pose === pose && b.step.t >= t && (!opts.turning || (b.read && b.read.turning && b.read.turnT > 0.8)) && (!opts.push || b.step.push) && (!opts.range || (opts.range === 'carry' ? (b.rangeHold && b.step.type === 'walk') : opts.range === 'fired' ? (b.step.fx && b.step.fx.range && b.step.fx.range.fired) : (b.step.fx && b.step.fx.range && (opts.range === 'shoot' ? !b.step.fx.range.single : b.step.fx.range.tag === opts.range)))) && (!opts.yard || (b.inYard() && b.step.t >= t)) && (!opts.album || (b.held && b.held.kind === 'album'))
+    && (!opts.on || (b.step.fx && (b.step.fx.needs || []).some((n) => n === opts.on || (W().objects[n] || {}).kind === opts.on))) && (!opts.inRoom || b.hereId() === opts.inRoom);      // (opts.on: at that object, not a door knob on the way; opts.inRoom: in that room)
   while (!ok() && guard++ < 40000) step(1 / 30);
   T.freeze(); T.look(view, opts.dist);                                       // (opts.dist: how far back the camera stands, for a picture of someone up on a stool)
   return { reached: guard < 40000, state: T.state(), hands: T.hands() };
@@ -1398,7 +1409,9 @@ T.resetRooms = () => {
   if (W().gal.exists()) W().gal.remove();                                       // GAL goes too (the machine is not given back)
   delete W().removed.botprinter;
   W().restaurant.clear(); W().restaurant.paused = false; W().restaurant.nServed = 0; W().restaurant.stats = { arrived: 0, paid: 0, gaveUp: 0 };
-  b.carry = null; b.restJob = null;
+  b.carry = null; b.restJob = null; b.shelfMove = null; for (const pp of b.popping || []) pp.o.group.scale.setScalar(1); b.popping = [];
+  const sh = W().objects.shelf;                                                   // the skill shelf back in its own place (a Library sweep carries it off)
+  if (sh) { if (sh.packed) W().unpackShelf('shelf', null); sh.rot = 0; sh.group.rotation.y = 0; sh.group.scale.setScalar(1); sh.home = { x: 4.7, z: 0.2 }; sh.set(4.7, 0.2); }
   if (!b.inMain()) T.home();                                                     // nobody is left standing in a room that is gone
 };
 // Put back what a door took out of the room (only what was not already out before the sweep began).
@@ -2332,6 +2345,38 @@ T.sweepCorners = () => {
   // 10. taking only a corner room away puts the Workshop's wall back whole
   R().reset('library');
   out.push(result('corners: taking a corner room away puts the side wall back whole', !w.doors.library && w.doors.workshop.shell.sides[dlWall.split(':')[1]].visible === true && !!w.doors.bedroom, { visible: w.doors.workshop.shell.sides[dlWall.split(':')[1]].visible }));
+  // 11. the Shooting Range takes a corner room's door in its side wall, clear of the blaster case, the controller and the scoreboard
+  const walkTo = (id) => {                                   // he goes in (main, the room beside it, the corner room) and back again: the rooms he passed through
+    T.home(); b.queue = []; b.step = null;
+    const r = b.visitRoom(id), seen = [];
+    let t = 0;
+    while (t < 160) { step(0.25); t += 0.25; const h = w.roomIdAt(g.pos.x, g.pos.z); if (h !== 'door' && seen[seen.length - 1] !== h) seen.push(h); if (b.hereId() === id) break; }
+    return { ok: !!(r && r.ok), seen, t };
+  };
+  {
+    T.resetRooms(); T.home();
+    R().add('range', { walls: ['front'] });
+    const gr = R().add('bedroom');
+    const d = w.doors.bedroom, pad = (o) => ({ x0: o.x0 - 0.2, x1: o.x1 + 0.2, z0: o.z0 - 0.2, z1: o.z1 + 0.2 });
+    const hits = d ? w.range.obstacles.filter((o) => { const p = pad(o); return [d.rect, d.rectIn].some((r) => r.x1 > p.x0 && r.x0 < p.x1 && r.z1 > p.z0 && r.z0 < p.z1); }).map((o) => o.name || 'screen') : ['no door'];
+    out.push(result('corners: beside the Shooting Range a corner room gets its door in the Range\'s side wall, where nothing of the Range stands', gr.ok && !!d && d.parent === 'range' && /^range:[ab]$/.test(d.wall) && !hits.length && !overlaps().length, { gr, wall: d && d.wall, hits }));
+    const tr = walkTo('bedroom');
+    out.push(result('corners: he gets to it through the Range (main, Range, Bedroom)', tr.ok && tr.seen.join() === ['main', 'range', 'bedroom'].join(), tr));
+  }
+  // 12. the Backyard's side fences take a gate into a corner room (the fence is cut round it; a fence is still no place for a picture)
+  {
+    T.resetRooms(); T.home();
+    R().add('backyard', { walls: ['left'] });
+    const gl = R().add('library');
+    const d = w.doors.library, yard = w.doors.backyard;
+    const side = d && d.wall.split(':')[1];
+    out.push(result('corners: beside the Backyard a corner room gets a garden gate in the side fence, and the fence there is cut round it', gl.ok && !!d && d.parent === 'backyard' && /^backyard:[ab]$/.test(d.wall) && d.gate && yard.shell.sides[side].visible === false && d.cut.children.length >= 2 && !overlaps().length, { gl, wall: d && d.wall, gate: d && d.gate }));
+    out.push(result('corners: the fences are not walls to hang a painting on', !w.hangWalls().some((h) => h.key.startsWith('backyard:')), { walls: w.hangWalls().map((h) => h.key) }));
+    const tr = walkTo('library');
+    out.push(result('corners: he gets to it across the lawn and through the gate (main, Backyard, Library)', tr.ok && tr.seen.join() === ['main', 'backyard', 'library'].join(), tr));
+    R().reset('library');
+    out.push(result('corners: taking that room away puts the fence back whole', !w.doors.library && yard.shell.sides[side].visible === true));
+  }
   T.resetRooms(); T.home(); T.removeAll(); putBackSince(before); T.settle(); machine().hidden = true;
   out.push(result('corners: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
@@ -4739,8 +4784,8 @@ T.sweepBowl = () => {
 };
 
 // ---- The Bedroom and the Library: the furniture GUY and GAL build to furnish them, and how it is used (src/homeobjects.js, homebrain.js) ----
-const HOME_RECIPES = ['bed', 'wardrobe', 'bedside', 'libshelf', 'readingchair'];
-const HOME_ROOM = { bed: 'bedroom', wardrobe: 'bedroom', bedside: 'bedroom', libshelf: 'library', readingchair: 'library' };
+const HOME_RECIPES = ['bed', 'wardrobe', 'bedside', 'libshelf', 'readingchair', 'libdesk', 'globe'];
+const HOME_ROOM = { bed: 'bedroom', wardrobe: 'bedroom', bedside: 'bedroom', libshelf: 'library', readingchair: 'library', libdesk: 'library', globe: 'library' };
 T.sweepHome = () => {
   const out = [], base = errors.length, w = W(), b = B(), g = G();
   const FURN = ['workshop', 'workshop.materials', 'workshop.furniture'];
@@ -4754,7 +4799,7 @@ T.sweepHome = () => {
   R().add('library');
   const lw = homeWants();
   out.push(result('home: nothing is wanted before the rooms are added; the Bedroom wants a bed, a wardrobe and a bedside table, the Library two bookshelves and a reading chair',
-    none && ['home.bed', 'home.wardrobe', 'home.bedside'].every((s) => bw.includes(s)) && !bw.includes('home.shelf') && ['home.shelf', 'home.readchair'].every((s) => lw.includes(s)), { none, bw, lw }));
+    none && ['home.bed', 'home.wardrobe', 'home.bedside'].every((s) => bw.includes(s)) && !bw.includes('home.shelf') && ['home.shelf', 'home.readchair', 'home.desk', 'home.globe'].every((s) => lw.includes(s)), { none, bw, lw }));
   out.push(result('home: the Bedroom and the Library are in the corners beside the Workshop', !!w.doors.bedroom && !!w.doors.library && w.doors.bedroom.parent === 'workshop' && w.doors.library.parent === 'workshop', { b: w.doors.bedroom && w.doors.bedroom.parent, l: w.doors.library && w.doors.library.parent }));
   // 2. without the furniture book none of it is built
   T.forget(); T.learn(['workshop']);
@@ -4763,12 +4808,12 @@ T.sweepHome = () => {
   out.push(result('home: it needs the furniture books (and the Wood Factory): without them none of it can be built, with them all of it can', locked && HOME_RECIPES.every((id) => b.canBuild(id)), { locked }));
   // 3. he builds all of it, one piece after another, and carries each into its room
   const times = [];
-  for (let i = 0; i < 9 && homeWants().length; i++) times.push(buildToEnd(b, 1300));
+  for (let i = 0; i < 12 && homeWants().length; i++) times.push(buildToEnd(b, 1300));
   const where = Object.fromEntries(HOME_RECIPES.map((k) => [k, built(k).map((o) => w.roomIdAt(o.x, o.z))]));
-  out.push(result('home: he builds a bed, a wardrobe and a bedside table for the Bedroom, two bookshelves and a reading chair for the Library, and puts each together in its own room',
+  out.push(result('home: he builds a bed, a wardrobe and a bedside table for the Bedroom, two bookshelves, a reading chair, a reading desk and a globe for the Library, and puts each together in its own room',
     times.every((t) => t > 0) && HOME_RECIPES.every((k) => where[k].length === (k === 'libshelf' ? 2 : 1) && where[k].every((r) => r === HOME_ROOM[k])), { times, where }));
   out.push(result('home: every piece fits where it stands, none is left in the Workshop or in storage, and then nothing more is wanted', HOME_RECIPES.every((k) => built(k).every((o) => w.fits(o, o.x, o.z))) && HOME_RECIPES.every((k) => !w.stock.items[k]) && homeWants().length === 0 && b.pickRecipe() === null, { wants: homeWants(), stock: { ...w.stock.items } }));
-  out.push(result('home: the heavy pieces (the bed, the wardrobe, the bookshelves) stay where they are put', ['bed', 'wardrobe', 'libshelf'].every((k) => built(k).every((o) => o.weight === 'heavy'))));
+  out.push(result('home: the heavy pieces (the bed, the wardrobe, the bookshelves, the desk) stay where they are put', ['bed', 'wardrobe', 'libshelf', 'libdesk'].every((k) => built(k).every((o) => o.weight === 'heavy'))));
   // 4. the bed has its head to the far wall, away from the door
   {
     const bed = built('bed')[0], head = bed.local(0, 1.0), q = w.doorPoint('bedroom', 0);
@@ -4777,7 +4822,7 @@ T.sweepHome = () => {
   }
   // 5. he uses it: pointed at each piece he goes in through the Workshop and does the right thing there, and comes out again
   {
-    const cases = [['bed', ['makebed', 'homesit']], ['wardrobe', ['wardrobe']], ['bedside', ['wardrobe']], ['libshelf', ['browse']], ['readingchair', ['homesit']]];
+    const cases = [['bed', ['makebed', 'homesit']], ['wardrobe', ['wardrobe']], ['bedside', ['wardrobe']], ['libshelf', ['browse']], ['readingchair', ['homesit']], ['libdesk', ['study']], ['globe', ['spinglobe']]];
     const res = {};
     for (const [k, acts] of cases) {
       const o = built(k)[0];
@@ -4789,7 +4834,7 @@ T.sweepHome = () => {
       b.skip(); b.queue = []; b.step = null; b.pendingActivity = 'leave';
       { let t2 = 0; while (t2 < 240 && !(b.inMain() && Object.values(w.doors).every((d) => d.open === 0))) { step(0.25); t2 += 0.25; } }
     }
-    out.push(result('home: pointed at the bed, the wardrobe, the bedside table, a bookshelf or the reading chair he goes in through the Workshop and uses it there', Object.values(res).every((x) => x.ok && x.did && x.inRoom), res));
+    out.push(result('home: pointed at the bed, the wardrobe, the bedside table, a bookshelf, the reading chair, the desk or the globe he goes in through the Workshop and uses it there', Object.values(res).every((x) => x.ok && x.did && x.inRoom), res));
     out.push(result('home: afterwards he is back in his own room with the doors shut', b.inMain() && Object.values(w.doors).every((d) => d.open === 0), { here: b.hereId() }));
   }
   // 5b. the bed and the reading chair are not chairs of his own room: sitting there is its own activity, and the plain 'sit' never uses them
@@ -4817,6 +4862,112 @@ T.sweepHome = () => {
   out.push(result('home: taking the Bedroom away takes its furniture out of it into storage (nothing is lost, the Library is untouched), and adding it again puts it back in the room', lost && kept && again.every((r) => r === 'bedroom'), { lost, kept, again, stock: { ...w.stock.items } }));
   T.resetRooms(); T.removeAll(); T.settle(); machine().hidden = true;
   out.push(result('home: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
+// ---- The Library: the bookshelves carried into it, its dust and cobwebs (librarybrain.js, library.js, room.js libraryShelfSpot) ----------
+T.sweepLibrary = () => {
+  const out = [], base = errors.length, w = W(), b = B();
+  T.resetRooms(); T.removeAll(); T.settle(); T.home();
+  const sh = w.objects.shelf;
+  const shelfBooks = () => sh.books.filter((r) => r.mesh.parent === sh.group).length;
+  const books0 = shelfBooks(), nBooks = sh.books.length;
+  // 1. no Library: nothing to move, no dust to clean
+  out.push(result('library: without a Library no shelf is moved and there is nothing to clean', !b.available('moveshelf') && !b.available('libclean') && b.shelfMoveNext() === null));
+  // 2. a Library: dusty, with cobwebs in its four corners; the skill shelf (and a shelf he built) is wanted in it
+  R().add('workshop', { walls: ['right'] }); R().add('library');
+  const dust = w.doors.library && w.doors.library.shell.dust;
+  out.push(result('library: a new Library is dusty: six patches on the floor and a cobweb in each of its four corners, all of them showing', !!dust && dust.spots.filter((s) => s.kind === 'floor').length === 6 && dust.spots.filter((s) => s.kind === 'web').length === 4 && dust.spots.every((s) => s.level === 1 && s.mesh.visible), { n: dust && dust.spots.length }));
+  w.stock.items.bookshelf2 = 1;
+  const b2 = w.addInstance('bookshelf2', null, null, false, { x: -3.8, z: 2.5 });
+  const moves = b.shelfMoves().map((m) => m.o.name);
+  out.push(result('library: the skill shelf and the shelf he built (in his room) are both wanted in the Library, the skill shelf first', moves[0] === 'shelf' && moves.includes(b2), { moves, b2 }));
+  // 3. he carries each in: taken apart (out of sight, flat in his arms), through the doors, put together against a side wall, books and all
+  const carried = {};
+  for (let i = 0; i < 2; i++) {
+    T.home(); b.queue = []; b.step = null; b.pendingActivity = 'moveshelf';
+    let t = 0, packedSeen = false, flat = false, name = null;
+    const rooms = new Set();
+    while (t < 240) {
+      step(0.25); t += 0.25;
+      if (b.shelfMove) name = b.shelfMove.name;
+      const o = name && w.objects[name];
+      if (o && o.packed) { packedSeen = true; flat = flat || b.carry === 'flat'; rooms.add(b.hereId()); }
+      if (o && !o.packed && w.roomIdAt(o.x, o.z) === 'library' && b.last !== 'moveshelf') break;
+    }
+    if (name) carried[name] = { t, packedSeen, flat, rooms: [...rooms] };
+  }
+  const inLib = (o) => !!o && !o.packed && o.group.visible && w.roomIdAt(o.x, o.z) === 'library' && w.fits(o, o.x, o.z);
+  out.push(result('library: both shelves were taken apart, carried flat through the Workshop and put together in the Library, where they fit', inLib(sh) && inLib(w.objects[b2]) && Object.values(carried).length === 2 && Object.values(carried).every((c) => c.packedSeen && c.flat && c.rooms.includes('workshop')), { carried, shelf: [sh.x, sh.z], b2: w.objects[b2] && [w.objects[b2].x, w.objects[b2].z] }));
+  const B2 = w.objects[b2];
+  const front = (o) => { const l = o.local(-1, 0), c = w.roomSpot('library'); return (l.x * (c.x - o.x) + l.z * (c.z - o.z)) > 0; };
+  out.push(result("library: each stands against a side wall of the Library with its books facing into the room, and none is left in GUY's room or packed", !!B2 && front(sh) && front(B2) && !Object.values(w.objects).some((o) => o.mainOnly && (o.packed || w.roomIdAt(o.x, o.z) === 'main')) && b.carry !== 'flat', { rot: [sh.rot, B2 && B2.rot] }));
+  out.push(result('library: the books went with it: every book is still on the skill shelf, and nothing more is wanted', shelfBooks() === books0 && sh.books.length === nBooks && b.shelfMoves().length === 0 && !b.available('moveshelf'), { books0, now: shelfBooks() }));
+  // 4. reading still works: the book comes off the shelf in the Library
+  {
+    w.stock.items.readingchair = 1; const rc = w.addInstance('readingchair', null, null, false);
+    T.home(); b.queue = []; b.step = null; b.readFrom = null; b.pendingActivity = 'read';
+    let t = 0, took = false, where = null, sat = null, couldNot = 0;
+    const ui0 = b.ui; b.ui = (m) => { if (/could not/.test(String(m))) couldNot++; return ui0.call(b, m); };
+    while (t < 260 && !sat) { step(0.25); t += 0.25; if (b.held && !took) { took = true; where = b.hereId(); } if (b.pose === 'readSit' && b.step && b.step.fx && b.step.fx.chair) sat = b.step.fx.chair; }
+    b.ui = ui0;
+    out.push(result('library: he still reads: he goes into the Library for a book from the shelf there, and sits down with it in the reading chair there (not in a chair of his own room, through the wall)', took && where === 'library' && sat === rc && !couldNot, { took, where, sat, rc, couldNot, t }));
+    // while one robot carries the shelf off, reading at it is not offered (it was: he walked to where it had stood and could not get there)
+    sh.packed = true; const noRead = !b.available('read'); sh.packed = false;
+    out.push(result('library: while the skill shelf is packed up on its way, reading is not offered', noRead));
+    T.settle();
+  }
+  // 5. cut short with the shelf flat in his arms: it is put together again, never lost
+  {
+    sh.rot = 0; sh.group.rotation.y = 0; sh.set(4.7, 0.2);                           // (back in his room, to be carried again)
+    T.home(); b.queue = []; b.step = null; b.pendingActivity = 'moveshelf';
+    let t = 0; while (t < 120 && !sh.packed) { step(0.25); t += 0.25; }
+    const wasPacked = sh.packed;
+    b.queue = []; b.step = null; b.pendingActivity = 'wander'; step(0.5);
+    out.push(result('library: cut short while carrying the skill shelf, it is put together where he is (or back where it was): visible, in a room it may stand in, not lost', wasPacked && !sh.packed && sh.group.visible && ['main', 'library'].includes(w.roomIdAt(sh.x, sh.z)) && w.fits(sh, sh.x, sh.z) && b.carry !== 'flat' && !b.shelfMove, { wasPacked, at: [sh.x, sh.z], room: w.roomIdAt(sh.x, sh.z) }));
+    T.settle();
+  }
+  // 6. cleaning: a few spots at a time, wiped away while he wipes; the dust comes back slowly; how clean it is is saved
+  {
+    T.home(); b.queue = []; b.step = null; b.pendingActivity = 'libclean';
+    let t = 0; while (t < 200 && !(t > 5 && b.last !== 'libclean')) { step(0.25); t += 0.25; }
+    const cleaned = dust.spots.filter((s) => s.level < 0.05);
+    out.push(result('library: told to clean, he goes into the Library and wipes three spots away (cobwebs or dust) and they disappear', cleaned.length === 3 && cleaned.every((s) => !s.mesh.visible), { cleaned: cleaned.length, levels: dust.snapshot() }));
+    for (let k = 0; k < 6 && b.available('libclean'); k++) { b.queue = []; b.step = null; b.pendingActivity = 'libclean'; let t2 = 0; while (t2 < 200 && !(t2 > 5 && b.last !== 'libclean')) { step(0.25); t2 += 0.25; } }
+    const unreached = dust.spots.filter((s) => s.level > 0.5 && !b.dustStand(s, dust));
+    out.push(result('library: in the end every patch and cobweb is clean (with the shelves in, every one can still be got to)', dust.dirty(0.5).length === 0 && !b.available('libclean'), { left: dust.snapshot(), unreached: unreached.map((s) => s.id) }));
+    const snap = JSON.parse(JSON.stringify(R().snapshot()));
+    out.push(result('library: how clean it is is saved with the rooms', Array.isArray(snap.rooms.library.dust) && snap.rooms.library.dust.every((v) => v < 0.1), { dust: snap.rooms.library.dust }));
+    T.home();
+    const keepShelf = [sh.x, sh.z, sh.rot];
+    R().reset('library'); R().restoreFrom({ rooms: { library: snap.rooms.library } });
+    const d2 = w.doors.library && w.doors.library.shell.dust;
+    out.push(result('library: restored, it is as clean as it was (not dusty again)', !!d2 && d2.dirty(0.1).length === 0, { levels: d2 && d2.snapshot() }));
+    if (d2) d2.update(1200);
+    out.push(result('library: the dust settles again slowly: after 20 minutes the floor is half dusty, the cobwebs less, and nothing is thick yet', !!d2 && d2.spots.filter((s) => s.kind === 'floor').every((s) => s.level > 0.4 && s.level < 0.6) && d2.spots.filter((s) => s.kind === 'web').every((s) => s.level > 0.15 && s.level < 0.3), { levels: d2 && d2.snapshot() }));
+    void keepShelf;
+  }
+  // 7. the Library taken away with the shelf in it: it comes back into his room (the skill shelf can never go to the Catalog)
+  {
+    T.home(); b.queue = []; b.step = null;
+    sh.rot = 0; sh.group.rotation.y = 0; sh.set(4.7, 0.2);
+    b.pendingActivity = 'moveshelf';
+    let t = 0; while (t < 240 && !(w.roomIdAt(sh.x, sh.z) === 'library' && !sh.packed && b.last !== 'moveshelf')) { step(0.25); t += 0.25; }
+    const was = w.roomIdAt(sh.x, sh.z);
+    T.home(); b.queue = []; b.step = null; b.pendingActivity = null;
+    R().remove('library'); step(1);
+    out.push(result("library: taking the Library away brings the bookshelf back into GUY's room, books and all, where it fits", was === 'library' && !w.doors.library && w.roomIdAt(sh.x, sh.z) === 'main' && w.fits(sh, sh.x, sh.z) && sh.group.visible && shelfBooks() === books0, { was, at: [sh.x, sh.z] }));
+  }
+  // 7b. a piece growing into place when the clock is set back (a picture's setup does that) keeps its size (it used to blow up thousands of times)
+  {
+    b.popping = [{ o: sh, t: 0.3 }]; b.lateWork2(); b.time -= 40; b.lateWork2(); b.time += 40; for (let i = 0; i < 12; i++) { b.time += 0.1; b.lateWork2(); }
+    out.push(result('library: a piece growing into place stays its own size even if the clock goes back, and ends at full size', Math.abs(sh.group.scale.x - 1) < 1e-6 && !b.popping.length, { scale: sh.group.scale.x }));
+    sh.group.scale.setScalar(1); b.popping = [];
+  }
+  // 8. a shelf may stand in his room or the Library, nowhere else
+  { const wb = w.doors.workshop.shell.bounds; out.push(result('library: a bookshelf may not be left in the Workshop', !w.fits(sh, (wb.minX + wb.maxX) / 2, (wb.minZ + wb.maxZ) / 2))); }
+  T.resetRooms(); T.removeAll(); T.settle(); machine().hidden = true;
+  out.push(result('library: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
 };
 
@@ -4882,6 +5033,7 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.paintings = S(T.sweepPaintings);
   report.corners = S(T.sweepCorners);
   report.home = S(T.sweepHome);
+  report.library = S(T.sweepLibrary);
   if (seed && T.unseed) T.unseed();
   window.__qaPaused = wasPaused;
   T.lastReport = report;

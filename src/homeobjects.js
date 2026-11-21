@@ -120,5 +120,87 @@ export function makeHomeBuilders({ makeObject, box, mat }) {
     return addAt(o);
   };
 
-  return { bed, wardrobe, bedside, libshelf };
+  // ------------------------------------------------------------------------------------------------ reading desk
+  // A writing desk with a drawer pedestal, a green banker's lamp (switched by its pull chain: it glows, and lights a pool on the desk) and an
+  // open book. Its front (where he stands) is local +z.
+  const libdesk = (name, x = 0, z = 0) => {
+    const wood = mat(WOOD), dark = mat(WOOD_DARK), brass = mat(0xc9a44a, { metalness: 0.6, roughness: 0.35 });
+    let shade = null, pool = null, left = null, right = null;
+    const o = makeObject(name, x, z, 1.3, 0.65, 0.76, 'heavy', (g) => {
+      box(1.3, 0.05, 0.65, dark, 0, 0.735, 0, g);                                // the top
+      box(1.2, 0.012, 0.5, mat(0x2f5a3a), 0, 0.766, -0.02, g);                     // a green leather writing pad
+      for (const sx of [-0.6, 0.6]) box(0.05, 0.71, 0.05, wood, sx, 0.355, 0.27, g);              // the front legs
+      box(0.05, 0.71, 0.05, wood, -0.6, 0.355, -0.27, g);
+      box(0.42, 0.71, 0.6, wood, 0.42, 0.355, 0, g);                               // the drawer pedestal (right)
+      for (const y of [0.15, 0.38, 0.6]) { box(0.38, 0.18, 0.015, mat(0xc79a62), 0.42, y, 0.305, g); box(0.08, 0.02, 0.02, brass, 0.42, y, 0.32, g); }
+      box(1.2, 0.3, 0.02, wood, -0.05, 0.56, -0.3, g);                             // the modesty panel at the back
+      // the banker's lamp: a brass stand and a green glass shade, towards the back left
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.03, 16), brass); base.position.set(-0.4, 0.775, -0.18); g.add(base);
+      box(0.02, 0.24, 0.02, brass, -0.4, 0.89, -0.18, g);
+      // (the shade: a long green glass tube lying across the top of the stand, its ends capped in brass)
+      shade = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.3, 20), mat(0x1f7a4a, { emissive: 0x2fbf6a, emissiveIntensity: 0, roughness: 0.25 }));
+      shade.rotation.z = Math.PI / 2; shade.position.set(-0.4, 1.03, -0.16); g.add(shade);
+      for (const sx of [-0.152, 0.152]) { const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.058, 0.012, 20), brass); cap.rotation.z = Math.PI / 2; cap.position.set(-0.4 + sx, 1.03, -0.16); g.add(cap); }
+      box(0.004, 0.12, 0.004, brass, -0.32, 0.93, -0.1, g);                       // the pull chain
+      // the pool of light on the desk, shown while the lamp is on
+      pool = new THREE.Mesh(new THREE.CircleGeometry(0.32, 24), new THREE.MeshBasicMaterial({ color: 0xfff1b8, transparent: true, opacity: 0, depthWrite: false }));
+      pool.rotation.x = -Math.PI / 2; pool.position.set(-0.2, 0.774, 0.0); g.add(pool);
+      // an open book: two pages that can turn
+      box(0.42, 0.015, 0.3, mat(0x7a2f2f), 0.02, 0.777, 0.08, g);
+      left = box(0.2, 0.012, 0.28, mat(0xf6efdc), -0.085, 0.79, 0.08, g);
+      right = new THREE.Group(); right.position.set(0.02, 0.79, 0.08); g.add(right);
+      box(0.2, 0.012, 0.28, mat(0xf6efdc), 0.105, 0, 0, right);
+    });
+    o.lamp = 0; o.lampTo = 0;
+    o.setLamp = (v) => { o.lampTo = v ? 1 : 0; };
+    o.lampOn = () => o.lampTo > 0;
+    o.turn = 0;                                                                   // a page turning: 0 flat on the right ... 1 over on the left
+    o.turnPage = () => { o.turn = 0.001; };
+    onUpdate(o, (dt) => {
+      if (o.lamp !== o.lampTo) { o.lamp = ease(o.lamp, o.lampTo, dt, 8); if (Math.abs(o.lamp - o.lampTo) < 0.01) o.lamp = o.lampTo; shade.material.emissiveIntensity = o.lamp * 1.1; pool.material.opacity = o.lamp * 0.45; }
+      if (o.turn > 0) { o.turn = Math.min(1, o.turn + dt / 0.6); right.rotation.z = Math.sin(o.turn * Math.PI) * 1.4; if (o.turn >= 1) { o.turn = 0; right.rotation.z = 0; } }
+    });
+    void left;
+    o.chainPoint = () => o.at(-0.32, 0.88, -0.1);
+    o.pagePoint = (k = 0.5) => o.at(0.02 + (k - 0.5) * 0.3, 0.82, 0.12);
+    return addAt(o);
+  };
+
+  // ------------------------------------------------------------------------------------------------ globe
+  // A globe on a wooden tripod stand, in a brass meridian ring, tilted like the Earth. A hand on its side sets it spinning; it slows down by
+  // itself. Its front is local +z.
+  const globe = (name, x = 0, z = 0) => {
+    const wood = mat(WOOD_DARK), brass = mat(0xc9a44a, { metalness: 0.6, roughness: 0.35 });
+    const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+    const cx = c.getContext('2d');
+    cx.fillStyle = '#3f78b5'; cx.fillRect(0, 0, 256, 128);
+    cx.fillStyle = '#d9c48a';                                                     // land: a few blobs, the same every time
+    for (const [ux, uy, r] of [[40, 40, 22], [60, 58, 16], [70, 90, 14], [128, 36, 18], [140, 64, 24], [150, 96, 12], [200, 44, 20], [214, 80, 16], [230, 104, 10], [100, 110, 9]]) {
+      cx.beginPath(); cx.ellipse(ux, uy, r * 1.3, r, 0, 0, Math.PI * 2); cx.fill();
+    }
+    cx.strokeStyle = 'rgba(255,255,255,0.35)'; cx.lineWidth = 1;
+    for (let i = 1; i < 6; i++) { cx.beginPath(); cx.moveTo(0, i * 128 / 6); cx.lineTo(256, i * 128 / 6); cx.stroke(); }
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+    let ball = null;
+    const R = 0.2, CY = 0.82;
+    const o = makeObject(name, x, z, 0.55, 0.55, CY + R + 0.05, 'medium', (g) => {
+      for (let i = 0; i < 3; i++) {                                               // the tripod legs
+        const a = (i / 3) * Math.PI * 2, leg = box(0.035, 0.66, 0.035, wood, Math.sin(a) * 0.11, 0.31, Math.cos(a) * 0.11, g);
+        leg.rotation.set(-Math.cos(a) * 0.32, 0, Math.sin(a) * 0.32);              // (the feet splay out, the tops meet under the column)
+      }
+      box(0.05, 0.12, 0.05, wood, 0, 0.62, 0, g);                                 // the column the ring stands on
+      const tilt = new THREE.Group(); tilt.position.set(0, CY, 0); tilt.rotation.z = 0.41; g.add(tilt);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(R + 0.025, 0.008, 6, 40), brass); ring.rotation.y = Math.PI / 2; tilt.add(ring);
+      box(0.012, 0.06, 0.012, brass, 0, R + 0.03, 0, tilt); box(0.012, 0.06, 0.012, brass, 0, -R - 0.03, 0, tilt);
+      ball = new THREE.Mesh(new THREE.SphereGeometry(R, 28, 18), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5 }));
+      tilt.add(ball);
+    });
+    o.spinV = 0;
+    o.spin = (v) => { o.spinV = v; };
+    onUpdate(o, (dt) => { if (Math.abs(o.spinV) > 0.01) { ball.rotation.y += o.spinV * dt; o.spinV *= Math.exp(-dt * 0.35); } else o.spinV = 0; });
+    o.sidePoint = (sx = 1) => o.at(sx * 0.12, CY + 0.02, R * 0.85);              // a hand on the front of the globe, a little to one side
+    return addAt(o);
+  };
+
+  return { bed, wardrobe, bedside, libshelf, libdesk, globe };
 }

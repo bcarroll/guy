@@ -7,6 +7,7 @@ import { makeBotBuilders } from './botobjects.js';
 import { buildYardShell, makeYardBuilders } from './yardobjects.js';
 import { makeYard } from './yardballs.js';
 import { buildRangeShell } from './rangeobjects.js';
+import { buildDust } from './library.js';
 import { buildBowlShell, makeBowlBuilders } from './bowlobjects.js';
 import { makeHomeBuilders } from './homeobjects.js';
 
@@ -91,7 +92,8 @@ export function buildRoom(scene) {
       get x() { return group.position.x; },
       get z() { return group.position.z; },
       get yaw() { return (this.rot * Math.PI) / 2; },
-      // the bookshelves are where GUY learns and keeps his records: they stay in his own room (they can be moved about in it, never out of it)
+      // the bookshelves are where GUY learns and keeps his records: they stay in his own room, or the Library once there is one (the robots
+      // carry them in there, flat-packed: librarybrain.js); never anywhere else
       get mainOnly() { return this.name === 'shelf' || this.kind === 'bookshelf2'; },
       set(nx, nz) {
         group.position.set(nx, 0, nz);
@@ -1244,7 +1246,7 @@ export function buildRoom(scene) {
     bubblemachine: { build: buildBubbleMachine, pref: { x: 0.2, z: 3.1 } },
     snowglobe: { build: buildSnowGlobe, pref: { x: 4.1, z: 1.4 } },
     petrock: { build: buildPetRock, pref: { x: 2.8, z: 3.0 } },
-    bookshelf2: { build: buildBookshelf2, pref: { x: 4.1, z: -2.2 } },
+    bookshelf2: { build: buildBookshelf2, pref: (w) => (w.doors.library && w.libraryShelfSpot ? w.libraryShelfSpot(null) : null) || { x: 4.1, z: -2.2 } },     // (into the Library once there is one)
     // the foot stool stands in front of a window whose top is out of reach (the owner's rule: built where it is needed), right by the wall
     footstool: { build: buildFootStool, pref: () => {
       const d = Object.values(decor).find((x) => x.wall && /^window/.test(x.name) && x.v + x.hh > 2.1);
@@ -1283,6 +1285,8 @@ export function buildRoom(scene) {
     libshelf: ['library', (N, L) => ({ n: N - 0.4, lat: -L * 0.22, face: 'door' })],
     libshelf2: ['library', (N, L) => ({ n: N - 0.4, lat: L * 0.22, face: 'door' })],
     readingchair: ['library', (N, L) => ({ n: N * 0.55, lat: 0, face: 'door' })],             // (an armchair faces its local -z: so it faces the shelves)
+    libdesk: ['library', (N) => ({ n: N - 0.45, lat: 0, face: 'door' })],                       // against the far wall, between the two shelves
+    globe: ['library', (N, L) => ({ n: N * 0.42, lat: L * 0.25, face: 'door' })],               // out in the room, beside the reading chair
   };
   const homeSpot = (id) => (w) => {
     const [room, f] = HOME_LAYOUT[id];
@@ -1297,6 +1301,8 @@ export function buildRoom(scene) {
   // (a second bookshelf goes in the other half of the wall)
   INSTANCE_KINDS.libshelf = { build: (name, x, z) => homeB.libshelf(name, x, z), pref: (w) => homeSpot(Object.values(w.objects).some((o) => o.kind === 'libshelf' && w.roomIdAt(o.x, o.z) === 'library') ? 'libshelf2' : 'libshelf')(w) };
   INSTANCE_KINDS.readingchair = { build: (name, x, z) => { const o = buildArmchair(name, x, z, 0x2f6b4f); o.homeSeat = true; return o; }, pref: (w) => homeSpot('readingchair')(w) };
+  INSTANCE_KINDS.libdesk = { build: (name, x, z) => homeB.libdesk(name, x, z), pref: (w) => homeSpot('libdesk')(w) };
+  INSTANCE_KINDS.globe = { build: (name, x, z) => homeB.globe(name, x, z), pref: (w) => homeSpot('globe')(w) };
   // (the restaurant's extra tables are further instance kinds, added below once the restaurant's layout is known)
 
   // ---- Restaurant furniture (src/restobjects.js), placed the same way in the Restaurant's own frame
@@ -1356,11 +1362,13 @@ export function buildRoom(scene) {
 
   const chairStands = () => Object.values(objects).filter((o) => o.sit).map((o) => [o.name, 0, o.sit.gap]);   // where he stands to sit down
 
+  // Where a bookshelf may stand: GUY's room, or the Library.
+  const shelfRoomOk = (x0, x1, z0, z1) => [MAIN_BOUNDS, ...(doors.library ? [doors.library.shell.bounds] : [])].some((b) => x0 >= b.minX && x1 <= b.maxX && z0 >= b.minZ && z1 <= b.maxZ);
   // Footprint (w x d, centred at x,z) inside the room and clear of every other object?
   const fits = (obj, x, z, w = obj.w, d = obj.d) => {
     const x0 = x - w / 2, x1 = x + w / 2, z0 = z - d / 2, z1 = z + d / 2;
     if (!roomBoundsList().some((b) => x0 >= b.minX && x1 <= b.maxX && z0 >= b.minZ && z1 <= b.maxZ)) return false;      // wholly inside one room
-    if (obj.mainOnly && !(x0 >= MAIN_BOUNDS.minX && x1 <= MAIN_BOUNDS.maxX && z0 >= MAIN_BOUNDS.minZ && z1 <= MAIN_BOUNDS.maxZ)) return false;      // (the bookshelves never leave his own room)
+    if (obj.mainOnly && !shelfRoomOk(x0, x1, z0, z1)) return false;      // (the bookshelves never leave his own room, or the Library)
     if (doorBlocks(x0, x1, z0, z1)) return false;                       // the strips either side of a door stay clear
     // furniture taller than the lower edge of a window or picture must not be pushed into it
     for (const dc of Object.values(decor)) {
@@ -1388,7 +1396,7 @@ export function buildRoom(scene) {
   // The walls only (no other furniture): inside one room, or straddling a wall line through a doorway.
   const wallOk = (obj, x, z, w = obj.w, d = obj.d) => {
     const x0 = x - w / 2, x1 = x + w / 2, z0 = z - d / 2, z1 = z + d / 2;
-    if (obj.mainOnly && !(x0 >= MAIN_BOUNDS.minX && x1 <= MAIN_BOUNDS.maxX && z0 >= MAIN_BOUNDS.minZ && z1 <= MAIN_BOUNDS.maxZ)) return false;
+    if (obj.mainOnly && !shelfRoomOk(x0, x1, z0, z1)) return false;
     const inRoom = roomBoundsList().some((b) => x0 >= b.minX && x1 <= b.maxX && z0 >= b.minZ && z1 <= b.maxZ);
     if (!inRoom) {
       // straddling the wall line of a door: through the doorway only
@@ -1506,6 +1514,8 @@ export function buildRoom(scene) {
     };
   };
   const cellFree = (c) => ![MAIN_BOUNDS, ...Object.values(doors).map((d) => d.shell.bounds)].some((b) => c.maxX > b.minX + 0.01 && c.minX < b.maxX - 0.01 && c.maxZ > b.minZ + 0.01 && c.minZ < b.maxZ - 0.01);
+  // The things built into a room that never move (the Shooting Range's screens and fixtures): a door must not open onto them.
+  const fixedIn = (pd) => [...((pd.shell.range && pd.shell.range.obstacles) || [])].map((o) => ({ x0: o.x0 - 0.3, x1: o.x1 + 0.3, z0: o.z0 - 0.3, z1: o.z1 + 0.3 }));
   // Where a door for a corner room could go: the doors it could have, best first. `why` says what is missing when there are none.
   const planCorner = (corners = Object.keys(CORNERS)) => {
     let why = 'corner';
@@ -1527,8 +1537,10 @@ export function buildRoom(scene) {
           if (hi - lo < DOOR.w + 2 * DOOR.margin + 0.6) continue;                   // the walls must really share a stretch to put a door in
           const steps = Math.floor((hi - lo - 1.8) / 0.1 + 1e-6);
           for (let i = 0; i <= steps; i++) {
-            const u = +(lo + 0.9 + i * 0.1).toFixed(2), r = doorRect(wall, u);
+            const u = +(lo + 0.9 + i * 0.1).toFixed(2), r = doorRect(wall, u), rIn = doorRectIn(wall, u);
             if (Object.values(doors).some((d) => rectsOverlap(d.rect, r) || rectsOverlap(d.rectIn, r))) continue;
+            // (the Shooting Range's fixtures against its side walls, the screens between its lanes: a door never opens onto one)
+            if (fixedIn(pd).some((o) => rectsOverlap(o, r) || rectsOverlap(o, rIn))) continue;
             const b = doorBlockers(wall, u);
             if (b.fixed) continue;
             const off = Math.abs(u - (lo + hi) / 2);
@@ -1544,24 +1556,39 @@ export function buildRoom(scene) {
 
   // A closed door in a wooden frame with the room's name above it. Both faces are drawn: the right and front walls are not
   // drawn from the default camera, so the door is often seen from the other side.
-  const buildDoor = (def, wall, u, otherName = "🏠 GUY's Room") => {
+  // `gate` (a door in the Backyard's fence): { mat: () => a fence-plank material for a piece w x h, h: the fence's height }: a garden gate,
+  // wooden posts a little higher than the fence and a leaf of the same planks, instead of a framed door.
+  const GATE_H = 1.45;
+  const buildDoor = (def, wall, u, otherName = "🏠 GUY's Room", gate = null) => {
     const g = new THREE.Group();
     g.position.copy(WALL[wall].at(u, 0));
     g.rotation.y = WALL[wall].rotY;
-    const frame = mat(def.look.frame), leaf = mat(def.look.door);
-    const H = DOOR.h + 0.12;
+    const frame = mat(gate ? 0x5a3d22 : def.look.frame), leaf = gate ? gate.mat(1.0, GATE_H) : mat(def.look.door);
+    const H = gate ? gate.h + 0.65 : DOOR.h + 0.12;                   // (a gate's posts carry a crossbar over it, an arch for the name board)
     box(0.1, H, 0.14, frame, -0.55, H / 2, 0.07, g);
     box(0.1, H, 0.14, frame, 0.55, H / 2, 0.07, g);
-    box(1.2, 0.12, 0.14, frame, 0, DOOR.h + 0.06, 0.07, g);
+    box(1.2, 0.12, 0.14, frame, 0, H - 0.06, 0.07, g);
     // the leaf hangs from a hinge on the left post (local x = -0.5) and swings away from the room when the door opens
     const hinge = new THREE.Group();
     hinge.position.set(-0.5, 0, 0);
     g.add(hinge);
     g.userData.leaf = hinge;
-    box(1.0, DOOR.h, 0.05, leaf, 0.5, DOOR.h / 2, 0.05, hinge);
-    for (const z of [0.08, 0.02]) {
-      box(0.7, 0.75, 0.01, mat(def.look.panel), 0.5, 1.55, z, hinge);
-      box(0.7, 0.75, 0.01, mat(def.look.panel), 0.5, 0.6, z, hinge);
+    if (gate) {                                                       // planks, two rails and a brace on each face
+      const lm = new THREE.Mesh(new THREE.PlaneGeometry(1.0, GATE_H), leaf);
+      lm.position.set(0.5, 0.05 + GATE_H / 2, 0.075); hinge.add(lm);
+      const back = new THREE.Mesh(new THREE.PlaneGeometry(1.0, GATE_H), leaf);
+      back.position.set(0.5, 0.05 + GATE_H / 2, 0.025); back.rotation.y = Math.PI; hinge.add(back);
+      const rail = mat(0x6e4a2a);
+      for (const z of [0.085, 0.015]) {
+        for (const y of [0.3, 1.25]) box(0.98, 0.09, 0.02, rail, 0.5, y, z, hinge);
+        const brace = box(1.15, 0.08, 0.02, rail, 0.5, 0.78, z, hinge); brace.rotation.z = Math.atan2(0.95, 0.9);
+      }
+    } else {
+      box(1.0, DOOR.h, 0.05, leaf, 0.5, DOOR.h / 2, 0.05, hinge);
+      for (const z of [0.08, 0.02]) {
+        box(0.7, 0.75, 0.01, mat(def.look.panel), 0.5, 1.55, z, hinge);
+        box(0.7, 0.75, 0.01, mat(def.look.panel), 0.5, 0.6, z, hinge);
+      }
     }
     for (const z of [0.1, 0]) {
       const knob = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 10), mat(0xe8c050, { metalness: 0.6, roughness: 0.3 }));
@@ -1597,7 +1624,7 @@ export function buildRoom(scene) {
     };
     for (const [z, ry, label] of [[0.145, 0, `${def.icon} ${def.name}`], [-0.005, Math.PI, otherName]]) {
       const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.225), new THREE.MeshBasicMaterial({ map: signTex(label) }));
-      sign.position.set(0, DOOR.h + 0.3, z);
+      sign.position.set(0, H + 0.18, z);
       sign.rotation.y = ry;
       g.add(sign);
     }
@@ -1666,7 +1693,8 @@ export function buildRoom(scene) {
         : { minX: c - L / 2, maxX: c + L / 2, minZ: -ROOM.d / 2 - N, maxZ: -ROOM.d / 2 };
     if (def.outdoor) {                         // open air: a lawn, a fence, the sun and moon lamps; no walls or ceiling (src/yardobjects.js)
       const yard = buildYardShell(g, L, N, ROOM.h);
-      return { group: g, bounds: bounds0, N, L, outdoor: true, yard };
+      // (its side fences take a gate into a corner room beside it, like the side walls of an indoor room)
+      return { group: g, bounds: bounds0, N, L, outdoor: true, yard, sides: yard.sides, fence: yard, linkable: true };
     }
     const sides = buildRoomBox(def, g, L, N);
     const bounds = wall === 'right' ? { minX: ROOM.w / 2, maxX: ROOM.w / 2 + N, minZ: c - L / 2, maxZ: c + L / 2 }
@@ -1674,7 +1702,7 @@ export function buildRoom(scene) {
       : wall === 'front' ? { minX: c - L / 2, maxX: c + L / 2, minZ: ROOM.d / 2, maxZ: ROOM.d / 2 + N }
         : { minX: c - L / 2, maxX: c + L / 2, minZ: -ROOM.d / 2 - N, maxZ: -ROOM.d / 2 };
     // the Shooting Range: its lanes, screens, bullseyes and enemies go in the room (src/rangeobjects.js); the screens are attached in addDoor
-    return { group: g, bounds, N, L, sides, range: def.shootingRange ? buildRangeShell(g, L, N) : null, bowl: def.bowlingAlley ? buildBowlShell(g, L, N) : null, linkable: !def.shootingRange && !def.bowlingAlley && !def.elevator };
+    return { group: g, bounds, N, L, sides, range: def.shootingRange ? buildRangeShell(g, L, N) : null, bowl: def.bowlingAlley ? buildBowlShell(g, L, N) : null, linkable: !def.bowlingAlley && !def.elevator };          // (the Range's side walls take a corner room's door, clear of its fixtures)
   };
 
   // The three walls of an added room as places to hang things: `<id>:far` (facing the door) and `<id>:a`, `<id>:b` (the sides).
@@ -1695,23 +1723,30 @@ export function buildRoom(scene) {
 
   // A real doorway: the wall is left out and put back in three pieces (left of the door, right of it, and above it), so an open
   // door shows the way through and GUY can walk through it. Built in the door's own frame (local x along the wall).
-  const buildDoorway = (wall, u, material = wallMat) => {
+  // opts.fence ({ h, mat(len, h) }): a fence (the Backyard's) with a gap for a gate, no lintel. opts.back: the same wall seen from the other side
+  // (facing out of the room the wall belongs to, `back` metres behind it): the door wall of a corner room that opens off the Backyard, which has
+  // no wall of its own between it and the lawn, only the fence.
+  const buildDoorway = (wall, u, material = wallMat, opts = {}) => {
     const W = WALL[wall], p0 = W.at(u, 0), p1 = W.at(u + 1, 0);
     const sgn = (p1.x - p0.x) * Math.cos(W.rotY) - (p1.z - p0.z) * Math.sin(W.rotY) < 0 ? -1 : 1;       // does u grow the way the door's own x does?
     const g = new THREE.Group();
     g.position.copy(W.at(u, 0));
     g.rotation.y = W.rotY;
-    const a = sgn > 0 ? W.lo - u : u - W.hi, b = sgn > 0 ? W.hi - u : u - W.lo;     // the ends of the wall, in the door's x
+    const f = opts.back !== undefined ? -1 : 1, holder = f > 0 ? g : new THREE.Group();
+    if (f < 0) { holder.rotation.y = Math.PI; holder.position.z = -opts.back; g.add(holder); }
+    let a = sgn > 0 ? W.lo - u : u - W.hi, b = sgn > 0 ? W.hi - u : u - W.lo;     // the ends of the wall, in the door's x
+    if (f < 0) [a, b] = [-b, -a];                                                  // (turned round: x runs the other way)
+    const H = opts.fence ? opts.fence.h : ROOM.h;
     const piece = (x0, x1, y0, y1) => {
       if (x1 - x0 < 0.01 || y1 - y0 < 0.01) return;
-      const p = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, y1 - y0), material);
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, y1 - y0), opts.fence ? opts.fence.mat(x1 - x0, y1 - y0) : material);
       p.position.set((x0 + x1) / 2, (y0 + y1) / 2, 0);
       p.receiveShadow = true;
-      g.add(p);
+      holder.add(p);
     };
-    piece(a, -DOOR.w / 2, 0, ROOM.h);
-    piece(DOOR.w / 2, b, 0, ROOM.h);
-    piece(-DOOR.w / 2, DOOR.w / 2, DOOR.h, ROOM.h);
+    piece(a, -DOOR.w / 2 - (opts.fence ? 0.1 : 0), 0, H);                           // (a gate's posts stand in the gap)
+    piece(DOOR.w / 2 + (opts.fence ? 0.1 : 0), b, 0, H);
+    if (!opts.fence) piece(-DOOR.w / 2, DOOR.w / 2, DOOR.h, ROOM.h);
     return g;
   };
 
@@ -1728,7 +1763,7 @@ export function buildRoom(scene) {
     decor, decorFits,
     // ---- GUY's paintings (src/paintings.js) ----
     // Every wall a painting can hang on: GUY's room (the two walls the camera sees) and the three walls of each added room.
-    hangWalls: () => [{ key: 'left', room: 'main' }, { key: 'back', room: 'main' }, ...Object.keys(WALL).filter((k) => k.includes(':')).map((key) => ({ key, room: key.split(':')[0] }))],
+    hangWalls: () => [{ key: 'left', room: 'main' }, { key: 'back', room: 'main' }, ...Object.keys(WALL).filter((k) => k.includes(':') && !WALL[k].fence).map((key) => ({ key, room: key.split(':')[0] }))],
     wallFrame: (key) => WALL[key] || null,
     PAINTING: { hw: 0.295, hh: 0.3575 },
     MACHINE_RECT,
@@ -1755,22 +1790,28 @@ export function buildRoom(scene) {
     addDoor(def, wall, u, opts = {}) {
       if (doors[def.id]) return doors[def.id];
       const parent = opts.parent || 'main', pd = doors[parent];
-      const group = buildDoor(def, wall, u, parent === 'main' ? undefined : `${pd.shell.icon || ''} ${pd.name}`.trim()), shell = buildShell(def, wall, u, opts.cell || null);
+      const fence = parent !== 'main' && pd.shell.fence ? { h: pd.shell.fence.FH, mat: (len, h) => pd.shell.fence.fencePiece(len, h) } : null;     // (a gate in the Backyard's fence)
+      const group = buildDoor(def, wall, u, parent === 'main' ? undefined : `${pd.shell.icon || ''} ${pd.name}`.trim(), fence), shell = buildShell(def, wall, u, opts.cell || null);
       shell.icon = def.icon;
       let cut, hidden = null;
       if (parent === 'main') { cut = buildDoorway(wall, u); wallMeshes[wall].visible = false; }      // the wall is rebuilt round the doorway
       else {                                                  // the side wall of the room beside it is rebuilt round the doorway
         hidden = pd.shell.sides[wall.split(':')[1]];
         hidden.visible = false;
-        cut = buildDoorway(wall, u, hidden.material);
+        cut = buildDoorway(wall, u, hidden.material, fence ? { fence } : {});
+        // a room behind a fence has its own wall there, facing into it, with a doorway behind the gate
+        if (fence && shell.sides) cut.add(buildDoorway(wall, u, shell.sides.a.material, { back: 0.03 }).children[0]);
         pd.shell.group.updateWorldMatrix(true, false);
       }
       room.add(group);
       room.add(shell.group);
       room.add(cut);
-      doors[def.id] = { id: def.id, name: def.name, wall, u, parent, hidden, group, leaf: group.userData.leaf, shell, cut, rect: doorRect(wall, u), rectIn: doorRectIn(wall, u), open: 0, openTo: 0, locked: false };
-      if (!shell.outdoor) Object.assign(WALL, roomWalls(def.id, shell));           // its walls can hold wall pieces (GUY's paintings); a fence cannot
+      doors[def.id] = { id: def.id, name: def.name, wall, u, parent, hidden, group, leaf: group.userData.leaf, shell, cut, rect: doorRect(wall, u), rectIn: doorRectIn(wall, u), open: 0, openTo: 0, locked: false, gate: !!fence };
+      // its walls can hold wall pieces (GUY's paintings); a fence cannot, but it is still a wall a corner room's gate can go in (`fence`)
+      if (!shell.outdoor) Object.assign(WALL, roomWalls(def.id, shell));
+      else for (const [k, W] of Object.entries(roomWalls(def.id, shell))) WALL[k] = Object.assign(W, { fence: true });
       if (shell.outdoor && world.yard) world.yard.attach(doors[def.id]);
+      if (def.dusty && !shell.outdoor) shell.dust = buildDust(shell.group, shell.L, shell.N);       // (the Library: dust on the floor, cobwebs in the corners: library.js)
       if (shell.range) {                                        // the range's screens stop the robots and block the line of fire
         shell.range.attach();
         obstacles.push(...shell.range.obstacles);
@@ -2069,6 +2110,45 @@ export function buildRoom(scene) {
       return true;
     },
     instanceKinds: () => Object.keys(INSTANCE_KINDS),
+    // ---- the bookshelves in the Library (librarybrain.js) ----
+    // Where a bookshelf (the skill shelf or one GUY built) goes in the Library: against a side wall, its front (local -x) facing into the room.
+    // `obj` null: for one that is about to be built. `taken`: spot keys already promised to another shelf. { x, z, rot, key, room } or null.
+    libraryShelfSpot(obj, taken = new Set()) {
+      if (!doors.library) return null;
+      const { n: N, l: L } = world.shellSize('library'), ax = world.shellAxes('library');
+      const probe = obj || { w: 0.5, d: 1.9, bw: 0.5, bd: 1.9, h: 2.2, mainOnly: true, obstacle: null, rot: 0 };
+      for (const [side, f] of [[-1, 0.62], [1, 0.62], [-1, 0.3], [1, 0.3]]) {
+        const key = `${side}:${f}`;
+        if (taken.has(key)) continue;
+        const p = world.shellPoint('library', N * f, side * (L / 2 - 0.27));
+        const inward = ax.lat.clone().multiplyScalar(-side);                      // (away from that side wall)
+        // the quarter turn that points the shelf's front (its local -x) into the room
+        let rot = 0, best = -2;
+        for (let r = 0; r < 4; r++) { const y = (r * Math.PI) / 2, dot = -Math.cos(y) * inward.x + Math.sin(y) * inward.z; if (dot > best + 1e-6) { best = dot; rot = r; } }
+        const w = rot % 2 ? probe.bd : probe.bw, d = rot % 2 ? probe.bw : probe.bd;
+        if (obj && Math.hypot(obj.x - p.x, obj.z - p.z) < 0.05) return { x: p.x, z: p.z, rot, key, room: 'library', exact: true };      // (already there)
+        if (!fits(probe, p.x, p.z, w, d)) continue;
+        return { x: p.x, z: p.z, rot, key, room: 'library', exact: true };
+      }
+      return null;
+    },
+    // Taken apart to be carried (packed) and put together again (unpacked at `spot`): the shelf and its books (and, for the skill shelf, the
+    // books stacked on the floor beside it) go out of sight and out of the way while it is in his arms, and come back with it.
+    packShelf(name) {
+      const o = objects[name];
+      if (!o || o.packed) return false;
+      o.packed = true; o.group.visible = false; o.obstacle.active = false;
+      if (name === 'shelf') for (const r of shelfBooks) if (r.stack && r.mesh.visible) { r.mesh.visible = false; r.packedAway = true; }
+      return true;
+    },
+    unpackShelf(name, spot) {
+      const o = objects[name];
+      if (!o || !o.packed) return false;
+      if (spot) { o.rot = spot.rot ?? o.rot; o.group.rotation.y = o.yaw; o.home = { x: spot.x, z: spot.z }; o.set(spot.x, spot.z); }
+      o.packed = false; o.group.visible = true; o.obstacle.active = true;
+      if (name === 'shelf') { for (const r of shelfBooks) if (r.packedAway) { r.mesh.visible = true; r.packedAway = false; } o.set(o.x, o.z); }      // (the stack is laid out beside it again)
+      return true;
+    },
     // where a built kind goes when it is wanted: { x, z, room, rot? } (null if it has nowhere to go, e.g. the restaurant is not there)
     instanceSite(kind) {
       const k = INSTANCE_KINDS[kind];

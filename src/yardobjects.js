@@ -69,11 +69,11 @@ export function buildYardShell(g, L, N, height) {
     m.receiveShadow = true;
     fenceMats.push(m.material);
     g.add(m);
+    return m;
   };
   const fenceMats = [];
-  fence(L, 0, -N, 0);
-  fence(N, -L / 2, -N / 2, Math.PI / 2);
-  fence(N, L / 2, -N / 2, -Math.PI / 2);
+  // (the side fences are `sides.a` and `sides.b`, like the side walls of an indoor room: a corner room's gate is cut into one: room.js)
+  const sides = { far: fence(L, 0, -N, 0), a: fence(N, -L / 2, -N / 2, Math.PI / 2), b: fence(N, L / 2, -N / 2, -Math.PI / 2) };
 
   // the gantry on the far fence: a sun lamp and a moon lamp, side by side, high up
   const metal = new THREE.MeshStandardMaterial({ color: 0x5d6670, roughness: 0.5, metalness: 0.5 });
@@ -131,7 +131,15 @@ export function buildYardShell(g, L, N, height) {
     },
   };
   sky.apply();
-  return { group: g, sky, cut, parts: { grass, tint, stars, sunDisc, moonDisc, gantry } };
+  // A piece of fence `len` long (for the stretches either side of a gate, and the gate's own leaf): the same planks, dimmed at night too.
+  const fencePiece = (len, h = FH) => {
+    const m = fenceMat.clone();
+    m.map = fenceTex.clone(); m.map.needsUpdate = true; m.map.repeat.set(len / 2, h / FH);
+    fenceMats.push(m);
+    if (sky.k) m.color.setScalar(1 - 0.5 * sky.k);
+    return m;
+  };
+  return { group: g, sky, cut, sides, FH, fencePiece, parts: { grass, tint, stars, sunDisc, moonDisc, gantry } };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------- the objects

@@ -231,18 +231,52 @@ export function install(T, h) {
         return { data: capture() };
       });
     }
-    // The furnished corner rooms: what the bots build for them (a bed, a wardrobe and a bedside table; two bookshelves and a reading chair)
-    for (const [id, kinds] of [['bedroom', ['bed', 'wardrobe', 'bedside']], ['library', ['libshelf', 'libshelf', 'readingchair']]]) {
+    // The furnished corner rooms: what the bots build for them (a bed, a wardrobe and a bedside table; two bookshelves, a reading chair, a
+    // reading desk with its lamp lit and a globe), and in the Library the skill shelf they carried in, its dust and cobwebs cleaned away
+    for (const [id, kinds] of [['bedroom', ['bed', 'wardrobe', 'bedside']], ['library', ['libshelf', 'libshelf', 'readingchair', 'libdesk', 'globe']]]) {
       add(`room-corner-${id}-furnished`, 'rooms', async () => {
         await clean(id === 'library' ? 48 : 49);
         const w = window.brain.w;
         w.rooms.add('workshop', { walls: ['right'] });
         w.rooms.add('library'); w.rooms.add('bedroom');
         for (const k of kinds) w.addInstance(k, null, null, true);
+        if (id === 'library') {
+          const spot = w.libraryShelfSpot(w.objects.shelf);
+          if (spot && w.packShelf('shelf')) w.unpackShelf('shelf', spot);
+          for (const s of w.doors.library.shell.dust.spots) w.doors.library.shell.dust.clean(s, 1);
+          const desk = Object.values(w.objects).find((o) => o.kind === 'libdesk');
+          if (desk) { desk.setLamp(true); for (let i = 0; i < 30; i++) desk.update(0.1); }
+        }
         T.freeze(); window.guy.root.visible = false; frameCorner(id); await settleFrames(3);
         return { data: capture() };
       });
     }
+    // A corner room beside the Shooting Range (its door in the Range's side wall, between the controller and the scoreboard) and one
+    // beside the Backyard (a garden gate in the side fence)
+    add('room-range-sidedoor', 'rooms', async () => {
+      await clean(51);
+      const w = window.brain.w;
+      w.rooms.add('range', { walls: ['front'] }); w.rooms.add('bedroom');
+      w.setDoorOpen('bedroom', true); for (let i = 0; i < 40; i++) window.sim(0.05);
+      T.freeze(); window.guy.root.visible = false;
+      const p = w.doorPoint('bedroom', 0);
+      window.controls.dispatchEvent({ type: 'start' });
+      window.camera.position.set(p.x - 6.5, 6.5, p.z + 4.5); window.controls.target.set(p.x, 0.8, p.z); window.controls.update();
+      await settleFrames(3);
+      return { data: capture() };
+    });
+    add('room-backyard-gate', 'rooms', async () => {
+      await clean(52);
+      const w = window.brain.w;
+      w.rooms.add('backyard', { walls: ['left'] }); w.rooms.add('library');
+      w.setDoorOpen('library', true); for (let i = 0; i < 40; i++) window.sim(0.05);
+      T.freeze(); window.guy.root.visible = false;
+      const p = w.doorPoint('library', 0);
+      window.controls.dispatchEvent({ type: 'start' });
+      window.camera.position.set(p.x + 3.5, 5.5, p.z + 7); window.controls.target.set(p.x, 0.8, p.z); window.controls.update();
+      await settleFrames(3);
+      return { data: capture() };
+    });
     add('room-corners', 'rooms', async () => {                      // the Workshop with a corner room at each side wall: both doors, both rooms
       await clean(50);
       const w = window.brain.w;

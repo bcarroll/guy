@@ -255,8 +255,8 @@ export function installWorkshop(Brain, POSES, H) {
     // new things grow into place over a moment
     lateWork2() {
       if (!this.popping || !this.popping.length) return;
-      const dt = Math.min(0.1, this.time - (this.popT0 ?? this.time)); this.popT0 = this.time;
-      for (const p of this.popping) { p.t += dt; const k = Math.min(1, p.t / 0.9), s = k * k * (3 - 2 * k); p.o.group.scale.setScalar(0.4 + 0.6 * s); if (k >= 1) p.done = true; }
+      const dt = Math.max(0, Math.min(0.1, this.time - (this.popT0 ?? this.time))); this.popT0 = this.time;      // (never backwards: the clock can be set back, and a negative step blew a piece up thousands of times its size)
+      for (const p of this.popping) { p.t += dt; const k = Math.max(0, Math.min(1, p.t / 0.9)), s = k * k * (3 - 2 * k); p.o.group.scale.setScalar(0.4 + 0.6 * s); if (k >= 1) p.done = true; }
       this.popping = this.popping.filter((p) => !p.done);
     },
     // Why he cannot do what the user asked with a Workshop object (a kind message), or null if he can.

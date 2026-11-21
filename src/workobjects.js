@@ -68,6 +68,12 @@ export function makeWorkshopBuilders({ makeObject, box, mat }) {
     } else if (kind === 'libshelf') {
       for (const sx of [-0.17, 0.17]) box(0.02, 0.4, 0.1, wd, sx, 0.2, 0, g);
       for (const y of [0.02, 0.14, 0.26, 0.38]) box(0.34, 0.02, 0.1, light, 0, y, 0, g);
+    } else if (kind === 'libdesk') {
+      box(0.34, 0.02, 0.18, wd, 0, 0.2, 0, g); for (const sx of [-0.15, 0.15]) box(0.02, 0.19, 0.16, light, sx, 0.095, 0, g);
+      box(0.04, 0.05, 0.03, mat(0x1f7a4a), -0.1, 0.24, -0.04, g);
+    } else if (kind === 'globe') {
+      box(0.03, 0.14, 0.03, wd, 0, 0.07, 0, g);
+      const s = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8), mat(0x3f78b5)); s.position.set(0, 0.2, 0); g.add(s);
     } else if (kind === 'readingchair') {
       box(0.2, 0.12, 0.18, mat(0x2f6b4f), 0, 0.08, 0, g); box(0.2, 0.14, 0.04, mat(0x2f6b4f), 0, 0.2, -0.07, g);
     } else {                                                                     // a chair

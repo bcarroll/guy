@@ -34,7 +34,9 @@ export const ROOM_CATALOG = [
   // Corner rooms: empty rooms for whatever the user wants to put in them (the Catalog's Rooms list, and every piece of furniture can be moved
   // in). A corner has no wall of GUY's room to put a door in, so it opens through the side wall of the room beside it: the Workshop, or another
   // room with one. `corner: true` rooms are put in the first free corner (`corners`) that has such a neighbour: see world.planCorner.
-  { id: 'library', name: 'Library', icon: '📚', unlocked: true, corner: true, doorWalls: [], corners: ['right-back', 'right-front', 'left-back', 'left-front'],
+  // The Library is dusty when it is added (`dusty`: dust on the floor, cobwebs in the corners, src/library.js) until the robots clean it,
+  // and they move the bookshelves into it, books and all (src/librarybrain.js).
+  { id: 'library', name: 'Library', icon: '📚', unlocked: true, corner: true, dusty: true, doorWalls: [], corners: ['right-back', 'right-front', 'left-back', 'left-front'],
     desc: 'A quiet room in a corner of your home, reached through the room beside it.',
     look: { frame: 0x5a3b22, door: 0x7a3b2e, panel: 0x93503f, floor: 0x9b7653, wall: 0xcdbfa6 } },
   { id: 'bedroom', name: 'Bedroom', icon: '🛏️', unlocked: true, corner: true, doorWalls: [], corners: ['right-front', 'right-back', 'left-front', 'left-back'],
@@ -65,7 +67,7 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
   };
 
   const snapshot = () => ({ rooms: Object.fromEntries(Object.entries(state).filter(([id, s]) => s.added && world.doors[id] && !closing[id])
-    .map(([id, s]) => [id, { added: true, wall: s.wall, u: s.u, ...(s.parent && s.parent !== 'main' ? { parent: s.parent, corner: s.corner } : {}), ...(s.unlocked !== undefined ? { unlocked: s.unlocked } : {}), ...(s.doorLocked ? { doorLocked: true } : {}) }])) });
+    .map(([id, s]) => [id, { added: true, wall: s.wall, u: s.u, ...(s.parent && s.parent !== 'main' ? { parent: s.parent, corner: s.corner } : {}), ...(s.unlocked !== undefined ? { unlocked: s.unlocked } : {}), ...(s.doorLocked ? { doorLocked: true } : {}), ...(world.doors[id].shell.dust ? { dust: world.doors[id].shell.dust.snapshot() } : {}) }])) });
   const save = () => {
     if (!persist) return;
     try { localStorage.setItem(KEY, JSON.stringify(snapshot())); } catch { /* no storage */ }
@@ -136,6 +138,7 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
       if (s.unlocked !== undefined) state[id] = { ...(state[id] || {}), id, unlocked: s.unlocked };
       if (s.doorLocked) state[id] = { ...(state[id] || {}), id, doorLocked: true };
       const res = add(id, { at: { wall: s.wall, u: s.u, ...(s.parent ? { parent: s.parent, corner: s.corner } : {}) } });
+      if (s.dust && world.doors[id] && world.doors[id].shell.dust) world.doors[id].shell.dust.apply(s.dust);      // (as clean as it was)
       out.push({ id, ok: res.ok || !!res.already, displaced: res.displaced || [] });
       if (!res.ok && !res.already) {                       // the saved spot is taken by something fixed: find a new one
         const again = add(id);
@@ -149,6 +152,21 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
     let data = null;
     try { data = JSON.parse(localStorage.getItem(KEY)); } catch { data = null; }
     return restoreFrom(data);
+  }
+
+  // The bookshelves can stand only in GUY's room or the Library (room.js mainOnly), and the skill shelf can never go to the Catalog: when the
+  // Library goes they come back into his room, books and all (a shelf GUY built goes into storage if there is no space for it there).
+  function shelvesHome(inRoom) {
+    for (const o of Object.values(world.objects)) {
+      if (!o.mainOnly || !inRoom(o.x, o.z)) continue;
+      if (o.packed && world.unpackShelf) world.unpackShelf(o.name, null);
+      const keep = o.rot;
+      let spot = null;
+      for (const rot of [0, keep, 1, 2, 3]) { o.rot = rot; spot = world.findSpot(o, { x: 4.1, z: 0.2 }, null); if (spot && world.roomIdAt(spot.x, spot.z) === 'main') break; spot = null; }
+      if (spot) { o.home = { x: spot.x, z: spot.z }; o.set(spot.x, spot.z); o.group.rotation.y = o.yaw; continue; }
+      o.rot = keep;
+      if (o.name === 'shelf') { o.rot = 0; o.set(4.7, 0.2); o.group.rotation.y = 0; }      // (its own place, whatever stands there: it must be somewhere he can reach)
+    }
   }
 
   // ---- Taking a room away (the Catalog's Rooms tab) ----
@@ -168,6 +186,7 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
       const d = world.doors[i], b = d && d.shell.bounds;
       if (!d) continue;
       const inRoom = (x, z) => x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ;
+      shelvesHome(inRoom);
       for (const [name, o] of Object.entries(world.objects)) if (inRoom(o.x, o.z)) remove(name);       // to the Catalog (or storage), not lost
       world.removeDoor(i);
       delete state[i];
@@ -200,6 +219,8 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
   let since = 0;
   function tick(dt = 0) {
     since += dt;
+    for (const d of Object.values(world.doors)) if (d.shell.dust) d.shell.dust.update(dt);      // (the Library's dust settles again, slowly)
+    if (dt && Math.floor(since / 20) !== Math.floor((since - dt) / 20) && Object.values(world.doors).some((d) => d.shell.dust)) save();     // (and how clean it is is saved now and then)
     for (const [id, c] of Object.entries(closing)) {
       const ids = c.ids.filter((i) => world.doors[i]);
       if (!world.doors[id]) { delete closing[id]; continue; }
@@ -220,6 +241,7 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
     for (const k of Object.values(world.doors)) if (k.parent === id) reset(k.id);          // the rooms that open into it go first
     const d = world.doors[id], b = d && d.shell.bounds;
     const inRoom = (x, z) => !!b && x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ;
+    shelvesHome(inRoom);
     for (const [name, o] of Object.entries(world.objects)) if (inRoom(o.x, o.z)) { remove(name); delete world.removed[name]; }     // its furniture goes with it
     for (const [name, o] of Object.entries(world.removed)) if (!o.decor && o.home && inRoom(o.home.x, o.home.z)) delete world.removed[name];   // and what was put away from it
     world.removeDoor(id);
