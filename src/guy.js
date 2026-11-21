@@ -125,7 +125,7 @@ export class Guy {
       const S = pos(`${side}Arm`), E = pos(`${side}ForeArm`), H = pos(`${side}Hand`);
       const M = pos(`${side}HandMiddle3`);
       this.limb[side] = {
-        L1: S.distanceTo(E), L2: E.distanceTo(H), handLen: H.distanceTo(M) + 0.035,
+        L1: S.distanceTo(E), L2: E.distanceTo(H), handLen: H.distanceTo(M) + 0.035, knuckle: H.distanceTo(pos(`${side}HandMiddle1`)),     // (wrist to knuckles)
         a0: E.clone().sub(S).normalize(), f0: H.clone().sub(E).normalize(),
       };
       // the hand's own rest axes: fingers direction, and palm normal (the side the fingers curl towards)

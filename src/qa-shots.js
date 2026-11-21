@@ -105,6 +105,33 @@ export function install(T, h) {
       });
     }
   };
+  // GAL playing the guitar, her fretting hand up close from behind her left shoulder (her shorter hand once made a fist under the neck)
+  add('gal-guitar-fretting', 'characters', async () => {
+    await clean(23);
+    const w = window.brain.w, b = window.brain;
+    const built = T.galBuild();
+    if (!built.ok) { T.galReset(); return { ok: false, why: 'GAL was not built' }; }
+    const gb = w.gal.brain, g = w.gal.g;
+    T.learn(['guitar']); gb.skills.learn('guitar'); T.addObject('guitar'); T.settle();
+    b.queue = []; b.step = null; b.choose('wander');
+    gb.queue = []; gb.step = null; gb.unlock(false); gb.choose('riff');
+    let t = 0; while (t < 30 && !(gb.pose === 'guitar' && gb.step && gb.step.t > 3)) { window.sim(0.25); t += 0.25; }
+    const ok = gb.pose === 'guitar';
+    T.freeze(); const upd = gb.update; gb.update = () => {};
+    for (let i = 0; i < 90; i++) g.apply(1 / 30);
+    window.scene.updateMatrixWorld(true); gb.safeLate && gb.safeLate();
+    const yaw = g.root.rotation.y, h = g.boneWorld('LeftHand');
+    const fw = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)), lf = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+    window.controls.dispatchEvent({ type: 'start' });
+    window.camera.position.copy(h.clone().addScaledVector(fw, -0.35).addScaledVector(lf, 0.45).add(new THREE.Vector3(0, 0.35, 0)));
+    window.controls.target.copy(h); window.controls.update();
+    await settleFrames(3);
+    window.renderer.render(window.scene, window.camera);
+    const data = window.renderer.domElement.toDataURL('image/jpeg', 0.9);
+    gb.update = upd; T.unfreeze(); T.galReset();
+    return ok ? { data } : { ok: false, why: 'GAL never started playing' };
+  });
+
   // The rigs are known only once the page is up, so the characters are added on the first call to shotIds.
   const baseIds = T.shotIds;
   let charsAdded = false;

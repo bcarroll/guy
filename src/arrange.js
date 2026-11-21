@@ -4,15 +4,18 @@
 //     (into a room he picks: see ROOMS);
 //   - he wants to sit and play but there is no free chair: he orders one out of storage (a chair he built), then one from the catalog,
 //     and when there is none of either he goes to the Workshop and builds one (the usual build, so the factories do the work);
-//   - there is no room for what he ordered: he sends something light that nobody is using away first, and orders again.
+//   - there is no room for what he ordered: he sends something light that nobody is using away first, and orders again;
+//   - something stands in a room it does not belong in (an instrument in the Workshop, a bed built for the Bedroom left in the Workshop):
+//     he sends it to its own room (its place in ROOMS, or where the Workshop builds it for), if there is space for it there.
 // Nothing moves by itself: it all happens when he taps the screen (the `arrange` activity in brain.js, whose steps are in arrangeActivities).
 import { sfx } from './sfx.js';
 import { RECIPES } from './workshop.js';
 
 // what he wants to play, and the skill that makes him want it
 const WANTS = [['guitar', 'guitar'], ['drums', 'drums'], ['easel', 'easel'], ['telescope', 'telescope'], ['piano', 'piano'], ['table', 'stereo']];
-// where each can go (the first is the home room; an added room is used only while it is there and its door is not locked)
-const ROOMS = { guitar: ['main', 'main', 'workshop'], drums: ['main', 'main', 'workshop'], easel: ['main', 'main', 'backyard'], telescope: ['main', 'main', 'backyard'], piano: ['main'], table: ['main', 'main', 'backyard'] };
+// where each can go (the first is the home room; an added room is used only while it is there and its door is not locked). The Workshop is
+// for making things, never for keeping them: an instrument ordered there used to stay there for good.
+const ROOMS = { guitar: ['main'], drums: ['main'], eguitar: ['main'], easel: ['main', 'main', 'backyard'], telescope: ['main', 'main', 'backyard'], piano: ['main'], table: ['main', 'main', 'backyard'] };
 const CHAIRS = ['builtchair', 'metalchair', 'chair', 'chair2', 'armchair2', 'armchair'];     // in the order he tries them
 const CHAIR_RECIPES = ['builtchair', 'metalchair'];
 // light things he will send away to make space (never something somebody is using, never a heavy or core piece)
@@ -37,6 +40,9 @@ export function installArrange(Brain, H) {
       if (this.time - (this.lastWish || -999) < 45) return null;
       const fails = (this.wishFails ||= {});
       const cool = (k) => this.time - (fails[k] || -999) > 240;
+      // 0. something is in the wrong room: it goes to its own
+      const moved = this.misplaced().find((m) => cool(`move:${m.o.name}`));
+      if (moved) return { act: 'arrange', key: `move:${moved.o.name}`, why: `sends the ${moved.label} to ${moved.roomName}`, add: [{ id: moved.id, room: moved.room, own: moved.own }], remove: [moved.id], name: moved.o.name };
       // 1. something he knows how to play is not in the room
       for (const [id, skill] of WANTS) {
         if (!this.skills.has(skill) || this.obj(id) || !cool(id)) continue;
@@ -55,6 +61,24 @@ export function installArrange(Brain, H) {
       const spare = Object.values(w.objects).filter((o) => CHAIR_RECIPES.includes(o.kind) && w.roomIdAt(o.x, o.z) === 'main');
       if (spare.length > 3 && cool('tidy')) return { act: 'arrange', key: 'tidy', why: 'puts a spare chair away', add: [], remove: [spare[spare.length - 1].kind] };
       return null;
+    },
+    // Things left in the Workshop that belong in another room, with the room each goes to (open to him, with space for it): [{ o, id, label, room, roomName }].
+    misplaced() {
+      const w = this.w, ok = this.openRooms(), out = [];
+      for (const o of Object.values(w.objects)) {
+        if (o.hauled || o.stowed || o.removable === false || this.inUse(o.name) || this.otherUses(o.name)) continue;
+        const id = o.kind || o.name, here = w.roomIdAt(o.x, o.z);
+        if (here !== 'workshop') continue;                       // (only out of the Workshop: anywhere else, it is where the user wants it)
+        let homes = ROOMS[id], own = false;
+        if (!homes && o.kind && RECIPES[o.kind]) { const s = w.instanceSite(o.kind); if (s && s.room !== 'door' && s.room !== 'workshop') { homes = [s.room]; own = true; } }   // where the Workshop builds it for (its planned spot there)
+        if (!homes || homes.includes(here)) continue;
+        const room = homes.find((r) => ok.includes(r));
+        const where = room && (own ? w.instanceSite(o.kind) : w.roomSpot(room));
+        if (!where || !w.findSpot(o, where, null)) continue;
+        const def = this.ops().byId ? this.ops().byId(id) : null;
+        out.push({ o, id, label: (def && def.name.replace(/ \(built by GUY\)$/, '')) || id, room, own, roomName: room === 'main' ? 'his own room' : `the ${room}` });
+      }
+      return out;
     },
     // Used by choose(): returns the activity to do now ('arrange' | 'build') or null. Sets up what that activity does.
     arrangeNext() {
@@ -83,17 +107,21 @@ export function installArrange(Brain, H) {
       const plan = this.arrangePlan, ops = this.ops(), w = this.w, done = [];
       this.arrangePlan = null;
       if (!plan || !ops) return done;
+      const back = {};                                              // (a move: where it stood, in case it does not fit where it is going after all)
       for (const id of plan.remove) {
-        if (ops.status(id) === 'inroom' && ops.remove(id)) { done.push(`removed ${id}`); }
+        const o = plan.name ? this.obj(plan.name) : null;
+        if (o) back[id] = { x: o.x, z: o.z };
+        if (ops.status(id) === 'inroom' && ops.remove(id, plan.name)) { done.push(`removed ${id}`); }
       }
       for (const a of plan.add) {
-        const where = w.roomSpot(a.room || 'main'), st = ops.status(a.id);
+        const where = a.own ? null : w.roomSpot(a.room || 'main'), st = ops.status(a.id);      // (`own`: a built thing goes to the spot planned for it)
         if (st !== 'removed' && st !== 'available' && st !== 'stored') continue;
         let ok = ops.add(a.id, where);
         if (!ok) {                                                  // no room: a light thing nobody uses goes first
           const away = CLUTTER.find((c) => this.obj(c) && !this.using.has(c) && !(this.other && this.other.using && this.other.using.has(c)) && w.roomIdAt(this.obj(c).x, this.obj(c).z) === (a.room || 'main'));
           if (away && ops.remove(away)) { done.push(`removed ${away}`); ok = ops.add(a.id, where); }
         }
+        if (!ok && back[a.id]) { ops.add(a.id, back[a.id]); continue; }       // it goes back where it was
         if (ok) done.push(`added ${a.id} (${a.room || 'main'})`);
       }
       if (done.length) { sfx('chime'); this.ui(done.join(', ')); }

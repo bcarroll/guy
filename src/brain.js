@@ -1292,13 +1292,14 @@ export class Brain {
     // left hand (the fretting hand): the forearm comes from his side, so the hand is BEHIND the neck (the side facing him), wrist below it,
     // thumb on the back of the neck, fingers reaching up past the neck's top edge and curling over it so the pads press the strings from the front.
     // (It used to sit on the soundboard side with the palm to the fretboard: the fingers curled round to the back of the neck, through it.)
-    // The WRIST is placed so the knuckles sit at the neck's top edge (0.124 m is wrist-to-knuckle on this model).
+    // The WRIST is placed so the knuckles sit at the neck's top edge (the rig's own wrist-to-knuckle length: 0.124 m on GUY, 0.092 m on GAL, whose
+    // knuckles used to end up 3 cm under the neck, so her curled fingers made a fist below it and the hand looked upside down).
     const gl = (x, y, z) => new THREE.Vector3(x, y, z).applyQuaternion(cur.q);
     const axZ = gl(0, 0, 1), axX = gl(1, 0, 0);
     const leftFingers = gl(GL_FINGERS[0], GL_FINGERS[1], GL_FINGERS[2]).normalize();
     const leftPalm = gl(GL_PALM[0], GL_PALM[1], GL_PALM[2]).normalize();                                          // palm normal: towards the back of the neck, and up
     const knuckle = this.gp(cur, GL_KNUCKLE[0] + st.fret, GL_KNUCKLE[1], GL_KNUCKLE[2]);                           // where the knuckles rest
-    const fretPt = knuckle.addScaledVector(leftFingers, -0.124);
+    const fretPt = knuckle.addScaledVector(leftFingers, -(this.g.limb.Left.knuckle ?? 0.124));
     const fingersDir = new THREE.Vector3(0, -1, 0).applyQuaternion(cur.q).multiplyScalar(0.9).addScaledVector(new THREE.Vector3(0, 0, 1).applyQuaternion(cur.q), -0.4).normalize();
     const tip = this.gp(cur, 0.05, st.y * 0.5, 0.07);                       // right FINGERTIPS just above the strings by the sound hole
     const strum = tip.clone().addScaledVector(fingersDir, -this.g.limb.Right.handLen * 0.9); // ...so the WRIST is a hand's length back along the fingers
@@ -1499,6 +1500,11 @@ export class Brain {
       const inRoom = room ? (q) => q.x >= bd.minX + 0.6 && q.x <= bd.maxX - 0.6 && q.z >= bd.minZ + 0.6 && q.z <= bd.maxZ - 0.6   // (nor against a fence)
         : (q) => (Math.abs(q.x) <= 4.5 && q.z >= -3.5 && q.z <= 3.6) || this.w.walkable(q.x, q.z); // GUY can't stand in the wall (but he can in an open doorway: a piece shoved against the door from outside)
       if (!inRoom(S) || !inRoom(S2) || cellBlocked(guyGrid, S.x, S.z) || cellBlocked(guyGrid, S2.x, S2.z) || !lineClear(guyGrid, S, S2)) return null;
+      // the piece itself never goes through a wall (a doorway only), and is never left in one: a chair shoved to the edge of the grid
+      // used to end up half in the next room, and then nobody could move it
+      const n = Math.max(1, Math.ceil(len / 0.1));
+      for (let k = 1; k <= n; k++) if (!this.w.wallOk(obj, A.x + (B.x - A.x) * k / n, A.z + (B.z - A.z) * k / n)) return null;
+      if (i + 2 === pts.length && !this.w.insideRoom(obj, B.x, B.z)) return null;
       const yaw = Math.atan2(d.x, d.z);
       steps.push(this.walk(S.x, S.z, yaw));
       steps.push({ ...this.walk(S2.x, S2.z, yaw), push: { obj, relx: d.x * off, relz: d.z * off, spd } });

@@ -2115,6 +2115,32 @@ T.sweepLayout = () => {
     const day = clone(L().snapshot()); y.snapNight(true); L().apply(clone(day));
     out.push(result('layout: the backyard remembers night and day', night.sky === true && sk === true && day.sky === false && y.isNight() === false, { sk }));
     y.snapNight(false); if (!wasYard) R().reset('backyard'); }
+  // 7c. pieces in walls: GUY's shoving never leaves one there, a saved one is put back on the floor, and one stuck there can still be dragged out
+  { if (!R().isAdded('workshop')) { unlockRoom('workshop'); R().add('workshop'); }
+    T.addObject('chair'); T.settle();
+    const ch = w.objects.chair, b = B(), home = { x: ch.x, z: ch.z }, room = { fr: w.frameOf('workshop'), bd: w.doors.workshop.shell.bounds };
+    let plans = 0; const bad = [];
+    for (const [cx, cz] of [[4.4, -2.6], [4.4, 2.4], [-4.4, 2.4], [2, 3.4], [2, -3.4], [5.6, 0.2], [5.6, 3.4], [14.4, 0]]) {
+      if (!w.fits(ch, cx, cz)) continue;
+      ch.set(cx, cz);
+      for (const d of [0.8, 1.2, 1.6]) for (let k = 0; k < 8; k++) for (const rm of [room, null]) {
+        const p = b.planPush(ch, cx + Math.cos(k * Math.PI / 4) * d, cz + Math.sin(k * Math.PI / 4) * d, null, rm);
+        if (!p) continue;
+        plans++;
+        const ends = p.filter((st) => st.push).map((st) => [st.x + st.push.relx, st.z + st.push.relz]);
+        if (ends.some(([x, z]) => !w.wallOk(ch, x, z)) || !w.insideRoom(ch, ...ends.at(-1))) bad.push([cx, cz, ends.at(-1).map((v) => +v.toFixed(2))]);
+      }
+    }
+    out.push(result('layout: GUY shoving a chair out of his way (near the walls, in both rooms) never leaves it half in a wall', plans > 0 && !bad.length, { plans, bad: bad.slice(0, 4) }));
+    const wd = w.doors.workshop, stuckAt = { x: 5.0, z: Math.abs(wd.u - 2.6) > 1.2 ? 2.6 : -2.6 };          // (on the wall line, away from the door)
+    ch.set(stuckAt.x, stuckAt.z);
+    const snap = clone(L().snapshot()); L().apply(clone(snap));
+    out.push(result('layout: a saved chair standing in a wall is put back on a floor when the game loads', w.insideRoom(ch, ch.x, ch.z) && w.fits(ch, ch.x, ch.z), { at: [ch.x, ch.z] }));
+    ch.set(stuckAt.x, stuckAt.z);
+    w.beginDrag(ch); for (let i = 0; i < 30; i++) w.dragTo(ch, stuckAt.x - 1.2, stuckAt.z); w.dropObject(ch);
+    out.push(result('layout: a chair stuck in a wall can be dragged out of it', w.insideRoom(ch, ch.x, ch.z) && w.fits(ch, ch.x, ch.z), { at: [+ch.x.toFixed(2), +ch.z.toFixed(2)] }));
+    ch.set(home.x, home.z);
+    R().reset('workshop'); }
   // 8. GUY stands on a free spot even if the saved layout has furniture where he starts
   G().root.position.set(w.objects.armchair.x, 0, w.objects.armchair.z);
   const moved = L().unstickGuy();
@@ -3126,6 +3152,7 @@ const galBuild = () => {
   let t = 0; while (t < 80 && !(w.gal.exists() && !w.gal.emerge)) { step(0.5); t += 0.5; }
   return { ok: w.gal.exists() && !w.gal.emerge, t };
 };
+T.galBuild = () => galBuild(); T.galReset = () => galReset();         // (the pictures use them: GAL playing the guitar)
 T.sweepGal = () => {
   const out = [], base = errors.length, w = W(), b = B(), gal = w.gal;
   if (!gal.g || !gal.g.loaded) return [result('gal: her model is loaded (wait a moment after the page opens)', false)];
@@ -3295,11 +3322,23 @@ T.sweepGal = () => {
   const e6d = errors.length;
   b.queue = []; b.step = null; b.skip(true); gb.queue = []; gb.step = null; gb.skip(true);
   b.choose('guitar'); gb.choose('guitar');
-  let t6d = 0, both = 0, close6d = 0, electric = false; const used = new Set();
+  let t6d = 0, both = 0, close6d = 0, electric = false; const used = new Set(), fretGal = [], fretGuy = [];
   while (t6d < 70) {
     step(0.25); t6d += 0.25;
     if (b.pose === 'guitar' && gb.pose === 'guitar') { both++; used.add(b.gname + '+' + gb.gname); electric = electric || b.electric() || gb.electric(); }
     if (Math.hypot(b.g.pos.x - gb.g.pos.x, b.g.pos.z - gb.g.pos.z) < 0.25) close6d++;
+    // her fretting hand, in the guitar's own frame (neck top edge at y 0.026, strings side +z): knuckles at the top edge, fingertips over it
+    for (const [x, arr] of [[gb, fretGal], [b, fretGuy]]) {
+      const F = x.pose === 'guitar' && x.step && x.step.t > 2 && x.lastCtx && x.lastCtx.guitar && x.lastCtx.guitar.cur;
+      if (!F) continue;
+      const Fi = F.q.clone().invert(), loc = (n) => x.g.boneWorld(n).sub(F.pos).applyQuaternion(Fi);
+      arr.push({ kY: loc('LeftHandMiddle1').y, tipsZ: ['Index', 'Middle', 'Ring', 'Pinky'].reduce((a, f) => a + loc(`LeftHand${f}3`).z, 0) / 4 });
+    }
+  }
+  {
+    const med = (a, k) => { const v = a.map((o) => o[k]).sort((p, q) => p - q); return v.length ? +v[Math.floor(v.length / 2)].toFixed(3) : null; };
+    const g = { kY: med(fretGal, 'kY'), tipsZ: med(fretGal, 'tipsZ') }, u = { kY: med(fretGuy, 'kY'), tipsZ: med(fretGuy, 'tipsZ') };
+    out.push(result('gal: her fretting hand sits like his: knuckles at the top edge of the neck and fingertips over it on the strings (her shorter hand used to make a fist under the neck, upside down)', fretGal.length > 10 && g.kY > 0.015 && g.tipsZ > 0.03 && Math.abs(g.kY - u.kY) < 0.012, { gal: g, guy: u, n: fretGal.length }));
   }
   out.push(result('gal: with an electric guitar as well as the acoustic one, GUY and GAL both play a guitar at the same time, one each, and the electric one sounds electric', both > 20 && used.size === 1 && !used.has('guitar+guitar') && ![...used][0].split('+').every((n, _i, a) => n === a[0]) && electric && close6d <= 6 && errors.length === e6d, { both, used: [...used], electric, close6d, errs: errors.slice(e6d, e6d + 1) }));
   // 7. both help in the restaurant: customers are looked after by whoever gets there, nothing is done twice
@@ -4966,6 +5005,30 @@ T.sweepArrange = () => {
     let tOwn = 0; while (tOwn < 240 && !w.objects.guitar) { b.lastWish = -999; step(0.5); tOwn += 0.5; if (tOwn > 5 && !b.step && !b.queue.length) b.choose(); }
     out.push(result('arrange: left alone with the skill and no guitar, he goes to the workstation by himself and orders one', !!w.objects.guitar, { tOwn }));
     if (w.objects.guitar) { w.removeObject('guitar'); b.objectRemoved('guitar'); }
+    // 5c. the Workshop is for making things, not keeping them: an instrument is never ordered into it, and what is left there (an instrument,
+    // a bed built for the Bedroom) he sends to its own room (a drum kit and a guitar used to stay in the Workshop for good)
+    {
+      const picks = new Set(); for (let i = 0; i < 40; i++) { picks.add(b.roomPick('guitar')); picks.add(b.roomPick('drums')); }
+      out.push(result('arrange: a guitar or drum kit he orders goes in his own room, never the Workshop', picks.size === 1 && picks.has('main'), { picks: [...picks] }));
+      unlockRoom('bedroom'); if (!w.rooms.isAdded('bedroom')) w.rooms.add('bedroom');
+      T.addObject('drums'); if (w.objects.drums) { w.removeObject('drums'); b.objectRemoved('drums'); }
+      w.stock.items.bed = 1;
+      const ws = w.roomSpot('workshop');
+      const inWs = [ops.add('drums', ws), ops.add('bed', ws)];
+      const bed = () => Object.values(w.objects).find((o) => o.kind === 'bed');
+      const at = () => ({ drums: w.objects.drums && w.roomIdAt(w.objects.drums.x, w.objects.drums.z), bed: bed() && w.roomIdAt(bed().x, bed().z) });
+      const before = at();
+      // on his own: left alone, he goes to the workstation and sends each to its room
+      b.queue = []; b.step = null; b.pendingActivity = null; b.wishFails = {}; T.settle();
+      let tm = 0; while (tm < 300 && !(at().drums === 'main' && at().bed === 'bedroom')) { b.lastWish = -999; step(0.5); tm += 0.5; if (tm > 5 && !b.step && !b.queue.length) b.choose(); }
+      const after = at(), bd = bed(), site = w.instanceSite('bed');
+      out.push(result('arrange: a drum kit and a bed left in the Workshop: he goes to the workstation and sends the drums to his room and the bed to its place in the Bedroom', inWs.every(Boolean) && before.drums === 'workshop' && before.bed === 'workshop' && after.drums === 'main' && after.bed === 'bedroom' && !!bd && Math.hypot(bd.x - site.x, bd.z - site.z) < 0.3, { inWs, before, after, tm, bedAt: bd && [bd.x, bd.z], site }));
+      b.wishFails = {}; b.lastWish = -999;
+      out.push(result('arrange: once everything is where it belongs he has nothing left to move', !b.misplaced().length, { left: b.misplaced().map((m) => m.o.name) }));
+      if (w.objects.drums) { w.removeObject('drums'); b.objectRemoved('drums'); }
+      if (bd) w.storeInstance(bd.name);
+      delete w.stock.items.bed;
+    }
     // 6. nothing to order: no wish, and with no workstation an order is refused in words
     skillsOf().known.clear(); b.lastWish = -999; b.wishFails = {};
     out.push(result('arrange: without the skill he has no wish for the guitar', !b.arrangeWish() || b.arrangeWish().key !== 'guitar'));

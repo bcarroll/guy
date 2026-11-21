@@ -224,6 +224,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
   // { x, z }, a spot in the room they chose. A built thing (a chair GUY made) comes out of storage; anything else out of the catalog.
   const byId = (id) => OBJECT_CATALOG.find((d) => d.id === id);
   const ops = {
+    byId,
     // 'inroom' | 'removed' | 'available' | 'stored' (built, waiting in storage) | 'locked' | 'unlisted' (a room or skill it needs is missing) | 'unknown'
     status(id) {
       const d = byId(id);
@@ -237,11 +238,12 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
       return !d ? false : d.built ? addBuilt(d, where) : st === 'removed' || st === 'available' ? addObject(d, where) : false;
     },
     // takes one away: the thing itself, or (for something GUY built) the first one standing in a room, which goes back into storage
-    remove(id) {
+    // (`name`: which one of the things GUY built, when there are several)
+    remove(id, name = null) {
       const d = byId(id);
       if (!d) return false;
       if (!d.built) return removeObject(d);
-      const o = Object.values(world.objects).find((x) => x.kind === id);
+      const o = Object.values(world.objects).find((x) => x.kind === id && (!name || x.name === name)) || Object.values(world.objects).find((x) => x.kind === id);
       if (!o) return false;
       remove(o.name);
       notify(`Put the ${d.name} back in storage`);

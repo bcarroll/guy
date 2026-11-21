@@ -1376,6 +1376,17 @@ export function buildRoom(scene) {
   // `canTransit` says whether a thing may be at (x, z) *while it is being moved*, which includes standing in the doorway; `fits` says where
   // it may be left. Together with `dragTo` they make a move a path, not a jump: an object dragged at a wall stops at the wall.
   const canTransit = (obj, x, z, w = obj.w, d = obj.d) => {
+    if (!wallOk(obj, x, z, w, d)) return false;
+    const x0 = x - w / 2, x1 = x + w / 2, z0 = z - d / 2, z1 = z + d / 2;
+    return !obstacles.some((o) => o !== obj.obstacle && o.active !== false && x1 > o.x0 && x0 < o.x1 && z1 > o.z0 && z0 < o.z1);
+  };
+  // Wholly inside one room (where a thing may be left, as far as the walls go)?
+  const insideRoom = (obj, x, z, w = obj.w, d = obj.d) => {
+    const x0 = x - w / 2, x1 = x + w / 2, z0 = z - d / 2, z1 = z + d / 2;
+    return roomBoundsList().some((b) => x0 >= b.minX && x1 <= b.maxX && z0 >= b.minZ && z1 <= b.maxZ);
+  };
+  // The walls only (no other furniture): inside one room, or straddling a wall line through a doorway.
+  const wallOk = (obj, x, z, w = obj.w, d = obj.d) => {
     const x0 = x - w / 2, x1 = x + w / 2, z0 = z - d / 2, z1 = z + d / 2;
     if (obj.mainOnly && !(x0 >= MAIN_BOUNDS.minX && x1 <= MAIN_BOUNDS.maxX && z0 >= MAIN_BOUNDS.minZ && z1 <= MAIN_BOUNDS.maxZ)) return false;
     const inRoom = roomBoundsList().some((b) => x0 >= b.minX && x1 <= b.maxX && z0 >= b.minZ && z1 <= b.maxZ);
@@ -1396,19 +1407,23 @@ export function buildRoom(scene) {
       });
       if (!through) return false;
     }
-    return !obstacles.some((o) => o !== obj.obstacle && o.active !== false && x1 > o.x0 && x0 < o.x1 && z1 > o.z0 && z0 < o.z1);
+    return true;
   };
   // Move `obj` towards (nx, nz) as far as it can legally go in a straight line (every 5 cm along the way must be a place it may pass or
   // rest: `fits`, or the doorway). `ok(x, z)` is an extra test from the caller (not on top of GUY). Returns true if it moved at all.
   // It remembers the last spot where it could be left (`dragRest`), for `dropObject`.
   const dragTo = (obj, nx, nz, ok = () => true) => {
     const legal = (x, z) => (fits(obj, x, z) || canTransit(obj, x, z)) && ok(x, z);
+    // (stuck in a wall, from an old save or an old bug: it may be pulled out of it, clear of other furniture, until it is free of the wall)
+    const stuck = !wallOk(obj, obj.x, obj.z);
+    const freeing = (x, z) => stuck && ok(x, z) && !obstacles.some((o) => o !== obj.obstacle && o.active !== false && x + obj.w / 2 > o.x0 && x - obj.w / 2 < o.x1 && z + obj.d / 2 > o.z0 && z - obj.d / 2 < o.z1);
     const sweep = (tx, tz) => {
       const dx = tx - obj.x, dz = tz - obj.z, n = Math.max(1, Math.ceil(Math.hypot(dx, dz) / 0.05));
-      let lx = obj.x, lz = obj.z;
+      let lx = obj.x, lz = obj.z, out = !stuck;
       for (let i = 1; i <= n; i++) {
         const x = obj.x + (dx * i) / n, z = obj.z + (dz * i) / n;
-        if (!legal(x, z)) break;
+        if (!legal(x, z)) { if (!out && freeing(x, z)) { lx = x; lz = z; continue; } break; }
+        out = true;
         lx = x; lz = z;
         if (fits(obj, x, z)) obj.dragRest = { x, z };
       }
@@ -1734,7 +1749,7 @@ export function buildRoom(scene) {
       return d;
     },
     // ---- doors and the rooms behind them (see src/rooms.js) ----
-    doors, DOOR, planDoor, planCorner, cornerCell, CORNER_KEYS: Object.keys(CORNERS), doorBlockers, findWallSpot, canTransit, dragTo, beginDrag, dropObject,
+    doors, DOOR, planDoor, planCorner, cornerCell, CORNER_KEYS: Object.keys(CORNERS), doorBlockers, findWallSpot, canTransit, wallOk, insideRoom, dragTo, beginDrag, dropObject,
     // Put a door for room `def` at (wall, u). The caller has already cleared whatever was in its way.
     // A corner room (opts.parent, opts.cell) has its door in the side wall `wall` of the room beside it (`parent`), and stands in `cell`.
     addDoor(def, wall, u, opts = {}) {
