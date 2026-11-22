@@ -5455,6 +5455,25 @@ T.sweepHelp = () => {
   btn.click();
   out.push(result('help: opening help closes the Skills menu', h.isOpen() && skills.hidden));
   h.close();
+  // The status line (what GUY and GAL are doing) never runs under the buttons in the top corner, whatever the window's width. The page's own styles and
+  // these elements in an empty frame, which can be made any size (the ❓ button covered the end of it on a phone).
+  {
+    const frame = document.createElement('iframe'); frame.style.cssText = 'position:fixed;left:0;top:0;border:0;visibility:hidden;height:844px';
+    document.body.appendChild(frame);
+    const d = frame.contentDocument, under = [], lines = [['GUY is ', 'reading "Stereo User Manual"', null], ['GUY is ', 'moving the bookshelf to the Library', 'reading "Piano Playing for Robots"'], ['', 'waking up…', null]];
+    d.head.innerHTML = [...document.querySelectorAll('style')].map((x) => `<style>${x.textContent}</style>`).join('');
+    d.body.innerHTML = ['hud', 'help-btn', 'lockscreen-btn', 'sound-btn'].map((id) => document.getElementById(id).outerHTML).join('');
+    const hud = d.getElementById('hud'); let seen = 0;
+    for (const wide of [320, 360, 390, 430, 540, 700, 701, 768, 820, 1024, 1280, 1500]) for (const [who, act, gal] of lines) {
+      frame.style.width = `${wide}px`;
+      hud.firstChild.textContent = who; d.getElementById('activity').textContent = act; d.getElementById('galline').hidden = !gal; d.getElementById('activity2').textContent = gal || '';
+      const a = hud.getBoundingClientRect();
+      for (const id of ['help-btn', 'lockscreen-btn', 'sound-btn']) { const k = d.getElementById(id).getBoundingClientRect(); if (k.width >= 44 && a.width > 60) seen++; if (a.left < k.right && a.right > k.left && a.top < k.bottom && a.bottom > k.top) under.push(`${wide}: "${act}" under ${id}`); }
+      if (a.right > wide || hud.scrollWidth > hud.clientWidth) under.push(`${wide}: "${act}" does not fit`);
+    }
+    frame.remove();
+    out.push(result('help: what GUY and GAL are doing is never covered by the buttons in the top corner, on a phone or a wide window', seen === 12 * 3 * 3 && !under.length, { seen, under: under.slice(0, 6), n: under.length }));
+  }
   return out;
 };
 
