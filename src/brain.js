@@ -130,11 +130,13 @@ const GUITAR_CHORDS = [
 function guitarHands(g, ctx, fade) {
   const b = ctx.guitar;
   if (!b) return;
+  g.set('Spine1', Q('x', 0.05));              // (before the lean, which adds to it: set after it, it threw away two fifths of the lean, and GAL's hand stopped short of the neck)
   const handLen = g.limb.Right.handLen;
   // palms face the instrument: the strumming hand looks into the soundboard, the fretting hand wraps the neck from behind
   if (b.wR > 0) {
     // (a grip needs the wrist there, not the fingertips: he leans in as far as that takes)
-    if (b.grip && (b.handBlend ?? 0) < 0.5) g.leanTo('Right', b.R, Math.min(1, b.wR * fade));
+    if (b.lean) g.leanTo('Right', b.lean.at, b.lean.weight * fade);
+    else if (b.grip && (b.handBlend ?? 0) < 0.5) g.leanTo('Right', b.R, Math.min(1, b.wR * fade));
     else g.reachAssist(b.R, Math.min(1, b.wR * fade));
     // taking it off / putting it on the stand he closes his hand round the neck (b.grip); the exact strumming hand only once it is on him
     const hand = (b.handBlend ?? 1) > 0.5 ? { hand: { fingers: b.fingersDir, palm: b.axisZ.clone().negate() } } : b.grip ? { hand: b.grip } : {};
@@ -144,7 +146,6 @@ function guitarHands(g, ctx, fade) {
   }
   // fretting hand: wrist under the neck, fingers pointing up and curling over it, thumb behind
   if (b.wL > 0) { g.reach('Left', b.L, b.wL * fade, 0, b.wL > 0.9 ? { hand: b.leftHand } : null); g.curl('Left', 1.0); }   // exact hand orientation only once the hand is on the neck (a wrist blended through it bends past 120 degrees)
-  g.set('Spine1', Q('x', 0.05));
 }
 
 function ballHands(g, ctx, fade) {
@@ -1356,6 +1357,8 @@ export class Brain {
       out.grip = { fingers: grip.fingers, palm: grip.palm, weight: hold1 * (1 - away) };
       out.close = lerp(0.2, lerp(GRIP_CLOSE, 0.12, open), toNeck);
       out.thumb = 0.5 * toNeck * (1 - open);
+      // (he bends down to the stand ahead of the instrument: leaning only as it went, his arm was still catching up with his body when it stood)
+      out.lean = { at: this.gp(rest, GRIP_AT[0], GRIP_AT[1], GRIP_AT[2]).addScaledVector(new THREE.Vector3(0, 0, 1).applyQuaternion(rest.q), kn), weight: sm((t - 0.15) / 0.55) * (1 - away) };
     } else {
       out = { R: strum, wR: 1, L: fretPt, wL: 1, stopR: 0 };
     }

@@ -5406,6 +5406,8 @@ T.sweepGuitarHold = () => {
     const at = (pose, t) => { for (let i = 0; i < 120 * 30; i++) { if (br.pose === pose && br.step && br.step.type === 'play' && br.step.t >= t) return true; other.queue = []; step(1 / 30); } return false; };
     const loc = (n) => { o.guitar.updateWorldMatrix(true, false); return o.guitar.worldToLocal(g.boneWorld(n)); };
     const grip = () => { const k = loc('RightHandMiddle1'), m = loc('RightHandMiddle3'), th = loc('RightHandThumb3'); return { k: k.toArray(), m: m.toArray(), th: th.toArray(), ok: k.x > 0.25 && k.x < 0.7 && k.y < -0.02 && k.y > -0.075 && Math.abs(k.z) < 0.04 && m.z < -0.004 && Math.abs(m.y) < 0.035 && th.z > 0.015 && Math.abs(th.y) < 0.045 }; };
+    // (he stands as far off as a walk may stop, 8 cm, the way that is furthest from his right hand: wherever he stops he must reach it)
+    if (at('takeGuitar', 0)) { const p = o.local(br.guitarDx() + 0.055, br.guitarDz() + 0.055); g.root.position.x = o.x + p.x; g.root.position.z = o.z + p.z; }
     const a = at('takeGuitar', 0.95), g1 = a ? grip() : {};
     out.push(result(`guitar hold: ${who}: before it comes off the stand the hand is closed round the neck (knuckles beside it, fingertips behind it, thumb in front)`, a && g1.ok, g1));
     let far = 0;
