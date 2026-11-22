@@ -23,6 +23,8 @@ export const MUSIC_ACTS = [...DANCES, 'jamdrums', 'jamguitar', 'jam', 'jampiano'
 // what he may do while a run is still waiting without it being over
 const ON_THE_WAY = ['skillwait', 'bringpiece', 'musicon', 'arrange', 'putback', 'putguitar', 'dropball', 'putcanvas', 'lighton', 'leave'];
 const WAIT_MAX = 150;                                   // how long he waits for GAL before he does it himself
+const START_WAIT = 20;                                  // how long she may take to put away what she has in her hands and set off
+const DOOR_CLEAR = 1.7;                                 // he waits at least this far from a doorway: whoever brings it has to get through
 
 // What each skill in the menu does. `acts(b)`: the activities, best first (the first that he can do is done). `piece`: what it is done with.
 // `music`: the stereo has to be playing. `here`: it needs nothing but the floor. `use`: a fixed thing he is sent to (the same as choosing it
@@ -126,10 +128,12 @@ export function installSkillRun(Brain) {
       if (U.stereo && this.music) return { ...is('help', helper(at) ? 'GAL turns it off' : 'He goes and turns it off'), ask: 'Turn the music off', icon: '🔇' };
       if (U.music && !this.music && !this.obj('table')) return is('no', 'Add a stereo first');
       const needs = (U.music && !this.music) || U.stereo ? this.roomOfObj('table') : null;
-      if (o && !U.use && !U.stereo && at !== here) return this.movable(o) ? is('help', helper(at, here) ? 'GAL brings it' : 'He fetches it') : is('go', inRoom(at));
+      if (o && !U.use && !U.stereo && at !== here) return this.movable(o) ? is('help', !this.handsFull(o) && helper(at, here) ? 'GAL brings it' : 'He fetches it') : is('go', inRoom(at));
       if (needs && needs !== here) return is('help', helper(needs) ? 'GAL puts the music on' : 'He puts the music on first');
       return at === here ? is('here', 'Right here') : is('go', inRoom(at));
     },
+    // it is in his own hands (the guitar: its stand is elsewhere): nobody can take it along until he has put it back, so he brings it himself
+    handsFull(o) { return !!o && !!o.guitar && this.gtr.held && this.gname === o.name; },
     // a thing the robots can carry: light and medium things; never the heavy ones, the stereo with its music, or what has to stay put
     movable(o) { return o.weight !== 'heavy' && o.name !== 'table' && !o.mainOnly && !o.stowed && o.removable !== false; },
     // can it be carried to `room`, and is there space for it?
@@ -144,6 +148,8 @@ export function installSkillRun(Brain) {
       const U = SKILL_USE[id], w = this.w, no = (message) => ({ ok: false, message }), yes = (message) => ({ ok: true, message });
       if (!U || !SKILL_INFO[id]) return no('There is nothing to do with that skill.');
       if (!this.skills.has(id)) return no('GUY has not learned that.');
+      const on = this.skillRun;                             // (chosen again while it is on its way: that does not start it all over)
+      if (on && on.id === id && !on.fixed && !on.started) return yes(on.by === 'gal' ? 'GAL is already on it.' : 'GUY is already on it.');
       const here = this.roomHere(), shut = this.stuckIn();
       if (U.room && !w.doors[U.room]) return no(`There is no ${ROOM_NAMES[U.room]}. Add it from the Catalog.`);
       if (shut && !U.use && U.room !== shut) return no(this.shutInMessage(shut));
@@ -177,7 +183,7 @@ export function installSkillRun(Brain) {
           if (at !== 'main' && this.doorLockedFor(at)) return no(`The ${w.doors[at].name} door is locked. Unlock it first (long-press the door).`);
           if (!this.canBring(o, here)) { run.room = at; run.went = true; }                     // (no space for it here: he goes to it)
           else {
-            const g = this.freeHelper(at, here);
+            const g = this.handsFull(o) ? null : this.freeHelper(at, here);
             this.beginRun(run);
             run.needMusic = !!U.music;
             if (g) {
@@ -293,7 +299,18 @@ export function installSkillRun(Brain) {
       if (name === run.act && !run.started) run.started = true;
       else if (run.started || (run.fixed && !this.pendingActivity) || !ON_THE_WAY.includes(name)) this.skillRun = null;
     },
-    skillNext() { return this.skillRun && !this.skillRun.started && !this.skillRun.fixed ? 'skillwait' : null; },
+    skillNext() {
+      const r = this.skillRun;
+      if (!r || r.fixed) return null;
+      // it came to nothing before he had begun (GAL still stood in his way, say): he looks again in a moment
+      if (r.started && !r.did && this.last === r.act && (r.tries || 0) < 3) { r.started = false; r.tries = (r.tries || 0) + 1; r.retryAt = this.time + 1.5; }
+      return r.started ? null : 'skillwait';
+    },
+    // every frame: has he really begun? (a pose of its own, not just walking up to it)
+    skillWatch() {
+      const r = this.skillRun, s = this.step;
+      if (r && r.started && !r.did && this.last === r.act && s && s.type === 'play' && s.t > 0.8 && !['idle', 'reach'].includes(s.pose)) r.did = true;
+    },
     // the music put on for a skill is switched off once it is over: by GAL, or by him when she is not here
     skillMusicNext() {
       const w = this.w;
@@ -319,7 +336,7 @@ export function installSkillRun(Brain) {
           const waiting = run.by === 'gal' && !this.skillIsReady(run);
           const label = !waiting ? 'getting ready' : run.askedMusic ? 'waiting for GAL to put the music on' : `waiting for GAL to ${run.ordered ? 'order' : 'bring'} the ${run.thing}`;
           const wave = waiting && !run.waved ? [this.play('wave', 2.6, { at: [0.2, () => { run.waved = true; }] })] : [];
-          return [label, { type: 'plan', fn: () => (this.stuckIn() ? [] : this.tripSteps(this.roomHere(), run.room)) }, ...wave, { type: 'plan', fn: () => this.skillWaitSteps() }];
+          return [label, { type: 'plan', fn: () => (this.stuckIn() ? [] : this.tripSteps(this.roomHere(), run.room)) }, { type: 'plan', fn: () => (waiting ? this.clearOfDoors(run.room) : []) }, ...wave, { type: 'plan', fn: () => this.skillWaitSteps() }];
         },
         // carry a thing from the room it is in to another (GAL for GUY, or GUY for himself)
         bringpiece: () => this.bringSteps(),
@@ -342,6 +359,7 @@ export function installSkillRun(Brain) {
     skillWaitSteps() {
       const run = this.skillRun, note = (m) => { this.ui(m); if (this.onSkillNote) this.onSkillNote(m); };
       if (!run) return [];
+      if (run.retryAt > this.time) return [this.play('idle', 0.5), { type: 'plan', fn: () => this.skillWaitSteps() }];
       if (this.skillIsReady(run)) {
         if (!this.startSkill()) note(this.refuseRun(run).message);
         return [];
@@ -355,7 +373,17 @@ export function installSkillRun(Brain) {
       }
       const g = run.by === 'gal' && this.w.gal && this.w.gal.exists() ? this.w.gal.brain : null;
       const job = run.askedMusic ? 'musicon' : run.ordered ? 'arrange' : 'bringpiece';
-      if (g && (g.pendingActivity === job || (g.last === job && (g.step || g.queue.length))) && this.time - run.t0 < WAIT_MAX) return again();
+      const carrying = !!(g && g.homeMove && g.homeMove.name === run.piece);             // (also when she has just given up the way: she sets it down first)
+      const setOff = g && (carrying || (g.last === job && (g.step || g.queue.length))), about = g && g.pendingActivity === job;
+      if (setOff) run.setOff = true;
+      if ((carrying || setOff || (about && this.time - run.t0 < START_WAIT)) && this.time - run.t0 < WAIT_MAX) return again();
+      // she was on it and it came to nothing (somebody in the way): she tries once more
+      if (g && run.setOff && !run.again && !run.askedMusic && !run.ordered && this.obj(run.piece) && this.roomOfObj(run.piece) !== run.room && this.freeHelper(this.roomOfObj(run.piece), run.room) === g && this.canBring(this.obj(run.piece), run.room)) {
+        run.again = true; run.setOff = false; run.t0 = this.time;
+        this.sendHelper(g, 'bringpiece', { name: run.piece, room: run.room, thing: run.thing, for: this });
+        return again();
+      }
+      if (about) { g.pendingActivity = null; g.bringJob = null; }                          // (too busy: he does it, not both of them)
       // nobody is at it (GAL was called away, or could not): he does it himself, once
       const o = run.piece && this.obj(run.piece);
       if (!run.self) {
@@ -367,6 +395,33 @@ export function installSkillRun(Brain) {
       this.skillRun = null;
       note(run.askedMusic ? 'GUY could not get the music on.' : `GUY could not get the ${run.thing}.`);
       return [];
+    },
+
+    // Where he waits: a step into the room when he stands in or at a doorway (whoever brings the thing could not get in past him).
+    clearOfDoors(room) {
+      const w = this.w, p = this.g.root.position, doors = Object.keys(w.doors).map((id) => w.doorPoint(id, 0)).filter(Boolean);
+      const near = (x, z) => Math.min(99, ...doors.map((d) => Math.hypot(d.x - x, d.z - z)));
+      if (near(p.x, p.z) >= DOOR_CLEAR) return [];
+      const b = this.roomBounds(room), cands = [];
+      for (let x = b.minX + 0.5; x <= b.maxX - 0.5; x += 0.35) for (let z = b.minZ + 0.5; z <= b.maxZ - 0.5; z += 0.35) if (near(x, z) >= DOOR_CLEAR + 0.2 && this.clearFloor(x, z, 0.5)) cands.push({ x, z, d: Math.hypot(x - p.x, z - p.z) });
+      const c = cands.sort((m, n) => m.d - n.d)[0], d0 = doors.sort((m, n) => Math.hypot(m.x - p.x, m.z - p.z) - Math.hypot(n.x - p.x, n.z - p.z))[0];
+      return c ? [{ ...this.walk(c.x, c.z, Math.atan2(d0.x - c.x, d0.z - c.z)), tol: 0.3 }] : [];
+    },
+    // open floor, with `r` all round it (the other robot counts)
+    clearFloor(x, z, r) {
+      const w = this.w, q = this.other && this.other.g && this.other.g.root.position;
+      return w.walkable(x, z) && !(q && Math.hypot(q.x - x, q.z - z) < r + 0.2) && !w.obstacles.some((o) => o !== this.selfOb && o.active !== false && !o.char && x > o.x0 - r && x < o.x1 + r && z > o.z0 - r && z < o.z1 + r);
+    },
+    // where to stand to put `o` down at `spot`: the side nearest to whoever carries it that is open floor (the side towards the middle of the
+    // room may be where the one who asked for it is standing, or a piece of furniture)
+    dropStand(room, spot, o) {
+      const base = this.setUpStand(room, spot, o.w, o.d), p = this.g.root.position, at = Math.atan2(p.x - spot.x, p.z - spot.z);
+      for (let i = 0; i < 12; i++) {
+        const a = at + (i % 2 ? 1 : -1) * Math.ceil(i / 2) * (Math.PI / 6), ux = Math.sin(a), uz = Math.cos(a);
+        const ext = Math.min(Math.abs(ux) > 1e-3 ? o.w / 2 / Math.abs(ux) : 9, Math.abs(uz) > 1e-3 ? o.d / 2 / Math.abs(uz) : 9), k = Math.max(0.95, ext + 0.45), x = spot.x + ux * k, z = spot.z + uz * k;
+        if (this.roomAt(x, z) === room && this.clearFloor(x, z, 0.3)) return { st: { x, z }, edge: { x: spot.x + ux * ext, z: spot.z + uz * ext } };
+      }
+      return base;
     },
 
     // walk to it, pick it up (a light thing whole, in both hands; the drum kit comes apart and goes flat), carry it through the doors and
@@ -383,7 +438,7 @@ export function installSkillRun(Brain) {
       const done = () => { this.homeMove = null; if (this.using) this.using.delete(n); };
       const pickUp = () => {
         const p = this.obj(n);
-        if (!p || p.packed || p.hauled || this.otherUses(n)) { this.queue.length = 0; return; }
+        if (!p || p.packed || p.hauled || (this.otherUses(n) && !(j.for && j.for !== this && j.for.skillWants(n)))) { this.queue.length = 0; return; }
         this.homeMove = { name: n, from, whole };
         if (whole) { this.startHaul(n); sfx('thud', 0.2); } else { w.packShelf(n); this.setCarry('flat', 1); sfx('thud', 0.4); }
       };
@@ -405,7 +460,7 @@ export function installSkillRun(Brain) {
           if (!p || !this.homeMove) return [];
           spot = spotOf(p);
           if (!spot) { this.homeCleanup(); return []; }
-          const { st, edge } = this.setUpStand(j.room, spot, p.w, p.d);
+          const { st, edge } = this.dropStand(j.room, spot, p);
           return [{ ...this.walk(st.x, st.z, Math.atan2(spot.x - st.x, spot.z - st.z)), tol: 0.4 },
             this.play('reach', 1.8, { target: () => V(edge.x, whole ? 0.5 : 0.35, edge.z), at: [0.8, put] }),
             this.play('idle', 0.8, { at: [0.7, () => { if (whole && this.homeMove) done(); }] })];

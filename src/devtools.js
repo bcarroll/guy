@@ -4899,6 +4899,56 @@ T.sweepSkillMenu = () => {
     out.push(result(N('dancing in the Library: GAL goes and puts the music on, he dances where he is'), g7.ok && !!b.music && g7.rooms.join() === 'library', g7));
     { let t = 0; while (t < 260 && b.music) { step(0.25); t += 0.25; }
       out.push(result(N('...and when he has finished the music is switched off again'), !b.music && !w.skillMusic, { t, last: b.last, gal: gal.last })); }
+    // 4b. what went wrong in the Studio (reported by hand): he stood about or walked in and out, and neither had the guitar in the end
+    {
+      T.addAlbum('rock');
+      const album = w.objects.shelf && w.objects.shelf.albums.find((a) => a.mesh.visible);
+      const wait = (room, sec = 90) => {                       // until he plays; every room he was in, and how often the guitar was taken up by whom
+        const rooms = [b.hereId()]; let t = 0;
+        while (t < sec && !(['guitar', 'jamguitar'].includes(b.last) && b.pose === 'guitar')) { step(0.1); t += 0.1; if (rooms[rooms.length - 1] !== b.hereId()) rooms.push(b.hereId()); }
+        return { ok: b.pose === 'guitar' && b.hereId() === room && b.roomOfObj('guitar') === room, t: +t.toFixed(0), rooms: rooms.join('>'), at: b.roomOfObj('guitar'), last: b.last, gal: gal.last, run: !!b.skillRun };
+      };
+      const begin = (room) => { stop(); if (b.gtr.held) b.setGuitarHeld(false); if (gal.gtr.held) gal.setGuitarHeld(false); b.held = null; gal.held = null; send('guitar', 'main'); put(b, room); const p = gal.g.root.position; p.x = 1; p.z = 1.2; gal.stayRoom = null; };
+      out.push(result(N('(there is a record to test with)'), !!album));
+      if (album) for (const [who, x] of [['GUY', b], ['GAL', gal]]) {
+        begin('library');
+        x.held = album; album.mesh.visible = false; b.musicOn('default'); x.albumOnTable = true;
+        choose('guitar'); const r = wait('library');
+        out.push(result(N(`a record ${who} put on is standing by the stereo and playing: GAL brings the guitar and he plays it, without leaving the room (the record counted as in ${who === 'GUY' ? 'his' : 'her'} hands, and nothing was begun)`), r.ok && r.rooms === 'library', r));
+        stop(); x.held = null; b.albumOnTable = false; gal.albumOnTable = false; album.mesh.visible = true;
+      }
+      // both in the room, he in the doorway: she has to get out past him, and in again
+      for (const n of [-0.45, -0.75]) {
+        begin('library'); const c = w.roomSpot('library'), gp = gal.g.root.position, q = w.doorPoint('library', n), p = b.g.root.position;
+        gp.x = c.x; gp.z = c.z; gal.stayRoom = 'library'; p.x = q.x; p.z = q.z;
+        const near = () => Math.hypot(p.x - w.doorPoint('library', 0).x, p.z - w.doorPoint('library', 0).z);
+        choose('guitar'); step(4); const d = near(), r = wait('library');
+        out.push(result(N(`he waits clear of the doorway he stood in (${-n} m inside), so GAL gets out and back with the guitar`), r.ok && d >= 1.5, { ...r, d: +d.toFixed(2) }));
+      }
+      // GAL loses her way with it in her arms (her steps are gone while she still holds it): she sets it down and he plays it, wherever that was
+      begin('library'); choose('guitar');
+      { let t = 0; while (t < 90 && !(gal.hauling && gal.hauling.k > 0.9 && gal.hereId() === 'library')) { step(0.1); t += 0.1; } }
+      const had2 = !!gal.hauling; gal.queue = []; gal.step = null;
+      b.step = null; b.queue = b.skillWaitSteps();                  // (he looks just then)
+      const still = !!b.skillRun; const r2 = wait('library');
+      out.push(result(N('GAL gives up the way with the guitar in her arms: he does not give up the order, and plays it'), had2 && still && r2.ok, { had2, still, ...r2 }));
+      // the first time it comes to nothing (somebody in the way): he tries again
+      begin('library'); send('guitar', 'library'); choose('guitar'); step(0.3);
+      const onIt = b.last === 'guitar' && b.skillRun && b.skillRun.started; b.queue = []; b.step = null;
+      const r3 = wait('library');
+      out.push(result(N('his way to the guitar comes to nothing at first: he tries again'), !!onIt && r3.ok, { onIt, ...r3 }));
+      // GAL does not take it for herself while it is on its way to him
+      begin('library'); choose('guitar'); const taken = gal.otherUses('guitar') && gal.guitarTaken('guitar') && !b.otherUses('guitar');
+      const again = choose('guitar'), kept = gal.pendingActivity === 'bringpiece' || gal.last === 'bringpiece';
+      out.push(result(N('the guitar he asked for is his: GAL leaves it alone; choosing it again does not start it all over'), taken && kept && /already on it/.test(again.toast), { taken, kept, ...again }));
+      const r4 = wait('library');
+      out.push(result(N('...and it still comes'), r4.ok && r4.rooms === 'library', r4));
+      // it is in his hands (its stand in another room): GAL does not walk off with the stand; he puts it back and brings it himself, once
+      begin('main'); b.gname = 'guitar'; b.setGuitarHeld(true); put(b, 'library'); const c5 = choose('guitar');
+      const r5 = wait('library', 140);
+      out.push(result(N('the guitar is in his hands, its stand in his room: one trip to put it back and bring it, and he plays it here'), /fetching/.test(c5.toast) && r5.ok && r5.rooms.split('>').filter((x) => x === 'library').length === 2, { toast: c5.toast, ...r5 }));
+      stop();
+    }
     // 5. fixed things: he goes to them; a locked door and a thing in use are refused with the reason
     stop(); put(b, 'library'); const p1 = choose('piano');
     out.push(result(N('the piano is too heavy to bring: he is told so and goes to it'), /stays in/.test(p1.toast) && ['sitpiano', 'piano'].includes(b.pendingActivity), { ...p1, pend: b.pendingActivity }));

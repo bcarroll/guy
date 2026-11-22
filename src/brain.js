@@ -1234,11 +1234,12 @@ export class Brain {
   // ---- Guitar ----
   electric() { const o = this.obj(this.gname); return !!(o && o.electric); }
   guitars() { return Object.values(this.w.objects).filter((o) => o.guitar); }
-  freeGuitar() { return this.guitars().some((g) => !(this.other && this.other.using && this.other.using.has(g.name))); }
+  guitarTaken(name) { const o = this.other; return !!o && ((o.using && o.using.has(name)) || o.skillWants(name)); }
+  freeGuitar() { return this.guitars().some((g) => !this.guitarTaken(g.name)); }
   // choose the guitar for what he is about to play: the one in his hands, the one he was asked for, or one the other robot is not using
   pickGuitar() {
     if (this.gtr.held && this.obj(this.gname)) { if (this.using) this.using.add(this.gname); return; }
-    const o = this.other, all = this.guitars(), free = all.filter((g) => !(o && o.using && o.using.has(g.name)));
+    const all = this.guitars(), free = all.filter((g) => !this.guitarTaken(g.name));
     const want = this.wantGuitar && free.find((g) => g.name === this.wantGuitar);
     this.wantGuitar = null;
     const pick = want || free.find((g) => g.name === this.gname) || free[0] || all[0];
@@ -2448,9 +2449,12 @@ export class Brain {
   inUse(name) {
     if (this.using && this.using.has(name)) return true;
     if (this.homeMove && this.homeMove.name === name) return true;       // (carrying it out of the Workshop to its room)
+    if (this.skillWants(name)) return true;                              // (he has asked for it in the Skills menu: it is on its way to him)
     if (this.chairClaim === name) return true;
     return this.stepUses(this.step, name);
   }
+  // His record stands by the stereo and plays, and what he was asked to do needs no book or record in his hands.
+  recordOut(act) { return !!(this.held && this.held.kind === 'album' && this.albumOnTable && this.music) && !['read', 'books', 'learn', 'arrange', 'stereoon', 'stereooff'].includes(act); }
   // Is the other robot working with `name` (see inUse)?
   otherUses(name) { return !!(this.other && this.other.inUse(name)); }
 
@@ -2610,7 +2614,9 @@ export class Brain {
       const moved = Math.hypot(cur[0] - snap[n][0], cur[1] - snap[n][1]) > 0.06 || cur[2] !== snap[n][2];
       if (!moved || (s.push && s.push.obj === o)) continue;
       this.ui(`the ${n} was moved: letting go`);
+      const run = this.skillRun && !this.skillRun.did ? this.skillRun : null;
       this.skip();
+      this.skillRun = run;                                         // (a skill he had not begun yet is not off because of that: he tries again)
       return !this.step;
     }
     return false;
@@ -2787,12 +2793,14 @@ export class Brain {
     this.autoAdvance();
     const g = this.g;
     const root = g.root;
+    this.skillWatch();                    // (is he really doing the skill that was chosen? skillrun.js)
     if (!this.step) {
       let next = this.queue.shift();
       if (!next) {
         // an activity the user asked for takes priority, once whatever he is holding has been put away
         const wanted = this.pendingActivity;
-        const holding = this.held || this.ballHeld || this.gtr.held;
+        // (a record standing by the stereo while it plays is not in his hands: choose() leaves it there too, so waiting for that was waiting for ever)
+        const holding = (this.held && !this.recordOut(wanted)) || this.ballHeld || this.gtr.held;
         // (an activity back in his room waits until he is back in it: choose() sends him through the door first. One that belongs to the
         // room he is already in (mowing, when he is out in the yard) starts right away: it must not wait for him to walk out and back in.)
         if (wanted && !holding) { this.pendingActivity = null; this.choose(wanted); } else this.choose();
