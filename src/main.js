@@ -4,6 +4,7 @@ import { initVoice as initTTS } from './tts.js';
 import { createVoice } from './voice.js';
 import { createMic } from './mic.js';
 import { initWorkstation } from './workstation.js';
+import { initHelp } from './help.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { buildRoom, ROOM } from './room.js';
 import { Guy } from './guy.js';
@@ -136,6 +137,9 @@ const panel = document.getElementById('skills');
 const toast = document.getElementById('toast');
 let toastTimer = 0;
 const skillsMenu = initSkillsMenu({ root: panel, button: document.getElementById('skills-btn'), brain, skills, label, toast: (m) => showToast(m) });
+// Help (help.js): the ❓ button in the top corner (or H / ?) opens how the game works, what is new and the change log.
+const help = initHelp({ onOpen: () => { skillsMenu.close(); closeMenu(); } });
+window.__help = help;
 const renderSkills = () => skillsMenu.render();
 brain.onSkillNote = (msg) => showToast(msg);
 function showToast(msg) {
@@ -757,7 +761,7 @@ canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 // Screen lock (screenlock.js): off / camera only / on. Locking closes every menu and panel and drops any press in progress.
 const screenLock = initScreenLock({
   persist: !params.has('fresh'), toast: (m) => showToast(m),
-  onLock: () => { closeMenu(); machineUI.close(); hidePlayer(); skillsMenu.close(); if (pending) { clearTimeout(pending.timer); pending = null; } drag = null; },
+  onLock: () => { closeMenu(); machineUI.close(); hidePlayer(); skillsMenu.close(); help.close(); if (pending) { clearTimeout(pending.timer); pending = null; } drag = null; },
 });
 screenLock.onChange(() => { controls.enabled = screenLock.cameraOk() && view !== 'third' && view !== 'first'; });
 window.__screenLock = screenLock;
