@@ -18,6 +18,7 @@ checklist. **After adding anything to the game, update this skill (see "Keeping 
 
 | part | what it checks | where |
 |---|---|---|
+| runner | the dev server the run tests goes on answering however much it prints (`qa/server.mjs`); a browser call that never ends is an error after 90 minutes, with what the server last printed | `checkServer` |
 | coverage | the MANIFEST knows every object, activity, book, record, track, room | `T.coverage()` |
 | sweeps | every sweep in section 2 (`T.runAll()`); `--repeat=3` runs them three times and reports a sweep that fails only sometimes as **FLAKY**. Every run is seeded (run i uses seed 1+i, `--seed=10` starts at 10): a FLAKY line names the seeds it failed under and the sweep's number, and `T.runAll({ seed, upTo })` replays that run up to that sweep (`T.lastReport` holds the result); `T.runSweep(name, seed, no)` plays one sweep alone with its seed (it does not carry what ran before it, so it may pass where the full run failed) | `src/devtools.js` |
 | rigs | GUY, GAL and every customer model loaded for real, in different turns, posed and measured: all 52 bones mapped, the right height, not flat, a T-pose rest, arms at the sides standing and walking, hips low and knees forward sitting, and **the same pose whichever way the figure or its room was turned when the model loaded** (the bug that gave every customer arms in the air) | `T.sweepRigs`, `src/qa-characters.js` |
