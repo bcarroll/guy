@@ -4905,6 +4905,49 @@ T.sweepRange = () => {
 };
 
 // ---- 12f. The Studio (src/studioobjects.js, src/studiobrain.js): the room, the record wall, a DJ trip, a show, a party, hanging guitars -----------------
+// GAL dances where the music is: with the stereo in the Studio she switches it on there and dances on the Studio floor, not in
+// GUY's room (she once danced in his room and walked back to switch it off).
+T.sweepGalDanceRoom = () => {
+  const out = [], base = errors.length, w = W(), gal = w.gal;
+  if (!gal.g || !gal.g.loaded) return [result('galdance: her model is loaded (wait a moment after the page opens)', false)];
+  galReset();
+  const built = galBuild(), gb = gal.brain;
+  try {
+    unlockRoom('studio');
+    const added = R().add('studio');
+    if (!built.ok || !added.ok || !w.studio) { out.push(result('galdance: GAL is built and the Studio added', false, { built, added: added.ok })); return out; }
+    if (!w.objects.table) T.addObject('table');
+    const bd = w.doors.studio.shell.bounds, tb = w.objects.table;
+    gb.actRoom = 'studio'; const spot = gb.openSpotNear((bd.minX + bd.maxX) / 2 - 2, bd.minZ + 1.6, 0.9); gb.actRoom = null;
+    tb.set(spot.x, spot.z);
+    for (let i = 0; i < 10; i++) step(1 / 30);
+    out.push(result('galdance: the stereo stands in the Studio', w.roomIdAt(tb.x, tb.z) === 'studio', { x: tb.x, z: tb.z }));
+    gb.skills.learn('stereo'); gb.skills.learn('dance.moves');
+    // her spots follow the room the activity is in; in GUY's room they are where they always were
+    gb.actRoom = 'studio'; const ds = gb.danceSpot(), ws = gb.waveSpot();
+    gb.actRoom = 'main'; const dm = gb.danceSpot(), wm = gb.waveSpot(); gb.actRoom = null;
+    out.push(result('galdance: her dance and wave spots for the Studio are on the Studio floor, and in his room they are unchanged', w.roomIdAt(ds.x, ds.z) === 'studio' && w.roomIdAt(ws.x, ws.z) === 'studio' && dm.x === 1.4 && dm.z === 0.9 && wm.x === -1.4 && wm.z === 2.2, { ds, ws, dm, wm }));
+    // the real thing: she puts on "Watch these moves" in the Studio
+    gb.queue = []; gb.step = null; gb.musicOff(); gb.choose('dancemoves');
+    const rooms = new Set(); let danced = false, onRoom = null;
+    for (let i = 0; i < 160 * 30; i++) {
+      step(1 / 30);
+      if (gb.music && !onRoom) onRoom = gb.hereId();
+      if (gb.step && gb.step.fx && gb.step.fx.dance) { danced = true; rooms.add(gb.hereId()); }
+      if (danced && gb.last !== 'dancemoves') break;
+    }
+    out.push(result('galdance: with the stereo in the Studio, she switches it on there and every dance move is in the Studio', danced && onRoom === 'studio' && rooms.size === 1 && rooms.has('studio'), { danced, onRoom, rooms: [...rooms] }));
+  } finally {
+    gal.brain.actRoom = null; gal.brain.queue = []; gal.brain.step = null; gal.brain.musicOff();
+    if (w.objects.table) w.objects.table.set(2.5, -2.4);          // (taking the room away deletes what stands in it)
+    B().queue = []; B().step = null; T.settle();
+    R().reset('studio'); R().setUnlocked('studio', false);
+    galReset();
+  }
+  out.push(result('galdance: no errors', errors.length === base, { errors: errors.slice(base, base + 3) }));
+  return out;
+};
+
 T.sweepStudio = () => {
   const out = [], base = errors.length, w = W(), b = B();
   T.settle(); T.resetRooms(); T.removeAll(); T.forget(); T.settle(); T.home();
@@ -5428,6 +5471,7 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.library = S(T.sweepLibrary);
   report.roomRemoval = S(T.sweepRoomRemoval);        // (last: each sweep's seed is its number, so a new one goes at the end and leaves the others' seeds alone)
   report.studio = S(T.sweepStudio);        // (after the others, so their seeds stay the same)
+  report.galDanceRoom = S(T.sweepGalDanceRoom);        // (last, so the others keep their seeds)
   if (seed && T.unseed) T.unseed();
   window.__qaPaused = wasPaused;
   T.lastReport = report;
