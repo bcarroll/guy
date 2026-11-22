@@ -9,8 +9,9 @@
 // -z. The door is at z = 0 and the far wall at z = -N. The robots stand on the approach facing the far wall (their front is -z).
 //
 // Pins are cleared and set up again by hand (a robot walks down the lane and does it) until an Automatic Pinsetter has been built
-// (the easter egg: it needs the Metal Factory): then each lane sweeps and racks its pins by itself. A set of wooden pins and a wooden
-// ball, built in the Workshop (the Wood & Metal book's chapters 4 and 5), change the pins and add a ball to the rack.
+// (the easter egg: it needs the Metal Factory): then each lane sweeps and racks its pins by itself. A set of maple pins and a wooden ball,
+// built in the Workshop (the Wood & Metal book's chapters 4 and 5): the set replaces the ten pins of one lane (a robot carries it there and
+// sets it up, bowlbrain.js), the ball goes in the rack.
 import * as THREE from 'three';
 import { LANE, PIN_SPOTS, scoreGame, afterRoll, throwBall, pathX } from './bowlrules.js';
 
@@ -139,7 +140,7 @@ export function buildBowlShell(g, L, N) {
   const worldYaw = (dx, dz) => { const a = worldPt0(0, 0, 0), b = worldPt0(dx, 0, dz); return Math.atan2(b.x - a.x, b.z - a.z); };
   const dark = mat(0x2b3038, { metalness: 0.3 }), chrome = mat(0xc9d0d8, { metalness: 0.8, roughness: 0.25 });
   const glow = (c) => new THREE.MeshBasicMaterial({ color: c });
-  const state = { maple: false, woodBall: false, time: 0 };
+  const state = { woodBall: false, time: 0 };
 
   // ---- the floor: carpet everywhere, wood on the lanes and the approaches, a dark pit behind the pins
   flat(L, N, new THREE.MeshStandardMaterial({ map: carpetTex(L, N), roughness: 0.95 }), 0, 0.003, -N / 2);
@@ -200,7 +201,7 @@ export function buildBowlShell(g, L, N) {
     const hood = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(0x3a1c6b, { metalness: 0.3, roughness: 0.3 })); hood.position.set(0, 0.46, -0.16); hood.scale.set(1, 0.9, 1); unit.add(hood);
     retBall.position.set(rx, 0.5 + LANE.ballR, BOWL.returnZ + 0.06);
     fixtures.push({ name: `ball return ${i + 1}`, x0: rx - 0.27, x1: rx + 0.27, z0: BOWL.returnZ - 0.27, z1: BOWL.returnZ + 0.27, h: 0.9 });
-    return { i, x, pins, ball, retBall, bar, unit, game: { rolls: [] }, owner: null, pending: null, roll: null, returning: 0, returnReady: true, setter: null, impactAt: -9, ballLook: { color: 0xd32f2f, wood: false }, thrown: 0 };
+    return { i, x, pins, ball, retBall, bar, unit, game: { rolls: [] }, owner: null, pending: null, roll: null, returning: 0, returnReady: true, setter: null, impactAt: -9, ballLook: { color: 0xd32f2f, wood: false }, thrown: 0, style: 'plastic', swapping: false };
   });
 
   // ---- the rack of house balls (against the +x wall): two tiers of four
@@ -305,7 +306,7 @@ export function buildBowlShell(g, L, N) {
 
   const bowl = {
     group: g, lanes: laneObjs, obstacles, rack, board, state, fixtures, N, L,
-    // what the Workshop has built for the alley (set by room.js): { pins, ball, setter }
+    // what the Workshop has built for the alley (set by room.js): { pins: [is lane i's set maple?], ball, setter }
     supplies: () => ({}),
     // a sound for what happens in the lane (set by room.js)
     sound: () => {},
@@ -325,8 +326,8 @@ export function buildBowlShell(g, L, N) {
     returnStand(i) { const p = worldPt0(lanes[i] + BOWL.returnDX - 0.5, 0, BOWL.returnZ); return { x: p.x, z: p.z, yaw: worldYaw(1, 0) }; },
     returnPoint(i) { return worldPt0(lanes[i] + BOWL.returnDX, 0.5 + LANE.ballR, BOWL.returnZ + 0.04); },
     // where he stands in front of the pin deck to clear and set the pins by hand
-    deckStand(i) { const p = worldPt(lanes[i], LANE.headZ + 0.95); return { x: p.x, z: p.z }; },
-    deckPoint(i) { return worldPt0(lanes[i], 0.1, LANE.headZ - 0.1); },
+    deckStand(i) { const p = worldPt(lanes[i] - 0.1, LANE.headZ + 0.55); return { x: p.x, z: p.z }; },
+    deckPoint(i) { return worldPt0(lanes[i], 0.2, LANE.headZ); },
     boardStand() { return board.standSpot(); },
     // a place to stand and watch the lanes from behind them
     watchSpot() { const p = worldPt(0, BOWL.startZ + 0.5); return { x: p.x, z: p.z, yaw: worldYaw(0, -1) }; },
@@ -379,16 +380,41 @@ export function buildBowlShell(g, L, N) {
     needsReset(i) { return laneObjs[i].pending; },
     // the reset a robot has done by hand (the same as the pinsetter's): what was pending is done
     manualReset(i) { const l = laneObjs[i]; if (l.pending === 'rack') bowl.respot(i); else bowl.clearFallen(i); l.pending = null; },
-    // the style of pin on the lanes ('plastic' or 'maple')
-    setPinStyle(style) {
-      state.maple = style === 'maple';
-      for (const l of laneObjs) for (const p of l.pins) p.mesh.geometry = pinGeometry(style);
+    // the style of pin on lane `i` ('plastic' or 'maple')
+    setPinStyle(i, style) {
+      laneObjs[i].style = style;
+      for (const p of laneObjs[i].pins) p.mesh.geometry = pinGeometry(style);
     },
+    // ---- a new set of pins is put on lane `i` by hand (bowlbrain.js pinSetSteps) ----
+    // the old ones are pushed back into the pit; from now on the lane is being worked on (`swapping`)
+    beginSwap(i) {
+      const l = laneObjs[i];
+      l.swapping = true; l.pending = null;
+      for (const p of l.pins) if (p.state !== 'gone' && p.state !== 'pit') { p.state = 'fall'; p.t = 0; p.y = 0; p.dx = 0; p.dz = -1; p.spin = rand(-2, 2); p.vx = rand(-0.1, 0.1); p.vz = -3.2 - rand(0, 0.5); }
+    },
+    // the pins of one row (0 is the head pin's) are set on their spots
+    placeRow(i, row, style) {
+      for (const p of laneObjs[i].pins) if (PIN_SPOTS[p.i].row === row) { p.mesh.geometry = pinGeometry(style); p.state = 'up'; p.mesh.visible = true; p.mesh.position.set(p.home.x, 0, p.home.z); p.mesh.quaternion.identity(); }
+    },
+    rowPoint(i, row, y = 0.2) { return worldPt0(lanes[i], y, LANE.headZ - row * LANE.rowGap); },
+    // `done`: all ten are the new set (a fresh game starts on the lane). Otherwise he was cut short: the deck is empty until somebody sets the pins
+    endSwap(i, done) {
+      const l = laneObjs[i];
+      if (!l.swapping) return;
+      l.swapping = false;
+      for (const p of l.pins) p.mesh.geometry = pinGeometry(l.style);
+      if (done) bowl.startGame(i, null);
+      else { for (const p of l.pins) { p.state = 'gone'; p.mesh.visible = false; } l.pending = 'rack'; }
+    },
+    // where he puts the crate of pins down, and where he stands to take pins out of it and to set row `row` (he sets the back row first and backs out)
+    crateSpot(i) { const p = worldPt(lanes[i] + 0.36, LANE.headZ + 1.15); return { x: p.x, z: p.z }; },
+    crateStand(i) { const p = worldPt(lanes[i] - 0.22, LANE.headZ + 1.1); return { x: p.x, z: p.z, yaw: worldYaw(1, -0.2) }; },
+    rowStand(i, row) { const p = worldPt(lanes[i] - 0.1, LANE.headZ - row * LANE.rowGap + 0.5); return { x: p.x, z: p.z, yaw: worldYaw(0.1, -0.5) }; },
     setWoodBall(on) { state.woodBall = !!on; if (!rack.balls[8].out) rack.balls[8].mesh.visible = !!on; },
     update(dt) {
       state.time += dt;
       const sup = bowl.supplies();
-      if (!!sup.pins !== state.maple) bowl.setPinStyle(sup.pins ? 'maple' : 'plastic');
+      laneObjs.forEach((l, i) => { const want = sup.pins && sup.pins[i] ? 'maple' : 'plastic'; if (l.style !== want && !l.swapping) bowl.setPinStyle(i, want); });
       if (!!sup.ball !== state.woodBall) bowl.setWoodBall(!!sup.ball);
       for (const l of laneObjs) stepLane(l, dt, !!sup.setter);
       board.draw();
@@ -449,7 +475,7 @@ export function buildBowlShell(g, L, N) {
       if (p.state === 'fall' && p.t > 2.2 && Math.hypot(p.vx, p.vz) < 0.02) p.state = 'down';
     }
     // an automatic pinsetter: when everything has stopped it sweeps the fallen pins away and, when it is a new frame, sets all ten again
-    if (setter && l.pending && !l.setter && !l.roll && !l.pins.some((p) => p.state === 'wait' || p.state === 'fall') && state.time - l.impactAt > 1.0) {
+    if (setter && l.pending && !l.setter && !l.swapping && !l.roll && !l.pins.some((p) => p.state === 'wait' || p.state === 'fall') && state.time - l.impactAt > 1.0) {
       l.setter = { kind: l.pending, t: 0 };
     }
     if (l.setter) {
@@ -483,15 +509,27 @@ export function buildBowlShell(g, L, N) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------- built for the alley
-// The objects GUY builds in the Workshop that stand in the alley: a display of wooden pins, a wooden ball on a stand, and the Automatic
+// The objects GUY builds in the Workshop for the alley: a set of ten maple pins in a crate (carried to a lane and set up there: while it is on a
+// lane the crate is out of sight, `lane` in room.js rackPins), a wooden ball on a stand, and the Automatic
 // Pinsetter (the easter egg). Made with the same makeObject helper as the rest of the rooms (room.js passes it in).
 export function makeBowlBuilders({ makeObject, box, mat }) {
   const metal = (c = 0x4a525c) => mat(c, { metalness: 0.6, roughness: 0.35 });
-  const buildPins = (name, x = 0, z = 0) => makeObject(name, x, z, 0.8, 0.8, 0.5, 'light', (g) => {
-    box(0.7, 0.06, 0.7, mat(0x6b4a2b), 0, 0.03, 0, g);
-    box(0.62, 0.08, 0.62, mat(0xb5651d), 0, 0.1, 0, g);
-    PIN_SPOTS.forEach((sp) => { const p = makePin('maple', 0.7); p.position.set(sp.x * 0.7 * 0.9, 0.14, (sp.z - LANE.headZ - 0.4) * 0.7 * 0.9 * -1 - 0.2); p.rotation.y = Math.PI; g.add(p); });
-  });
+  const buildPins = (name, x = 0, z = 0) => {
+    const rows = [[], [], [], []];
+    const o = makeObject(name, x, z, 0.64, 0.5, 0.44, 'light', (g) => {
+      const wood = mat(0x8a5a2e), dark = mat(0x6b4a2b);
+      box(0.64, 0.03, 0.5, wood, 0, 0.015, 0, g);
+      for (const s of [-1, 1]) { box(0.64, 0.14, 0.02, dark, 0, 0.1, s * 0.24, g); box(0.02, 0.14, 0.46, dark, s * 0.31, 0.1, 0, g); }
+      // ten pins standing in the crate (4, 3 and 3); which row of the lane each goes to: the front ones are the head pin's
+      const cells = []; for (let r = 0; r < 3; r++) for (let k = 0; k < (r ? 3 : 4); k++) cells.push([(k - (r ? 1 : 1.5)) * (r ? 0.18 : 0.15), (r - 1) * 0.145]);
+      let n = 0;
+      for (let r = 3; r >= 0; r--) for (let k = 0; k <= r; k++, n++) { const p = makePin('maple'); p.position.set(cells[n][0], 0.03, cells[n][1]); g.add(p); rows[r].push(p); }
+    });
+    // (a row's pins are out of the crate once he has taken them)
+    o.showRow = (r, on) => { for (const p of rows[r]) p.visible = on; };
+    o.fillCrate = () => { for (let r = 0; r < 4; r++) o.showRow(r, true); };
+    return o;
+  };
   const buildBall = (name, x = 0, z = 0) => makeObject(name, x, z, 0.5, 0.5, 0.75, 'light', (g) => {
     box(0.4, 0.08, 0.4, mat(0x6b4a2b), 0, 0.04, 0, g);
     box(0.08, 0.34, 0.08, mat(0x8a5a2e), 0, 0.25, 0, g);

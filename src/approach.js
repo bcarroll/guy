@@ -4,6 +4,7 @@
 // remembers the side (`sideOf`) so the hands that work (the spoon ...) are turned to match. Objects that only work one
 // way round (the drum kit, the easel) do not use `stand` and are unchanged.
 import { makeGrid, findPath, cellBlocked, MAIN_FRAME } from './brain.js';
+import { WALK } from './room.js';
 
 // how far the hands can reach from where he stands, measured along the floor to the thing he works at
 const REACH = 1.0;
@@ -16,7 +17,7 @@ export function installApproach(Brain) {
     // robot, furniture): then the nearest free place in front of it, so he never heads for a spot he cannot reach.
     doorStand(id) {
       const w = this.w, face = w.doorYaw(id, false), tx = Math.cos(face), tz = -Math.sin(face);
-      const parent = w.doors[id].parent || 'main';                     // the room the door is in: his own, or the room beside a corner room
+      const parent = w.gateOf(id).parent || 'main';                     // the room the door is in: his own, or the room beside a corner room
       const grid = makeGrid(w.obstacles, 0.22, 0, this.selfOb || null, parent === 'main' ? MAIN_FRAME : w.frameOf(parent));
       for (const d of [0.8, 1.0, 0.65, 1.25]) {
         for (const lat of [0, 0.3, -0.3, 0.5, -0.5]) {
@@ -73,7 +74,7 @@ export function installApproach(Brain) {
       const inside = (x, z) => {
         if (w.roomIdAt(x, z) !== room) return false;
         // where he can really stand: an added room is walkable half a metre in from its walls (room.js `walkable`), his own a little less
-        const added = room !== 'main' && room !== 'door', b = added ? w.doors[room].shell.bounds : { minX: -4.5, maxX: 4.5, minZ: -3.5, maxZ: 3.6 }, m = added ? 0.6 : 0.15;
+        const added = room !== 'main' && room !== 'door', b = added ? w.doors[room].shell.bounds : WALK, m = added ? 0.6 : 0.15;
         return x > b.minX + m && x < b.maxX - m && z > b.minZ + m && z < b.maxZ - m;
       };
       const taken = this.otherSpots();

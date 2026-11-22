@@ -48,7 +48,8 @@ export function install(T, h) {
     const cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2, wx = b.maxX - b.minX, wz = b.maxZ - b.minZ;
     window.controls.dispatchEvent({ type: 'start' });
     const dx = id === 'main' ? 0 : Math.sign(cx) * 0.0, dist = Math.max(wx, wz) * 1.05;
-    window.camera.position.set(cx + dx + (id === 'restaurant' || id === 'workshop' ? (cx > 2 ? -1 : 1) * wx * 0.45 : wx * 0.5), 5.2, cz + dist * 0.8);
+    const far = id === 'main' ? 1.2 : 1;                          // (far enough back for the whole of the floor)
+    window.camera.position.set(cx + dx + (id === 'restaurant' || id === 'workshop' ? (cx > 2 ? -1 : 1) * wx * 0.45 : wx * 0.5) * far, 5.2 * far, cz + dist * 0.8 * far);
     window.controls.target.set(cx, 0.9, cz);
     window.controls.update();
   };
@@ -228,6 +229,40 @@ export function install(T, h) {
       T.freeze(); window.guy.root.visible = false; T.frameRoom('range'); await settleFrames(3);
       return { data: capture() };
     });
+    // The whole house from above: every room the same square, lined up; and the two doors of a corner room between two others
+    add('floorplan', 'rooms', async () => {
+      await clean(55);
+      const w = window.brain.w;
+      for (const [id, o] of [['workshop', { walls: ['right'] }], ['studio', { walls: ['front'] }], ['bowling', { walls: ['back'] }], ['library', { corners: ['right-back'] }], ['bedroom', { corners: ['right-front'] }]]) w.rooms.add(id, o);
+      T.freeze(); window.guy.root.visible = false;
+      window.controls.dispatchEvent({ type: 'start' });
+      const far = window.controls.maxDistance; window.controls.maxDistance = 100;
+      window.camera.position.set(-12, 30, 22); window.controls.target.set(5, 0, 1); window.controls.update();
+      await settleFrames(3);
+      const data = capture();
+      window.controls.maxDistance = far;
+      return { data };
+    });
+    // New maple pins for a lane: the crate carried in both hands, and a row of pins set on the deck
+    const pinShot = (id, when, why) => add(id, 'rooms', async () => {
+      await clean(56);
+      const w = window.brain.w, b = window.brain, p = window.guy.root.position;
+      w.rooms.add('bowling', { walls: ['back'] });
+      w.addInstance('bowlingpins', null, null, true); T.settle(); T.home();
+      b.queue = []; b.step = null; b.homeTried = -999; b.choose('carryhome');
+      let t = 0; while (t < 160 && !when(b, w)) { window.sim(1 / 30); t += 1 / 30; }
+      const ok = !!when(b, w);
+      T.freeze();
+      window.controls.dispatchEvent({ type: 'start' });
+      window.camera.position.set(p.x + 1.9, 1.5, p.z + 1.6); window.controls.target.set(p.x, 0.6, p.z - 0.25); window.controls.update();
+      await settleFrames(3);
+      const data = capture();
+      b.skip(true); b.homeCleanup(); b.pinCleanup();
+      for (const o of Object.values(w.objects)) if (o.kind === 'bowlingpins') { w.removeObject(o.name); delete w.removed[o.name]; }
+      return { ok, why, data };
+    });
+    pinShot('bowl-pins-carry', (b) => b.hauling && b.hauling.k > 0.98 && b.hauling.dir > 0 && b.pose === 'walk' && b.hereId() === 'bowling' && b.g.root.position.z < -8.6, 'never carried the crate');
+    pinShot('bowl-pins-set', (b, w) => b.pose === 'bowlreach' && !!b.step && b.step.t > 1.05 && w.bowl.lanes.some((l) => l.swapping && l.pins.filter((p) => p.state === 'up').length === 9), 'never set the pins');
     add('room-bowling', 'rooms', async () => {                    // three lanes with pins, the ball returns, the rack, the scoreboard and the neon
       await clean(48);
       window.brain.w.rooms.add('bowling');

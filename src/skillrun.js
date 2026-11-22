@@ -399,7 +399,7 @@ export function installSkillRun(Brain) {
 
     // Where he waits: a step into the room when he stands in or at a doorway (whoever brings the thing could not get in past him).
     clearOfDoors(room) {
-      const w = this.w, p = this.g.root.position, doors = Object.keys(w.doors).map((id) => w.doorPoint(id, 0)).filter(Boolean);
+      const w = this.w, p = this.g.root.position, doors = w.allDoors().map((d) => w.doorPoint(d.id, 0)).filter(Boolean);
       const near = (x, z) => Math.min(99, ...doors.map((d) => Math.hypot(d.x - x, d.z - z)));
       if (near(p.x, p.z) >= DOOR_CLEAR) return [];
       const b = this.roomBounds(room), cands = [];

@@ -12,6 +12,8 @@ import { Q } from './guy.js';
 import { sfx } from './sfx.js';
 import { RECIPES, STORAGE_CAP, factoriesOf, skillsOf } from './workshop.js';
 import { wants } from './needs.js';
+import { ROOM, WALK } from './room.js';
+import { makePin } from './bowlobjects.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const UPV = V(0, 1, 0);
@@ -38,6 +40,8 @@ export function installWorkshop(Brain, POSES, H) {
         mflat: group(...[0, 1, 2].map((i) => { const m = sbar(0.5 - i * 0.04, 0.035, 0.34); m.position.set(0, i * 0.038, 0); m.rotation.y = i * 0.15; return m; })),
         bars: group(...[0, 1].map((i) => { const m = sbar(0.34, 0.035, 0.07); m.position.set(0, i * 0.037, (i - 0.5) * 0.09); return m; })),
       };
+      // the maple pins he has taken out of their crate for a row of a lane (1 to 4: `carryN`)
+      this.workProps.pins = group(...[0, 1, 2, 3].map((i) => { const m = makePin('maple'); m.position.set(0, -0.14, 0.09 - i * 0.06); m.position.x = i % 2 ? 0.06 : -0.06; return m; }));
       Object.values(this.workProps).forEach((p) => { p.visible = false; this.w.room.add(p); });
     },
 
@@ -51,22 +55,56 @@ export function installWorkshop(Brain, POSES, H) {
     lockHere() { const o = this.lock && this.obj(this.lock.name); return !!o && this.w.roomIdAt(o.x, o.z) === ID; },
 
     // ------------------------------------------------------------------ going in and out through the door
-    // The door of room `id` is locked and he is not already in there (or in the doorway): he cannot go in. (He can always come out.)
+    // The door of room `id` is locked (and it has no other door he can get in by) and he is not already in there (or in the doorway): he cannot
+    // go in. (He can always come out.)
     doorLockedFor(id) {
       const d = this.w.doors[id];
       if (!d || !(d.locked || d.closing)) return false;                // (a room the user is taking away: nobody goes in)
       const here = this.w.roomIdAt(this.g.root.position.x, this.g.root.position.z);
-      return here !== id && here !== 'door';
+      if (here === id || here === 'door') return false;
+      return !!d.closing || !this.route(this.hereId(), id);
     },
-    // The doors out of room `id` (an added room has the one door; with more, any that is unlocked lets him out).
-    exitsOf(id) { const d = this.w.doors[id]; return d ? [d] : []; },
-    // The room a room's door opens into: his own ('main'), or the room beside a corner room.
-    parentOf(id) { const d = this.w.doors[id]; return d && d.parent ? d.parent : 'main'; },
+    // This very door is locked (or its room is going) and he is on this side of it.
+    gateShut(id) {
+      const d = this.w.gateOf(id);
+      if (!d) return true;
+      const room = d.link ? d.room : d.id, here = this.w.roomIdAt(this.g.root.position.x, this.g.root.position.z);
+      return !!(d.locked || (this.w.doors[room] && this.w.doors[room].closing)) && here !== room && here !== 'door';
+    },
+    // The doors out of room `id`: its own, and for a corner room (or a room beside one) the doors between the two.
+    exitsOf(id) { const d = this.w.doors[id]; return d ? [d, ...Object.values(this.w.links).filter((l) => l.room === id || l.to === id)] : []; },
+    // The room a door opens into: his own ('main'), or the room beside a corner room.
+    parentOf(id) { const d = this.w.gateOf(id); return d && d.parent ? d.parent : 'main'; },
+    // The way from room `here` to room `where`: the doors to go through, [{ id, dir: 'in' | 'out' }], the shortest walk through doors that are not
+    // locked. 'out' goes from a room through its own door (or one of its other doors, a link), 'in' the other way. null if there is no way.
+    route(here, where) {
+      const w = this.w, mid = (r) => { const b = r === 'main' ? w.MAIN_BOUNDS : w.doors[r] && w.doors[r].shell.bounds; return b ? { x: (b.minX + b.maxX) / 2, z: (b.minZ + b.maxZ) / 2 } : { x: 0, z: 0 }; };
+      const edges = w.allDoors().filter((d) => !d.locked).map((d) => ({ id: d.id, a: d.link ? d.room : d.id, b: d.parent, p: w.doorPoint(d.id, 0) }));
+      const me = this.g.root.position, goal = mid(where);
+      let best = null;
+      const go = (room, p, len, seen, path) => {
+        if (best && len >= best.len) return;
+        if (room === where) { const L = len + Math.hypot(goal.x - p.x, goal.z - p.z); if (!best || L < best.len) best = { len: L, path }; return; }
+        for (const e of edges) {
+          const to = e.a === room ? e.b : e.b === room ? e.a : null;
+          if (!to || seen.includes(to) || (to !== 'main' && (!w.doors[to] || w.doors[to].closing))) continue;       // (nobody goes through a room that is going)
+          go(to, e.p, len + Math.hypot(e.p.x - p.x, e.p.z - p.z), [...seen, to], [...path, { id: e.id, dir: e.a === room ? 'out' : 'in' }]);
+        }
+      };
+      go(here, here === this.hereId() ? { x: me.x, z: me.z } : mid(here), 0, [here], []);
+      return best && best.path;
+    },
+    edgeSteps(e) { return e.dir === 'out' ? this.doorOut(e.id) : this.doorIn(e.id); },
+    // is there a door between these two rooms?
+    adjoining(a, b) { return this.w.allDoors().some((d) => { const r = d.link ? d.room : d.id; return (r === a && d.parent === b) || (r === b && d.parent === a); }); },
     // The rooms from `id` out to his own, `id` first (not including his own room).
     roomChain(id) { const c = []; for (let r = id; r && r !== 'main' && this.w.doors[r]; r = this.parentOf(r)) c.push(r); return c; },
     // The doors to go through from room `here` to room `where` (through every room between: a corner room is entered through the room beside it).
     // `outOnly`: just out of the room he is in, as far as his own (the Workshop, Yard and Restaurant jobs go in through their own door).
     tripSteps(here, where, outOnly = false) {
+      const way = this.route(here, outOnly ? 'main' : where);
+      if (way) return way.flatMap((e) => this.edgeSteps(e));
+      // no way there with the doors as they are (one is locked): the usual way, as far as the locked door, where he gives up
       const a = this.roomChain(here), b = outOnly ? [] : this.roomChain(where);
       while (!outOnly && a.length && b.length && a[a.length - 1] === b[b.length - 1]) { a.pop(); b.pop(); }          // (the rooms they share are not left)
       return [...a.flatMap((r) => this.doorOut(r)), ...b.reverse().flatMap((r) => this.doorIn(r))];
@@ -76,14 +114,14 @@ export function installWorkshop(Brain, POSES, H) {
     stuckIn() {
       const here = this.w.roomIdAt(this.g.root.position.x, this.g.root.position.z);
       if (here === 'main' || here === 'door') return null;
-      const exits = this.exitsOf(here);
-      return exits.length && exits.every((d) => d.locked) ? here : null;
+      const exits = this.exitsOf(here), open = exits.filter((d) => !d.locked);
+      return exits.length && (!open.length || (open.every((d) => d.link) && !this.route(here, 'main'))) ? here : null;       // (a link that only leads to another shut room is no way out)
     },
     shutInMessage(room) { return `${this.isGal ? 'GAL' : 'GUY'} is shut in the ${this.w.doors[room].name}: the door is locked. Unlock it (long-press the door) to let ${this.isGal ? 'her' : 'him'} out.`; },
     doorIn(id) {
       const w = this.w, out = this.doorStand(id), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false);
       // (the locked doors are kept out of every choice, but one can be locked while he is on his way: he gives up there, never walks into it)
-      return [{ type: 'plan', fn: () => { if (!this.doorLockedFor(id)) return []; this.queue.length = 0; this.ui(`the ${w.doors[id].name} door is locked`); return []; } },
+      return [{ type: 'plan', fn: () => { if (!this.gateShut(id)) return []; this.queue.length = 0; this.ui(`the ${w.gateOf(id) ? w.gateOf(id).name : 'other'} door is locked`); return []; } },
         this.walk(out.x, out.z, face),
         { type: 'plan', fn: () => (w.isDoorOpen(id) ? [] : [      // (a door that is already open is simply walked through)
           this.play('reach', 1.6, { at: [0.8, () => { w.setDoorOpen(id, true); sfx('click'); }], target: () => w.doorKnob(id) }),
@@ -95,15 +133,23 @@ export function installWorkshop(Brain, POSES, H) {
     doorOut(id) {
       const w = this.w, out = this.doorStand(id), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false);
       // (locked while he is on his way out: he stays in, and what he was doing there is dropped)
-      return [{ type: 'plan', fn: () => { if (!this.stuckIn()) return []; this.queue.length = 0; this.ui(`shut in the ${w.doors[id].name} (the door is locked)`); return []; } },
-        this.play('idle', 0.05, { at: [0, () => w.setDoorOpen(id, true)] }),            // (the other robot may have shut it behind her while he was inside)
-        this.walk(inn.x, inn.z), { ...this.walk(out.x, out.z), direct: true, ...this.doorFrame(id) }, this.walk(out.x, out.z, face),
+      return [{ type: 'plan', fn: () => { const d = w.gateOf(id); if (d && !(d.locked && this.hereId() === (d.link ? d.room : d.id))) return []; this.queue.length = 0; this.ui(d ? `shut in the ${d.name} (the door is locked)` : 'the door is gone'); return []; } },
+        ...this.openFromInside(id, this.walk(inn.x, inn.z)), { ...this.walk(out.x, out.z), direct: true, ...this.doorFrame(id) }, this.walk(out.x, out.z, face),
         this.play('reach', 1.6, { at: [0.8, () => this.closeDoor(id)], target: () => w.doorKnob(id) })];
+    },
+    // up to the door from inside its room (`walk`: the walk there), and open it if it is shut (he came in by another door, or the other robot shut it)
+    openFromInside(id, walk) {
+      const w = this.w;
+      return [walk, { type: 'plan', fn: () => (!w.gateOf(id) || w.isDoorOpen(id) ? [] : [
+        this.walk(walk.x, walk.z, w.doorYaw(id, true)),
+        this.play('reach', 1.6, { at: [0.8, () => { w.setDoorOpen(id, true); sfx('click'); }], target: () => w.doorKnob(id, true) }),
+        this.play('idle', 0.7)]) }];
     },
     // the door is shut behind whoever leaves, unless the other robot is still in there (or in the doorway)
     closeDoor(id) {
       const o = this.other, r = o && o.g ? this.w.roomIdAt(o.g.root.position.x, o.g.root.position.z) : null;
-      if (r === 'door' || this.roomChain(r).includes(id)) return;                      // (still in there, or in a room beyond it)
+      const l = this.w.links[id];
+      if (r === 'door' || (l ? r === l.room : this.roomChain(r).includes(id))) return;                      // (still in there, or in a room beyond it)
       this.w.setDoorOpen(id, false);
     },
     // A trip: in through the door (unless he is already inside), the steps, and out again (unless he is locked on something in here).
@@ -151,6 +197,7 @@ export function installWorkshop(Brain, POSES, H) {
     // the spot. Otherwise it stands in the Workshop straight away (the user can move it or put it away); storage only if there is no room.
     finishBuilt(id) {
       const r = RECIPES[id];
+      if (r.whole && this.siteFor(id) && this.liftBuilt(id)) return;
       if (this.siteFor(id)) { this.setCarry(r.line === 'metal' ? 'mflat' : 'flat', 1); this.flatKind = id; return; }
       this.setCarry(null);
       this.endBuild();
@@ -158,6 +205,22 @@ export function installWorkshop(Brain, POSES, H) {
       if (!placed) { const items = this.w.stock.items; items[r.object] = Math.min(STORAGE_CAP, (items[r.object] || 0) + 1); }
       sfx('chime');
       if (this.onBuilt) this.onBuilt(placed ? `${this.who()} built a ${r.name}! It is in the Workshop.` : `${this.who()} built a ${r.name}! There is no room in the Workshop, so it is in storage.`);
+    },
+    // A thing that is carried as it is (a crate of pins): off the tray and into both hands. False if it cannot be (no room for it to have come from).
+    liftBuilt(id) {
+      const r = RECIPES[id], w = this.w, f = this.obj(factoriesOf(r).at(-1)), p = this.g.root.position;
+      const name = w.addInstance(r.object, null, null, true, { x: p.x, z: p.z });
+      if (!name) return false;
+      this.setCarry(null);
+      this.endBuild();
+      const o = this.obj(name), t = f ? f.trayPoint() : null;
+      const from = { x: o.x, z: o.z, rot: o.rot };
+      this.homeMove = { name, from, whole: true };
+      this.builtWhole = name;
+      (this.using ||= new Set()).add(name);
+      this.startHaul(name);
+      if (t) { this.hauling.from = { x: t.x, z: t.z, y: t.y }; o.group.position.set(t.x, t.y, t.z); }
+      return true;
     },
     who() { return this.isGal ? 'GAL' : 'GUY'; },
 
@@ -177,7 +240,7 @@ export function installWorkshop(Brain, POSES, H) {
       const w = this.w, back = d.wall === 'back', gap = 0.3;
       for (const off of [0, -0.25, 0.25, -0.45, 0.45, -0.65, 0.65]) {
         if (Math.abs(off) > d.hw - 0.2) continue;
-        const u = d.u + off, p = back ? { x: u, z: -4 + 0.55 } : { x: -5 + 0.55, z: u }, at = back ? { x: p.x, z: p.z + 0.55 } : { x: p.x + 0.55, z: p.z };
+        const u = d.u + off, p = back ? { x: u, z: -ROOM.d / 2 + 0.55 } : { x: -ROOM.w / 2 + 0.55, z: u }, at = back ? { x: p.x, z: p.z + 0.55 } : { x: p.x + 0.55, z: p.z };
         if (!w.fits(stool, p.x, p.z, stool.w + (back ? gap : 0), stool.d + (back ? 0 : gap))) continue;
         if (w.obstacles.some((o) => o !== stool.obstacle && o.active !== false && !o.char && at.x > o.x0 - 0.25 && at.x < o.x1 + 0.25 && at.z > o.z0 - 0.25 && at.z < o.z1 + 0.25)) continue;
         return { ...p, u };
@@ -187,8 +250,9 @@ export function installWorkshop(Brain, POSES, H) {
     // How a thing is held while it is carried whole: how high it is lifted, how far in front of him, which way round (`turn`), and where each
     // hand takes hold (`half` either side of its middle, at `y` on it, `z` towards (-) or away from him). The default is the foot stool's.
     haulGrip(o) {
-      const key = o.guitar && !o.bass ? 'guitar' : o.name;
-      return { guitar: { lift: 0.42, ahead: 0.46, turn: 0, half: 0.12, y: 0.42, z: 0 },               // by the cradle of its stand
+      const key = o.guitar && !o.bass ? 'guitar' : o.kind === 'bowlingpins' ? 'pins' : o.name;
+      return { pins: { lift: 0.84, ahead: 0.48, turn: 0, half: 0.33, y: 0.03, z: 0, plain: true },        // the crate, by its two ends, at his waist
+        guitar: { lift: 0.42, ahead: 0.46, turn: 0, half: 0.12, y: 0.42, z: 0 },               // by the cradle of its stand
         lamp: { lift: 0.14, ahead: 0.5, turn: 0, half: 0.02, y: 0.86, z: 0, apart: 0.2 },            // by the pole, one hand above the other
         easel: { lift: 0.16, ahead: 0.52, turn: Math.PI, half: 0.31, y: 0.88, z: 0 },                  // by its two uprights, the canvas towards him
         telescope: { lift: 0.14, ahead: 0.46, turn: Math.PI, half: 0.03, y: 0.94, z: 0, apart: 0.16, tube: 1.35 },    // by its closed legs, the tube swung upright
@@ -225,7 +289,8 @@ export function installWorkshop(Brain, POSES, H) {
       const root = this.g.root, yaw = root.rotation.y, k = h.k * h.k * (3 - 2 * h.k);
       const o = h.o, q = h.grip, cx = root.position.x + Math.sin(yaw) * q.ahead, cz = root.position.z + Math.cos(yaw) * q.ahead;
       const base = h.dir > 0 ? h.from : (h.to || h.from);
-      o.group.position.set(base.x + (cx - base.x) * k, q.lift * k, base.z + (cz - base.z) * k);
+      const by = base.y || 0;
+      o.group.position.set(base.x + (cx - base.x) * k, by + (q.lift - by) * k, base.z + (cz - base.z) * k);
       const way = h.dir > 0 || q.plain ? yaw + q.turn : o.yaw, dy = Math.atan2(Math.sin(way - o.group.rotation.y), Math.cos(way - o.group.rotation.y));      // (on the way down it turns to the way it will stand)
       o.hauledYaw = o.group.rotation.y + (h.dir > 0 && k > 0.98 ? dy : dy * Math.min(1, dt * 9));
       if (q.tube && h.aim && o.setAim) o.setAim(h.aim.yaw, h.aim.pitch + (q.tube - h.aim.pitch) * k);
@@ -249,7 +314,7 @@ export function installWorkshop(Brain, POSES, H) {
     siteFor(id) {
       const r = RECIPES[id], w = this.w, p = r && w.instanceSite(r.object);
       if (!p || !r.serves) return null;
-      const room = p.room, b = room === 'main' || room === 'door' ? { minX: -4.5, maxX: 4.5, minZ: -3.5, maxZ: 3.6 } : w.doors[room] && w.doors[room].shell.bounds;
+      const room = p.room, b = room === 'main' || room === 'door' ? WALK : w.doors[room] && w.doors[room].shell.bounds;
       if (!b) return null;
       if (room !== 'main' && room !== 'door' && this.doorLockedFor(room)) return null;                      // a locked room: it is put together where it stands, not carried in
       if (this.stuckIn() && room !== this.stuckIn()) return null;                                           // shut in the Workshop: it is put together here, not carried out
@@ -257,6 +322,7 @@ export function installWorkshop(Brain, POSES, H) {
     },
     // out of the Workshop with it, through the other room's door if it goes there, put it together where it is wanted, and back out
     deliverSteps(id) {
+      if (this.builtWhole) { const n = this.builtWhole; this.builtWhole = null; return this.pinSetSteps(n); }
       if (this.carry !== 'flat' && this.carry !== 'mflat') return [];
       const site = this.siteFor(id);
       if (!site) return [{ type: 'plan', fn: () => [this.play('idle', 0.3, { at: [0.1, () => this.setUp(id, null)] })] }];
@@ -304,11 +370,13 @@ export function installWorkshop(Brain, POSES, H) {
     // The built things in the Workshop that belong in another room he can get to, with where each goes: [{ o, spot }].
     homeMoves() {
       const w = this.w;
+      const pins = this.pinMove();
+      if (pins) return [pins];
       if (!w.doors.workshop || this.doorLockedFor('workshop')) return [];
       const out = [];
       for (const o of Object.values(w.objects)) {
         if (!o.kind || !RECIPES[o.kind] || o.packed || o.hauled || o.stowed || o.removable === false) continue;
-        if (w.roomIdAt(o.x, o.z) !== 'workshop' || this.otherUses(o.name)) continue;          // (the other robot is using it, or carrying it already)
+        if (RECIPES[o.kind].whole || w.roomIdAt(o.x, o.z) !== 'workshop' || this.otherUses(o.name)) continue;          // (the other robot is using it, or carrying it already)
         const spot = this.homeSpot(o);
         if (spot) out.push({ o, spot });
       }
@@ -327,6 +395,7 @@ export function installWorkshop(Brain, POSES, H) {
       this.homeMove = null;
       const o = this.obj(m.name);
       if (m.whole) {                                                             // (in his arms as it is: set down on the nearest free floor)
+        if (!this.hauling) { if (o && !o.stowed) o.obstacle.active = true; return; }      // (put down already: it stays where it stands)
         this.dropHaul();
         if (!o) return;
         const q = this.g.root.position, ry = this.g.root.rotation.y, ah = { x: q.x + Math.sin(ry) * 0.7, z: q.z + Math.cos(ry) * 0.7 };
@@ -366,6 +435,7 @@ export function installWorkshop(Brain, POSES, H) {
       this.homeTried = this.time;
       if (!m) return ['nothing to carry', this.play('idle', 0.5)];
       (this.using ||= new Set()).add(m.o.name);                              // (his from the moment he sets off: with both robots on their way to it, both carried it)
+      if (m.pins) return this.pinHomeSteps(m.o.name);
       const w = this.w, n = m.o.name, r = RECIPES[m.o.kind], room = m.spot.room, from = { x: m.o.x, z: m.o.z, rot: m.o.rot };
       const roomName = room === 'main' ? (this.isGal ? "GUY's room" : 'his own room') : `the ${w.doors[room].name}`;
       const at = () => { const o = this.obj(n); return o ? V(o.x, 0.35, o.z) : this.g.pos.clone(); };
@@ -405,7 +475,7 @@ export function installWorkshop(Brain, POSES, H) {
     // Where he stands to put a piece (`wd` x `dp` on the floor) together at `p` in `room`: towards the middle of the room, clear of the piece
     // (a step back from its edge: a fixed 0.95 m from a bed's middle had his legs in the bed as it grew), and the near edge he reaches for.
     setUpStand(room, p, wd = 0.6, dp = 0.6) {
-      const w = this.w, b = room === 'main' || room === 'door' ? { minX: -4.5, maxX: 4.5, minZ: -3.5, maxZ: 3.6 } : w.doors[room].shell.bounds;
+      const w = this.w, b = room === 'main' || room === 'door' ? WALK : w.doors[room].shell.bounds;
       const cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2, d = Math.hypot(cx - p.x, cz - p.z) || 1, ux = (cx - p.x) / d, uz = (cz - p.z) / d;
       const ext = Math.min(Math.abs(ux) > 1e-3 ? wd / 2 / Math.abs(ux) : 9, Math.abs(uz) > 1e-3 ? dp / 2 / Math.abs(uz) : 9);       // (from its middle to its edge, along that line)
       const edge = { x: p.x + ux * ext, z: p.z + uz * ext }, k = Math.max(0.95, ext + 0.45);
@@ -505,7 +575,7 @@ export function installWorkshop(Brain, POSES, H) {
           const target = () => {
             sfx('wipe');
             const u = Math.min(win.u + win.hw - 0.1, Math.max(win.u - win.hw + 0.1, sp.u + Math.sin((this.time - t0) * 2.0) * span));
-            return win.wall === 'back' ? V(u, top, -4 + 0.04) : V(-5 + 0.04, top, u);
+            return win.wall === 'back' ? V(u, top, -ROOM.d / 2 + 0.04) : V(-ROOM.w / 2 + 0.04, top, u);
           };
           steps.push({ type: 'plan', fn: () => { const p = this.g.root.position, from = { x: p.x, z: p.z }; return [this.play('reach', 7.5, { needs: [name], target, stool: { name, from } })]; } });
           return [`cleaning the top of the ${win.label} from the foot stool`, ...steps];
@@ -513,7 +583,7 @@ export function installWorkshop(Brain, POSES, H) {
         build: () => {
           const id = this.pickRecipe();
           if (!id) return ['wondering what to build', this.play('idle', 1)];
-          const label = `building a ${RECIPES[id].name.toLowerCase()}`;
+          const label = `building ${/s$/.test(RECIPES[id].name) ? '' : /^[aeiou]/i.test(RECIPES[id].name) ? 'an ' : 'a '}${RECIPES[id].name.toLowerCase()}`;
           if (this.siteFor(id)) return [label, ...(this.inWorkshop() ? [] : this.doorIn(ID)), ...this.buildSteps(id)];          // (the delivery takes him out again)
           return this.shopTrip(label, this.buildSteps(id));
         },
@@ -544,6 +614,7 @@ export function installWorkshop(Brain, POSES, H) {
       const g = this.g, hp = this.hobProps || {};
       for (const [key, m] of Object.entries(P)) m.visible = key === this.carry;
       const handCenter = (side) => { const fr = this.handFrame(side); return { fr, pos: fr.wrist.clone().addScaledVector(fr.f, g.limb[side].handLen * 0.5) }; };
+      if (this.carry === 'pins') P.pins.children.forEach((m, i) => { m.visible = i < this.carryN; });
       if (this.carry && P[this.carry]) {
         const { fr, pos } = handCenter('Right');
         const m = P[this.carry];

@@ -83,7 +83,7 @@ export function helpHtml(tab) {
       kv([['K', 'Skills'], ['H or ?', 'This help'], ['F', 'Switch between the static view and the chosen one'], ['Space', 'Next activity'], ['M', 'Mute'], ['Esc', 'Close a panel or menu']]),
     ].join('');
     case 'rooms': return [
-      p('GUY\'s room is home. Add more rooms from the Catalog\'s Rooms tab: each one gets a door on a wall of his room, and corner rooms open through the side of the room beside them. Remove a room there too; everything in it goes back to the Catalog.'),
+      p('GUY\'s room is home. Add more rooms from the Catalog\'s Rooms tab: each one gets a door on a wall of his room, and every room is the same 10 m square, so they line up with no gaps; a corner room has a door into each room beside it. Remove a room there too; everything in it goes back to the Catalog.'),
       kv(ROOM_CATALOG.map((r) => [`${r.icon} ${esc(r.name)}`, ROOM_NOTES[r.id] || ''])),
     ].join('');
     case 'skills': return [

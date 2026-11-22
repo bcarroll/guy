@@ -11,7 +11,8 @@ The big changes to GUY's room, newest first. The game shows the same list under 
 ### Changed
 
 - Skills menu: GAL really brings what GUY asked for, and he plays it when it comes.
-- The Studio is wider than its wall and reaches into the free corners; corner rooms can open off the end of its stage.
+- Every room is the same 10 m square, so the house lines up with no overlaps or gaps; a corner room has a door into each room beside it.
+- New bowling pins are carried to a lane and set up there by hand.
 - GAL dances in the room the stereo is in, not always in GUY's room.
 - GUY and GAL wear the bass with its strap over the shoulder, and their hands close round the neck of a guitar or bass.
 

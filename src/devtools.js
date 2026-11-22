@@ -16,7 +16,7 @@ import { lampLooks, LAMP_LOOKS } from './brain.js';
 import { BAND } from './gal.js';
 import { wants } from './needs.js';
 import { ROOM_CATALOG } from './rooms.js';
-import { ROOM as ROOM_MAIN } from './room.js';
+import { ROOM as ROOM_MAIN, WALK } from './room.js';
 import { initLayout } from './layout.js';
 import { RECIPES as RECIPES_DEF } from './workshop.js';
 import { DISHES } from './restobjects.js';
@@ -1162,12 +1162,12 @@ T.sweepDecor = () => {
   // (find a stretch of the back wall where the tree fits when the picture is down, whatever else the room holds, and hang the picture there)
   w.removeObject('picture');
   const free = [];
-  for (let u = -4.0; u <= 4.0; u += 0.25) if (tree && w.fits(tree, u, -3.55, tree.w, tree.d)) free.push(u);
+  for (let u = -4.0; u <= 4.0; u += 0.25) if (tree && w.fits(tree, u, -ROOM_MAIN.d / 2 + 0.45, tree.w, tree.d)) free.push(u);
   w.restoreObject('picture');
   const p2 = w.decor.picture;
   let tested = null;
   for (const u of free) {
-    if (p2 && w.decorFits(p2, u, p2.v)) { p2.set(u, p2.v); tested = { u, treeFitsUnderIt: w.fits(tree, u, -3.55, tree.w, tree.d) }; break; }
+    if (p2 && w.decorFits(p2, u, p2.v)) { p2.set(u, p2.v); tested = { u, treeFitsUnderIt: w.fits(tree, u, -ROOM_MAIN.d / 2 + 0.45, tree.w, tree.d) }; break; }
   }
   out.push(result('decor:furniture cannot be pushed into a wall piece', !!tree && !!p2 && (!tested || !tested.treeFitsUnderIt), { freeStretches: free.length, tested, note: tested ? undefined : 'no free stretch of back wall to test in this layout' }));
   return out;
@@ -2024,7 +2024,7 @@ T.sweepRooms = () => {
   out.push(result('rooms: adding the Workshop again does nothing, and says so kindly', !twice.ok && twice.already && Object.keys(w.doors).length === 1 && friendly(twice.messages), { twice }));
   R().reset('workshop');
   out.push(result('rooms: taking the room away removes the door and its room, and the camera frames the main room again',
-    !Object.keys(w.doors).length && !w.room.children.includes(door.group) && !w.room.children.includes(door.shell.group) && w.extent().maxX === 5 && w.extent().minZ === -4));
+    !Object.keys(w.doors).length && !w.room.children.includes(door.group) && !w.room.children.includes(door.shell.group) && w.extent().maxX === 5 && w.extent().minZ === -5));
   // the Shooting Range and the Bowling Alley are as wide as any other room on the same wall (a wall of GUY's room is 10 m or 8 m long)
   {
     const widths = {};
@@ -2155,7 +2155,7 @@ T.sweepDoors = () => {
     out.push(result(`doors: on the ${wall} wall only, the door is clear and what it moved is in the Catalog`, res.ok ? !probs.length && gone && w.doors.workshop.wall === wall : friendly(res.messages), { res: { ok: res.ok, u: res.u, displaced: res.displaced }, probs }));
     // every added room is as big as GUY's room: the same width (x) and the same depth (z), whichever wall the door is on
     const sb = res.ok ? w.doors.workshop.shell.bounds : null;
-    out.push(result(`doors: ${wall} wall: the room behind it has the same width and depth as GUY's room`, !res.ok || (near(sb.maxX - sb.minX, 10) && near(sb.maxZ - sb.minZ, 8)), { bounds: sb }));
+    out.push(result(`doors: ${wall} wall: the room behind it has the same width and depth as GUY's room`, !res.ok || (near(sb.maxX - sb.minX, 10) && near(sb.maxZ - sb.minZ, 10)), { bounds: sb }));
     // what was moved can be put back, and none of it ends up in the doorway
     putBackSince(before);
     out.push(result(`doors: ${wall} wall: put back, nothing returns into the doorway`, !res.ok || !doorProblems('workshop').length, { probs: doorProblems('workshop') }));
@@ -2400,7 +2400,7 @@ T.sweepShelf = () => {
   for (let i = 1; i < stack.length; i++) resting = resting && Math.abs((stack[i].mesh.position.y - stack[i].w / 2) - (stack[i - 1].mesh.position.y + stack[i - 1].w / 2)) < 0.01;
   out.push(result('shelf: stacked books lie flat on their side, the first on the floor and each resting on the one below (nothing floats)', stack.length > 0 && flat && Math.abs(lowest) < 0.01 && resting, { flat, lowest, resting }));
   const l = stack.length ? stack[0].mesh.getWorldPosition(new THREE.Vector3()) : null;
-  out.push(result('shelf: the stack is beside the shelf, inside the room and clear of furniture', !!l && Math.abs(stack[0].z) > 1.15 && Math.abs(l.x) < 4.7 && Math.abs(l.z) < 3.6 && w.obstacles.some((o) => o.name === 'bookstack'), { l }));
+  out.push(result('shelf: the stack is beside the shelf, inside the room and clear of furniture', !!l && Math.abs(stack[0].z) > 1.15 && Math.abs(l.x) < 4.7 && Math.abs(l.z) < 4.6 && w.obstacles.some((o) => o.name === 'bookstack'), { l }));
   const obs = w.obstacles.find((o) => o.name === 'bookstack');
   const lamp = (T.addObject('lamp'), w.objects.lamp);
   out.push(result('shelf: nothing can be put on top of the stack', !!obs && !w.fits(lamp, (obs.x0 + obs.x1) / 2, (obs.z0 + obs.z1) / 2)));
@@ -2468,8 +2468,8 @@ T.sweepCorners = () => {
   out.push(result('corners: the Library and the Bedroom are added in the two corners beside the Workshop', wk.ok && lib.ok && bed.ok && !!dl && !!db && dl.parent === 'workshop' && db.parent === 'workshop', { wk: wk.ok, lib, bed }));
   if (!dl || !db) { T.resetRooms(); return out; }
   const eq = (p, q) => Math.abs(p - q) < 1e-6;
-  out.push(result('corners: each corner room fills its whole corner, 10 x 8 like the others, and no room overlaps another', eq(dl.shell.bounds.minX, 5) && eq(dl.shell.bounds.maxX, 15) && eq(dl.shell.bounds.minZ, -12) && eq(dl.shell.bounds.maxZ, -4)
-    && eq(db.shell.bounds.minX, 5) && eq(db.shell.bounds.maxX, 15) && eq(db.shell.bounds.minZ, 4) && eq(db.shell.bounds.maxZ, 12) && !overlaps().length, { l: dl.shell.bounds, b: db.shell.bounds, overlaps: overlaps() }));
+  out.push(result('corners: each corner room fills its whole corner, 10 x 10 like the others, and no room overlaps another', eq(dl.shell.bounds.minX, 5) && eq(dl.shell.bounds.maxX, 15) && eq(dl.shell.bounds.minZ, -15) && eq(dl.shell.bounds.maxZ, -5)
+    && eq(db.shell.bounds.minX, 5) && eq(db.shell.bounds.maxX, 15) && eq(db.shell.bounds.minZ, 5) && eq(db.shell.bounds.maxZ, 15) && !overlaps().length, { l: dl.shell.bounds, b: db.shell.bounds, overlaps: overlaps() }));
   out.push(result('corners: each door is in the Workshop\'s side wall, in the middle stretch the two rooms share, with nothing in the way', !doorProblems('library').length && !doorProblems('bedroom').length && dl.wall !== db.wall && w.doors.workshop.shell.sides[dl.wall.split(':')[1]].visible === false && w.doors.workshop.shell.sides[db.wall.split(':')[1]].visible === false, { l: dl.wall, b: db.wall, pl: doorProblems('library'), pb: doorProblems('bedroom') }));
   // 3. the doorway: the way through only while the door is open
   const probe = { w: 0.5, d: 0.5, obstacle: null };
@@ -2598,6 +2598,113 @@ T.sweepCorners = () => {
   }
   T.resetRooms(); T.home(); T.removeAll(); putBackSince(before); T.settle(); machine().hidden = true;
   out.push(result('corners: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
+// ---- Every room the same square, and a door into every neighbour (room.js ROOM, links; rooms.js linkRooms; workbrain.js route) ----
+// every door of a room (its own, and the ones between it and the corner rooms beside it)
+T.lockRoom = (id, on) => { R().setDoorLocked(id, on); for (const l of Object.values(W().links)) if (l.room === id || l.to === id) R().setDoorLocked(l.id, on); };
+T.sweepFloorplan = () => {
+  const out = [], base = errors.length, w = W(), b = B(), g = G();
+  const before = new Set(Object.keys(w.removed)), places = T.keepPlaces(), box = (d) => d.shell.bounds, all = () => [{ id: 'main', ...w.MAIN_BOUNDS }, ...Object.values(w.doors).map((d) => ({ id: d.id, ...box(d) }))];
+  const r6 = (v) => Math.round(v * 1e6) / 1e6;
+  // square, the same size, and on the grid: every edge is a wall line of the 3 x 3 grid, so nothing overlaps and nothing is short of its neighbour
+  const problems = () => all().flatMap((q) => [
+    r6(q.maxX - q.minX) === 10 && r6(q.maxZ - q.minZ) === 10 ? null : `${q.id} is ${r6(q.maxX - q.minX)} x ${r6(q.maxZ - q.minZ)}`,
+    [q.minX, q.maxX, q.minZ, q.maxZ].every((v) => [-15, -5, 5, 15].includes(r6(v))) ? null : `${q.id} is off the grid (${[q.minX, q.maxX, q.minZ, q.maxZ].map(r6)})`,
+    all().some((o) => o.id !== q.id && r6(o.minX) === r6(q.minX) && r6(o.minZ) === r6(q.minZ)) ? `${q.id} stands on another room` : null]).filter(Boolean);
+  out.push(result('floor plan: GUY\'s own room is a square', ROOM_MAIN.w === 10 && ROOM_MAIN.d === 10));
+  const ids = Object.keys(MANIFEST.rooms);
+  for (const id of ids) {
+    const bad = [];
+    for (const wall of ['right', 'front', 'back', 'left']) {
+      T.resetRooms(); T.removeAll();
+      unlockRoom(id);
+      if (!R().add(id, { walls: [wall] }).ok) continue;
+      bad.push(...problems().map((p) => `${wall}: ${p}`));
+      const sh = w.doors[id].shell; if (sh.N !== 10 || sh.L !== 10) bad.push(`${wall}: built ${sh.L} x ${sh.N}`);
+    }
+    out.push(result(`floor plan: the ${id} is a 10 m square whichever wall its door is in`, !bad.length, { bad }));
+  }
+  // the house in the report: the Bedroom between the Workshop and the Studio
+  const house = () => {
+    T.resetRooms(); T.removeAll(); T.settle(); T.home();
+    for (const [id, o] of [['workshop', { walls: ['right'] }], ['studio', { walls: ['front'] }], ['bowling', { walls: ['back'] }], ['library', { corners: ['right-back'] }], ['bedroom', { corners: ['right-front'] }]]) R().add(id, o);
+  };
+  house();
+  out.push(result('floor plan: the Workshop, Studio, Bowling Alley, Library and Bedroom line up with no overlap and no gap', !problems().length && Object.keys(w.doors).length === 5, { problems: problems() }));
+  const pair = (x, y) => w.allDoors().filter((d) => { const r = d.link ? d.room : d.id; return (r === x && d.parent === y) || (r === y && d.parent === x); });
+  const ways = { ws: pair('bedroom', 'workshop').length, st: pair('bedroom', 'studio').length, lib: pair('library', 'workshop').length, bowl: pair('library', 'bowling').length };
+  out.push(result('floor plan: the Bedroom has a door into the Workshop and one into the Studio (the Library one into the Workshop; the Bowling Alley\'s side walls take none)', ways.ws === 1 && ways.st === 1 && ways.lib === 1 && ways.bowl === 0, ways));
+  const link = Object.values(w.links)[0];
+  if (!link) { T.resetRooms(); return out; }
+  const cell = (d) => { const c = [d.rect, d.rectIn], hits = w.obstacles.filter((o) => o.active !== false && !o.char && c.some((r) => o.x1 > r.x0 && o.x0 < r.x1 && o.z1 > r.z0 && o.z0 < r.z1)); return hits.map((o) => o.name); };
+  out.push(result('floor plan: that door is cut in the wall of each of the two rooms, with nothing standing in front of it on either side', link.hide.length === 2 && link.hide.every((m) => !m.visible) && link.cut.children.length === 2 && !cell(link).length, { hits: cell(link) }));
+  {
+    const p = (n) => w.doorPoint(link.id, n), mid = p(0), probe = { w: 0.5, d: 0.5, obstacle: null };
+    out.push(result('floor plan: its two sides are the two rooms, a thing can be moved through it, and the doorway is walkable only while it is open', w.roomIdAt(p(1).x, p(1).z) === link.to && w.roomIdAt(p(-1).x, p(-1).z) === link.room && w.roomIdAt(mid.x, mid.z) === 'door' && w.canTransit(probe, mid.x, mid.z)
+      && !w.walkable(mid.x, mid.z) && (w.setDoorOpen(link.id, true), step(1.2), w.walkable(mid.x, mid.z)) && (w.setDoorOpen(link.id, false), step(1.2), !w.walkable(mid.x, mid.z)), { mid }));
+    const n0 = p(0.6); out.push(result('floor plan: furniture cannot be left in front of it', !w.fits({ name: 'x', w: 0.5, d: 0.5, h: 0.5, obstacle: null }, n0.x, n0.z), {}));
+  }
+  // he walks round: in by one door and out by the other, and shuts what he opened behind him on the way out
+  const go = (max, stop) => { const seen = [], bad = []; let t = 0; while (t < max) { step(0.1); t += 0.1; const r = w.roomIdAt(g.pos.x, g.pos.z); if (r !== 'door' && seen.at(-1) !== r) seen.push(r); if (!w.walkable(g.pos.x, g.pos.z) && !w.inMain(g.pos.x, g.pos.z)) bad.push([+g.pos.x.toFixed(2), +g.pos.z.toFixed(2)]); if (stop(seen)) break; } return { seen, bad, t: +t.toFixed(0) }; };
+  const stand = (room, n = 5, lat = 0) => { const p = w.shellPoint(room, n, lat); b.skip(true); b.queue = []; b.step = null; b.pendingActivity = null; g.root.position.set(p.x, 0, p.z); b.stayRoom = room; };
+  for (const d of w.allDoors()) w.setDoorOpen(d.id, false);
+  step(1.2);
+  const other = link.to === 'studio' ? 'workshop' : 'studio';
+  for (const [from, to] of [[link.to, link.room], [link.room, link.to], [link.room, other], [other, link.room]]) {
+    stand(from, from === 'studio' ? 4.5 : 5); for (const d of w.allDoors()) { d.open = 0; d.openTo = 0; }
+    const ask = b.visitRoom(to, true);
+    const tr = go(60, () => b.hereId() === to && w.roomIdAt(g.pos.x, g.pos.z) === to);
+    out.push(result(`floor plan: from the ${from} he goes straight into the ${to} through the door between them`, ask.ok && tr.seen.at(-1) === to && !tr.seen.includes('main') && !tr.bad.length, { ask, ...tr }));
+  }
+  // the menu on it
+  window.__guyOpenDoorMenu(link.id, 'main');
+  const txt = [...document.getElementById('menu').querySelectorAll('[data-act]')].filter((x) => !x.hidden).map((x) => x.textContent);
+  out.push(result('floor plan: long-pressing it offers the room on the other side and the lock', txt.length === 2 && txt[0].includes('Go into') && /Lock the door/.test(txt[1]), { txt }));
+  document.getElementById('menu').hidden = true;
+  // locked: the way round it; both locked: shut in
+  stand('bedroom'); b.choose('wander');
+  R().setDoorLocked('bedroom', true);
+  out.push(result('floor plan: with one of its doors locked the Bedroom is not shut: he goes in and out by the other', b.stuckIn() === null && !b.doorLockedFor('bedroom') && (b.route('bedroom', 'main') || []).every((e) => e.id !== 'bedroom'), { way: b.route('bedroom', 'main') }));
+  { b.skip(true); b.queue = []; b.step = null; b.pendingActivity = 'leave'; const tr = go(90, () => b.inMain() && w.roomIdAt(g.pos.x, g.pos.z) === 'main'); out.push(result('floor plan: ... and he gets home that way', tr.seen.at(-1) === 'main' && tr.seen.includes(link.to) && !tr.bad.length, tr)); }
+  R().setDoorLocked(link.id, true);
+  out.push(result('floor plan: with both locked nobody can go in', w.isDoorLocked(link.id) && b.doorLockedFor('bedroom') && !b.route('main', 'bedroom'), {}));
+  stand('bedroom'); step(0.2);
+  out.push(result('floor plan: ... and whoever is in there is shut in', b.stuckIn() === 'bedroom', { stuck: b.stuckIn() }));
+  R().setDoorLocked('bedroom', false);
+  out.push(result('floor plan: unlocking either lets him out', b.stuckIn() === null, {}));
+  // saved with the rooms (and where it is, and that it is locked)
+  b.skip(true); b.queue = []; b.step = null; T.home(); T.settle();
+  const snap = JSON.parse(JSON.stringify(R().snapshot())), was = { id: link.id, u: link.u };
+  T.resetRooms();
+  out.push(result('floor plan: taking the rooms away takes the door with them', !Object.keys(w.links).length));
+  R().restoreFrom(snap);
+  out.push(result('floor plan: it comes back where it was, locked as it was', !!w.links[was.id] && w.links[was.id].u === was.u && w.isDoorLocked(was.id) && !problems().length, { links: Object.keys(w.links) }));
+  // an older save: no links, and a Studio that stood 12 m wide: the doors are added once everything is back
+  const old = JSON.parse(JSON.stringify(snap)); for (const s of Object.values(old.rooms)) delete s.links; old.rooms.studio.span = { lo: -6, hi: 5 };
+  T.resetRooms(); R().restoreFrom(old);
+  const none = Object.keys(w.links).length, made = R().linkRooms();
+  out.push(result('floor plan: an older save gets the missing door, and its wide Studio comes back square', none === 0 && made.length === 1 && Object.keys(w.links).length === 1 && !problems().length, { none, made, problems: problems() }));
+  // one room goes, the wall of the other is whole again
+  { const l = Object.values(w.links)[0], mine = w.doors[l.room].shell.sides[l.wall2.split(':')[1]], cutWas = mine.visible;
+    R().reset(l.to);
+    out.push(result('floor plan: taking a neighbour away closes the wall of the room that stays', !Object.keys(w.links).length && !cutWas && mine.visible && !!w.doors[l.room] && !w.room.children.includes(l.cut) && !w.room.children.includes(l.group), { links: Object.keys(w.links) })); }
+  // the third room arrives last: the corner room that was there gets its second door then
+  T.resetRooms(); T.settle(); T.home();
+  R().add('workshop', { walls: ['right'] }); R().add('bedroom', { corners: ['right-front'] });
+  const n0 = Object.keys(w.links).length, late = R().add('backyard', { walls: ['front'] }), gate = Object.values(w.links)[0];
+  out.push(result('floor plan: a room added beside a corner room later gets a door into it too (a gate, in the Backyard\'s fence), and the toast says so', n0 === 0 && late.ok && !!gate && gate.to === 'backyard' && gate.gate && late.messages.some((x) => /between the Bedroom and the Backyard/.test(x)), { late }));
+  // a layout from when his room was 8 m deep: what stood by the front and back walls still does, the rest has not moved
+  T.resetRooms(); T.removeAll(); T.settle(); T.home();
+  for (const id of ['piano', 'lamp', 'plant']) T.addObject(id);
+  { const v1 = JSON.parse(JSON.stringify(w.layout.snapshot())); v1.v = 1;
+    v1.objects.piano = { x: -2.5, z: -3.5, rot: 0 }; v1.objects.lamp = { x: -4.3, z: 3.7, rot: 0 }; v1.objects.plant = { x: 2, z: 1.2, rot: 0 };
+    const did = w.layout.apply(v1), q = (n) => [r6(w.objects[n].x), r6(w.objects[n].z)].join();
+    out.push(result('floor plan: an old layout: the piano is still against the back wall, the lamp by the front one, the plant where it was', did.applied && q('piano') === '-2.5,-4.5' && q('lamp') === '-4.3,4.7' && q('plant') === '2,1.2', { piano: q('piano'), lamp: q('lamp'), plant: q('plant'), did }));
+    out.push(result('floor plan: and it is saved as a new one', w.layout.snapshot().v === 2)); }
+  T.resetRooms(); T.removeAll(); places(); putBackSince(before); T.settle(); T.home(); machine().hidden = true;
+  out.push(result('floor plan: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
 };
 
@@ -2883,9 +2990,11 @@ T.sweepRestaurant = () => {
     restSetup('front');
     const cs = [r.spawn(), r.spawn(), r.spawn()];
     out.push(result('restaurant: three customers at once sit at three different seats, and a fourth is not let in', cs.every(Boolean) && new Set(cs.map((c) => c.seat.table + c.seat.i)).size === 3 && r.spawn() === null));
-    let t5 = 0, minGap = 9;
+    let t5 = 0, minGap = 9, ready5 = false;
     const moving = (c) => ['walk', 'exit', 'leave'].includes(c.state);
     while (t5 < 900 && r.list.length) {
+      if (!ready5 && cs.some((c) => c.state === 'waiting')) { ready5 = true; b.pendingActivity = null; }
+      if (!ready5) b.pendingActivity = 'wander';       // (with a book just opened as they sit down he is 70 s late, and one of them gives up: not what is tested here)
       step(0.25); t5 += 0.25;
       for (const c of r.list) if (moving(c)) for (const o of r.list) if (o !== c && moving(o)) minGap = Math.min(minGap, Math.hypot(c.x - o.x, c.z - o.z));
     }
@@ -3296,11 +3405,11 @@ T.sweepNeeds = () => {
     needSetup('right', ['decorate', 'workshop']); for (const id of ['window', 'window2', 'table']) T.addObject(id);
     w.stock.items.footstool = 1; const sn = w.addInstance('footstool', null, null), st = w.objects[sn], tb = w.objects.table, w2 = w.decor.window2;
     const along = [];
-    for (let x = w2.u - 1.2; x <= w2.u + 1.2; x += 0.2) { tb.set(x, -3.5); const s = b.stoolSpot(st, w2); along.push(!s || w.fits(st, s.x, s.z)); }
-    const free = [w2.u - 1.2, w2.u + 1.2].some((x) => { tb.set(x, -3.5); return !!b.stoolSpot(st, w2); });
-    tb.set(w2.u, -3.5); const job = b.stoolJob();
+    for (let x = w2.u - 1.2; x <= w2.u + 1.2; x += 0.2) { tb.set(x, -4.5); const s = b.stoolSpot(st, w2); along.push(!s || w.fits(st, s.x, s.z)); }
+    const free = [w2.u - 1.2, w2.u + 1.2].some((x) => { tb.set(x, -4.5); return !!b.stoolSpot(st, w2); });
+    tb.set(w2.u, -4.5); const job = b.stoolJob();
     out.push(result('needs: the foot stool is only ever put where it fits: beside the stereo table under a window, never in it, and a window with no room is left alone', !!sn && along.every(Boolean) && free && (!job || [...job.spots.values()].every((s) => w.fits(st, s.x, s.z))) && b.stoolSpot(st, { ...w2, hw: 0.2 }) === null, { along, free }));
-    tb.set(3.2, -3.5);
+    tb.set(3.2, -4.5);
   }
   // 5. the top of a window is out of reach: a foot stool, put together right by the window; and he can then stand on it to clean
   needSetup('back', ['workshop', 'decorate'], { chair: true });
@@ -4596,7 +4705,7 @@ T.playSession = ({ seed = 1, seconds = 600, learned = true, restaurant = false, 
     const ids = ['main', ...Object.keys(w.doors)];
     for (let i = 0; i < scramble && names.length; i++) {
       const o = w.objects[names.splice(Math.floor(Math.random() * names.length), 1)[0]], id = ids[Math.floor(Math.random() * ids.length)];
-      const bd = id === 'main' ? { minX: -4.5, maxX: 4.5, minZ: -3.5, maxZ: 3.6 } : w.doors[id].shell.bounds;
+      const bd = id === 'main' ? WALK : w.doors[id].shell.bounds;
       const at = { x: bd.minX + 0.7 + Math.random() * (bd.maxX - bd.minX - 1.4), z: bd.minZ + 0.7 + Math.random() * (bd.maxZ - bd.minZ - 1.4) };
       const sp = w.findSpot(o, at, null);
       if (sp) { o.set(sp.x, sp.z); (m.scrambled ||= []).push([o.name, id]); }
@@ -4710,7 +4819,7 @@ T.sweepPlay = () => {
 // along for good, also the piano and the stereo, which no later sweep could add again).
 T.keepPlaces = () => {
   const w = W(), all = () => [...Object.values(w.objects), ...Object.values(w.removed)].filter((o) => o.obstacle && !o.kind && !o.mainOnly);
-  const at = new Map(all().map((o) => [o, { x: o.x, z: o.z, home: { ...o.home } }])), inMain = (p) => Math.abs(p.x) < 4.9 && Math.abs(p.z) < 3.9;
+  const at = new Map(all().map((o) => [o, { x: o.x, z: o.z, home: { ...o.home } }])), inMain = (p) => Math.abs(p.x) < 4.9 && Math.abs(p.z) < 4.9;
   return () => {
     for (const o of all()) {
       const p = at.get(o);
@@ -4785,11 +4894,11 @@ T.sweepWalkRooms = () => {
     out.push(result('walk between rooms: slouching at the drum kit in the Bedroom, he goes through the doors to it (he used to walk into the corner of his room)', !!ks && b.pose === 'slouch' && s.pressed <= 1.5, { ...s, pose: b.pose, last: b.last, label: label() }));
     T.settle(); T.home();
     // a spot he cannot get to (the door is locked): given up at once
-    w.rooms.setDoorLocked('bedroom', true);
+    T.lockRoom('bedroom', true);                          // (every door of it: with one open he would go round by that one)
     const q = spot('bedroom'); b.skip(); b.queue = [b.walk(q.x, q.z)]; b.step = null; b.last = 'wander'; b.pendingActivity = null;
     const l = T.walkWatch(b, 20, () => b.last !== 'wander');
     out.push(result('walk between rooms: the door there is locked: he does not walk at the wall', l.pressed <= 1.5 && b.hereId() !== 'bedroom', { ...l, label: label() }));
-    w.rooms.setDoorLocked('bedroom', false);
+    T.lockRoom('bedroom', false);
     // beside the other robot, who stands by the wall: the spot is inside the wall
     T.home(); b.skip(); b.queue = [b.walk(4.9, 1.2, 0)]; b.step = null; b.last = 'wander'; b.pendingActivity = null;
     const e = T.walkWatch(b, 15, () => b.last !== 'wander');
@@ -4852,7 +4961,7 @@ T.sweepSkillMenu = () => {
       stop(); T.home(); send('guitar', 'main');
       const before = JSON.stringify([b.pendingActivity, b.last, b.queue.length, !!b.skillRun]);
       const main = b.skillPreview('guitar'); put(b, 'library'); const lib = b.skillPreview('guitar'), pno = b.skillPreview('piano'), bowl = b.skillPreview('bowling');
-      w.rooms.setDoorLocked('backyard', true); const yard = b.skillPreview('outdoor'); w.rooms.setDoorLocked('backyard', false); T.home();
+      T.lockRoom('backyard', true); const yard = b.skillPreview('outdoor'); T.lockRoom('backyard', false); T.home();
       out.push(result(N('the notes: "Right here", "He fetches it" (no GAL), "In his room" (the piano), "Add the Bowling Alley first", "The door is locked"'), main.tone === 'here' && lib.tone === 'help' && /fetches/.test(lib.text) && pno.tone === 'go' && bowl.tone === 'no' && /Bowling/.test(bowl.text) && yard.tone === 'no' && /locked/.test(yard.text), { main, lib, pno, bowl, yard }));
       out.push(result(N('looking at the menu changes nothing'), before === JSON.stringify([b.pendingActivity, b.last, b.queue.length, !!b.skillRun])));
       document.getElementById('skills-btn').click(); const open = !panel.hidden, says = panel.querySelector('.where').textContent;
@@ -5089,7 +5198,7 @@ T.sweepRange = () => {
     const sz = w.shellSize('range'), fx = rg.obstacles.filter((o) => o.fixture), names = fx.map((o) => o.name).sort().join();
     const bounds = w.doors.range.shell.bounds, inRoom = fx.every((o) => o.x0 >= bounds.minX - 0.01 && o.x1 <= bounds.maxX + 0.01 && o.z0 >= bounds.minZ - 0.01 && o.z1 <= bounds.maxZ + 0.01);
     const clear = fx.every((o) => rg.partitions.every((p) => { const ob = rg.obstacles[rg.partitions.indexOf(p)]; return !(o.x1 > ob.x0 && o.x0 < ob.x1 && o.z1 > ob.z0 && o.z0 < ob.z1); }));
-    out.push(result('range: the room is 8 m wide like GUYs room, with a blaster case, a round controller and a scoreboard inside it, clear of the screens', sz.l === 8 && names === 'blaster case,round controller,scoreboard' && inRoom && clear, { size: sz, names, inRoom, clear }));
+    out.push(result('range: the room is as big as GUYs room (10 x 10), with a blaster case, a round controller and a scoreboard inside it, clear of the screens', sz.l === 10 && names === 'blaster case,round controller,scoreboard' && inRoom && clear, { size: sz, names, inRoom, clear }));
     const slot = rg.display.slot('range.pistol'), stand = rg.display.standSpot('range.pistol');
     out.push(result('range: the robot stands where he can walk (not in an obstacle) to use each piece of equipment', [stand, rg.panel.standSpot(), rg.board.standSpot(), rg.display.standSpot('range.carbine')].every((p) => w.walkable(p.x, p.z) && !w.obstacles.some((o) => o.active !== false && p.x > o.x0 && p.x < o.x1 && p.z > o.z0 && p.z < o.z1)) && Math.hypot(slot.x - stand.x, slot.z - stand.z) < 0.9, { slot, stand }));
   }
@@ -5490,7 +5599,7 @@ T.sweepStudio = () => {
     for (const wall of ['right', 'left', 'front', 'back']) {
       T.resetRooms(); T.settle(); T.home();
       const ok = R().add('studio', { walls: [wall] }).ok, d = w.doors.studio;
-      out.push(result(`studio: on the ${wall} wall it is 12 m wide when nothing stands beside it`, ok && Math.abs(w.shellSize('studio').l - 12) < 1e-6 && Math.abs(w.shellSize('studio').n - 10) < 1e-6 && !overlaps().length, { ok, size: ok && w.shellSize('studio') }));
+      out.push(result(`studio: on the ${wall} wall it is a 10 m square like every other room`, ok && Math.abs(w.shellSize('studio').l - 10) < 1e-6 && Math.abs(w.shellSize('studio').n - 10) < 1e-6 && !overlaps().length, { ok, size: ok && w.shellSize('studio') }));
       if (!ok) continue;
       const near = { right: ['right-back', 'right-front'], left: ['left-back', 'left-front'], front: ['left-front', 'right-front'], back: ['left-back', 'right-back'] }[wall], made = [];
       for (const [k, id] of ['library', 'bedroom'].entries()) made.push(R().add(id, { corners: [near[k]] }));
@@ -5499,7 +5608,7 @@ T.sweepStudio = () => {
       // saved and loaded again: the same rooms on the same ground
       const snap = JSON.parse(JSON.stringify(R().snapshot())), before2 = JSON.stringify(Object.fromEntries(Object.values(w.doors).map((x) => [x.id, x.shell.bounds])));
       T.resetRooms(); R().restoreFrom(snap);
-      out.push(result(`studio: on the ${wall} wall the wide Studio and its corner rooms come back as they were`, JSON.stringify(Object.fromEntries(Object.values(w.doors).map((x) => [x.id, x.shell.bounds]))) === before2, { before2 }));
+      out.push(result(`studio: on the ${wall} wall the Studio and its corner rooms come back as they were`, JSON.stringify(Object.fromEntries(Object.values(w.doors).map((x) => [x.id, x.shell.bounds]))) === before2, { before2 }));
       if (wall === 'right') {                                          // he walks to a corner room across the stage, and back
         for (const id of ['library', 'bedroom']) {
           T.settle(); T.home(); b.queue = []; b.step = null; b.skip(true); b.visitRoom(id);
@@ -5509,14 +5618,14 @@ T.sweepStudio = () => {
         }
       }
     }
-    // a room already standing in a corner: the Studio stays off it; and one saved before it was wide comes back without growing over the corner rooms
+    // a room already standing in a corner beside it; and a home saved while the Studio was up to 12 m wide (its `span`) comes back square
     T.resetRooms(); T.settle(); T.home();
     R().add('workshop', { walls: ['front'] }); R().add('library', { corners: ['right-front'] }); R().add('studio', { walls: ['right'] });
-    out.push(result('studio: with a room in one corner it is wider on the other side only (10 m), and stands on nobody', w.doors.library && w.doors.library.parent === 'workshop' && Math.abs(w.shellSize('studio').l - 10) < 1e-6 && !overlaps().length, { l: w.doors.studio && w.shellSize('studio').l, overlaps: overlaps() }));
+    out.push(result('studio: with a room in one corner it is the same size, and stands on nobody', w.doors.library && w.doors.library.parent === 'workshop' && Math.abs(w.shellSize('studio').l - 10) < 1e-6 && !overlaps().length, { l: w.doors.studio && w.shellSize('studio').l, overlaps: overlaps() }));
     { const inR = (p) => { const bb = w.doors.studio.shell.bounds; return p.x > bb.minX + 0.4 && p.x < bb.maxX - 0.4 && p.z > bb.minZ + 0.4 && p.z < bb.maxZ - 0.4; }, sp = [-4, 4].map((l) => w.shellPoint('studio', 5, l)); out.push(result('studio: and its middle is the middle of the room, not of the wall', sp.every(inR) && w.studio.stageSpot(0) && inR(w.studio.stageSpot(0)) && inR(w.studio.deckStand()), { sp })); }
-    const old = JSON.parse(JSON.stringify(R().snapshot())); delete old.rooms.studio.span;
+    const old = JSON.parse(JSON.stringify(R().snapshot())); old.rooms.studio.span = { lo: -6, hi: 6 };
     T.resetRooms(); R().restoreFrom(old);
-    out.push(result('studio: a home saved before the Studio was wide comes back with no room on another, the corner room where it was', !overlaps().length && Math.abs(w.shellSize('studio').l - 10) < 1e-6 && w.doors.library && Math.abs(w.doors.library.shell.bounds.minZ - 4) < 1e-6, { overlaps: overlaps(), b: w.doors.library && w.doors.library.shell.bounds }));
+    out.push(result('studio: a home saved while the Studio was wide comes back with no room on another, the corner room on the grid', !overlaps().length && Math.abs(w.shellSize('studio').l - 10) < 1e-6 && w.doors.library && Math.abs(w.doors.library.shell.bounds.minZ - 5) < 1e-6, { overlaps: overlaps(), b: w.doors.library && w.doors.library.shell.bounds }));
     T.resetRooms(); T.settle(); T.home(); R().add('studio');
   }
   // a guitar pushed against a Studio wall hangs there, and comes off its hook when it is moved away again
@@ -5658,7 +5767,65 @@ T.sweepBowl = () => {
   {
     T.addObject('bowlingpins'); T.addObject('bowlingball');
     for (let i = 0; i < 5; i++) bw.update(1 / 30);
-    out.push(result('bowling: built pins put maple pins on the lanes and a built ball puts a wooden ball in the rack', bw.state.maple && bw.state.woodBall && bw.rack.balls[8].mesh.visible && !!kindOf('bowlingpins') && w.roomIdAt(kindOf('bowlingpins').x, kindOf('bowlingpins').z) === 'bowling', { maple: bw.state.maple, wood: bw.state.woodBall }));
+    out.push(result('bowling: a built ball puts a wooden ball in the rack, and a crate of pins that nobody has carried to a lane changes no lane', bw.state.woodBall && bw.rack.balls[8].mesh.visible && !!kindOf('bowlingpins') && bw.lanes.every((l) => l.style === 'plastic'), { styles: bw.lanes.map((l) => l.style), wood: bw.state.woodBall }));
+  }
+  // a set of maple pins: made in the Workshop, carried to a lane in both hands, and set up there in place of the old ones (it used to be left on the floor by the door)
+  {
+    const sets = () => Object.values(w.objects).filter((o) => o.kind === 'bowlingpins'), styles = () => bw.lanes.map((l) => l.style).join();
+    const onFloor = () => sets().filter((o) => o.lane === undefined && !o.hauled && !o.stowed);
+    const watch = (max, stop = () => false) => {
+      const m = { hauled: 0, hands: 0, reach: [], swap: false, pit: false, both: 0, minY: 9, done: false, rooms: [] };
+      for (let i = 0; i < max * 30 && !m.done; i++) {
+        step(1 / 30);
+        const h = b.hereId(); if (m.rooms.at(-1) !== h) m.rooms.push(h);
+        if (b.hauling && b.hauling.o.kind === 'bowlingpins' && b.hauling.k > 0.98 && b.hauling.dir > 0 && b.pose === 'walk' && b.step && b.step.t > 0.5) {
+          m.hauled++; const q = b.haulHands(); window.scene.updateMatrixWorld(true);
+          if (G().boneWorld('LeftHand').distanceTo(q.L) < 0.28 && G().boneWorld('RightHand').distanceTo(q.R) < 0.28) m.hands++;
+        }
+        const s = b.step, L = bw.lanes.find((l) => l.swapping);
+        if (L) { m.swap = true; if (L.pins.some((p) => p.state === 'pit')) m.pit = true; m.minY = Math.min(m.minY, G().root.position.y); }
+        if (b.pose === 'bowlreach' && s && s.fx.at && s.t >= s.fx.at[0] && s.t < s.fx.at[0] + 1 / 25) { window.scene.updateMatrixWorld(true); const c = s.fx.bowl.point(), hd = G().boneWorld('RightHand'); m.reach.push(+hd.distanceTo(c).toFixed(2)); }
+        if (stop(m)) return m;
+        if (!L && m.swap && b.hereId() === 'main') m.done = true;
+      }
+      return m;
+    };
+    T.removeAll(); T.settle(); T.home();
+    for (const k of ['bowlingpins', 'bowlingball']) delete w.stock.items[k];
+    T.addObject('woodfactory'); T.learn(['workshop', 'workshop.materials', 'workshop.materials.ch4']);
+    b.queue = []; b.step = null; b.forceRecipe = 'bowlingpins'; b.choose('build');
+    const m = watch(220);
+    out.push(result('bowling: new pins are carried in their crate, both hands on it, from the Workshop to the alley', m.hauled > 30 && m.hands / Math.max(1, m.hauled) > 0.9 && m.rooms.includes('workshop') && m.rooms.includes('bowling'), { hauled: m.hauled, hands: m.hands, rooms: m.rooms }));
+    out.push(result('bowling: ... and replace the ten pins of one lane: the old ones go into the pit, the new ones are set up, the crate is left on no floor, the other lanes keep theirs', m.done && m.pit && styles() === 'maple,plastic,plastic' && bw.standing(0).length === 10 && sets().length === 1 && sets()[0].lane === 0 && !sets()[0].group.visible && !onFloor().length && !w.obstacles.includes(sets()[0].obstacle) && b.carry === null && !b.hauling, { done: m.done, pit: m.pit, styles: styles(), sets: sets().map((o) => [o.name, o.lane]) }));
+    out.push(result('bowling: ... his hand really goes down to the pins he takes and sets (never set from above them), and he stays on the floor', m.reach.length === 9 && Math.max(...m.reach) < 0.42 && m.minY > -0.01, { reach: m.reach, minY: m.minY }));
+    out.push(result('bowling: he wants a set for each lane, and no more', wants(b).some((x) => x.serves === 'bowl.pins' && x.n === 2) && b.canBuild('bowlingpins'), { wants: wants(b).filter((x) => x.serves === 'bowl.pins') }));
+    // saved and put back: on its lane, not on the floor
+    const snap = JSON.parse(JSON.stringify(w.layout.snapshot()));
+    w.removeObject(sets()[0].name); for (const k of Object.keys(w.removed)) if (k.startsWith('bowlingpins')) delete w.removed[k];
+    for (let i = 0; i < 3; i++) bw.update(1 / 30);
+    const off = styles();
+    w.layout.apply(snap); for (let i = 0; i < 3; i++) bw.update(1 / 30);
+    out.push(result('bowling: taken away, the lane has its old pins back; put back from a save the set is on its lane again', off === 'plastic,plastic,plastic' && styles() === 'maple,plastic,plastic' && sets().length === 1 && sets()[0].lane === 0 && !onFloor().length, { off, now: styles() }));
+    // a crate standing about (from the Catalog, or an older save that left it on the floor) is carried to the next lane, as a chore
+    T.settle(); T.home();
+    const loose = w.addInstance('bowlingpins', null, null, true);
+    b.homeTried = -999; b.queue = []; b.step = null;
+    out.push(result('bowling: a crate of pins left on the floor is a chore waiting', !!loose && b.homeMoveNext() === 'carryhome', { loose }));
+    b.choose('carryhome');
+    const half = watch(120, () => bw.lanes.some((l) => l.swapping && l.pins.filter((p) => p.state === 'up').length >= 4));
+    b.skip(true); b.queue = []; b.step = null; b.choose('wander');
+    const o = w.objects[loose];
+    out.push(result('bowling: cut short half-way nothing is lost: the crate stands there full again, his hands are empty, and the lane waits for its pins', half.swap && !!o && o.lane === undefined && !o.hauled && o.group.visible && o.obstacle.active && o.group.children.filter((c) => c.userData.style === 'maple').every((c) => c.visible) && b.carry === null && !b.homeMove && b.pinLane == null && !bw.lanes.some((l) => l.swapping) && bw.laneState(1).pending === 'rack' && styles() === 'maple,plastic,plastic', { styles: styles(), pending: bw.laneState(1).pending, carry: b.carry }));
+    T.settle(); T.home(); b.homeTried = -999; b.queue = []; b.step = null; b.choose('carryhome');
+    const again = watch(160);
+    out.push(result('bowling: ... and the next time he finishes the job: two lanes have maple pins', again.done && styles() === 'maple,maple,plastic' && bw.standing(1).length === 10 && !onFloor().length, { done: again.done, styles: styles() }));
+    // GAL or GUY bowls on a lane with the new pins like on any other
+    bw.startGame(0, 'T'); const from = bw.group.localToWorld(new window.THREE.Vector3(-1.97, 0.3, -2.2)), r = bw.roll(0, { from, aim: 0.035, hook: 0, noise: 0, power: 1.1, rnd: lcg(7) });
+    for (let i = 0; i < 60 * (r.tHit + 5); i++) bw.update(1 / 60);
+    out.push(result('bowling: the new pins fall and are set again like the old ones', r.count >= 5 && bw.standing(0).length === 10 - r.count && (bw.record(0, r.count), bw.manualReset(0), bw.startGame(0, null), bw.standing(0).length === 10) && bw.lanes[0].style === 'maple', { count: r.count }));
+    for (const s of sets()) { w.removeObject(s.name); delete w.removed[s.name]; }
+    for (const k of ['bowlingpins', 'bowlingball']) delete w.stock.items[k];
+    T.settle(); T.home();
   }
   // a press on the rack asks him to bowl; the menu says so
   {
@@ -5982,6 +6149,7 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.studio = S(T.sweepStudio);        // (after the others, so their seeds stay the same)
   report.guitarHold = S(T.sweepGuitarHold);
   report.galDanceRoom = S(T.sweepGalDanceRoom);
+  report.floorplan = S(T.sweepFloorplan);
   report.help = S(T.sweepHelp);        // (last, so the others keep their seeds)
   if (seed && T.unseed) T.unseed();
   window.__qaPaused = wasPaused;
