@@ -1,6 +1,6 @@
 # Feature plan: voice control and voice responses
 
-Status: plan only for voice (decisions below are Brett's, 2026-10-23). The screen lock (see below) is built. Two halves: **hear** the user (hands-free commands) and **speak** back (GUY and GAL talk to the user, to each other, and while using objects).
+Status: superseded by the Claude Doc "Guy's Room: Voice Command Design" (Nov 2026). Built: typed commands, spoken replies, push-to-talk microphone (`src/mic.js`) and finish-then-obey with time limits (`src/commands.js`). The screen lock (see below) is built. Later decisions (Nov 2026): GAL may be addressed directly, and takes a command when GUY is busy. Two halves: **hear** the user (hands-free commands) and **speak** back (GUY and GAL talk to the user, to each other, and while using objects).
 
 ## Decisions (Brett)
 - **English only.**

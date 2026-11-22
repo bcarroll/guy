@@ -59,6 +59,23 @@ export function makeWorkshopBuilders({ makeObject, box, mat }) {
     } else if (kind === 'footstool') {
       box(0.26, 0.03, 0.2, light, 0, 0.19, 0, g);
       for (const sx of [-0.1, 0.1]) for (const sz of [-0.07, 0.07]) box(0.035, 0.18, 0.035, wd, sx, 0.09, sz, g);
+    } else if (kind === 'bed') {
+      box(0.34, 0.06, 0.22, wd, 0, 0.03, 0, g); box(0.3, 0.05, 0.2, mat(0xf0e6d2), 0, 0.085, 0, g); box(0.34, 0.16, 0.025, light, 0, 0.1, -0.105, g);
+    } else if (kind === 'wardrobe') {
+      box(0.2, 0.36, 0.1, wd, 0, 0.18, 0, g); box(0.005, 0.3, 0.005, mat(0x4a3320), 0, 0.18, 0.052, g);
+    } else if (kind === 'bedside') {
+      box(0.14, 0.16, 0.12, wd, 0, 0.08, 0, g); box(0.1, 0.03, 0.01, light, 0, 0.1, 0.062, g);
+    } else if (kind === 'libshelf') {
+      for (const sx of [-0.17, 0.17]) box(0.02, 0.4, 0.1, wd, sx, 0.2, 0, g);
+      for (const y of [0.02, 0.14, 0.26, 0.38]) box(0.34, 0.02, 0.1, light, 0, y, 0, g);
+    } else if (kind === 'libdesk') {
+      box(0.34, 0.02, 0.18, wd, 0, 0.2, 0, g); for (const sx of [-0.15, 0.15]) box(0.02, 0.19, 0.16, light, sx, 0.095, 0, g);
+      box(0.04, 0.05, 0.03, mat(0x1f7a4a), -0.1, 0.24, -0.04, g);
+    } else if (kind === 'globe') {
+      box(0.03, 0.14, 0.03, wd, 0, 0.07, 0, g);
+      const s = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8), mat(0x3f78b5)); s.position.set(0, 0.2, 0); g.add(s);
+    } else if (kind === 'readingchair') {
+      box(0.2, 0.12, 0.18, mat(0x2f6b4f), 0, 0.08, 0, g); box(0.2, 0.14, 0.04, mat(0x2f6b4f), 0, 0.2, -0.07, g);
     } else {                                                                     // a chair
       box(0.22, 0.025, 0.22, light, 0, 0.2, 0, g);
       for (const sx of [-0.09, 0.09]) for (const sz of [-0.09, 0.09]) box(0.03, 0.19, 0.03, wd, sx, 0.095, sz, g);

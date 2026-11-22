@@ -56,14 +56,18 @@ export function installYard(Brain, POSES, H) {
           if (!b) { this.queue.length = 0; return []; }
           const p = b.position, g = this.g.pos, bd = this.w.doors[ID].shell.bounds;
           let base = Math.atan2(g.x - p.x, g.z - p.z);                        // from the ball towards GUY
-          let turns = [0, 0.8, -0.8, 1.6, -1.6, 2.4, -2.4, Math.PI];
-          if (at) { const t = at(); if (t) { base = Math.atan2(p.x - t.x, p.z - t.z); turns = [0, 0.3, -0.3, 0.6, -0.6]; } }
+          const wide = [0, 0.8, -0.8, 1.6, -1.6, 2.4, -2.4, Math.PI];
+          let sets = [wide];
+          // (in line with the hoop or goal if he can; a ball up against the yard's edge or a wall has no room on that side: any side will do then)
+          if (at) { const t = at(); if (t) { base = Math.atan2(p.x - t.x, p.z - t.z); sets = [[0, 0.3, -0.3, 0.6, -0.6], wide]; } }
           const fr = this.yardFrame();
-          for (const grid of [makeGrid(this.w.obstacles, 0.62, 0, null, fr), makeGrid(this.w.obstacles, 0.55, 0, null, fr)]) {
-            for (const turn of turns) {
-              const x = p.x + Math.sin(base + turn) * dist, z = p.z + Math.cos(base + turn) * dist;
-              if (x < bd.minX + 0.7 || x > bd.maxX - 0.7 || z < bd.minZ + 0.7 || z > bd.maxZ - 0.7 || cellBlocked(grid, x, z)) continue;
-              return [this.walk(x, z, Math.atan2(p.x - x, p.z - z))];
+          for (const turns of sets) {
+            for (const grid of [makeGrid(this.w.obstacles, 0.62, 0, null, fr), makeGrid(this.w.obstacles, 0.55, 0, null, fr)]) {
+              for (const turn of turns) {
+                const x = p.x + Math.sin(base + turn) * dist, z = p.z + Math.cos(base + turn) * dist;
+                if (x < bd.minX + 0.7 || x > bd.maxX - 0.7 || z < bd.minZ + 0.7 || z > bd.maxZ - 0.7 || cellBlocked(grid, x, z)) continue;
+                return [this.walk(x, z, Math.atan2(p.x - x, p.z - z))];
+              }
             }
           }
           this.queue.length = 0;

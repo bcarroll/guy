@@ -5,6 +5,8 @@
 //   diners  customers cannot find a seat at the restaurant: another table and chairs
 //   band    a second guitar to play along with (an electric guitar, needs both workshop lines)
 //   bowl.pins / bowl.ball  the Bowling Alley has been added: maple pins, a wooden ball (the Wood & Metal book, chapters 4 and 5)
+//   home.*   the Bedroom has been added: a bed, a wardrobe and a bedside table; the Library: two bookshelves, a reading chair, a reading
+//            desk (with its lamp) and a globe
 //   egg.<id> an easter egg (RECIPES with `egg`): wanted, last of all, once every object it lists stands in the main room
 // `wants(brain)` lists what is missing now, most pressing first: [{ serves, n, why }]. A recipe in workshop.js says which want it
 // serves; `supply` counts what already exists or is on its way (built and waiting in the Workshop, or in storage), so nothing is built twice.
@@ -46,6 +48,18 @@ export function wants(b) {
   if (w.doors.bowling) {
     if (supply(w, 'bowl.pins') === 0) out.push({ serves: 'bowl.pins', n: 1, why: 'the bowling alley could do with wooden pins' });
     if (supply(w, 'bowl.ball') === 0) out.push({ serves: 'bowl.ball', n: 1, why: 'the bowling alley could do with a wooden ball' });
+  }
+  // the Bedroom and the Library, once they have been added: a bed, a wardrobe and a bedside table; two bookshelves and a reading chair
+  if (w.doors.bedroom) {
+    if (supply(w, 'home.bed') === 0) out.push({ serves: 'home.bed', n: 1, why: 'the bedroom has no bed' });
+    if (supply(w, 'home.wardrobe') === 0) out.push({ serves: 'home.wardrobe', n: 1, why: 'the bedroom has nowhere to hang clothes' });
+    if (supply(w, 'home.bedside') === 0) out.push({ serves: 'home.bedside', n: 1, why: 'the bedroom has no bedside table' });
+  }
+  if (w.doors.library) {
+    if (supply(w, 'home.shelf') < 2) out.push({ serves: 'home.shelf', n: 2 - supply(w, 'home.shelf'), why: 'the library has no shelves for books' });
+    if (supply(w, 'home.readchair') === 0) out.push({ serves: 'home.readchair', n: 1, why: 'the library has nowhere to sit and read' });
+    if (supply(w, 'home.desk') === 0) out.push({ serves: 'home.desk', n: 1, why: 'the library has no desk to read at' });
+    if (supply(w, 'home.globe') === 0) out.push({ serves: 'home.globe', n: 1, why: 'the library could do with a globe' });
   }
   // easter eggs: only when everything the recipe lists is in the room
   const inMain = (k) => Object.values(w.objects).some((o) => (o.name === k || o.kind === k) && w.roomIdAt(o.x, o.z) === 'main');

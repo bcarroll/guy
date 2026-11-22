@@ -13,6 +13,7 @@ export const BARKS = {
   scribble: ['A quick sketch.'], paint: ['Let me paint.'], mixpaint: ['Mixing some colours.'], portrait: ['A portrait, I think.'],
   peek: ['A quick look through the telescope.'], stargaze: ['Stargazing.'], darkstargaze: ['Lights off, for the stars.'], scopecare: ['The telescope needs looking after.'],
   rearrange: ['This could be arranged better.'], stereoon: ['Some music.'], stereooff: ['That is enough music.'],
+  makebed: ['This bed needs making.'], homesit: ['I will sit down for a bit.'], wardrobe: ['Let me sort the clothes.'], browse: ['Let me see what is on the shelves.'], study: ['A few pages at the desk.'], spinglobe: ['Where shall we go?'], libclean: ['This library needs a clean.'], moveshelf: ['These books belong in the library.'],
   tidytools: ['Tidying the tools.'], build: ['I am building something.'],
   yardsit: ['Some fresh air.', 'Time to sit in the sun.'], birdbath: ['Let me see the bird bath.'], skyswitch: ['Let me change the sky.'], mow: ['The lawn needs mowing.'],
   yardpoke: ['A kick about, perhaps.'], goalshot: ['Shots at the goal.'], soccertoss: ['A little ball handling.'], hoopshoot: ['Let me shoot some hoops.'], hoopdribble: ['Dribbling.'], hoopdefend: ['I will play defence.'], goalkeep: ['I will keep goal.'],

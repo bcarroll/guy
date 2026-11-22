@@ -105,6 +105,33 @@ export function install(T, h) {
       });
     }
   };
+  // GAL playing the guitar, her fretting hand up close from behind her left shoulder (her shorter hand once made a fist under the neck)
+  add('gal-guitar-fretting', 'characters', async () => {
+    await clean(23);
+    const w = window.brain.w, b = window.brain;
+    const built = T.galBuild();
+    if (!built.ok) { T.galReset(); return { ok: false, why: 'GAL was not built' }; }
+    const gb = w.gal.brain, g = w.gal.g;
+    T.learn(['guitar']); gb.skills.learn('guitar'); T.addObject('guitar'); T.settle();
+    b.queue = []; b.step = null; b.choose('wander');
+    gb.queue = []; gb.step = null; gb.unlock(false); gb.choose('riff');
+    let t = 0; while (t < 30 && !(gb.pose === 'guitar' && gb.step && gb.step.t > 3)) { window.sim(0.25); t += 0.25; }
+    const ok = gb.pose === 'guitar';
+    T.freeze(); const upd = gb.update; gb.update = () => {};
+    for (let i = 0; i < 90; i++) g.apply(1 / 30);
+    window.scene.updateMatrixWorld(true); gb.safeLate && gb.safeLate();
+    const yaw = g.root.rotation.y, h = g.boneWorld('LeftHand');
+    const fw = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)), lf = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+    window.controls.dispatchEvent({ type: 'start' });
+    window.camera.position.copy(h.clone().addScaledVector(fw, -0.35).addScaledVector(lf, 0.45).add(new THREE.Vector3(0, 0.35, 0)));
+    window.controls.target.copy(h); window.controls.update();
+    await settleFrames(3);
+    window.renderer.render(window.scene, window.camera);
+    const data = window.renderer.domElement.toDataURL('image/jpeg', 0.9);
+    gb.update = upd; T.unfreeze(); T.galReset();
+    return ok ? { data } : { ok: false, why: 'GAL never started playing' };
+  });
+
   // The rigs are known only once the page is up, so the characters are added on the first call to shotIds.
   const baseIds = T.shotIds;
   let charsAdded = false;
@@ -204,6 +231,52 @@ export function install(T, h) {
         return { data: capture() };
       });
     }
+    // The furnished corner rooms: what the bots build for them (a bed, a wardrobe and a bedside table; two bookshelves, a reading chair, a
+    // reading desk with its lamp lit and a globe), and in the Library the skill shelf they carried in, its dust and cobwebs cleaned away
+    for (const [id, kinds] of [['bedroom', ['bed', 'wardrobe', 'bedside']], ['library', ['libshelf', 'libshelf', 'readingchair', 'libdesk', 'globe']]]) {
+      add(`room-corner-${id}-furnished`, 'rooms', async () => {
+        await clean(id === 'library' ? 48 : 49);
+        const w = window.brain.w;
+        w.rooms.add('workshop', { walls: ['right'] });
+        w.rooms.add('library'); w.rooms.add('bedroom');
+        for (const k of kinds) w.addInstance(k, null, null, true);
+        if (id === 'library') {
+          const spot = w.libraryShelfSpot(w.objects.shelf);
+          if (spot && w.packShelf('shelf')) w.unpackShelf('shelf', spot);
+          for (const s of w.doors.library.shell.dust.spots) w.doors.library.shell.dust.clean(s, 1);
+          const desk = Object.values(w.objects).find((o) => o.kind === 'libdesk');
+          if (desk) { desk.setLamp(true); for (let i = 0; i < 30; i++) desk.update(0.1); }
+        }
+        T.freeze(); window.guy.root.visible = false; frameCorner(id); await settleFrames(3);
+        return { data: capture() };
+      });
+    }
+    // A corner room beside the Shooting Range (its door in the Range's side wall, between the controller and the scoreboard) and one
+    // beside the Backyard (a garden gate in the side fence)
+    add('room-range-sidedoor', 'rooms', async () => {
+      await clean(51);
+      const w = window.brain.w;
+      w.rooms.add('range', { walls: ['front'] }); w.rooms.add('bedroom');
+      w.setDoorOpen('bedroom', true); for (let i = 0; i < 40; i++) window.sim(0.05);
+      T.freeze(); window.guy.root.visible = false;
+      const p = w.doorPoint('bedroom', 0);
+      window.controls.dispatchEvent({ type: 'start' });
+      window.camera.position.set(p.x - 6.5, 6.5, p.z + 4.5); window.controls.target.set(p.x, 0.8, p.z); window.controls.update();
+      await settleFrames(3);
+      return { data: capture() };
+    });
+    add('room-backyard-gate', 'rooms', async () => {
+      await clean(52);
+      const w = window.brain.w;
+      w.rooms.add('backyard', { walls: ['left'] }); w.rooms.add('library');
+      w.setDoorOpen('library', true); for (let i = 0; i < 40; i++) window.sim(0.05);
+      T.freeze(); window.guy.root.visible = false;
+      const p = w.doorPoint('library', 0);
+      window.controls.dispatchEvent({ type: 'start' });
+      window.camera.position.set(p.x + 3.5, 5.5, p.z + 7); window.controls.target.set(p.x, 0.8, p.z); window.controls.update();
+      await settleFrames(3);
+      return { data: capture() };
+    });
     add('room-corners', 'rooms', async () => {                      // the Workshop with a corner room at each side wall: both doors, both rooms
       await clean(50);
       const w = window.brain.w;

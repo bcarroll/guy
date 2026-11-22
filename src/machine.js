@@ -83,6 +83,13 @@ export const OBJECT_CATALOG = [
   { id: 'metalchair', cat: 'workshop', sub: 'Built by GUY', name: 'Metal Chair (built by GUY)', icon: '🪑', desc: 'A welded metal chair. GUY can sit on it.', built: true, room: 'workshop' },
   { id: 'bowlingpins', cat: 'workshop', sub: 'Built by GUY', name: 'Maple Bowling Pins (built by GUY)', icon: '🎳', desc: 'A display of turned maple pins. Once they exist the alley sets up wooden pins.', built: true, room: 'workshop' },
   { id: 'bowlingball', cat: 'workshop', sub: 'Built by GUY', name: 'Wooden Bowling Ball (built by GUY)', icon: '🎳', desc: 'A wooden bowling ball on a stand. A wooden ball joins the alley rack.', built: true, room: 'workshop' },
+  { id: 'bed', cat: 'workshop', sub: 'Built by GUY', name: 'Bed (built by GUY)', icon: '🛏️', desc: 'A wooden bed with two pillows and a blanket, built for the Bedroom. GUY and GAL sit on the foot of it and make it. Heavy: only you can move it.', built: true, room: 'workshop' },
+  { id: 'wardrobe', cat: 'workshop', sub: 'Built by GUY', name: 'Wardrobe (built by GUY)', icon: '🚪', desc: 'A wardrobe with two doors, built for the Bedroom. GUY opens it and sorts the clothes. Heavy: only you can move it.', built: true, room: 'workshop' },
+  { id: 'bedside', cat: 'workshop', sub: 'Built by GUY', name: 'Bedside Table (built by GUY)', icon: '🗄️', desc: 'A little table with a lamp, a clock and a drawer, built for the Bedroom. GUY pulls the drawer out and tidies it.', built: true, room: 'workshop' },
+  { id: 'libshelf', cat: 'workshop', sub: 'Built by GUY', name: 'Library Bookshelf (built by GUY)', icon: '📚', desc: 'A tall shelf of books for the Library. GUY browses along it. (It is not the skill bookshelf.) Heavy: only you can move it.', built: true, room: 'workshop' },
+  { id: 'readingchair', cat: 'workshop', sub: 'Built by GUY', name: 'Reading Chair (built by GUY)', icon: '🛋️', desc: 'A green armchair for the Library. GUY sits in it for a rest.', built: true, room: 'workshop' },
+  { id: 'libdesk', cat: 'workshop', sub: 'Built by GUY', name: 'Reading Desk (built by GUY)', icon: '🪔', desc: 'A writing desk for the Library with a green banker lamp and an open book. GUY switches the lamp on and reads a few pages. Heavy: only you can move it.', built: true, room: 'workshop' },
+  { id: 'globe', cat: 'workshop', sub: 'Built by GUY', name: 'Globe (built by GUY)', icon: '🌐', desc: 'A globe on a wooden stand for the Library. GUY gives it a spin and looks for places.', built: true, room: 'workshop' },
   { id: 'pinsetter', cat: 'workshop', sub: 'Built by GUY', name: 'Automatic Pinsetter (built by GUY)', icon: '🤖', desc: 'Three pinsetters over the ends of the lanes: sweeps the fallen pins away and sets all ten again. Heavy: only you can move it.', built: true, room: 'workshop' },
   // The Restaurant (a room added from the Rooms tab). Customers arrive by its elevator. See src/restobjects.js and src/customers.js.
   { id: 'stove', cat: 'restaurant', sub: 'Kitchen', name: 'Stove', icon: '🍲', desc: 'A big stove with a pot. GUY cooks the orders here. Heavy: only you can move it. Comes with the book "Restaurant Basics".', free: true, room: 'restaurant', book: 'restaurant' },
@@ -225,6 +232,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
   // { x, z }, a spot in the room they chose. A built thing (a chair GUY made) comes out of storage; anything else out of the catalog.
   const byId = (id) => OBJECT_CATALOG.find((d) => d.id === id);
   const ops = {
+    byId,
     // 'inroom' | 'removed' | 'available' | 'stored' (built, waiting in storage) | 'locked' | 'unlisted' (a room or skill it needs is missing) | 'unknown'
     status(id) {
       const d = byId(id);
@@ -238,11 +246,12 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
       return !d ? false : d.built ? addBuilt(d, where) : st === 'removed' || st === 'available' ? addObject(d, where) : false;
     },
     // takes one away: the thing itself, or (for something GUY built) the first one standing in a room, which goes back into storage
-    remove(id) {
+    // (`name`: which one of the things GUY built, when there are several)
+    remove(id, name = null) {
       const d = byId(id);
       if (!d) return false;
       if (!d.built) return removeObject(d);
-      const o = Object.values(world.objects).find((x) => x.kind === id);
+      const o = Object.values(world.objects).find((x) => x.kind === id && (!name || x.name === name)) || Object.values(world.objects).find((x) => x.kind === id);
       if (!o) return false;
       remove(o.name);
       notify(`Put the ${d.name} back in storage`);
@@ -253,6 +262,17 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
   function addRoom(r) {
     const res = rooms.add(r.id);
     notify(res.messages.join(' '));
+    render();
+  }
+
+  // Take a room away (tapped twice: the first tap asks). Its furniture comes back to the Catalog; a robot in it walks out first.
+  let confirmRoom = null;
+  function removeRoom(r) {
+    if (confirmRoom !== r.id) { confirmRoom = r.id; render(); return; }
+    confirmRoom = null;
+    const res = rooms.remove(r.id);
+    notify(res.messages.join(' '));
+    save();
     render();
   }
 
@@ -396,7 +416,13 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
       for (const r of rooms ? rooms.catalog : []) {
         const base = { icon: r.icon, name: r.name, desc: r.desc, status: 'room' };
         if (!rooms.isUnlocked(r.id)) { if (r.premium) roomGroups['Premium · coming soon'].push(card({ ...base, status: 'locked', label: '🔒 Premium' })); continue; }
-        if (rooms.isAdded(r.id)) roomGroups['In your home'].push(card({ ...base, status: 'inroom', label: '✓ In your home' }));
+        if (rooms.isAdded(r.id) && rooms.isClosing(r.id)) roomGroups['In your home'].push(card({ ...base, status: 'inroom', label: 'Removing…', note: 'It goes as soon as GUY and GAL are out of it.' }));
+        else if (rooms.isAdded(r.id)) {
+          const sure = confirmRoom === r.id, kids = rooms.corners(r.id);
+          const i = handlers.push(() => removeRoom(r)) - 1;
+          const note = sure ? `Tap again to remove the ${r.name}${kids.length ? ` and the ${kids.join(' and the ')}` : ''}. Its furniture goes back to the Catalog.` : '✓ In your home';
+          roomGroups['In your home'].push(card({ ...base, status: 'inroom', label: sure ? 'Tap to confirm' : 'Remove room', action: i, danger: true, note }));
+        }
         else { const i = handlers.push(() => addRoom(r)) - 1; roomGroups['Add a room'].push(card({ ...base, label: 'Add to my home', action: i, note: r.corner ? 'Goes in a free corner beside another room when there is one, otherwise gets a door on a wall. Anything in the way goes back to the Catalog.' : 'Puts a door on a wall. Anything in the way goes back to the Catalog.' })); }
       }
     } else {

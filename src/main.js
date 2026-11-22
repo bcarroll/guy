@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { initScreenLock } from './screenlock.js';
 import { initVoice as initTTS } from './tts.js';
 import { createVoice } from './voice.js';
+import { createMic } from './mic.js';
 import { initWorkstation } from './workstation.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { buildRoom, ROOM } from './room.js';
@@ -191,6 +192,7 @@ lockBtn.addEventListener('click', () => { brain.unlock(true); showToast('GUY is 
 // Rooms the user adds from the Catalog: a door on a wall, and a room behind it. Frame the camera round all of them.
 const rooms = initRooms({
   world, persist: !params.has('fresh'), remove: (id) => removeById(id),
+  robots: () => [brain, world.gal && world.gal.exists() && world.gal.brain].filter(Boolean),
   refit: () => {
     const e = world.extent();
     roomBox.length = 0;
@@ -609,7 +611,13 @@ function interactLabel(name) {
     case 'birdbath': return '🐦 Look at the Bird Bath';
     case 'skyswitch': return w.yard && w.yard.isNight() ? '☀️ Switch to Day' : '🌙 Switch to Night';
     case 'shed': case 'mower': return '🚜 Mow the Lawn';
-    default: return brain.obj(name) && brain.obj(name).heldBooks ? '📖 Read a Book' : brain.obj(name) && brain.obj(name).guitar ? '🎸 Play Guitar' : brain.obj(name) && brain.obj(name).kind === 'footstool' ? '🪜 Stand on It to Clean' : brain.obj(name) && brain.obj(name).sit ? '🪑 Sit Down' : '▶ Use';
+    default: if (brain.obj(name) && brain.obj(name).kind === 'bed') return '🛏️ Make the Bed or Sit';
+      if (brain.obj(name) && brain.obj(name).kind === 'readingchair') return '🛋️ Sit Down';
+      if (brain.obj(name) && ['wardrobe', 'bedside'].includes(brain.obj(name).kind)) return brain.obj(name).kind === 'wardrobe' ? '🚪 Sort the Wardrobe' : '🗄️ Tidy the Drawer';
+      if (brain.obj(name) && brain.obj(name).kind === 'libshelf') return '📚 Browse the Shelves';
+      if (brain.obj(name) && brain.obj(name).kind === 'libdesk') return '🪔 Read at the Desk';
+      if (brain.obj(name) && brain.obj(name).kind === 'globe') return '🌐 Spin the Globe';
+      return brain.obj(name) && brain.obj(name).heldBooks ? '📖 Read a Book' : brain.obj(name) && brain.obj(name).guitar ? '🎸 Play Guitar' : brain.obj(name) && brain.obj(name).kind === 'footstool' ? '🪜 Stand on It to Clean' : brain.obj(name) && brain.obj(name).sit ? '🪑 Sit Down' : '▶ Use';
   }
 }
 
@@ -786,7 +794,43 @@ cmdBox.querySelector('#cmd-chatter').addEventListener('change', (e) => tts.set('
 cmdBox.querySelector('#cmd-chatter').value = tts.settings.chatter;
 const voiceSel = cmdBox.querySelector('#cmd-voice'); voiceSel.value = tts.settings.engine;
 voiceSel.addEventListener('change', (e) => tts.set('engine', e.target.value));
-window.__voice = { bark: voice.bark, run: (t) => voice.run(t), parse: voice.parse, tts, audienceOn: voice.audienceOn };
+window.__voice = { bark: voice.bark, run: (t) => voice.run(t), runAlternatives: (a) => voice.runAlternatives(a), parse: voice.parse, tts, audienceOn: voice.audienceOn, commands: voice.commands };
+window.__commands = voice.commands;           // the queues and the open question (debugging, and the QA harness)
+
+// The microphone (mic.js): hold 🎤 and talk, let go to send; a quick tap listens until a pause. What was heard goes the same way as
+// the typed box. Hidden in a browser without speech recognition. The music ducks while it listens, and GUY stops talking.
+const micBtn = document.getElementById('mic-btn');
+let micDown = 0, micDucked = false;
+const micDuck = (on) => {
+  const m = window.__guyAudio && window.__guyAudio().master;
+  if (!m) return;
+  if (on && !micDucked && m.gain.value === 0.5) { m.gain.value = 0.18; micDucked = true; }
+  else if (!on && micDucked) { if (m.gain.value === 0.18) m.gain.value = 0.5; micDucked = false; }
+};
+const mic = createMic({
+  onPartial: (t) => tts.caption('you', t + '…'),
+  onFinal: (alts) => { if (alts.length) { tts.caption('you', alts[0].text); voice.runAlternatives(alts); } },
+  onState: (st, detail) => {
+    micBtn.classList.toggle('listening', st === 'listening');
+    if (st === 'listening') { micDuck(true); sfx('micon'); tts.caption('you', 'Listening…'); }
+    else if (st === 'thinking') { micDuck(false); sfx('micoff'); }
+    else if (st === 'error') { micDuck(false); sfx('micoff'); tts.caption('guy', detail); }
+    else { micDuck(false); if (detail === 'nothing') { sfx('micoff'); tts.caption('guy', "I didn't hear anything. Hold the mic and try again."); } }
+  },
+});
+micBtn.hidden = !mic.supported;
+micBtn.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  if (mic.listening) { mic.stop(); micDown = 0; return; }       // a second tap: done talking
+  tts.stop(); tts.warm().catch(() => {});                      // (GUY stops talking so he is not heard as the user)
+  micDown = performance.now();
+  mic.start();
+});
+const micUp = () => { if (micDown && performance.now() - micDown > 350 && mic.listening) mic.stop(); micDown = 0; };   // held: letting go sends it; a quick tap keeps listening until a pause
+micBtn.addEventListener('pointerup', micUp);
+micBtn.addEventListener('pointercancel', micUp);
+micBtn.addEventListener('contextmenu', (e) => e.preventDefault());
+window.__mic = mic;
 
 
 // Capture phase so we run before OrbitControls and can keep it from orbiting while we handle an object.
@@ -918,7 +962,7 @@ window.sim = (sec, dt = 1 / 30) => {
   if (window.__simNow === undefined) window.__simNow = performance.now() / 1000;      // (the music's clock now follows simulated time: see nowSec in brain.js)
   for (let t = 0; t < sec; t += dt) {
     window.__simNow += dt;
-    brain.safeUpdate(dt); guy.apply(dt); brain.safeLate(); world.lamp.tick(brain.currentBeat()); updateBall(dt); for (const o of Object.values(world.objects)) o.update(dt); world.yard.update(dt); if (world.range) world.range.update(dt); if (world.bowl) world.bowl.update(dt); if (world.studio) world.studio.update(dt, !!brain.music);
+    brain.safeUpdate(dt); guy.apply(dt); brain.safeLate(); world.lamp.tick(brain.currentBeat()); updateBall(dt); for (const o of Object.values(world.objects)) o.update(dt); world.yard.update(dt); if (world.range) world.range.update(dt); if (world.bowl) world.bowl.update(dt); if (world.studio) world.studio.update(dt, !!brain.music); rooms.tick(dt);
   }
   if (follow) { controls.target.copy(guy.pos).setY(1.1); controls.update(); }
 };
@@ -1051,7 +1095,7 @@ renderer.setAnimationLoop(() => {
   space.position.copy(camera.position);
   world.lamp.tick(brain.currentBeat());
   world.skillMachine.userData.update(performance.now() / 1000);
-  for (const o of Object.values(world.objects)) o.update(dt); world.yard.update(dt); if (world.range) world.range.update(dt); if (world.bowl) world.bowl.update(dt); if (world.studio) world.studio.update(dt, !!brain.music);
+  for (const o of Object.values(world.objects)) o.update(dt); world.yard.update(dt); if (world.range) world.range.update(dt); if (world.bowl) world.bowl.update(dt); if (world.studio) world.studio.update(dt, !!brain.music); rooms.tick(dt);
   updateBall(dt);
   if (follow && guy.loaded) {
     camGoal.copy(guy.pos).setY(1.1);

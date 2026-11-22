@@ -23,9 +23,9 @@ const SPEC = {
   machine: { dur: [0.3, 1.0], bright: 'any' }, lid: { dur: [0.03, 0.4], bright: 'any' },
   ding: { dur: [0.2, 1.0], bright: 'mid' }, cash: { dur: [0.12, 0.6], bright: 'high' }, sizzle: { dur: [0.3, 1.2], bright: 'high' }, plate: { dur: [0.02, 0.3], bright: 'high' }, lift: { dur: [0.3, 1.0], bright: 'mid' },
   splash: { dur: [0.1, 0.6], bright: 'high' }, swish: { dur: [0.1, 0.6], bright: 'high' }, motor: { dur: [0.1, 0.5], bright: 'low' },
-  chime: { dur: [0.4, 1.2], bright: 'mid' }, pop: { dur: [0.03, 0.3], bright: 'any' }, whoosh: { dur: [0.1, 0.6], bright: 'high' },
+  chime: { dur: [0.4, 1.2], bright: 'mid' }, pop: { dur: [0.03, 0.3], bright: 'any' }, micon: { dur: [0.1, 0.5], bright: 'mid' }, micoff: { dur: [0.1, 0.5], bright: 'mid' }, whoosh: { dur: [0.1, 0.6], bright: 'high' },
   shot: { dur: [0.05, 0.4], bright: 'high' }, holo: { dur: [0.1, 0.5], bright: 'high' },
-  rumble: { dur: [0.3, 1.0], bright: 'low' }, pinhit: { dur: [0.1, 0.8], bright: 'high' }, strike: { dur: [0.3, 1.0], bright: 'high' }, gutter: { dur: [0.3, 1.0], bright: 'low' }, pins: { dur: [0.1, 0.6], bright: 'high' },
+  rumble: { dur: [0.3, 1.0], bright: 'low' }, pinhit: { dur: [0.1, 0.8], bright: 'high' }, strike: { dur: [0.3, 1.0], bright: 'high' }, gutter: { dur: [0.3, 1.0], bright: 'low' }, pins: { dur: [0.1, 0.6], bright: 'any' },      // (a rattle of pins with random pitches: its centre jumps between about 1.4 and 4.4 kHz from one render to the next, both fine)
 };
 // the instruments: how to play one note / hit
 const INSTRUMENTS = {
@@ -98,6 +98,7 @@ export function install(T, h) {
     for (const [name, fn] of Object.entries(SOUNDS)) {
       const sp = SPEC[name];
       if (!sp) continue;
+      if (T.seed) T.seed(4242);      // (a sound with random pitches must be measured the same way every time)
       const m = await render((ctx, master) => fn(ctx, master, sp.amount));
       loud[name] = m.peak;
       const why = [];
@@ -111,7 +112,7 @@ export function install(T, h) {
         // a soft sound (a brush stroke is repeated many times a second) must swell, not strike: a sharp start repeated sounds like hammering
         if (sp.soft && m.peakAfter < 0.02) why.push(`hits at once (loudest ${(m.peakAfter * 1000).toFixed(0)} ms after it starts): repeated, it sounds like hammering`);
         if (m.tail > 0.003) why.push('still sounding at the end (a stuck note)');
-        if (!brightOk(sp.bright, m.centroid)) why.push(`sounds ${m.centroid < 700 ? 'too dull' : 'too bright'} for a ${sp.bright} sound (centre ${Math.round(m.centroid)} Hz)`);
+        if (!brightOk(sp.bright, m.centroid)) why.push(`sounds too ${sp.bright === 'high' || (sp.bright === 'mid' && m.centroid < 600) ? 'dull' : 'bright'} for a ${sp.bright} sound (centre ${Math.round(m.centroid)} Hz)`);
       }
       out.push(result(`audio ${name}: audible, not clipping, ${sp.dur[0]}-${sp.dur[1]} s long, starts at once, ${sp.bright}`, !why.length, { why, peak: m.peak && +m.peak.toFixed(3), dur: m.dur && +m.dur.toFixed(2), centre: m.centroid && Math.round(m.centroid) }));
     }
@@ -128,6 +129,7 @@ export function install(T, h) {
       }
       out.push(result(`audio ${name}: audible, not clipping, the right length and brightness`, !why.length, { why, peak: m.peak && +m.peak.toFixed(3), dur: m.dur && +m.dur.toFixed(2), centre: m.centroid && Math.round(m.centroid) }));
     }
+    if (T.unseed) T.unseed();
     // balance: no effect is wildly louder or quieter than the rest (more than 24 dB between the loudest and the quietest)
     const peaks = Object.values(loud).filter((p) => p > 0);
     const spread = 20 * Math.log10(Math.max(...peaks) / Math.min(...peaks));
