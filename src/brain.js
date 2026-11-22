@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { strapLine, makeStrapMesh, layStrap } from './strap.js';
 import { Q } from './guy.js';
 import { playNote, playPluck, startBeat, startTrack, trackSeconds, TRACKS, BEAT } from './audio.js';
 import { ALBUM_CATALOG } from './albums.js';
@@ -116,6 +117,7 @@ function guitarChordAt(trackId, beat) {
 }
 
 // the fretting hand in the guitar's own frame (neck along +x, soundboard +z): finger direction, palm normal, knuckle spot
+const GRIP_AT = [0.48, -0.042, 0.004], GRIP_CLOSE = 0.85;          // taking it off its stand: where the right knuckles go (in the guitar's frame), and how far the fingers close
 const GL_FINGERS = [0.1, 0.85, 0.5], GL_PALM = [0, -0.5, 0.85], GL_KNUCKLE = [0.42, 0.026, -0.01];
 const GUITAR_RIGHT_POLE = new THREE.Vector3(-0.4, 0.5, -0.9); // elbow stays up and back so the forearm clears the guitar
 const GUITAR_CHORDS = [
@@ -131,11 +133,14 @@ function guitarHands(g, ctx, fade) {
   const handLen = g.limb.Right.handLen;
   // palms face the instrument: the strumming hand looks into the soundboard, the fretting hand wraps the neck from behind
   if (b.wR > 0) {
-    g.reachAssist(b.R, Math.min(1, b.wR * fade));
-    // taking it off / putting it on the stand he just grips the neck with a straight wrist; the exact strumming hand only once it is on him
-    const hand = (b.handBlend ?? 1) > 0.5 ? { hand: { fingers: b.fingersDir, palm: b.axisZ.clone().negate() } } : {};
+    // (a grip needs the wrist there, not the fingertips: he leans in as far as that takes)
+    if (b.grip && (b.handBlend ?? 0) < 0.5) g.leanTo('Right', b.R, Math.min(1, b.wR * fade));
+    else g.reachAssist(b.R, Math.min(1, b.wR * fade));
+    // taking it off / putting it on the stand he closes his hand round the neck (b.grip); the exact strumming hand only once it is on him
+    const hand = (b.handBlend ?? 1) > 0.5 ? { hand: { fingers: b.fingersDir, palm: b.axisZ.clone().negate() } } : b.grip ? { hand: b.grip } : {};
     g.reach('Right', b.R, b.wR * fade, b.stopR ?? 0, { ...hand, pole: GUITAR_RIGHT_POLE });
-    g.curl('Right', 0.2);
+    g.curl('Right', b.close ?? 0.2);
+    if (b.thumb) for (const i of [2, 3]) g.target[`RightHandThumb${i}`].copy(Q('x', b.thumb));        // the thumb over the strings, against the fingers
   }
   // fretting hand: wrist under the neck, fingers pointing up and curling over it, thumb behind
   if (b.wL > 0) { g.reach('Left', b.L, b.wL * fade, 0, b.wL > 0.9 ? { hand: b.leftHand } : null); g.curl('Left', 1.0); }   // exact hand orientation only once the hand is on the neck (a wrist blended through it bends past 120 degrees)
@@ -1311,8 +1316,7 @@ export class Brain {
     st.y += ((st.yGoal ?? 0) - st.y) * 0.35;
     st.fret += ((st.fretGoal ?? 0) - st.fret) * 0.15;
 
-    const neckRest = this.gp(rest, 0.36, 0, 0.03);
-    const neckNow = this.gp(cur, 0.36, 0, 0.03);
+    const neckNow = this.gp(cur, GRIP_AT[0], 0, 0.03);
     // left hand (the fretting hand): the forearm comes from his side, so the hand is BEHIND the neck (the side facing him), wrist below it,
     // thumb on the back of the neck, fingers reaching up past the neck's top edge and curling over it so the pads press the strings from the front.
     // (It used to sit on the soundboard side with the palm to the fretboard: the fingers curled round to the back of the neck, through it.)
@@ -1328,16 +1332,29 @@ export class Brain {
     const tip = this.gp(cur, 0.05, st.y * 0.5, 0.07);                       // right FINGERTIPS just above the strings by the sound hole
     const strum = tip.clone().addScaledVector(fingersDir, -this.g.limb.Right.handLen * 0.9); // ...so the WRIST is a hand's length back along the fingers
     const handLen = this.g.limb.Right.handLen;
+    // on the stand the neck stands upright in front of him: the right hand goes to its right side, thumb up, and closes round it, the fingers
+    // behind it. (The straight fingers used to stop on the strings, and the guitar came up by itself.)
+    const kn = this.g.limb.Right.knuckle ?? 0.124, gripF = gl(0, 0, -1), gripP = gl(0, 1, 0);
+    const grip = { fingers: gripF, palm: gripP, wrist: this.gp(cur, GRIP_AT[0], GRIP_AT[1], GRIP_AT[2] + (pose === 'putGuitar' ? 0.013 : 0)).addScaledVector(gripF, -kn) };
+    const short = neckNow.clone().addScaledVector(neckNow.clone().sub(this.g.boneWorld('RightArm')).normalize(), -0.1);      // the wrist when the neck just lies in his palm
     let out;
     if (pose === 'takeGuitar') {
       const reach = sm(t / 0.6);
       const toStrum = sm((t - 1.6) / 0.45);
-      out = { R: new THREE.Vector3().lerpVectors(blend < 0.02 ? neckRest : neckNow, strum, toStrum), wR: reach, L: fretPt, wL: sm((t - 1.4) / 0.5), stopR: lerp(handLen - 0.03, 0, toStrum) };
+      const hold1 = 1 - sm(blend / 0.5), close = sm((t - 0.6) / 0.25);                // (he lets the neck turn in his hand as it comes round to his left one)
+      out = { R: grip.wrist.lerp(short, 1 - hold1).lerp(strum, toStrum), wR: reach, L: fretPt, wL: sm((t - 1.4) / 0.5), stopR: 0 };
       out.handBlend = toStrum;
+      out.grip = { fingers: grip.fingers, palm: grip.palm, weight: hold1 * sm((t - 0.1) / 0.4) };
+      out.close = lerp(lerp(0.12, GRIP_CLOSE, close), 0.2, toStrum);
+      out.thumb = 0.5 * close * (1 - toStrum);
     } else if (pose === 'putGuitar') {
       const toNeck = sm(t / 0.45);
-      out = { R: new THREE.Vector3().lerpVectors(strum, blend < 0.02 ? neckRest : neckNow, toNeck), wR: 1 - sm((t - 1.5) / 0.6), L: fretPt, wL: 1 - sm(t / 0.4), stopR: lerp(0, handLen - 0.03, toNeck) };
+      const hold1 = 1 - sm(blend / 0.5), open = sm((t - 1.3) / 0.25), away = sm((t - 1.5) / 0.6);
+      out = { R: strum.lerp(grip.wrist.lerp(short, 1 - hold1), toNeck), wR: 1 - away, L: fretPt, wL: 1 - sm(t / 0.4), stopR: 0 };
       out.handBlend = 1 - toNeck;
+      out.grip = { fingers: grip.fingers, palm: grip.palm, weight: hold1 * (1 - away) };
+      out.close = lerp(0.2, lerp(GRIP_CLOSE, 0.12, open), toNeck);
+      out.thumb = 0.5 * toNeck * (1 - open);
     } else {
       out = { R: strum, wR: 1, L: fretPt, wL: 1, stopR: 0 };
     }
@@ -1358,27 +1375,16 @@ export class Brain {
   // A strap from the end of the body, over his left shoulder, to the heel of the neck, so the guitar visibly hangs from him.
   updateStrap(cur) {
     if (!this.strap) {
-      this.strap = [0, 1].map(() => {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.005, 1), new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 }));
-        this.w.room.add(m);
-        return m;
-      });
+      this.strap = [0, 1].map(() => { const m = makeStrapMesh(); this.w.room.add(m); return m; });        // the half over his back, the half up his chest (strap.js)
     }
     this.strap.forEach((m) => (m.visible = !!cur));
     if (!cur) return;
-    const F = { pos: cur.pos, q: cur.q };
-    const root = this.g.root;
-    const pin = this.gp(F, -0.27, 0.0, 0.0);
-    const heel = this.gp(F, 0.22, 0.0, 0.0);
-    const shoulder = this.g.boneWorld('LeftShoulder').add(new THREE.Vector3(0, 0.07, 0)).addScaledVector(new THREE.Vector3(Math.sin(root.rotation.y), 0, Math.cos(root.rotation.y)), -0.03);
-    [[pin, shoulder], [shoulder, heel]].forEach(([a, b], i) => {
-      const m = this.strap[i];
-      const d = b.clone().sub(a);
-      m.position.copy(a).addScaledVector(d, 0.5);
-      m.scale.set(1, 1, d.length());
-      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), d.normalize());
-    });
+    const line = this.strapLine(cur);
+    if (!line) { this.strap.forEach((m) => (m.visible = false)); return; }
+    layStrap(this.strap[0], line.back, line.n);
+    layStrap(this.strap[1], line.front, line.n);
   }
+  strapLine(F) { return strapLine(this.g, this.gp(F, 0.22, 0.0, -0.01), this.gp(F, -0.27, 0.0, 0.0)); }
 
   // ---- Ball games ----
   ballStand() { // walk to a free spot next to the ball (on GUY's side if possible), facing it
