@@ -38,7 +38,7 @@ const ACT_OBJ = {
 // what an activity needs to have in the same room as its main object (else it cannot be done, or is done without it)
 const TOGETHER = { jam: ['table'], jampiano: ['table'], jamsit: ['table'], jamguitar: ['table'], jamdrums: ['table'] };
 const FREE_ACTS = ['wander', 'lookaround', 'sway', 'akimbo', 'ponder', 'wave'];           // done wherever he happens to be
-const OWN_ROOM_ACTS = ['leave', 'stuck', 'visit', 'dropball', 'hangpaint', 'moveshelf'];      // (they plan their own way: dropping a ball where he stands, hanging a painting on whichever wall)
+const OWN_ROOM_ACTS = ['leave', 'stuck', 'visit', 'dropball', 'hangpaint', 'moveshelf', 'carryhome'];      // (they plan their own way: dropping a ball where he stands, hanging a painting on whichever wall)
 import { sfx, drag as sfxDrag } from './sfx.js';
 import { findBooks, learnBooks } from './learn.js';
 import { nextRiff, keepRiff, riffAt, STEPS as RIFF_STEPS } from './riffs.js';
@@ -258,10 +258,9 @@ export const POSES = {
     const e = env(t, dur, 0.7);
     const head = g.root.worldToLocal(g.boneWorld('Head')), rq = g.root.getWorldQuaternion(new THREE.Quaternion());
     const chin = g.root.localToWorld(new THREE.Vector3(-0.05, head.y - 0.12, 0.2));
-    // (the hand turns to the chin as the arm comes up, not before: turned fully while the arm was still low, on the way down, it bent the wrist past 110 degrees)
-    g.reach('Right', chin, e, false, { hand: { fingers: new THREE.Vector3(0.9, 0.5, 0.1).normalize().applyQuaternion(rq), palm: new THREE.Vector3(0, 0, -1).applyQuaternion(rq), weight: e * e * (3 - 2 * e) }, pole: new THREE.Vector3(-0.2, -1, -0.5) });
+    g.reach('Right', chin, e, false, { hand: { fingers: new THREE.Vector3(0.9, 0.5, 0.1).normalize().applyQuaternion(rq), palm: new THREE.Vector3(0, 0, -1).applyQuaternion(rq), weight: e * e }, pole: new THREE.Vector3(-0.2, -1, -0.5) });       // (weight: the hand turns as the arm comes up and goes down; turned at once, with the arm still hanging, the wrist bent 113 degrees)
     const belly = g.root.localToWorld(new THREE.Vector3(-0.05, head.y - 0.55, 0.3));
-    g.reach('Left', belly, e, false, { hand: { fingers: new THREE.Vector3(-1, 0, 0.3).normalize().applyQuaternion(rq), palm: new THREE.Vector3(0, 1, 0).applyQuaternion(rq) }, pole: new THREE.Vector3(0.2, -1, -0.5) });
+    g.reach('Left', belly, e, false, { hand: { fingers: new THREE.Vector3(-1, 0, 0.3).normalize().applyQuaternion(rq), palm: new THREE.Vector3(0, 1, 0).applyQuaternion(rq), weight: e * e }, pole: new THREE.Vector3(0.2, -1, -0.5) });
     g.set('Head', Q('z', 0.14 * e, 'x', 0.05 * e, 'y', Math.sin(t * 0.7) * 0.15 * e));
     g.curl('Right', 0.5 * e);
   },
@@ -2230,6 +2229,7 @@ export class Brain {
     if (act === 'arrange') return !!this.obj('workstation') && !!this.arrangePlan;                // (only when he wants something, or somebody asks: arrange.js)
     if (HOME_ACTS[act]) return this.homeAvailable(act) && !(this.galBlocks && this.galBlocks(act));       // the Bedroom and the Library: their furniture, built for them
     if (act === 'moveshelf' || act === 'libclean') return this.libAvailable(act);           // the Library: its shelves carried in, its dust (librarybrain.js)
+    if (act === 'carryhome') return this.homeMoves().length > 0;                 // something built for another room is standing in the Workshop (workbrain.js)
     if (act === 'learn') return !!this.obj('workstation');                      // the Learning Workstation (only when somebody asks: it has no weight; from another room he walks back to it first)
     if (BOWL_ACTS.includes(act)) return this.bowlOpen();                  // the Bowling Alley: the door is open (a beginner can bowl too)
     if (STUDIO_ACTS.includes(act)) return this.studioOpen() && (act !== 'studiodj' || (this.studioDeckFree() && !(this.music && this.userMusic))) && (!STUDIO_INSTR_ACTS[act] || !!this.studioInst(act));   // the Studio: the door is open (the decks are free for records)
@@ -2415,6 +2415,7 @@ export class Brain {
   // Is this robot working with `name` right now? Then the other robot must not move it, put it away or take it out of the room.
   inUse(name) {
     if (this.using && this.using.has(name)) return true;
+    if (this.homeMove && this.homeMove.name === name) return true;       // (carrying it out of the Workshop to its room)
     if (this.chairClaim === name) return true;
     return this.stepUses(this.step, name);
   }
@@ -2458,7 +2459,7 @@ export class Brain {
     // Activities that share a theme: GUY gets bored of doing the same kind of thing back to back
     const tags = {
       piano: ['piano'], sitpiano: ['piano'], jam: ['piano', 'stereo'], jampiano: ['piano', 'stereo'], jamsit: ['piano', 'stereo'],
-      dance: ['stereo'], dancemoves: ['stereo'], ballroom: ['stereo'], lamp: ['fidget'], mood: ['fidget'], plant: ['fidget'], rearrange: ['fidget'], plink: ['piano'],
+      dance: ['stereo'], dancemoves: ['stereo'], ballroom: ['stereo'], lamp: ['fidget'], mood: ['fidget'], plant: ['fidget'], rearrange: ['fidget'], plink: ['piano'], carryhome: ['chore'],
       ball: ['ball'], dribble: ['ball'], toss: ['ball'], guitar: ['guitar'], riff: ['guitar'], jamguitar: ['guitar', 'stereo'],
       bang: ['drums'], drums: ['drums'], drumsolo: ['drums'], jamdrums: ['drums', 'stereo'],
       sit: ['rest'], homesit: ['rest'], makebed: ['fidget'], wardrobe: ['fidget'], browse: ['fidget'], study: ['rest'], spinglobe: ['fidget'], libclean: ['chore'], sitguitar: ['guitar'], slouch: ['drums', 'rest'],
@@ -2470,6 +2471,7 @@ export class Brain {
     const lastTags = [this.last, this.prev].flatMap((n) => tags[n] || []);
     this.restCleanup();                                      // cut short in the Restaurant: the dish goes back, the order waits again
     this.shelfCleanup();                                     // cut short carrying a bookshelf to the Library: it is put together again (before workCleanup drops the flat pack)
+    this.homeCleanup();                                      // cut short carrying a built thing out of the Workshop to its room: the same
     this.workCleanup();                                      // cut short in the Workshop: what he carries goes back in the stock
     this.yardCleanup();                                      // cut short mowing: the shed door is shut again
     this.studioCleanup();                                    // cut short in the Studio: the lights, the deck and the record in his hand go back
@@ -2502,6 +2504,7 @@ export class Brain {
       }
     }
     if (!name && this.restStays()) name = this.restNext();             // customers about: he stays and looks after them
+    if (!name && !this.restStays()) name = this.homeMoveNext();        // something built for another room left in the Workshop: he carries it there (workbrain.js)
     if (!name && !this.restStays()) name = this.arrangeNext();         // something he wants is missing: he orders it at the workstation (arrange.js)
     if (!name && !this.restStays()) name = this.shelfMoveNext();       // a bookshelf still in his room while there is a Library: he carries it in (librarybrain.js)
     if (!name) {

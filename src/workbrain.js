@@ -167,8 +167,22 @@ export function installWorkshop(Brain, POSES, H) {
       const w = this.w, stool = Object.values(w.objects).find((o) => o.kind === 'footstool' && w.roomIdAt(o.x, o.z) === 'main');
       if (!stool) return null;
       const wins = Object.values(w.decor).filter((d) => d.wall && /^window/.test(d.name) && d.v + d.hh > 2.1);
-      if (!wins.length) return null;
-      return { stool, wins };
+      const spots = new Map(wins.map((d) => [d, this.stoolSpot(stool, d)]).filter(([, s]) => s));
+      if (!spots.size) return null;
+      return { stool, wins: [...spots.keys()], spots };
+    },
+    // Where the stool goes under window `d`: by the wall, under its middle or as near to that as there is free floor for the stool, his arms
+    // either side of it and him in front of it. null if something stands along all of it (the stool used to be put down inside the stereo table).
+    stoolSpot(stool, d) {
+      const w = this.w, back = d.wall === 'back', gap = 0.3;
+      for (const off of [0, -0.25, 0.25, -0.45, 0.45, -0.65, 0.65]) {
+        if (Math.abs(off) > d.hw - 0.2) continue;
+        const u = d.u + off, p = back ? { x: u, z: -4 + 0.55 } : { x: -5 + 0.55, z: u }, at = back ? { x: p.x, z: p.z + 0.55 } : { x: p.x + 0.55, z: p.z };
+        if (!w.fits(stool, p.x, p.z, stool.w + (back ? gap : 0), stool.d + (back ? 0 : gap))) continue;
+        if (w.obstacles.some((o) => o !== stool.obstacle && o.active !== false && !o.char && at.x > o.x0 - 0.25 && at.x < o.x1 + 0.25 && at.z > o.z0 - 0.25 && at.z < o.z1 + 0.25)) continue;
+        return { ...p, u };
+      }
+      return null;
     },
     startHaul(name) {
       const o = this.obj(name); if (!o) return;
@@ -211,7 +225,7 @@ export function installWorkshop(Brain, POSES, H) {
       root.position.set(f.from.x + (o.x - f.from.x) * e, 0.34 * e, f.from.z + (o.z - f.from.z) * e);
       this.onStool = e > 0.02 ? f : null;
     },
-    // where it is wanted: { room, pref, stand } or null (nowhere in particular)
+    // where it is wanted: { room, pref } or null (nowhere in particular)
     siteFor(id) {
       const r = RECIPES[id], w = this.w, p = r && w.instanceSite(r.object);
       if (!p || !r.serves) return null;
@@ -219,9 +233,7 @@ export function installWorkshop(Brain, POSES, H) {
       if (!b) return null;
       if (room !== 'main' && room !== 'door' && this.doorLockedFor(room)) return null;                      // a locked room: it is put together where it stands, not carried in
       if (this.stuckIn() && room !== this.stuckIn()) return null;                                           // shut in the Workshop: it is put together here, not carried out
-      const cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2, d = Math.hypot(cx - p.x, cz - p.z) || 1;
-      const stand = { x: Math.min(b.maxX - 0.7, Math.max(b.minX + 0.7, p.x + (cx - p.x) / d * 0.95)), z: Math.min(b.maxZ - 0.7, Math.max(b.minZ + 0.7, p.z + (cz - p.z) / d * 0.95)) };
-      return { room, pref: p, stand };
+      return { room, pref: p };
     },
     // out of the Workshop with it, through the other room's door if it goes there, put it together where it is wanted, and back out
     deliverSteps(id) {
@@ -237,9 +249,10 @@ export function installWorkshop(Brain, POSES, H) {
     setupSteps(id) {
       const site = this.siteFor(id);
       if (!site) return [this.play('idle', 0.3, { at: [0.1, () => this.setUp(id, null)] })];
-      const { stand, pref } = site, yaw = Math.atan2(pref.x - stand.x, pref.z - stand.z);
-      return [this.walk(stand.x, stand.z, yaw),
-        this.play('reach', 3.4, { target: () => V(pref.x, 0.3, pref.z), at: [2.0, () => this.setUp(id, site)] }),
+      const { room, pref } = site, sz = this.w.instanceSize(RECIPES[id].object) || { bw: 0.6, bd: 0.6 }, turned = (pref.rot || 0) % 2;
+      const { st, edge } = this.setUpStand(room, pref, turned ? sz.bd : sz.bw, turned ? sz.bw : sz.bd);                 // (clear of it: his legs were in a new bed as it grew)
+      return [this.walk(st.x, st.z, Math.atan2(pref.x - st.x, pref.z - st.z)),
+        this.play('reach', 3.4, { target: () => V(edge.x, 0.3, edge.z), at: [2.0, () => this.setUp(id, site)] }),
         this.play('idle', 0.6)];
     },
     // the flat-pack becomes the real thing: it grows into place (and is counted in storage if there is no room for it)
@@ -251,6 +264,105 @@ export function installWorkshop(Brain, POSES, H) {
       if (name) { const o = this.w.objects[name]; (this.popping ||= []).push({ o, t: 0 }); sfx('chime'); }
       else { const items = this.w.stock.items; items[r.object] = Math.min(STORAGE_CAP, (items[r.object] || 0) + 1); sfx('chime'); }
       if (this.onBuilt) this.onBuilt(name ? `${this.who()} built a ${r.name} and put it where it is needed!` : `${this.who()} built a ${r.name}! There is no room for it, so it is in storage.`);
+    },
+    // ------------------------------------------------------------------ carried home: built things left standing in the Workshop
+    // A piece built for another room can end up in the Workshop: he was cut short with it flat-packed in his arms (workCleanup sets it down
+    // where he stands), or its room was locked when it was finished. The Workshop is for making things, not keeping them: GUY or GAL packs
+    // it flat again, carries it through the doors and puts it together where it belongs (the same place a fresh one is built for).
+    // Where `o` goes in its own room: { x, z, rot?, room } (its planned spot, else the nearest free place in that room), or null.
+    homeSpot(o) {
+      const w = this.w, s = o && o.kind && RECIPES[o.kind] && w.instanceSite(o.kind);
+      if (!s || s.room === 'workshop' || s.room === 'door') return null;
+      if (s.room !== 'main' && (!w.doors[s.room] || this.doorLockedFor(s.room) || w.doors[s.room].closing)) return null;
+      const keep = o.rot;
+      if (s.rot !== undefined) o.rot = s.rot;
+      const at = w.fits(o, s.x, s.z) && w.ownStandClear(o, s.x, s.z) && !w.onSomeonesStand(o, s.x, s.z) ? { x: s.x, z: s.z } : w.findSpot(o, s, null);
+      o.rot = keep;
+      if (!at || w.roomIdAt(at.x, at.z) !== s.room) return null;
+      return { x: at.x, z: at.z, rot: s.rot, room: s.room };
+    },
+    // The built things in the Workshop that belong in another room he can get to, with where each goes: [{ o, spot }].
+    homeMoves() {
+      const w = this.w;
+      if (!w.doors.workshop || this.doorLockedFor('workshop')) return [];
+      const out = [];
+      for (const o of Object.values(w.objects)) {
+        if (!o.kind || !RECIPES[o.kind] || o.packed || o.hauled || o.stowed || o.removable === false) continue;
+        if (w.roomIdAt(o.x, o.z) !== 'workshop' || this.otherUses(o.name)) continue;          // (the other robot is using it, or carrying it already)
+        const spot = this.homeSpot(o);
+        if (spot) out.push({ o, spot });
+      }
+      return out.sort((a, b) => (a.o.name < b.o.name ? -1 : 1));
+    },
+    // Called from choose(): 'carryhome' when something built for another room stands in the Workshop (a chore, not chosen by weight).
+    homeMoveNext() {
+      if (this.lock || this.stuckIn() || this.held || this.carry || this.hauling) return null;
+      if (this.time - (this.homeTried || -999) < 30) return null;          // (it did not work a moment ago: not straight away again)
+      return this.homeMoves().length ? 'carryhome' : null;
+    },
+    // Cut short with it flat in his arms: put together where he stands if it fits there, otherwise back where it was. Never lost.
+    homeCleanup() {
+      const m = this.homeMove;
+      if (!m) return;
+      this.homeMove = null;
+      const o = this.obj(m.name);
+      if (this.carry === 'flat' || this.carry === 'mflat') this.setCarry(null);
+      if (!o || !o.packed) return;
+      const p = this.g.root.position, yaw = this.g.root.rotation.y;
+      const ahead = { x: p.x + Math.sin(yaw) * 0.7, z: p.z + Math.cos(yaw) * 0.7 };
+      const here = this.w.fits(o, ahead.x, ahead.z) ? ahead : this.w.findSpot(o, ahead, null);
+      const back = here && this.w.roomIdAt(here.x, here.z) !== 'door' ? here : m.from;
+      this.w.unpackShelf(m.name, { x: back.x, z: back.z, rot: back === m.from ? m.from.rot : o.rot });
+    },
+    carryHomeSteps() {
+      const m = this.homeMoves()[0];
+      this.homeTried = this.time;
+      if (!m) return ['nothing to carry', this.play('idle', 0.5)];
+      (this.using ||= new Set()).add(m.o.name);                              // (his from the moment he sets off: with both robots on their way to it, both carried it)
+      const w = this.w, n = m.o.name, r = RECIPES[m.o.kind], room = m.spot.room, from = { x: m.o.x, z: m.o.z, rot: m.o.rot };
+      const roomName = room === 'main' ? (this.isGal ? "GUY's room" : 'his own room') : `the ${w.doors[room].name}`;
+      const at = () => { const o = this.obj(n); return o ? V(o.x, 0.35, o.z) : this.g.pos.clone(); };
+      // put together where it belongs (looked up again: somebody may have put something there meanwhile)
+      const setUp = () => {
+        const o = this.obj(n);
+        if (!o || !o.packed || !this.homeMove) return;
+        const s = this.homeSpot(o);
+        if (!s) { this.homeCleanup(); return; }
+        this.setCarry(null);
+        w.unpackShelf(n, { x: s.x, z: s.z, rot: s.rot ?? o.rot });
+        o.home = { x: s.x, z: s.z };
+        (this.popping ||= []).push({ o, t: 0 });
+        this.homeMove = null;
+        sfx('thud', 0.5); sfx('chime');
+        if (this.onBuilt) this.onBuilt(`${this.who()} carried the ${r.name} out of the Workshop to ${roomName}.`);
+      };
+      return [`carrying the ${r.name.toLowerCase()} to ${roomName}`,
+        { type: 'plan', fn: () => this.tripSteps(this.hereId(), 'workshop') },
+        this.stand(n, 0.7, at),
+        this.play('reach', 1.4, { needs: [n], at: [0.5, () => { this.homeMove = { name: n, from }; }], target: at }),
+        // it comes apart: it goes flat, and the flat pack is in his arms
+        this.play('reach', 1.8, { needs: [n], at: [1.2, () => { if (!this.homeMove) return; w.packShelf(n); this.setCarry(r.line === 'metal' ? 'mflat' : 'flat', 1); sfx('thud', 0.4); }], target: at }),
+        { type: 'plan', fn: () => (this.homeMove ? this.tripSteps(this.hereId(), room) : []) },
+        { type: 'plan', fn: () => {
+          const o = this.obj(n);
+          if (!o || !o.packed || !this.homeMove) return [];
+          const s = this.homeSpot(o);
+          if (!s) { this.homeCleanup(); return []; }
+          const rot = s.rot ?? o.rot, wd = rot % 2 ? o.bd : o.bw, dp = rot % 2 ? o.bw : o.bd;
+          const { st, edge } = this.setUpStand(room, s, wd, dp);
+          return [this.walk(st.x, st.z, Math.atan2(s.x - st.x, s.z - st.z)),
+            this.play('reach', 2.6, { target: () => V(edge.x, 0.35, edge.z), at: [1.8, setUp] }),
+            this.play('idle', 0.5)];
+        } }];
+    },
+    // Where he stands to put a piece (`wd` x `dp` on the floor) together at `p` in `room`: towards the middle of the room, clear of the piece
+    // (a step back from its edge: a fixed 0.95 m from a bed's middle had his legs in the bed as it grew), and the near edge he reaches for.
+    setUpStand(room, p, wd = 0.6, dp = 0.6) {
+      const w = this.w, b = room === 'main' || room === 'door' ? { minX: -4.5, maxX: 4.5, minZ: -3.5, maxZ: 3.6 } : w.doors[room].shell.bounds;
+      const cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2, d = Math.hypot(cx - p.x, cz - p.z) || 1, ux = (cx - p.x) / d, uz = (cz - p.z) / d;
+      const ext = Math.min(Math.abs(ux) > 1e-3 ? wd / 2 / Math.abs(ux) : 9, Math.abs(uz) > 1e-3 ? dp / 2 / Math.abs(uz) : 9);       // (from its middle to its edge, along that line)
+      const edge = { x: p.x + ux * ext, z: p.z + uz * ext }, k = Math.max(0.95, ext + 0.45);
+      return { st: { x: Math.min(b.maxX - 0.4, Math.max(b.minX + 0.4, p.x + ux * k)), z: Math.min(b.maxZ - 0.4, Math.max(b.minZ + 0.4, p.z + uz * k)) }, edge };
     },
     // new things grow into place over a moment
     lateWork2() {
@@ -326,11 +438,12 @@ export function installWorkshop(Brain, POSES, H) {
     workActivities() {
       return {
         tidytools: () => this.shopTrip('tidying the toolbox', this.toolboxSteps()),
+        carryhome: () => this.carryHomeSteps(),
         // clean the top of a high window: carry the foot stool there (unless it is there already), step up on it and wipe along the top of the frame
         dusttop: () => {
           const job = this.stoolJob();
           if (!job) return ['no window to clean', this.play('idle', 0.5)];
-          const w = this.w, win = pick(job.wins), sp = win.wall === 'back' ? { x: win.u, z: -4 + 0.55 } : { x: -5 + 0.55, z: win.u }, yaw = win.wall === 'back' ? Math.PI : -Math.PI / 2;
+          const w = this.w, win = pick(job.wins), sp = job.spots.get(win), yaw = win.wall === 'back' ? Math.PI : -Math.PI / 2;
           const inward = win.wall === 'back' ? { x: 0, z: 1 } : { x: 1, z: 0 };
           const name = job.stool.name, steps = [];
           const there = Math.hypot(job.stool.x - sp.x, job.stool.z - sp.z) < 0.3;
@@ -344,7 +457,7 @@ export function installWorkshop(Brain, POSES, H) {
           const t0 = this.time, top = win.v + win.hh - 0.12, span = Math.min(win.hw * 0.7, 0.55);
           const target = () => {
             sfx('wipe');
-            const u = win.u + Math.sin((this.time - t0) * 2.0) * span;
+            const u = Math.min(win.u + win.hw - 0.1, Math.max(win.u - win.hw + 0.1, sp.u + Math.sin((this.time - t0) * 2.0) * span));
             return win.wall === 'back' ? V(u, top, -4 + 0.04) : V(-5 + 0.04, top, u);
           };
           steps.push({ type: 'plan', fn: () => { const p = this.g.root.position, from = { x: p.x, z: p.z }; return [this.play('reach', 7.5, { needs: [name], target, stool: { name, from } })]; } });

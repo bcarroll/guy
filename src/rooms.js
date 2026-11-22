@@ -248,8 +248,8 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
     const d = world.doors[id], b = d && d.shell.bounds;
     const inRoom = (x, z) => !!b && x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ;
     shelvesHome(inRoom);
-    for (const [name, o] of Object.entries(world.objects)) if (inRoom(o.x, o.z)) { remove(name); delete world.removed[name]; }     // its furniture goes with it
-    for (const [name, o] of Object.entries(world.removed)) if (!o.decor && o.home && inRoom(o.home.x, o.home.z)) delete world.removed[name];   // and what was put away from it
+    for (const [name, o] of Object.entries(world.objects)) if (inRoom(o.x, o.z)) { remove(name); if (world.canAddNew(name)) delete world.removed[name]; }     // its furniture goes with it (what his own room came with, left in there, goes to the Catalog: it cannot be made again)
+    for (const [name, o] of Object.entries(world.removed)) if (!o.decor && o.home && inRoom(o.home.x, o.home.z) && world.canAddNew(name)) delete world.removed[name];   // and what was put away from it
     world.removeDoor(id);
     delete state[id];
     delete closing[id];

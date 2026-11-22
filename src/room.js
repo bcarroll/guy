@@ -1357,7 +1357,14 @@ export function buildRoom(scene) {
   INSTANCE_KINDS.bedside = { build: (name, x, z) => homeB.bedside(name, x, z), pref: (w) => homeSpot('bedside')(w) };
   INSTANCE_KINDS.wardrobe = { build: (name, x, z) => homeB.wardrobe(name, x, z), pref: (w) => homeSpot('wardrobe')(w) };
   // (a second bookshelf goes in the other half of the wall)
-  INSTANCE_KINDS.libshelf = { build: (name, x, z) => homeB.libshelf(name, x, z), pref: (w) => homeSpot(Object.values(w.objects).some((o) => o.kind === 'libshelf' && w.roomIdAt(o.x, o.z) === 'library') ? 'libshelf2' : 'libshelf')(w) };
+  // (the first of the two places that no bookshelf in the Library stands on: the second one used to be picked whenever any shelf stood in
+  // the Library, even on that very place, so a shelf carried back in after the first one had gone landed wherever there was floor)
+  INSTANCE_KINDS.libshelf = { build: (name, x, z) => homeB.libshelf(name, x, z), pref: (w) => {
+    const a = homeSpot('libshelf')(w), b = homeSpot('libshelf2')(w);
+    if (!a) return null;
+    const taken = (s) => Object.values(w.objects).some((o) => o.kind === 'libshelf' && !o.packed && Math.hypot(o.x - s.x, o.z - s.z) < 0.4);
+    return !taken(a) ? a : !taken(b) ? b : a;
+  } };
   INSTANCE_KINDS.readingchair = { build: (name, x, z) => { const o = buildArmchair(name, x, z, 0x2f6b4f); o.homeSeat = true; return o; }, pref: (w) => homeSpot('readingchair')(w) };
   INSTANCE_KINDS.libdesk = { build: (name, x, z) => homeB.libdesk(name, x, z), pref: (w) => homeSpot('libdesk')(w) };
   INSTANCE_KINDS.globe = { build: (name, x, z) => homeB.globe(name, x, z), pref: (w) => homeSpot('globe')(w) };
@@ -2186,6 +2193,13 @@ export function buildRoom(scene) {
       return true;
     },
     instanceKinds: () => Object.keys(INSTANCE_KINDS),
+    // How big a built kind is on the floor, unturned ({ bw, bd }), before there is one: it is built once, measured and taken away again.
+    instanceSize(kind) {
+      const k = INSTANCE_KINDS[kind];
+      if (!k) return null;
+      if (!k.size) { const o = k.build('__size', 0, 0); k.size = { bw: o.bw, bd: o.bd }; world.removeObject('__size'); delete world.removed.__size; }
+      return k.size;
+    },
     // ---- the bookshelves in the Library (librarybrain.js) ----
     // Where a bookshelf (the skill shelf or one GUY built) goes in the Library: against a side wall, its front (local -x) facing into the room.
     // `obj` null: for one that is about to be built. `taken`: spot keys already promised to another shelf. { x, z, rot, key, room } or null.
@@ -2240,6 +2254,7 @@ export function buildRoom(scene) {
       const p = world.shellPoint('workshop', n * 0.5, 0);
       return world.addInstance(kind, null, null, true, { x: p.x, z: p.z });
     },
+    canAddNew: (id) => !!NEW_OBJECTS[id],          // (made afresh when it is added: not one of the things his room came with)
     // Objects that do not exist yet but can be added from the Catalog.
     addNew(id, avoid, where = null) {
       if (DECOR_NEW[id]) {

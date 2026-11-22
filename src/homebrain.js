@@ -34,7 +34,7 @@ export function installHome(Brain, POSES, H) {
     // the objects an activity can be done at right now (the other robot is not using them)
     homeObjs(act) {
       const kinds = HOME_ACTS[act] || [];
-      return Object.values(this.w.objects).filter((o) => kinds.includes(o.kind) && this.homeRoomOpen(o) && !this.otherUses(o.name) && !o.hauled)
+      return Object.values(this.w.objects).filter((o) => kinds.includes(o.kind) && this.homeRoomOpen(o) && !this.otherUses(o.name) && !o.hauled && !o.packed)
         .sort((a, b) => (a.name < b.name ? -1 : 1));
     },
     // the one it is done at: the one he was pointed at, else the first that is not the one he used last (so he uses each in turn)

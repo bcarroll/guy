@@ -247,7 +247,7 @@ export class Guy {
       const basis = (f, p) => new THREE.Matrix4().makeBasis(f, p, f.clone().cross(p));
       const { f: rf, p: rp } = this.limb[side].handRest;
       const handQ = new THREE.Quaternion().setFromRotationMatrix(basis(d, pp)).multiply(new THREE.Quaternion().setFromRotationMatrix(basis(rf, rp)).invert());
-      this.target[`${side}Hand`].slerp(Rtf.clone().invert().multiply(handQ), opts.hand.weight ?? weight);      // (opts.hand.weight: turn the hand in step with the arm, not ahead of it)
+      this.target[`${side}Hand`].slerp(Rtf.clone().invert().multiply(handQ), Math.min(weight, opts.hand.weight ?? 1));       // (`hand.weight`: turn the hand no faster than the arm comes up)
       return want - dist;
     }
 
