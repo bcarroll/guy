@@ -228,6 +228,7 @@ export class Gal {
   remove() {
     if (!this.present) return;
     if (this.brain && this.brain.held) this.brain.returnBook();                // a book in her hands goes back on the shelf
+    if (this.brain && this.brain.homeMove) this.brain.homeCleanup();            // what she was carrying is set down
     if (this.brain && this.brain.hauling) { this.brain.hauling.o.hauled = false; this.brain.hauling.o.obstacle.active = true; this.brain.hauling = null; }
     if (this.brain) { this.brain.shelfCleanup(); this.brain.homeCleanup(); this.brain.dropBuilding(); }       // (a piece flat in her arms stands again, and what she was building is not "coming" any more)
     this.opts.scene.remove(this.g.root);

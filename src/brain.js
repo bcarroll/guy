@@ -17,6 +17,7 @@ import { installRestaurant, REST_OBJECTS, REST_JOBS } from './restbrain.js';
 import { installApproach } from './approach.js';
 import { installArrange } from './arrange.js';
 import { installPaintings } from './paintbrain.js';
+import { installSkillRun } from './skillrun.js';
 
 const REST_ACTS = ['takepay', 'serve', 'takeorder', 'cook', 'rwait'];
 // how far apart the two robots keep their middles when they walk (each is a 0.5 m box: closer than this and they overlap)
@@ -28,17 +29,17 @@ const WORK_ACTS = ['tidytools', 'build'];
 const ACT_OBJ = {
   piano: 'piano', sitpiano: 'piano', plink: 'piano', jam: 'piano', jampiano: 'piano', jamsit: 'piano',
   guitar: 'guitar', riff: 'guitar', jamguitar: 'guitar',
-  bang: 'drums', drums: 'drums', drumsolo: 'drums', jamdrums: 'drums',
+  bang: 'drums', drums: 'drums', drumsolo: 'drums', jamdrums: 'drums', slouch: 'drums',
   scribble: 'easel', paint: 'easel', mixpaint: 'easel', portrait: 'easel',
   peek: 'telescope', stargaze: 'telescope', darkstargaze: 'telescope', scopecare: 'telescope',
   lamp: 'lamp', mood: 'lamp', read: 'shelf', lighton: 'lamp', putback: 'shelf', putguitar: 'guitar', putcanvas: 'easel',
-  dance: 'table', dancemoves: 'table', ballroom: 'table', stereoon: 'table', stereooff: 'table',
+  dance: 'table', dancemoves: 'table', ballroom: 'table', stereoon: 'table', stereooff: 'table', musicon: 'table',
   learn: 'workstation', arrange: 'workstation', buildbot: 'botprinter',          // (the user can drag these into another room: he goes there)
 };
 // what an activity needs to have in the same room as its main object (else it cannot be done, or is done without it)
 const TOGETHER = { jam: ['table'], jampiano: ['table'], jamsit: ['table'], jamguitar: ['table'], jamdrums: ['table'] };
 const FREE_ACTS = ['wander', 'lookaround', 'sway', 'akimbo', 'ponder', 'wave'];           // done wherever he happens to be
-const OWN_ROOM_ACTS = ['leave', 'stuck', 'visit', 'dropball', 'hangpaint', 'moveshelf', 'carryhome'];      // (they plan their own way: dropping a ball where he stands, hanging a painting on whichever wall)
+const OWN_ROOM_ACTS = ['leave', 'stuck', 'visit', 'dropball', 'hangpaint', 'moveshelf', 'carryhome', 'skillwait', 'bringpiece'];      // (they plan their own way: dropping a ball where he stands, hanging a painting on whichever wall)
 import { sfx, drag as sfxDrag } from './sfx.js';
 import { findBooks, learnBooks } from './learn.js';
 import { nextRiff, keepRiff, riffAt, STEPS as RIFF_STEPS } from './riffs.js';
@@ -150,6 +151,16 @@ function ballHands(g, ctx, fade) {
   g.set('Head', Q('x', b.look || 0));
 }
 
+// carrying a light piece of furniture: both hands under its sides, held in front of him (one hand while the other works a door knob)
+function haulGrip(g, haul, oneHand = false) {
+  if (!oneHand) g.set('Spine1', Q('x', 0.06));
+  g.reachAssist(haul.L, 1);
+  const h = (hand) => (hand ? { hand, pole: new THREE.Vector3(0, -1, -0.5) } : null);
+  g.reach('Left', haul.L, 1, 0, h(haul.handL));
+  if (!oneHand) g.reach('Right', haul.R, 1, 0, h(haul.handR));
+  if (haul.handL) { g.curl('Left', 0.9); if (!oneHand) g.curl('Right', 0.9); }
+}
+
 function sitLegs(g, e) {
   g.set('LeftUpLeg', Q('x', -1.4 * e, 'z', -0.08 * e));
   g.set('RightUpLeg', Q('x', -1.4 * e, 'z', 0.08 * e));
@@ -197,10 +208,7 @@ export const POSES = {
     g.set('Head', Q('y', s * 0.05));
     g.hipsOffset.y = -Math.abs(c) * 0.025;
     if (ctx.haul) {                    // carrying a light piece of furniture: both hands under its sides, held in front of him
-      g.set('Spine1', Q('x', 0.06));
-      g.reachAssist(ctx.haul.L, 1);
-      g.reach('Left', ctx.haul.L, 1);
-      g.reach('Right', ctx.haul.R, 1);
+      haulGrip(g, ctx.haul);
     }
     if (ctx.carry && ctx.tgt.pushL) { // pushing furniture: both hands flat on the near face
       g.set('Spine1', Q('x', 0.12 + 0.12 * (ctx.strain || 0)));
@@ -972,6 +980,7 @@ export class Brain {
       ...this.restActivities(),
       ...(this.galActivities ? this.galActivities() : {}),       // working with GAL (gal.js)
       ...this.paintActivities(),
+      ...this.skillRunActivities(),                                 // a skill chosen in the Skills menu (skillrun.js)
       ...this.arrangeActivities(),                                  // furnishing the house at the workstation (arrange.js)
       // the Learning Workstation: walk up, tap the screen, and its panel opens for whoever is here (the page shows it: onWorkstation)
       learn: () => {
@@ -1003,7 +1012,7 @@ export class Brain {
       jampiano: () => this.stereoPiano('piano', 'playing piano along with the stereo'),
       dance: () => {
         // With the lighting book he starts the lamp's party mode first and puts the light back afterwards.
-        const lights = this.skills.has('lighting') && this.obj('lamp') && this.sameRoom('lamp', 'table');
+        const lights = this.skills.has('lighting') && this.obj('lamp') && this.roomOfObj('lamp') === this.spotRoom();
         const lampStep = (fn) => [this.walkAt('lamp', 0.55, 0, -Math.PI / 2),
           this.play('reach', 1.8, { at: [0.9, fn], needs: ['lamp'], target: () => this.lampSwitch() })];
         const ss = this.stereoSession();
@@ -1175,7 +1184,7 @@ export class Brain {
         const direct = (q) => ({ ...this.walk(q.x, q.z), direct: true });
         return [`coming back from the ${w.doors[id].name}`,
           this.play('idle', 0.1, { at: [0, () => w.setDoorOpen(id, true)] }),
-          direct(inn), direct(out), this.walk(out.x, out.z, face),
+          direct(inn), { ...direct(out), ...this.doorFrame(id) }, this.walk(out.x, out.z, face),
           this.play('reach', 1.6, { at: [0.8, () => this.closeDoor(id)], target: () => w.doorKnob(id) })];
       },
       // making up riffs: a new idea (or two) and sometimes one of the favourites he kept. The good new ones are remembered (riffs.js).
@@ -1200,7 +1209,8 @@ export class Brain {
 
   // Songs he can play with what he has learned (null if none).
   pickSong() {
-    const song = randomSong(this.lastSong, (need) => this.skills.has(need));
+    const only = this.wantSong; this.wantSong = null;               // ("Advanced piano" chosen in the Skills menu: a piece from that book)
+    const song = (only && randomSong(this.lastSong, (need) => this.skills.has(need) && (need === only || need.startsWith(`${only}.`)))) || randomSong(this.lastSong, (need) => this.skills.has(need));
     this.lastSong = song.name;
     return song;
   }
@@ -1211,10 +1221,10 @@ export class Brain {
       type: 'plan',
       fn: () => {
         const o = this.obj(name);
-        const grid = makeGrid(this.w.obstacles, INFLATE, 0, o.obstacle);
+        const room = this.roomOfObj(name), grid = makeGrid(this.w.obstacles, INFLATE, 0, o.obstacle, room === 'main' ? MAIN_FRAME : this.w.frameOf(room));       // (in whichever room it stands)
         for (const [dx, dz] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
           const l = o.local(dx * dist, dz * dist), x = o.x + l.x, z = o.z + l.z;
-          if (Math.abs(x) < 4.5 && z > -3.5 && z < 3.6 && !cellBlocked(grid, x, z)) return [this.walk(x, z, Math.atan2(-l.x, -l.z))];
+          if (this.onFloorOf(name, x, z) && this.w.walkable(x, z) && !cellBlocked(grid, x, z)) return [this.walk(x, z, Math.atan2(-l.x, -l.z))];
         }
         return [this.walkAt(name, dist, 0)];
       },
@@ -1960,6 +1970,22 @@ export class Brain {
   // how far in front of the guitar he stands to take it (a guitar hung on a Studio wall is closer to the wall than one on its stand)
   guitarDz() { const o = this.obj(this.gname); return o && o.standDz ? o.standDz() : 0.62; }
   hereId() { const r = this.w.roomIdAt(this.g.root.position.x, this.g.root.position.z); return r === 'door' || !this.w.doors[r] ? 'main' : r; }
+  // The room (x, z) belongs to, doorways included: in a doorway, the room of the side of the door it is on.
+  roomAt(x, z) {
+    const r = this.w.roomIdAt(x, z);
+    if (r !== 'door') return this.w.doors[r] ? r : 'main';
+    let best = null, bd = Infinity;
+    for (const d of Object.values(this.w.doors)) {
+      const p = this.w.doorPoint(d.id, 0), q = this.w.doorPoint(d.id, 1), dist = Math.hypot(x - p.x, z - p.z);
+      if (dist < bd) { bd = dist; best = (x - p.x) * (q.x - p.x) + (z - p.z) * (q.z - p.z) >= 0 ? this.parentOf(d.id) : d.id; }
+    }
+    return best || 'main';
+  }
+  // Where he can stand in a room (the limits of its floor).
+  roomBounds(id) {
+    const d = this.w.doors[id], b = d && d.shell.bounds;
+    return b ? { minX: b.minX + 0.5, maxX: b.maxX - 0.5, minZ: b.minZ + 0.5, maxZ: b.maxZ - 0.5 } : { minX: -4.5, maxX: 4.5, minZ: -3.5, maxZ: 3.6 };
+  }
   // Is (x, z) on the floor of a room (main or an added one), at least `m` metres in from its walls? (Not in a doorway.)
   onFloor(x, z, m = 0, mz = m) {
     const id = this.w.roomIdAt(x, z);
@@ -1981,6 +2007,9 @@ export class Brain {
   }
   // The room an activity happens in: where its object is; the yard, Workshop and Restaurant jobs in their own rooms; the rest in his own.
   roomForAct(name) {
+    const wanted = this.skillRoom(name);                           // (a dance chosen in the Skills menu: where he is, the stereo may be in another room)
+    if (wanted) return wanted;
+    if (ACT_OBJ[name] === 'guitar') return this.roomOfObj(this.wantGuitar || this.gname) || this.roomOfObj('guitar') || 'main';
     if (ACT_OBJ[name]) return this.roomOfObj(ACT_OBJ[name]) || 'main';
     if (HOME_ACTS[name]) { const o = this.homeObj(name); return o ? this.roomOfObj(o.name) || 'main' : 'main'; }
     if (name === 'libclean') return 'library';
@@ -2107,6 +2136,7 @@ export class Brain {
     this.music();
     this.music = null;
     this.userMusic = false;
+    this.w.skillMusic = false;
     this.w.boombox.led.material.color.set(0x333333);
     sfx('click');
   }
@@ -2159,10 +2189,11 @@ export class Brain {
     if (!o || !own) return true;
     const l = o.local(own[0], own[1]), x = o.x + l.x, z = o.z + l.z;
     if (!this.onFloor(x, z, 0.1, 0)) return false;
-    if (cellBlocked(makeGrid(this.w.obstacles, 0.05, 0, o.obstacle), x, z)) return false;       // not inside another object (furniture merely nearby is fine: he walks round it)
+    const room = this.roomOfObj(name), fr = room === 'main' ? MAIN_FRAME : this.w.frameOf(room);       // (in whichever room it stands)
+    if (cellBlocked(makeGrid(this.w.obstacles, 0.05, 0, o.obstacle, fr), x, z)) return false;       // not inside another object (furniture merely nearby is fine: he walks round it)
     // and a way there: a stool behind a bench that is wedged against the wall cannot be reached (the kit has to be moved, or the bench)
-    const g = this.g.root.position, from = this.inMain() ? { x: g.x, z: g.z } : { x: 0, z: 2 };
-    const grid = makeGrid(this.w.obstacles.filter((ob) => !ob.char), INFLATE, 0, o.obstacle);
+    const g = this.g.root.position, from = this.hereId() === room ? { x: g.x, z: g.z } : room === 'main' ? { x: 0, z: 2 } : this.w.doorPoint(room, -1.0);
+    const grid = makeGrid(this.w.obstacles.filter((ob) => !ob.char), INFLATE, 0, o.obstacle, fr);
     return !cellBlocked(grid, x, z) && !!findPath(grid, from.x, from.z, x, z, true);
   }
 
@@ -2219,13 +2250,14 @@ export class Brain {
 
   available(act) {
     // an activity that needs two things (playing along with the stereo) needs them in the same room
-    if (TOGETHER[act] && !TOGETHER[act].every((n) => this.sameRoom(n, ACT_OBJ[act]))) return false;
+    if (TOGETHER[act] && !this.skillToMusic(act) && !TOGETHER[act].every((n) => this.sameRoom(n, ACT_OBJ[act]))) return false;
     // shut in a room by a locked door: only what can be done in that room
     const shut = this.stuckIn();
     if (shut) return shut === 'workshop' ? WORK_ACTS.includes(act) && this.availableIn(act) : shut === 'backyard' ? YARD_ACTS.includes(act) && this.availableIn(act) : shut === 'range' ? RANGE_ACTS.includes(act) && this.availableIn(act) : shut === 'bowling' ? BOWL_ACTS.includes(act) && this.availableIn(act) : shut === 'studio' ? STUDIO_ACTS.includes(act) && this.availableIn(act) : shut === 'restaurant' ? (REST_JOBS.includes(act) || act === 'rwait') && this.availableIn(act) : false;
     return this.availableIn(act);
   }
   availableIn(act) {
+    if (['skillwait', 'bringpiece', 'musicon'].includes(act)) return false;         // (only for a skill chosen in the Skills menu: skillrun.js)
     if (act === 'arrange') return !!this.obj('workstation') && !!this.arrangePlan;                // (only when he wants something, or somebody asks: arrange.js)
     if (HOME_ACTS[act]) return this.homeAvailable(act) && !(this.galBlocks && this.galBlocks(act));       // the Bedroom and the Library: their furniture, built for them
     if (act === 'moveshelf' || act === 'libclean') return this.libAvailable(act);           // the Library: its shelves carried in, its dust (librarybrain.js)
@@ -2427,6 +2459,7 @@ export class Brain {
     if (this.lock && this.lock.name === name) this.unlock(false);
     if (name === 'table') { this.musicOff(); this.albumOnTable = false; }
     if (name === 'lamp') this.lampOffByMe = false;
+    for (const x of [this, this.other]) if (x && x.homeMove && x.homeMove.name === name) x.carryGone();       // (taken away while it was in his arms)
     if (name === this.gname) { this.gtr.held = false; this.gtr.override = null; this.resetGuitarMesh(); }
     const s = this.step;
     const uses = (st) => this.stepUses(st, name);
@@ -2479,7 +2512,7 @@ export class Brain {
     if (!name && this.ballHeld && this.inYard()) name = 'dropball';        // out in the yard with a ball in his hands: set it down before anything else
     // He is in an added room: back through the door before anything else, unless he went there to use something that stands in it (a piano
     // dragged into the Workshop ...): then it is his room for now, and free activities happen there too.
-    if (!name && !this.inMain() && this.hereId() !== this.stayRoom && !this.lockedInside() && !this.lockedInRange() && !this.lockedInBowl() && !this.lockedInStudio() && !this.restStays() && !this.stuckIn()) name = 'leave';
+    if (!name && !this.skillNext() && !this.inMain() && this.hereId() !== this.stayRoom && !this.lockedInside() && !this.lockedInRange() && !this.lockedInBowl() && !this.lockedInStudio() && !this.restStays() && !this.stuckIn()) name = 'leave';
     if (!name && this.carry === 'canvas') name = 'putcanvas';                  // cut short with a painting in his hands: back to the easel with it
     if (!name && this.gtr.held && this.obj('guitar') && !this.guitarLocked()) name = 'putguitar'; // still holding the guitar: back on its stand (not while locked in on it)
     if (!name && this.lampOffByMe && this.obj('lamp') && !this.obj('lamp').on) name = 'lighton'; // he switched it off for the stars and never put it back
@@ -2488,6 +2521,7 @@ export class Brain {
     // stereo while its music plays (the session puts it away itself). A stuck flag must never excuse carrying a book around.
     const recordPlaying = this.held && this.held.kind === 'album' && this.albumOnTable && this.music;
     if (!name && this.held && !recordPlaying) name = 'putback';
+    if (!name) name = this.skillNext() || this.skillMusicNext();      // a skill chosen in the Skills menu that is still waiting; the music put on for one that is over
     // Locked in on an object (long-press > Lock in): he keeps going back to it until the user tells him to stop. The chores above
     // (put the guitar back, drop the ball) still come first.
     if (!name && this.lock) {
@@ -2516,6 +2550,7 @@ export class Brain {
       for (const [k, v] of entries) { if ((r -= v) <= 0) { name = k; break; } }
       name ||= this.stuckIn() ? 'stuck' : 'wander';
     }
+    this.skillTrack(name);                                           // (anything else ends the run of a chosen skill)
     if (name !== 'read') this.readFrom = null;
     if (name === 'rearrange') this.lastRearrange = this.time;
     this.prev = this.last;
@@ -2534,8 +2569,8 @@ export class Brain {
     // a practice session of an instrument: after enough of them the next chapter of its book is learned (skills.js CHAPTERS)
     for (const c of this.skills.practice(name)) { this.ui(`learned ${c.title.toLowerCase()}`); if (this.onChapter) this.onChapter(c); }
     if (!this.stuckIn() && where !== here && !OWN_ROOM_ACTS.includes(name)) {
-      // (the yard, Workshop and Restaurant jobs go in through their own door themselves: they only need him out of the room he is in)
-      const ownTrip = YARD_ACTS.includes(name) || WORK_ACTS.includes(name) || REST_JOBS.includes(name) || REST_ACTS.includes(name);
+      // (the yard, Range, alley, Studio, Workshop and Restaurant jobs go in through their own door themselves (with both, he went in, out and in again): they only need him out of the room he is in)
+      const ownTrip = YARD_ACTS.includes(name) || RANGE_ACTS.includes(name) || BOWL_ACTS.includes(name) || STUDIO_ACTS.includes(name) || WORK_ACTS.includes(name) || REST_JOBS.includes(name) || REST_ACTS.includes(name);
       const trip = this.tripSteps(here, where, ownTrip);
       steps = [...trip, ...steps];
     }
@@ -2726,6 +2761,7 @@ export class Brain {
     this.queue = [this.play('idle', this.faults > 3 ? 3 : 0.05)];
     this.step = null;
     this.pendingActivity = null;
+    this.skillRun = null;
     this.read = { open: 0, turning: false, turnT: 0, sheet: null };
     this.ballPos = null;
     this.gtr.override = null;
@@ -2805,15 +2841,22 @@ export class Brain {
         }
         if (!finished) {
           // the grid of the room he is walking in: his own, or an added room when he and his goal are both in it
-          const ra = this.w.roomIdAt(root.position.x, root.position.z), rb = this.w.roomIdAt(s.x, s.z);
-          const fr = s.frameRoom ? this.w.frameOf(s.frameRoom) : ra === rb && ra !== 'main' && ra !== 'door' ? this.w.frameOf(ra) : MAIN_FRAME;
-          // He is inside an added room and the spot is in his own: the grid of his own room knows nothing of the other one, so he goes out through the door first (not into its wall)
-          if (ra !== rb && ra !== 'main' && ra !== 'door' && rb === 'main' && !s.viaDoor && !s.direct && !s.push && !s.drive && this.w.doors[ra] && !this.stuckIn()) {
-            const [, ...out] = this.activities().leave();
-            this.queue.unshift(...out, { ...s, viaDoor: true });
+          const ra = this.w.roomIdAt(root.position.x, root.position.z);
+          // The spot is in another room. A room's grid knows nothing of the other rooms, so he goes through the doors between them first, and
+          // then walks to it (he used to head straight for it: into the wall, and along that into the corner nearest to it).
+          const here = this.roomAt(root.position.x, root.position.z), there = this.roomAt(s.x, s.z);
+          if (here !== there && !s.direct && !s.push && !s.frameRoom) {
+            if (s.viaDoor || this.stuckIn()) { this.queue.length = 0; this.step = null; this.ui('could not get there'); return; }      // (he has been through the doors and still is not in there, or cannot get out: not for walking at)
+            this.queue.unshift(...this.tripSteps(here, there), { ...s, viaDoor: true, path: undefined });
             this.step = null;
             return;
           }
+          // a spot just inside a wall (a place beside the other robot, who stands by it): the nearest floor to it
+          if (!s.direct && !s.push && !this.w.walkable(s.x, s.z)) {
+            const b = this.roomBounds(here);
+            s.x = clamp(s.x, b.minX, b.maxX); s.z = clamp(s.z, b.minZ, b.maxZ);
+          }
+          const fr = s.frameRoom ? this.w.frameOf(s.frameRoom) : here === there && here !== 'main' ? this.w.frameOf(here) : MAIN_FRAME;
           this.grid = makeGrid(this.w.obstacles, INFLATE, 0, null, fr);
           if (s.fx && s.fx.guitar) {                               // carrying the guitar sticks his hands out: give furniture more room when the way is clear
             const wide = makeGrid(this.w.obstacles, INFLATE + 0.14, 0, null, fr);
@@ -2859,6 +2902,23 @@ export class Brain {
           if (this.stuckT > 25) finished = true;
           // Pressed against a wall, or circling something he cannot get past: if the distance still to walk along his path has not
           // got shorter by 20 cm in 5 s, give up on the walk and the activity it belongs to (instead of pushing on for 25 s).
+          // Pressed: his legs go and he does not (another robot stepped into the way after he planned, a box corner, a wall). Half a second of that and
+          // he looks for another way; still no headway and he moves the small furniture, or gives it up. Never several seconds at a wall.
+          if (!s.drive && facing < 0.8) {
+            const pr = s.press;
+            if (!pr || Math.hypot(root.position.x - pr.x, root.position.z - pr.z) > 0.08) s.press = { x: root.position.x, z: root.position.z, t: 0, at: pr && pr.at, tries: pr && pr.at && Math.hypot(root.position.x - pr.at.x, root.position.z - pr.at.z) < 0.6 ? pr.tries : 0 };
+            else if ((pr.t += dt) > 0.5) {
+              pr.t = 0; pr.tries++; pr.at = { x: pr.x, z: pr.z };
+              if (s.push) { if (pr.tries >= 3) { finished = true; this.queue.length = 0; } }
+              else if (pr.tries === 1) s.path = null;                              // another way round, as things stand now
+              else if (pr.tries === 2 && !s.roomTried && !s.direct && this.makeRoomFor(s)) return;
+              else if (pr.tries >= 2) {
+                finished = true;
+                if (finalDist > Math.max(s.tol || 0, 0.15)) { this.queue.length = 0; this.ui('could not get there'); }
+              }
+              if (!s.path) return;
+            }
+          }
           let rem = Math.hypot(wp.x - root.position.x, wp.z - root.position.z);
           for (let k = 1; k < s.path.length; k++) rem += Math.hypot(s.path[k].x - s.path[k - 1].x, s.path[k].z - s.path[k - 1].z);
           if (s.rem === undefined || rem < s.rem - 0.2) { s.rem = rem; s.remT = 0; }
@@ -2937,6 +2997,7 @@ export class Brain {
     g.clearTargets();
     basePose(g, this.time);
     POSES[poseName](g, t, dur, ctx);
+    if (ctx.haul && (poseName === 'idle' || poseName === 'reach')) haulGrip(g, ctx.haul, poseName === 'reach');      // carrying something through a door: one hand for the knob, the other keeps hold of it
     if (ctx.guitar && (poseName === 'walk' || poseName === 'idle')) guitarHands(g, ctx, 1);   // carrying the guitar between the stand and a chair
     this.hit.L = Math.max(0, this.hit.L - dt * 6);
     this.hit.R = Math.max(0, this.hit.R - dt * 6);
@@ -3320,7 +3381,10 @@ export class Brain {
     let nx = p.x + dx, nz = p.z + dz;
     // he stays inside his own room, an added room, or the doorway between them (while its door is open); at a wall he slides along it
     const ok = (x, z) => this.w.walkable(x, z);
-    if (!ok(p.x, p.z)) { nx = clamp(nx, -4.5, 4.5); nz = clamp(nz, -3.5, 3.6); }          // he is somewhere he should not be: back into his room
+    if (!ok(p.x, p.z)) {          // he is somewhere he should not be (a door shut beside him): onto the floor of the room he is in (it used to be his own room, however far away), eased there, never in a jump
+      const r = this.roomBounds(this.roomAt(p.x, p.z)), tx = clamp(nx, r.minX, r.maxX), tz = clamp(nz, r.minZ, r.maxZ), d = Math.hypot(tx - p.x, tz - p.z), most = 0.05;
+      nx = d > most ? p.x + (tx - p.x) / d * most : tx; nz = d > most ? p.z + (tz - p.z) / d * most : tz;
+    }
     else if (!ok(nx, nz)) { if (ok(nx, p.z)) nz = p.z; else if (ok(p.x, nz)) nx = p.x; else { nx = p.x; nz = p.z; } }
     for (const o of this.w.obstacles) {
       if (o.active === false) continue;
@@ -3623,5 +3687,6 @@ installRestaurant(Brain, POSES, { smooth, clamp, lerp, rand, pick });
 installArrange(Brain, { pick });
 installApproach(Brain);                                      // stations are used from whichever side is free (approach.js)
 installPaintings(Brain);
+installSkillRun(Brain);                                      // choosing a skill in the Skills menu (skillrun.js)
 
 export { ROOM, basePose, sitLegs, makeGrid, findPath, cellBlocked, MAIN_FRAME, INFLATE };

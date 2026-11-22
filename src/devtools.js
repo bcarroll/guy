@@ -7,6 +7,7 @@
 // T.coverage() reports anything the MANIFEST below does not know about yet. When you add an asset or an
 // activity, add it to MANIFEST (and to .claude/skills/test-guy-game/assets.md). See that skill for the workflow.
 import { OBJECT_CATALOG } from './machine.js';
+import { SKILL_USES, SKILL_GROUPS } from './skillrun.js';
 import { BOOK_CATALOG, SKILL_INFO, TIMING_SKILLS, CHAPTERS, CHAPTER_IDS, PRACTICE_ACTS, Skills } from './skills.js';
 import { allSongs, randomSong, SONG_NEEDS } from './songs.js';
 import { makeStrum, PATTERN_NEEDS, PROGRESSIONS } from './strum.js';
@@ -171,6 +172,7 @@ export const MANIFEST = {
     // internal recovery activities and aliases: exercised through the interruption sweep, not on their own
     books: { alias: true }, putback: { internal: true }, putguitar: { internal: true }, dropball: { internal: true }, lighton: { internal: true }, yardtidy: { internal: true, objects: ['shed', 'lawnchair'], room: 'backyard' },
     hangpaint: { objects: ['easel'], painted: true, max: 220, touches: ['easel'] }, putcanvas: { internal: true },      // hanging a painting (sweepPaintings tests it in depth)
+    skillwait: { internal: true }, bringpiece: { internal: true }, musicon: { internal: true },      // a skill chosen in the Skills menu (skillrun.js): tested by sweepSkillMenu
     learn: { internal: true },      // using the Learning Workstation: tested by sweepWorkstation
     arrange: { internal: true },    // ordering things into / out of any room at the Learning Workstation: tested by sweepArrange
     buildbot: { internal: true }, bandjam: { internal: true }, bandplay: { internal: true }, orderbuild: { internal: true },      // GUY and GAL: tested by sweepGal
@@ -813,10 +815,10 @@ T.sweepBooks = () => {
     const was = b.pendingActivity;
     if (r) r.click();
     out.push(result('skills panel: a learned skill is clickable (Guitar) and the click orders GUY to use that object', !!r && r.classList.contains('do') && !!b.pendingActivity && b.pendingActivity !== was, { has: !!r, cls: r && r.className, pending: b.pendingActivity, toast: document.getElementById('toast').textContent, music: b.music }));
-    out.push(result('skills panel: a skill with no object (Decorating) is not clickable', !plain || !plain.classList.contains('do')));
-    // only learned skills are listed, and each is only its heading
+    out.push(result('skills panel: every learned skill is clickable, also one with no object of its own (Decorating)', !plain || plain.classList.contains('do')));
+    // only learned skills are listed, each as one button: what he will do, and how it would go from here (no book, unlocks or chapters)
     const rows = [...panel.querySelectorAll('.skill')];
-    out.push(result('skills panel: only learned skills are listed, each as just its heading (no book, unlocks or chapters)', rows.length > 0 && rows.every((x) => x.classList.contains('known') && !x.querySelector('.book, ul, .chapters') && x.children.length === 1), { rows: rows.map((x) => x.dataset.skill) }));
+    out.push(result('skills panel: only learned skills are listed, each as one button with a short note (no book, unlocks or chapters)', rows.length > 0 && rows.every((x) => skillsOf().has(x.dataset.skill) && x.querySelector('.name').textContent.trim() && x.querySelector('.note').textContent.trim().length < 48 && !x.querySelector('.book, ul, .chapters')), { rows: rows.map((x) => x.dataset.skill) }));
   }
   return out;
 };
@@ -1443,7 +1445,7 @@ T.resetRooms = () => {
   if (W().gal.exists()) W().gal.remove();                                       // GAL goes too (the machine is not given back)
   delete W().removed.botprinter;
   W().restaurant.clear(); W().restaurant.paused = false; W().restaurant.nServed = 0; W().restaurant.stats = { arrived: 0, paid: 0, gaveUp: 0 };
-  b.carry = null; b.restJob = null; b.shelfMove = null; for (const pp of b.popping || []) pp.o.group.scale.setScalar(1); b.popping = [];
+  b.carry = null; b.restJob = null; b.shelfMove = null; b.skillRun = null; b.bringJob = null; W().skillMusic = false; for (const pp of b.popping || []) pp.o.group.scale.setScalar(1); b.popping = [];
   const sh = W().objects.shelf;                                                   // the skill shelf back in its own place (a Library sweep carries it off)
   if (sh) { if (sh.packed) W().unpackShelf('shelf', null); sh.rot = 0; sh.group.rotation.y = 0; sh.group.scale.setScalar(1); sh.home = { x: 4.7, z: 0.2 }; sh.set(4.7, 0.2); }
   if (!b.inMain()) T.home();                                                     // nobody is left standing in a room that is gone
@@ -4539,9 +4541,9 @@ T.sweepSports = () => {
 // pushing or putting away what the other is using, reading a book already read, reaching for the knob of an open door, a lawn left
 // half-mown. `learned: true` starts with every skill known, so every activity is in play; `learned: false` starts with none, so they
 // read their way through the shelf first.
-T.playSession = ({ seed = 1, seconds = 600, learned = true, restaurant = false } = {}) => {
+T.playSession = ({ seed = 1, seconds = 600, learned = true, restaurant = false, speed = 1, scramble = 0 } = {}) => {
   const w = W(), b = B(), g = G();
-  const m = { seed, seconds, learned, frames: 0, stuck: [], circling: [], jumps: [], overlapFrames: 0, overlapRun: 0, overlapMax: 0, rereads: [], inUseMoved: [], stowedInUse: [], couldNot: {},
+  const m = { seed, seconds, learned, frames: 0, stuck: [], pressed: [], circling: [], jumps: [], overlapFrames: 0, overlapRun: 0, overlapMax: 0, rereads: [], inUseMoved: [], stowedInUse: [], couldNot: {},
     acts: { guy: {}, gal: {} }, together: { hoopdefend: 0, goalkeep: 0 }, mows: [], errors: 0, learnedBooks: 0, readStarts: 0, idle: { guy: 0, gal: 0 }, built: 0 };
   // ---- the full house
   galReset();
@@ -4574,6 +4576,21 @@ T.playSession = ({ seed = 1, seconds = 600, learned = true, restaurant = false }
   undo.push(() => { Math.random = realRandom; });
   const errs0 = errors.length;
   const dt = 0.1;
+  b.speed = speed; gb.speed = speed; undo.push(() => { b.speed = 1; gb.speed = 1; });
+  // furniture the player dragged about, some of it into other rooms (`scramble`: how many pieces)
+  if (scramble) {
+    undo.push(T.keepPlaces());
+    const names = Object.values(w.objects).filter((o) => o.obstacle && !o.mainOnly && !o.packed && !o.stowed && !o.yard && o.removable !== false && w.roomIdAt(o.x, o.z) === 'main').map((o) => o.name).sort();
+    const ids = ['main', ...Object.keys(w.doors)];
+    for (let i = 0; i < scramble && names.length; i++) {
+      const o = w.objects[names.splice(Math.floor(Math.random() * names.length), 1)[0]], id = ids[Math.floor(Math.random() * ids.length)];
+      const bd = id === 'main' ? { minX: -4.5, maxX: 4.5, minZ: -3.5, maxZ: 3.6 } : w.doors[id].shell.bounds;
+      const at = { x: bd.minX + 0.7 + Math.random() * (bd.maxX - bd.minX - 1.4), z: bd.minZ + 0.7 + Math.random() * (bd.maxZ - bd.minZ - 1.4) };
+      const sp = w.findSpot(o, at, null);
+      if (sp) { o.set(sp.x, sp.z); (m.scrambled ||= []).push([o.name, id]); }
+    }
+  }
+  const press = { guy: null, gal: null };
   const walk = { guy: { t0: 0, p0: null, label: '' }, gal: { t0: 0, p0: null, label: '' } };
   const prevPos = { guy: { x: pos.guy.x, z: pos.guy.z }, gal: { x: pos.gal.x, z: pos.gal.z } };
   const objPrev = {}; const watched = ['mower', 'lawnchair', 'armchair', 'easel', 'piano', 'drums', 'stool', 'telescope', 'chair', 'builtchair', 'bench', 'basketballhoop', 'soccergoal'];
@@ -4600,6 +4617,13 @@ T.playSession = ({ seed = 1, seconds = 600, learned = true, restaurant = false }
         prevPos[who] = { x: p.x, z: p.z };
         // walking at something without getting anywhere
         const s = x.step, wk = walk[who];
+        // pressed against something: his legs go but he has not got 15 cm further in a second and a half (what a player sees as "walking into
+        // the corner"; a robot gives up after a few seconds, so the 8 s check below never sees it)
+        if (s && s.type === 'walk' && x.moving && !s.drive) {
+          const pr = press[who], yaw = x.g.root.rotation.y, turned = pr ? Math.abs(Math.atan2(Math.sin(yaw - pr.yaw), Math.cos(yaw - pr.yaw))) : 0;
+          if (!pr || Math.hypot(p.x - pr.x, p.z - pr.z) > 0.15 || turned > 0.5) press[who] = { x: p.x, z: p.z, yaw, t };
+          else if (t - pr.t > 1.5 && !pr.told) { pr.told = true; m.pressed.push({ who, t: +t.toFixed(0), act: x.last, at: [+p.x.toFixed(2), +p.z.toFixed(2)], to: [+(s.x || 0).toFixed(2), +(s.z || 0).toFixed(2)], rooms: [w.roomIdAt(p.x, p.z), w.roomIdAt(s.x, s.z)], anchor: s.anchor && s.anchor.name, push: s.push && s.push.obj.name, direct: !!s.direct, path: (s.path || []).slice(0, 4).map((q) => [+q.x.toFixed(2), +q.z.toFixed(2)]), other: [+x.other.g.root.position.x.toFixed(1), +x.other.g.root.position.z.toFixed(1)], near: w.obstacles.filter((ob) => ob.active !== false && p.x > ob.x0 - 0.5 && p.x < ob.x1 + 0.5 && p.z > ob.z0 - 0.5 && p.z < ob.z1 + 0.5).map((ob) => ob.name || 'ob'), label: x.isGal ? document.getElementById('activity2').textContent : label() }); }
+        } else press[who] = null;
         if (s && s.type === 'walk' && !s.drive) {
           if (!wk.p0 || wk.s !== s) { wk.p0 = { x: p.x, z: p.z }; wk.t0 = t; wk.s = s; wk.len = 0; wk.w0 = s.waitT || 0; wk.d0 = Math.hypot(p.x - (s.x || 0), p.z - (s.z || 0)); }
           else {
@@ -4643,6 +4667,8 @@ T.sweepPlay = () => {
     { name: 'everything known, 15 minutes (seed 11)', opt: { seed: 11, seconds: 900, learned: true } },
     { name: 'everything known, 15 minutes (seed 12)', opt: { seed: 12, seconds: 900, learned: true } },
     { name: 'learning from nothing, 20 minutes', opt: { seed: 13, seconds: 1200, learned: false } },
+    { name: 'furniture dragged all over the house, 12 minutes (seed 201)', opt: { seed: 201, seconds: 720, learned: true, scramble: 10 } },
+    { name: 'furniture dragged about, four times the speed, 8 minutes', opt: { seed: 301, seconds: 480, learned: true, scramble: 6, speed: 4 } },
     { name: 'a busy restaurant, 8 minutes', opt: { seed: 14, seconds: 480, learned: true, restaurant: true } },
   ];
   const total = { together: 0 };
@@ -4650,12 +4676,13 @@ T.sweepPlay = () => {
     for (const r of runs) {
       const m = T.playSession(r.opt), n = r.name;
       out.push(result(`play (${n}): nobody walks at a wall or stands still on a walk for 8 s`, m.stuck.length === 0, { stuck: m.stuck.slice(0, 4) }));
+      out.push(result(`play (${n}): nobody walks into a wall or a corner (legs going for a second and a half without getting anywhere)`, m.pressed.length === 0, { pressed: m.pressed.slice(0, 3) }));
       out.push(result(`play (${n}): nobody paces round in circles (a walk of 3 m or more that gets nowhere)`, m.circling.length === 0, { circling: m.circling.slice(0, 4) }));
       out.push(result(`play (${n}): nobody jumps across the room`, m.jumps.length === 0, { jumps: m.jumps.slice(0, 4) }));
       out.push(result(`play (${n}): the two never stand inside each other (at most half a second of touching, never more than a second at a time)`, m.overlapFrames <= 5 && m.overlapMax <= 1, { frames: m.overlapFrames, max: +m.overlapMax.toFixed(1), at: (m.overlaps || []).slice(0, 4) }));
       out.push(result(`play (${n}): no book is read twice, nothing the other is using is pushed or put away`, m.rereads.length === 0 && m.inUseMoved.length === 0 && m.stowedInUse.length === 0, { rereads: m.rereads.slice(0, 3), inUseMoved: m.inUseMoved.slice(0, 3), stowed: m.stowedInUse.slice(0, 3) }));
       out.push(result(`play (${n}): at most two "could not get there" in the whole session, and no errors`, Object.values(m.couldNot).reduce((a, c) => a + c, 0) <= 2 && m.errors === 0, { couldNot: m.couldNotAt && m.couldNotAt.slice(0, 4), errors: m.errors, list: m.errorList }));
-      if (r.opt.learned && !r.opt.restaurant) out.push(result(`play (${n}): each does a good variety of things (9 kinds or more each)`, Object.keys(m.acts.guy).length >= 9 && Object.keys(m.acts.gal).length >= 9, { guy: Object.keys(m.acts.guy).length, gal: Object.keys(m.acts.gal).length }));
+      if (r.opt.learned && !r.opt.restaurant && !r.opt.scramble) out.push(result(`play (${n}): each does a good variety of things (9 kinds or more each)`, Object.keys(m.acts.guy).length >= 9 && Object.keys(m.acts.gal).length >= 9, { guy: Object.keys(m.acts.guy).length, gal: Object.keys(m.acts.gal).length }));
       if (!r.opt.learned) out.push(result(`play (${n}): they read their way through the shelf (at least 8 skills between them) and never reread`, m.learnedBooks >= 8, { skills: m.learnedBooks }));
       if (r.opt.restaurant) out.push(result(`play (${n}): they serve customers who pay`, m.paid >= 3, { paid: m.paid }));
       out.push(result(`play (${n}): every lawn mowed is mostly cut (85% or more of the grass)`, m.mows.every((c) => c >= 0.85), { mows: m.mows }));
@@ -4664,6 +4691,232 @@ T.sweepPlay = () => {
     // (playing a sport together is a matter of chance in a session: sweepSports checks it directly; here it is only counted)
   } finally { galReset(); }
   out.push(result('play: no errors', errors.length === base, { errors: errors.slice(base), sportsTogether: total.together }));
+  return out;
+};
+
+// The pieces of the house as they stand, and a function that puts them back there (a room taken away by the harness takes what stands in it
+// along for good, also the piano and the stereo, which no later sweep could add again).
+T.keepPlaces = () => {
+  const w = W(), all = () => [...Object.values(w.objects), ...Object.values(w.removed)].filter((o) => o.obstacle && !o.kind && !o.mainOnly);
+  const at = new Map(all().map((o) => [o, { x: o.x, z: o.z, home: { ...o.home } }])), inMain = (p) => Math.abs(p.x) < 4.9 && Math.abs(p.z) < 3.9;
+  return () => {
+    for (const o of all()) {
+      const p = at.get(o);
+      if (p && inMain(p.home)) o.home = { ...p.home };
+      if (w.objects[o.name] !== o || w.roomIdAt(o.x, o.z) === 'main') continue;
+      if (p && inMain(p)) { o.set(p.x, p.z); continue; }
+      const s = inMain(o.home) && w.findSpot(o, { x: 0, z: 0 }, null);                  // (not the shed, the stove ...: they belong in their own room)
+      if (s) o.set(s.x, s.z);
+    }
+  };
+};
+
+// ---- 27. Walking between rooms (brain.js update: the doors are put in the way first) ----
+// A walk whose goal is in another room goes through the doors, whatever it was made by: main room to each added room (a corner room is behind
+// another), back, and from one to another. He never walks at a wall (see `pressed` in playSession), and gives up at once on a spot he cannot get to.
+T.walkWatch = (b, sec, done) => {                  // run up to `sec` seconds; { t, pressed, rooms } (pressed: the longest time his legs went without getting 10 cm further)
+  const p = b.g.root.position, rooms = [];
+  let t = 0, mark = null, pressed = 0;
+  while (t < sec && !done()) {
+    step(0.1); t += 0.1;
+    const r = b.hereId(), yaw = b.g.root.rotation.y;
+    if (rooms[rooms.length - 1] !== r) rooms.push(r);
+    if (!(b.moving && b.step && b.step.type === 'walk' && !b.step.drive) || !mark || Math.hypot(p.x - mark.x, p.z - mark.z) > 0.1 || Math.abs(Math.atan2(Math.sin(yaw - mark.yaw), Math.cos(yaw - mark.yaw))) > 0.5) mark = { x: p.x, z: p.z, yaw, t };
+    else pressed = Math.max(pressed, t - mark.t);
+  }
+  return { t: +t.toFixed(1), pressed: +pressed.toFixed(1), rooms, at: [+p.x.toFixed(2), +p.z.toFixed(2)] };
+};
+T.sweepWalkRooms = () => {
+  const out = [], base = errors.length, w = W(), b = B();
+  galReset();
+  const back = T.keepPlaces();
+  try {
+    unlockRoom('workshop'); R().add('workshop', { walls: ['right'] });
+    for (const id of ['library', 'bedroom', 'backyard']) { unlockRoom(id); R().add(id); }
+    const spot = (id) => {                                     // a free place well inside a room
+      if (id === 'main') return { x: 1.2, z: 1.4 };
+      const { n } = w.shellSize(id), bd = b.roomBounds(id);
+      for (const f of [0.5, 0.6, 0.4, 0.7]) for (const l of [0.6, -0.9, 1.6, -1.8]) {
+        const q = w.shellPoint(id, n * f, 0), ax = w.shellAxes(id).lat, p = { x: q.x + ax.x * l, z: q.z + ax.z * l };
+        if (p.x > bd.minX + 0.4 && p.x < bd.maxX - 0.4 && p.z > bd.minZ + 0.4 && p.z < bd.maxZ - 0.4 && !w.obstacles.some((o) => p.x > o.x0 - 0.5 && p.x < o.x1 + 0.5 && p.z > o.z0 - 0.5 && p.z < o.z1 + 0.5)) return p;
+      }
+      return w.roomSpot(id);
+    };
+    const go = (to) => {
+      const q = spot(to);
+      b.skip(); b.queue = [b.walk(q.x, q.z), b.play('idle', 0.6)]; b.step = null; b.last = 'wander'; b.pendingActivity = null;
+      const r = T.walkWatch(b, 90, () => b.hereId() === to && Math.hypot(b.g.root.position.x - q.x, b.g.root.position.z - q.z) < 0.4);
+      return { ...r, ok: b.hereId() === to && Math.hypot(b.g.root.position.x - q.x, b.g.root.position.z - q.z) < 0.4, to: q };
+    };
+    T.home();
+    for (const [a, c] of [['main', 'workshop'], ['workshop', 'main'], ['main', 'library'], ['library', 'bedroom'], ['bedroom', 'main'], ['main', 'backyard'], ['backyard', 'library'], ['library', 'main']]) {
+      const r = go(c);
+      out.push(result(`walk between rooms: a plain walk from ${a} to a spot in ${c} goes through the doors and gets there`, r.ok, r));
+      out.push(result(`walk between rooms: ${a} to ${c}: he never walks at a wall (a second and a half at most)`, r.pressed <= 1.5, r));
+    }
+    // the jobs of a room with a trip of their own: in through its door once, not in, out and in again
+    for (const [id, act] of [['studio', 'studiowatch'], ['bowling', 'bowlwatch'], ['range', 'rangehang']]) {
+      if (id === 'studio') R().reset('backyard'); else R().reset(id === 'bowling' ? 'studio' : 'bowling');
+      unlockRoom(id); R().add(id); T.settle(); T.home();
+      b.skip(); b.queue = []; b.step = null; b.pendingActivity = null; b.stayRoom = null; b.choose(act);
+      const r = T.walkWatch(b, 90, () => b.last !== act || (b.hereId() === 'main' && b.__wasIn) || (b.hereId() === id && (b.__wasIn = true) && b.step && b.step.type === 'play' && !['idle', 'reach', 'walk'].includes(b.pose)));
+      const entered = r.rooms.filter((x) => x === id).length; delete b.__wasIn;
+      out.push(result(`walk between rooms: ${act}: he goes into the ${id} once (not in, out and in again)`, !!w.doors[id] && entered === 1 && b.last === act && (r.rooms[r.rooms.length - 1] === id || r.t > 10), { ...r, last: b.last, pose: b.pose }));
+    }
+    R().reset('range'); R().add('backyard'); T.settle(); T.home();
+    // the drum kit in the corner room, and something that is planned as if it were in his own room (what sent him into the corner)
+    T.home(); T.learn(['drums']); T.addObject('drums'); T.settle();
+    const kit = w.objects.drums, ks = w.findSpot(kit, w.roomSpot('bedroom'), null);
+    if (ks) kit.set(ks.x, ks.z);
+    T.home(); b.skip(); b.queue = []; b.step = null; b.pendingActivity = null; b.choose('slouch');
+    const s = T.walkWatch(b, 120, () => b.pose === 'slouch' || b.last !== 'slouch');
+    out.push(result('walk between rooms: slouching at the drum kit in the Bedroom, he goes through the doors to it (he used to walk into the corner of his room)', !!ks && b.pose === 'slouch' && s.pressed <= 1.5, { ...s, pose: b.pose, last: b.last, label: label() }));
+    T.settle(); T.home();
+    // a spot he cannot get to (the door is locked): given up at once
+    w.rooms.setDoorLocked('bedroom', true);
+    const q = spot('bedroom'); b.skip(); b.queue = [b.walk(q.x, q.z)]; b.step = null; b.last = 'wander'; b.pendingActivity = null;
+    const l = T.walkWatch(b, 20, () => b.last !== 'wander');
+    out.push(result('walk between rooms: the door there is locked: he does not walk at the wall', l.pressed <= 1.5 && b.hereId() !== 'bedroom', { ...l, label: label() }));
+    w.rooms.setDoorLocked('bedroom', false);
+    // beside the other robot, who stands by the wall: the spot is inside the wall
+    T.home(); b.skip(); b.queue = [b.walk(4.9, 1.2, 0)]; b.step = null; b.last = 'wander'; b.pendingActivity = null;
+    const e = T.walkWatch(b, 15, () => b.last !== 'wander');
+    out.push(result('walk between rooms: a spot inside the wall is walked to as near as the floor goes, then he stops', e.pressed <= 1.5 && e.t < 12, e));
+    // put in the strip beside a side door as it shuts: back onto the floor of that room, not across the house
+    const lib = w.doors.library, inWall = w.doorPoint('library', 0.3), g = b.g.root.position;
+    lib.open = 0; lib.openTo = 0; g.x = inWall.x; g.z = inWall.z;
+    let jump = 0, px = g.x, pz = g.z;
+    b.skip(); b.queue = [b.walk(1, 1)]; b.step = null;
+    for (let i = 0; i < 30; i++) { step(0.034); jump = Math.max(jump, Math.hypot(g.x - px, g.z - pz)); px = g.x; pz = g.z; }
+    out.push(result('walk between rooms: standing in the doorway strip as its door shuts, he steps back into that room (he used to jump into his own)', jump < 0.5, { jump: +jump.toFixed(2), at: [+g.x.toFixed(1), +g.z.toFixed(1)] }));
+  } finally { T.home(); back(); galReset(); }
+  out.push(result('walk between rooms: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
+// ---- 28. The Skills menu: choosing a skill makes GUY use it, in the room he is in; GAL helps (skillrun.js) ----
+T.sweepSkillMenu = () => {
+  const out = [], base = errors.length, w = W(), b = B();
+  const N = (t) => `skills menu: ${t}`, ids = Object.keys(SKILL_INFO);
+  out.push(result(N('every skill has something to do'), ids.every((k) => SKILL_USES.includes(k)), { missing: ids.filter((k) => !SKILL_USES.includes(k)) }));
+  galReset();
+  let back = T.keepPlaces();
+  const stop = () => { for (const x of [b, w.gal.exists() ? w.gal.brain : null]) if (x) { x.skip(true); if (x.homeMove) x.homeCleanup(); x.queue = []; x.step = null; x.pendingActivity = null; x.using = new Set(); x.last = 'wander'; x.stayRoom = null; } if (b.music) b.stereoControl('stop'); w.skillMusic = false; };
+  const put = (x, id) => { const c = id === 'main' ? { x: 0.4, z: 1.6 } : w.roomSpot(id), p = x.g.root.position; p.x = c.x; p.z = c.z; x.stayRoom = id === 'main' ? null : id; };
+  const send = (name, id) => { const o = w.objects[name], s = o && w.findSpot(o, w.roomSpot(id), null); if (s) o.set(s.x, s.z); return !!s && w.roomIdAt(s.x, s.z) === id; };
+  const panel = document.getElementById('skills');
+  const choose = (id) => { const row = panel.querySelector(`.skill[data-skill="${id}"]`); document.getElementById('toast').textContent = ''; if (row) row.click(); return { row: !!row, toast: document.getElementById('toast').textContent }; };
+  // GUY stands in `room`, `at` (the thing) in another; he chooses the skill: where does he do it, and who carried it?
+  const run = (id, act, { room, thing = null, from = null, sec = 200, gal = false }) => {
+    stop();
+    if (thing && from && !send(thing, from)) return { ok: false, why: `no place for the ${thing} in ${from}` };
+    put(b, room); if (w.gal.exists()) put(w.gal.brain, 'main');
+    const c = choose(id), seen = new Set(), carried = new Set(), rooms = new Set();
+    let t = 0, hauled = 0, flat = false, loose = 0, jump = 0, o0 = null;
+    const doing = () => b.last === act && b.step && b.step.type === 'play' && !['idle', 'reach'].includes(b.pose);
+    while (t < sec && !doing()) {
+      step(0.1); t += 0.1;
+      seen.add(b.last); rooms.add(b.hereId());
+      for (const [who, x] of [['guy', b], ['gal', w.gal.exists() ? w.gal.brain : null]]) if (x && x.homeMove && x.homeMove.name === thing) { carried.add(who); if (x.hauling && x.hauling.k > 0.9) hauled++; if (x.carry === 'flat') flat = true; }
+      const o = thing && w.objects[thing];
+      if (o && !o.packed) { if (o0 && Math.hypot(o.x - o0.x, o.z - o0.z) > 0.75) jump++; o0 = { x: o.x, z: o.z }; if (o.hauled && ![b, w.gal.brain].some((x) => x && x.hauling && x.hauling.o === o)) loose++; } else o0 = null;
+    }
+    const done = doing();
+    return { ok: done && b.hereId() === room && (!thing || b.roomOfObj(thing) === room) && !jump && !loose, done, here: b.hereId(), at: thing && b.roomOfObj(thing), who: [...carried].join('+'), hauled, flat, jump, loose, t: +t.toFixed(0), toast: c.toast, seen: [...seen], rooms: [...rooms], last: b.last, gal: w.gal.exists() ? w.gal.brain.last : null, label: label() };
+  };
+  try {
+    unlockRoom('workshop'); R().add('workshop', { walls: ['right'] });
+    for (const id of ['library', 'bedroom', 'backyard']) { unlockRoom(id); R().add(id); }
+    for (const id of ['piano', 'table', 'lamp', 'guitar', 'drums', 'easel', 'telescope', 'ball']) T.addObject(id);
+    { const was = dev.all; dev.all = true; w.addNew('workstation', null); dev.all = was; }          // (premium: the dev unlock)
+    for (const [n, d] of Object.entries(w.removed)) if (d.decor) w.restoreObject(n, null);          // (windows and pictures to dust)
+    T.learn(ids);
+    T.settle(); T.home();
+    back = T.keepPlaces();
+    out.push(result(N('every learned skill is a button'), ids.every((k) => { const r = panel.querySelector(`.skill[data-skill="${k}"]`); return r && r.tagName === 'BUTTON' && r.classList.contains('do'); })));
+    out.push(result(N('every skill is in exactly one group of the menu, with its own icon and wording'), ids.every((k) => SKILL_GROUPS.flatMap((g) => g[1]).filter((x) => x === k).length === 1) && new Set(ids.map((k) => b.skillPreview(k).ask)).size === ids.length && ids.every((k) => b.skillPreview(k).icon), { asks: ids.map((k) => b.skillPreview(k).ask).filter((a, i, l) => l.indexOf(a) !== i) }));
+    // 0. the notes on the buttons say how it would go from here, and looking changes nothing
+    {
+      stop(); T.home(); send('guitar', 'main');
+      const before = JSON.stringify([b.pendingActivity, b.last, b.queue.length, !!b.skillRun]);
+      const main = b.skillPreview('guitar'); put(b, 'library'); const lib = b.skillPreview('guitar'), pno = b.skillPreview('piano'), bowl = b.skillPreview('bowling');
+      w.rooms.setDoorLocked('backyard', true); const yard = b.skillPreview('outdoor'); w.rooms.setDoorLocked('backyard', false); T.home();
+      out.push(result(N('the notes: "Right here", "He fetches it" (no GAL), "In his room" (the piano), "Add the Bowling Alley first", "The door is locked"'), main.tone === 'here' && lib.tone === 'help' && /fetches/.test(lib.text) && pno.tone === 'go' && bowl.tone === 'no' && /Bowling/.test(bowl.text) && yard.tone === 'no' && /locked/.test(yard.text), { main, lib, pno, bowl, yard }));
+      out.push(result(N('looking at the menu changes nothing'), before === JSON.stringify([b.pendingActivity, b.last, b.queue.length, !!b.skillRun])));
+      document.getElementById('skills-btn').click(); const open = !panel.hidden, says = panel.querySelector('.where').textContent;
+      panel.querySelector('.close').click(); const shut = panel.hidden;
+      out.push(result(N('the button opens it, it says where GUY is, and ✕ closes it'), open && shut && /GUY is in his room/.test(says), { open, shut, says }));
+    }
+    // 1. the thing is in his room: at once, and the skill's own activity
+    for (const [id, act] of [['drums.solo', 'drumsolo'], ['easel.portrait', 'portrait'], ['telescope.care', 'scopecare'], ['dance.moves', 'dancemoves'], ['lighting', 'mood'], ['decorate', 'dust']]) {
+      stop(); T.home(); const c = choose(id), pend = b.pendingActivity;
+      out.push(result(N(`${id}: in his room he does just that (${act}), right away`), pend === act || (act === 'dust' && pend === 'dusttop'), { pend, toast: c.toast }));
+    }
+    stop(); T.home(); choose('piano.advanced');
+    const adv = []; for (let i = 0; i < 8; i++) { b.wantSong = 'piano.advanced'; adv.push(b.pickSong().name); }
+    out.push(result(N('advanced piano plays a piece from that book'), adv.length === 8 && adv.every((n) => !/scale|Ode|Twinkle|Mary|Row|Saints|Amazing|Greensleeves/i.test(n)), { adv }));
+    // 2. no GAL: he fetches it into the room he is in (a light thing whole, the drum kit flat)
+    const g1 = run('guitar', 'guitar', { room: 'library', thing: 'guitar', from: 'main' });
+    out.push(result(N('GUY in the Library, the guitar in his room, no GAL: he fetches it and plays in the Library'), g1.ok && g1.who === 'guy' && g1.hauled > 20, g1));
+    const g2 = run('drums', 'drums', { room: 'workshop', thing: 'drums', from: 'main', sec: 260 });
+    out.push(result(N('GUY in the Workshop, the drum kit in his room, no GAL: it comes apart, is carried flat and set up in the Workshop'), g2.ok && g2.who === 'guy' && g2.flat, g2));
+    const g3 = run('dance.moves', 'dancemoves', { room: 'bedroom', sec: 200 });
+    out.push(result(N('GUY in the Bedroom, no GAL: he switches the stereo on and comes back to dance there'), g3.ok && g3.seen.includes('musicon') && !!b.music, g3));
+    // a guitar hung on a Studio wall: off its hook, on its stand again, to the room he is in
+    {
+      R().reset('backyard'); unlockRoom('studio'); R().add('studio'); stop(); send('guitar', 'studio');
+      const gu = w.objects.guitar, bd = w.doors.studio && w.doors.studio.shell.bounds, horiz = w.doors.studio && ['left', 'right'].includes(w.doors.studio.wall);
+      if (bd) gu.set(horiz ? (bd.minX + bd.maxX) / 2 : bd.minX + 0.23, horiz ? bd.minZ + 0.23 : (bd.minZ + bd.maxZ) / 2);
+      step(0.3);
+      const hung = !!gu.hung; put(b, 'library'); choose('guitar');
+      let t = 0; while (t < 200 && !(b.last === 'guitar' && b.pose === 'guitar')) { step(0.2); t += 0.2; }
+      out.push(result(N('a guitar hung on a Studio wall is taken off its hook and brought, on its stand'), hung && b.pose === 'guitar' && b.hereId() === 'library' && b.roomOfObj('guitar') === 'library' && !gu.hung && gu.stand.every((m) => m.visible), { hung, t, here: b.hereId(), at: b.roomOfObj('guitar'), label: label() }));
+      stop(); send('guitar', 'main'); R().reset('studio'); R().add('backyard');
+    }
+    // 3. cut short with it in his arms: it is on the floor, nothing is lost
+    stop(); send('guitar', 'main'); put(b, 'library'); choose('guitar');
+    { let t = 0; while (t < 90 && !(b.hauling && b.hauling.k > 0.9 && b.hereId() !== 'main')) { step(0.1); t += 0.1; } }
+    const had = !!b.hauling; b.skip(); step(3);
+    const gt = w.objects.guitar;
+    out.push(result(N('cut short with the guitar in his arms: it is set down on a floor, not lost, and the order is off'), had && !!gt && !gt.hauled && !b.hauling && !b.homeMove && !b.skillRun && Math.abs(gt.group.position.y) < 0.01 && w.roomIdAt(gt.x, gt.z) !== 'door', { had, at: gt && [gt.x, gt.z], run: b.skillRun }));
+    // 4. GAL helps
+    const bu = galBuild(); out.push(result(N('GAL is built'), bu.ok));
+    const gal = w.gal.brain; gal.skills.known.clear();
+    const g4 = run('guitar', 'guitar', { room: 'library', thing: 'guitar', from: 'main' });
+    out.push(result(N('GUY calls GAL: she brings the guitar to the Library, he waits there and plays it'), g4.ok && g4.who === 'gal' && /asks GAL/.test(g4.toast) && g4.rooms.join() === 'library', g4));
+    const g5 = run('easel.portrait', 'portrait', { room: 'backyard', thing: 'easel', from: 'main' });
+    out.push(result(N('GUY in the Backyard: GAL brings the easel out and he paints there'), g5.ok && g5.who === 'gal', g5));
+    const g6 = run('drums.band', 'jamdrums', { room: 'workshop', thing: 'drums', from: 'bedroom', sec: 300 });
+    out.push(result(N('drumming with the band in the Workshop: GAL brings the kit, then puts the music on, and he drums along'), g6.ok && g6.who === 'gal' && !!b.music, g6));
+    const g7 = run('dance.ballroom', 'ballroom', { room: 'library' });
+    out.push(result(N('dancing in the Library: GAL goes and puts the music on, he dances where he is'), g7.ok && !!b.music && g7.rooms.join() === 'library', g7));
+    { let t = 0; while (t < 260 && b.music) { step(0.25); t += 0.25; }
+      out.push(result(N('...and when he has finished the music is switched off again'), !b.music && !w.skillMusic, { t, last: b.last, gal: gal.last })); }
+    // 5. fixed things: he goes to them; a locked door and a thing in use are refused with the reason
+    stop(); put(b, 'library'); const p1 = choose('piano');
+    out.push(result(N('the piano is too heavy to bring: he is told so and goes to it'), /stays in/.test(p1.toast) && ['sitpiano', 'piano'].includes(b.pendingActivity), { ...p1, pend: b.pendingActivity }));
+    stop(); send('guitar', 'main'); put(b, 'library'); gal.using = new Set(['guitar']);
+    const p2 = choose('guitar'); gal.using = new Set();
+    out.push(result(N('GAL is playing the guitar: he is told so'), /GAL is using/.test(p2.toast), p2));
+    stop(); back(); R().reset('backyard'); const p3 = choose('outdoor.soccer');
+    out.push(result(N('a skill of a room that is not there says so'), /no Backyard/.test(p3.toast), p3));
+    // 6. it is not in the house: ordered into his room at the workstation, by GAL
+    stop(); if (w.objects.telescope) { w.removeObject('telescope'); b.objectRemoved('telescope'); }
+    const g8 = run('telescope', 'stargaze', { room: 'library', sec: 200 });
+    out.push(result(N('the telescope has been put away: GAL orders it into the Library at the workstation'), b.roomOfObj('telescope') === 'library' && /order/.test(g8.toast), { ...g8, at: b.roomOfObj('telescope') }));
+    // 7. GAL called away half-way: GUY sees to it himself
+    stop(); send('guitar', 'main'); put(b, 'library'); put(gal, 'main'); choose('guitar'); step(3);
+    const asked = gal.pendingActivity === 'bringpiece' || gal.last === 'bringpiece';
+    gal.skip(); gal.pendingActivity = null; gal.lock = { name: 'shelf' };
+    { let t = 0; while (t < 200 && !(b.last === 'guitar' && b.pose === 'guitar')) { step(0.2); t += 0.2; } }
+    gal.lock = null;
+    out.push(result(N('GAL is called away: GUY fetches it himself'), asked && b.last === 'guitar' && b.hereId() === 'library' && b.roomOfObj('guitar') === 'library', { asked, last: b.last, here: b.hereId(), guitar: b.roomOfObj('guitar') }));
+    // 8. told to do something else while he waits: the order is off
+    stop(); send('guitar', 'main'); put(b, 'library'); choose('guitar'); step(2); const waiting = !!b.skillRun; b.interact('lamp'); step(1);
+    out.push(result(N('told to do something else while he waits: that is what he does'), waiting && !b.skillRun && (b.last === 'mood' || b.last === 'lamp' || ['mood', 'lamp'].includes(b.pendingActivity)), { waiting, last: b.last, pend: b.pendingActivity }));
+    stop();
+  } finally { stop(); T.home(); back(); galReset(); }
+  out.push(result(N('no errors'), errors.length === base, { errors: errors.slice(base) }));
   return out;
 };
 
@@ -5418,6 +5671,8 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.mowing = S(T.sweepMowing);
   report.reading = S(T.sweepReading);
   report.play = S(T.sweepPlay);
+  report.walkRooms = S(T.sweepWalkRooms);
+  report.skillMenu = S(T.sweepSkillMenu);
   report.sports = S(T.sweepSports);
   report.botRules = S(T.sweepBotRules);
   report.workstation = S(T.sweepWorkstation);

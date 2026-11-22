@@ -93,7 +93,8 @@ export function installRange(Brain, POSES, H) {
       const known = this.rangeKnown(), own = this.rangeOwn();
       if (!known.length) { this.queue.length = 0; return []; }
       this.rangeLane = this.rangeLaneFor();
-      this.rangeBlaster = pick(own.length ? own : known);                  // which blaster he takes out for this trip
+      const asked = this.wantBlaster; this.wantBlaster = null;             // (the blaster chosen in the Skills menu)
+      this.rangeBlaster = own.includes(asked) ? asked : pick(own.length ? own : known);                  // which blaster he takes out for this trip
       const p = R.firingSpot(this.rangeLane);
       // a blaster only GAL has read: he goes over to her to borrow it, then walks on to the firing line
       const borrow = own.length ? [] : [this.walk(this.other.g.root.position.x, this.other.g.root.position.z)];

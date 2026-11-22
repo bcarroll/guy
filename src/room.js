@@ -982,12 +982,12 @@ export function buildRoom(scene) {
     const clear = () => { cx.fillStyle = '#f6f3ea'; cx.fillRect(0, 0, 256, 320); tex.needsUpdate = true; };
     const tex = new THREE.CanvasTexture(cv);
     tex.colorSpace = THREE.SRGBColorSpace;
-    let obj;
+    let obj, prop = null;
     obj = makeObject('easel', x, z, 0.75, 0.8, 1.75, 'light', (g) => {
       box(0.05, 1.7, 0.05, wood, -0.3, 0.85, -0.02, g);
       box(0.05, 1.7, 0.05, wood, 0.3, 0.85, -0.02, g);
       const back = box(0.05, 1.6, 0.05, wood, 0, 0.78, -0.45, g);
-      back.rotation.x = 0.3;
+      back.rotation.x = 0.3; prop = back;
       box(0.7, 0.05, 0.05, wood, 0, 0.62, 0.02, g);                          // tray
       box(0.7, 0.04, 0.1, wood, 0, 0.6, 0.08, g);
       for (const [px, col] of [[-0.22, 0xd0312d], [-0.08, 0x2a62d8], [0.06, 0xf2c500], [0.2, 0x2e9e4a]]) {
@@ -1002,6 +1002,7 @@ export function buildRoom(scene) {
       g.add(board);
     });
     clear();
+    obj.fold = (k) => { prop.rotation.x = 0.3 * (1 - k); prop.position.z = -0.45 + 0.38 * k; };          // the back leg swings in while it is carried (0 standing .. 1 folded)
     const W = 0.5, H = 0.65;
     obj.paint = {
       clear,
@@ -1024,13 +1025,16 @@ export function buildRoom(scene) {
   const buildTelescope = (x = 0, z = 0) => {
     const white = mat(0xe9edf2, { roughness: 0.35 }), black = mat(0x16181c, { roughness: 0.5 }), chrome = mat(0xbfc3c8, { roughness: 0.25, metalness: 0.8 });
     let tube = null;
+    const legs = [], setLeg = (leg, a, r) => {                                   // one leg of the tripod, its foot `r` out from the middle
+      const top = new THREE.Vector3(0, 1.44, 0), foot = new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r);
+      leg.position.copy(top).add(foot).multiplyScalar(0.5);
+      leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), top.sub(foot).normalize());
+    };
     const obj = makeObject('telescope', x, z, 0.8, 0.8, 1.6, 'light', (g) => {
       for (const a of [0.4, 2.5, 4.6]) {                                      // tripod legs
         const top = new THREE.Vector3(0, 1.44, 0), foot = new THREE.Vector3(Math.cos(a) * 0.36, 0, Math.sin(a) * 0.36);
         const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.02, top.distanceTo(foot), 10), black);
-        const mid = top.clone().add(foot).multiplyScalar(0.5);
-        leg.position.copy(mid);
-        leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), top.clone().sub(foot).normalize());
+        setLeg(leg, a, 0.36); legs.push([leg, a]);
         leg.castShadow = true; g.add(leg);
       }
       box(0.12, 0.08, 0.12, chrome, 0, 1.44, 0, g);                            // mount
@@ -1051,6 +1055,7 @@ export function buildRoom(scene) {
     });
     obj.tube = tube;
     obj.legAngles = [0.4, 2.5, 4.6];
+    obj.fold = (k) => { for (const [leg, a] of legs) setLeg(leg, a, 0.36 - 0.27 * k); };                  // the tripod closes while it is carried (0 standing .. 1 folded)
     obj.legPoint = (i, f) => obj.group.localToWorld(new THREE.Vector3(Math.cos(obj.legAngles[i]) * 0.36 * f, 1.44 * (1 - f), Math.sin(obj.legAngles[i]) * 0.36 * f));   // f = 0 at the mount .. 1 at the foot
     // aim: yaw (0 = along local +z) and pitch up; the default points at the window on the left wall
     obj.setAim = (yaw, pitch) => { tube.rotation.y = yaw; tube.rotation.x = -pitch; obj.aim = { yaw, pitch }; };
