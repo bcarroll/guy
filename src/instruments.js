@@ -5,7 +5,8 @@
 //   obj.stand   { x, dz }   where he stands (object-local x, and how far in front of the centre)
 //   obj.reach               how many places each hand can be sent to: { Left: n, Right: n }
 //   obj.hand(side, i)       the world point of place i for that hand (a fingertip / a mallet head touching the instrument)
-//   obj.hit(side, i, other) the instrument answers: a key or bar dips, a note sounds (`other` is the other hand's place, for the bass's fretting)
+//   obj.hit(side, i, other) the instrument answers: a key or bar dips, a note sounds (`other` is the other hand's place)
+// The bass is different: it is taken off its stand and worn like a guitar (obj.guitar, obj.rest, obj.playAt, obj.pluck), so it has no hand / hit.
 import * as THREE from 'three';
 import { playPluck, playNote, playMallet, playSynth, drumHit } from './audio.js';
 
@@ -34,25 +35,43 @@ export function makeInstrumentBuilders({ makeObject, box, mat }) {
     return o;
   };
 
-  // ---- Electric bass: stands upright on a stand (body low, neck up), its little amp beside it. The right hand plucks the strings over the
-  // body, the left hand slides up and down the neck.
+  // ---- Electric bass: on a stand (body low, neck up), its little amp beside it. It is an instrument that is picked up and worn, like the
+  // guitars: `obj.guitar` is the bass itself (neck along its local +x, strings facing +z), `obj.rest` where it sits on the stand, and brain.js
+  // (computeGuitar) holds it across the player. The stand faces the audience: he takes it from the front, turns round and plays facing them too.
   const bass = (x = 0, z = 0) => {
-    const body = mat(0x1f4d8f, { roughness: 0.35 }), neck = mat(0xc99a5b, { roughness: 0.5 }), fret = mat(0xb9bec4, { metalness: 0.8, roughness: 0.3 });
+    const body = mat(0x1f4d8f, { roughness: 0.35 }), neck = mat(0xc99a5b, { roughness: 0.5 }), board = mat(0x3a2416, { roughness: 0.6 }), fret = mat(0xb9bec4, { metalness: 0.8, roughness: 0.3 });
     const grill = mat(0x303338, { roughness: 0.9 }), cab = mat(0x1a1a1c, { roughness: 0.8 });
-    const o = makeObject('bass', x, z, 1.0, 0.5, 1.5, 'light', (g) => {
-      // stand
-      box(0.46, 0.03, 0.05, metal, -0.25, 0.015, 0, g); box(0.05, 0.03, 0.36, metal, -0.25, 0.015, 0, g);
-      pole(g, -0.25, 0.02, 0.34, 0, 0.014, metal);
-      // body (two lobes) and neck
-      cyl(g, 0.15, 0.15, 0.05, body, -0.25, 0.5, 0.02, Math.PI / 2);
-      cyl(g, 0.11, 0.11, 0.05, body, -0.25, 0.74, 0.02, Math.PI / 2);
-      box(0.2, 0.2, 0.05, body, -0.25, 0.62, 0.02, g);
-      box(0.06, 0.78, 0.035, neck, -0.25, 1.02, 0.02, g);
-      for (let i = 0; i < 12; i++) box(0.062, 0.006, 0.038, fret, -0.25, 0.8 + i * 0.062, 0.022, g);
-      box(0.08, 0.2, 0.03, neck, -0.25, 1.5, 0.02, g);                                // the headstock, with its tuning pegs
-      for (let i = 0; i < 4; i++) cyl(g, 0.012, 0.012, 0.03, chrome, -0.285 + (i % 2) * 0.07, 1.46 + Math.floor(i / 2) * 0.07, 0.04, Math.PI / 2);
-      box(0.1, 0.03, 0.02, black, -0.25, 0.6, 0.05, g); box(0.1, 0.03, 0.02, black, -0.25, 0.68, 0.05, g);                  // pickups
-      for (let i = 0; i < 4; i++) box(0.004, 1.0, 0.004, chrome, -0.25 + (i - 1.5) * 0.015, 0.95, 0.045, g);                 // strings
+    const SX = -0.25;                                                                   // where on the footprint the stand is (the amp is on the other side)
+    let b = null;
+    const o = makeObject('bass', x, z, 1.0, 0.5, 1.8, 'light', (g) => {
+      // the stand: a base, a post, a cradle the body sits in
+      box(0.44, 0.03, 0.05, metal, SX, 0.015, 0, g); box(0.05, 0.03, 0.4, metal, SX, 0.015, 0, g);
+      pole(g, SX, 0.02, 0.44, -0.01, 0.014, metal);
+      box(0.28, 0.03, 0.12, metal, SX, 0.36, 0.05, g);
+      for (const sx of [-0.13, 0.13]) box(0.025, 0.07, 0.12, metal, SX + sx, 0.4, 0.05, g);
+      // the bass: two lobes and a waist, two horns, pickups, bridge, knobs, a long neck with its fretboard, four strings and four pegs
+      b = new THREE.Group();
+      const cylZ = (r, h, m, bx, by, bz) => cyl(b, r, r, h, m, bx, by, bz, Math.PI / 2);
+      cylZ(0.165, 0.045, body, -0.15, 0, 0); cylZ(0.13, 0.045, body, 0.08, 0, 0);
+      box(0.22, 0.25, 0.045, body, -0.04, 0, 0, b);
+      box(0.2, 0.07, 0.045, body, 0.16, 0.1, 0, b); box(0.13, 0.06, 0.045, body, 0.14, -0.1, 0, b);
+      cylZ(0.035, 0.045, body, 0.26, 0.1, 0); cylZ(0.03, 0.045, body, 0.205, -0.1, 0);
+      box(0.03, 0.1, 0.014, black, 0.07, 0, 0.029, b); box(0.03, 0.1, 0.014, black, -0.04, 0, 0.029, b);
+      box(0.05, 0.1, 0.016, chrome, -0.2, 0, 0.03, b);
+      for (const k of [0, 1]) cylZ(0.015, 0.02, chrome, -0.16 - k * 0.06, -0.11 + k * 0.02, 0.03);
+      box(0.8, 0.048, 0.026, neck, 0.56, 0, 0, b);
+      box(0.72, 0.044, 0.01, board, 0.58, 0, 0.017, b);
+      for (let i = 0; i < 12; i++) box(0.005, 0.045, 0.003, fret, 0.3 + i * 0.055, 0, 0.0225, b);
+      box(0.17, 0.085, 0.024, neck, 1.04, 0.006, 0, b);
+      for (let i = 0; i < 4; i++) {
+        cylZ(0.008, 0.03, chrome, 0.985 + i * 0.037, -0.018 + i * 0.012, 0.02);
+        box(0.022, 0.04, 0.012, chrome, 0.985 + i * 0.037, 0.064, 0, b);                 // the tuning pegs, along the top edge
+        box(1.16, 0.0026, 0.0026, chrome, 0.38, -0.0165 + i * 0.011, 0.034, b);           // the strings (the lowest on top when he wears it)
+      }
+      b.traverse((m) => { if (m.isMesh) m.castShadow = true; });
+      b.rotation.z = Math.PI / 2 + 0.04;
+      b.position.set(SX, 0.68, 0.06);
+      g.add(b);
       // the amp
       box(0.42, 0.5, 0.32, cab, 0.3, 0.25, 0, g);
       cyl(g, 0.15, 0.15, 0.02, grill, 0.3, 0.22, 0.165, Math.PI / 2);
@@ -60,15 +79,12 @@ export function makeInstrumentBuilders({ makeObject, box, mat }) {
       for (let i = 0; i < 4; i++) cyl(g, 0.02, 0.02, 0.025, chrome, 0.18 + i * 0.08, 0.46, 0.18, Math.PI / 2);
     });
     rig(o);
-    o.stand = { x: -0.25, dz: 0.58 };
-    o.reach = { Left: 6, Right: 4 };
-    // Left: places up the neck (the nut end is high), Right: the four strings over the body
-    o.hand = (side, i) => side === 'Left' ? o.at(-0.25 + 0.0, 1.3 - i * 0.075, 0.06) : o.at(-0.25 + (i - 1.5) * 0.015 + 0.02, 0.6, 0.09);
-    o.hit = (side, i, other) => {
-      if (side !== 'Right') return;
-      const fret = Math.max(0, other | 0) * 2, open = [28, 33, 38, 43][i];
-      playPluck(open + fret, 0, 1.3, 0.2, true);
-    };
+    o.guitar = b; o.bass = true;                                                         // (`bass`: worn like a guitar, but it is not one of the guitars)
+    o.rest = { pos: b.position.clone(), quat: b.quaternion.clone() };
+    o.stand = { x: SX, dz: 0.57 }; o.standDz = () => o.stand.dz;                                                     // where he stands to take it, facing it
+    o.playAt = { x: SX, dz: 1.0 };                                                       // and where he plays, his back to the stand
+    o.string = (i) => { b.updateWorldMatrix(true, false); return b.localToWorld(V(0.05, 0.0165 - i * 0.011, 0.034)); };       // string i, where it is plucked (world)
+    o.pluck = (note, vol = 0.2) => playPluck(note, 0, 1.3, vol, true);
     return o;
   };
 

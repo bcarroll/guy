@@ -236,6 +236,20 @@ export function installStudio(Brain, POSES, H) {
       } }]);
       return {
         ...Object.fromEntries(Object.keys(STUDIO_INSTR_ACTS).map((a) => [a, play(a)])),
+        // the bass is taken off its stand, put on (the strap over his shoulder) and played facing out, with his back to the stand and its amp
+        playbass: () => this.studioTrip('playing the bass', [{ type: 'plan', fn: () => {
+          const o = this.studioInst('playbass');
+          if (!o) { this.queue.length = 0; return []; }
+          const having = this.gtr.held && this.gname === 'bass', locked = !!this.lock && this.lock.name === 'bass', fx = { guitar: true, needs: ['bass'] };
+          if (!having) this.takeUpBass();
+          const at = this.bassSpot(o), stand = this.walkAt('bass', o.stand.x, o.stand.dz, Math.PI);
+          return [
+            ...(having ? [] : [stand, this.play('takeGuitar', 2.4, { ...fx, at: [1.0, () => this.setGuitarHeld(true)] })]),
+            { ...this.walkAt('bass', at.x, at.dz, at.yaw), fx },
+            this.play('guitar', 16 + Math.random() * 10, { ...fx, bassline: { steps: 0 }, sync: true }),
+            ...(locked ? [] : [{ ...stand, fx }, this.play('putGuitar', 2.4, { ...fx, at: [1.3, () => this.setGuitarHeld(false)] })]),
+          ];
+        } }]),
         studiodj: () => this.studioTrip('spinning records', this.studioDjSteps()),
         studioshow: () => this.studioTrip('putting on a show', this.studioShowSteps()),
         studioparty: () => this.studioTrip('dancing in the Studio', this.studioPartySteps()),
@@ -250,6 +264,36 @@ export function installStudio(Brain, POSES, H) {
     studioInst(act) {
       const o = this.obj(STUDIO_INSTR_ACTS[act]);
       return o && this.w.roomIdAt(o.x, o.z) === ID ? o : null;
+    },
+    // ------------------------------------------------------------------ the bass
+    takeUpBass() {
+      if (this.gname !== 'bass') { this.resetGuitarMesh(); this.gname = 'bass'; }
+      if (this.using) this.using.add('bass');
+    },
+    // Where he plays it: a step further out than where he took it, if there is floor there (else beside it, else where he took it), his back to the stand.
+    bassSpot(o) {
+      for (const [x, dz] of [[o.playAt.x, o.playAt.dz], [o.playAt.x - 0.5, o.playAt.dz], [o.playAt.x + 0.5, o.playAt.dz]]) {
+        const l = o.local(x, dz), px = o.x + l.x, pz = o.z + l.z;
+        if (this.w.roomIdAt(px, pz) === ID && this.w.walkable(px, pz) && this.w.obstacles.every((b) => b.active === false || b === o.obstacle || px < b.x0 - 0.35 || px > b.x1 + 0.35 || pz < b.z0 - 0.35 || pz > b.z1 + 0.35)) return { x, dz, yaw: 0 };
+      }
+      return { x: o.stand.x, dz: o.stand.dz, yaw: 0 };
+    },
+    // The bass line: eighth notes, plucked one at a time with the right hand over the pickups, the left hand following the pitch up and down the
+    // neck. With music on it is in time with it and follows its chords; otherwise a walking line of his own.
+    playBassline(s, t, o, st) {
+      const sync = !!this.music, step = 0.3, n = sync ? Math.floor(this.currentBeat() * 2) : Math.floor((t - 0.6) / step);
+      if (n === st.n || t < 0.6) return;
+      st.n = n;
+      const k = ((n % 8) + 8) % 8, OWN = [33, 33, 29, 31];                                     // A A F G
+      let root = sync ? H.chordAt(this.track, this.currentBeat()).notes[0] : OWN[Math.floor(n / 8) % 4];
+      while (root > 43) root -= 12;
+      while (root < 28) root += 12;
+      const off = [0, null, 0, 7, null, 7, 10, 12][k];
+      if (off === null) return;
+      o.pluck(root + off, k === 0 ? 0.22 : 0.17);
+      s.fx.bassline.steps++;
+      st.fretGoal = clamp((root + off - 28) / 27 * 0.11 - 0.01, -0.01, 0.1);
+      st.yGoal = s.fx.bassline.steps % 2 ? 0.035 : -0.035;                                     // index and middle fingers, one after the other
     },
     // what each instrument's player does on each beat: [{ side, idx, hit }] (idx: the place that hand goes to, see obj.reach / obj.hand)
     studioBeat(kind, n, P) {
@@ -268,12 +312,6 @@ export function installStudio(Brain, POSES, H) {
         const c = 'LRRLRLRR'[n % 8];
         return n % 8 === 7 && Math.random() < 0.5 ? [] : [{ side: c === 'L' ? 'Left' : 'Right', idx: 0, hit: true }];
       }
-      if (kind === 'bass') {
-        const out = [];
-        if (n % 2 === 0) out.push({ side: 'Left', idx: [0, 0, 2, 3, 0, 2, 4, 1][(n >> 1) % 8], hit: false });
-        out.push({ side: 'Right', idx: [0, 0, 1, 0, 2, 2, 1, 0][n % 8], hit: true });
-        return out;
-      }
       return [];
     },
     // the player: a beat clock, and where each hand is (it travels to its next place and touches it on the way down: that is when it sounds)
@@ -282,7 +320,7 @@ export function installStudio(Brain, POSES, H) {
       if (!o || !o.hand) return null;
       let P = this.sp;
       if (!P || P.step !== s) {
-        const period = { bass: 0.42, keyboard: 0.36, xylophone: 0.3, bongos: 0.22 }[name] || 0.4;
+        const period = { keyboard: 0.36, xylophone: 0.3, bongos: 0.22 }[name] || 0.4;
         P = this.sp = { step: s, name, t0: this.time, beat: -1, period, hands: {} };
         for (const side of ['Left', 'Right']) P.hands[side] = { from: 0, idx: 0, t0: this.time, hit: true, pos: o.hand(side, 0) };
       }

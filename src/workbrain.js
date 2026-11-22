@@ -187,7 +187,7 @@ export function installWorkshop(Brain, POSES, H) {
     // How a thing is held while it is carried whole: how high it is lifted, how far in front of him, which way round (`turn`), and where each
     // hand takes hold (`half` either side of its middle, at `y` on it, `z` towards (-) or away from him). The default is the foot stool's.
     haulGrip(o) {
-      const key = o.guitar ? 'guitar' : o.name;
+      const key = o.guitar && !o.bass ? 'guitar' : o.name;
       return { guitar: { lift: 0.42, ahead: 0.46, turn: 0, half: 0.12, y: 0.42, z: 0 },               // by the cradle of its stand
         lamp: { lift: 0.14, ahead: 0.5, turn: 0, half: 0.02, y: 0.86, z: 0, apart: 0.2 },            // by the pole, one hand above the other
         easel: { lift: 0.16, ahead: 0.52, turn: Math.PI, half: 0.31, y: 0.88, z: 0 },                  // by its two uprights, the canvas towards him

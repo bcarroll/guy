@@ -3,9 +3,11 @@
 // Laid out in the room's own frame (like the Range and the Bowling Alley): x along the door wall from the middle of the room, z away from the
 // door as -z. The door is at z = 0 and the far wall at z = -N. The stage is against the far wall, the dance floor in the middle, the DJ booth
 // against the +x wall and the record wall against the -x wall. Everything here is a fixture (it is part of the room and cannot be moved); the
-// Studio Machine is how the user adds or removes the movable things (instruments, chairs ...) in this room.
+// Studio Machine is how the user adds or removes the movable things (instruments, chairs ...) in this room. How wide the room is depends on
+// the ground beside it (room.js studioSpan: 12 m where it is free, 8 at least), so everything across it is worked out from its width (`L`).
 //
-// The stage is a low riser the robots walk across at floor level. What they do here is in studiobrain.js.
+// The stage goes from side wall to side wall, and nothing is built against the walls at its ends: a door to a corner room goes there
+// (`doorZ`, room.js planCorner). It is a low riser the robots walk across at floor level. What they do here is in studiobrain.js.
 //
 // The record wall holds every album (a 12 inch sleeve each) and a single for every song on them (a 7 inch sleeve each): far more than the top
 // shelf of the bookshelf. A record taken from the wall goes on the deck, and the song plays through the same music the stereo uses.
@@ -17,10 +19,11 @@ const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const hex = (c) => '#' + new THREE.Color(c).getHexString();
 
 export const STUDIO = {
-  stage: { x0: -3.0, x1: 3.0, zFront: -7.3, h: 0.06 },     // the riser: from the far wall to zFront
-  floor: { x0: -2.0, x1: 2.0, z0: -6.6, z1: -2.6, n: 8 },  // the dance floor: n x n lit tiles
-  booth: { x: 3.68, z: -4.6, len: 2.0 },                    // the DJ booth, against the +x wall
-  wallX: -3.86,                                             // the record wall's face
+  width: 12, minWidth: 8,                                    // along the door wall
+  stage: { zFront: -7.3, h: 0.06 },                          // the riser: from the far wall to zFront, the whole width of the room
+  doorZ: { from: -9.1, to: -7.95 },                          // a door to another room goes in a side wall here, up on the stage
+  floor: { z0: -6.6, z1: -2.6, tile: 0.5 },                  // the dance floor: half-metre lit tiles, as wide as the room leaves space for
+  booth: { z: -4.6, len: 2.0 },                              // the DJ booth, against the +x wall
   rows: [{ y: 1.72, kind: 'album', size: 0.34, pitch: 0.44 }, { y: 1.3, kind: 'single', size: 0.26, pitch: 0.33 }, { y: 0.9, kind: 'single', size: 0.26, pitch: 0.33 }, { y: 0.5, kind: 'single', size: 0.26, pitch: 0.33 }],
   mics: [-0.9, 0.9],                                        // where the two mic stands are (x), and the robots stand behind them
 };
@@ -73,7 +76,7 @@ const sleeveTex = (rec) => canvasTex(256, 256, (cx, w, h) => {
 // Fills the room's group `g` (`L` wide along the door wall, `N` deep). Returns the studio. The caller adds `g` to the scene and then calls
 // `studio.attach()`, which works out where the fixtures are in the world (the robots' pathing: `obstacles`).
 export function buildStudioShell(g, L, N) {
-  const side = L / 2;
+  const side = L / 2, half = Math.max(2, Math.min(3, side - 3));          // half the dance floor's width
   const mat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.7, ...o });
   const bxm = (w, h, d, m, x, y, z, parent = g) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); b.castShadow = b.receiveShadow = true; parent.add(b); return b; };
   const glow = (c) => new THREE.MeshBasicMaterial({ color: c });
@@ -94,13 +97,14 @@ export function buildStudioShell(g, L, N) {
   carpet.rotation.x = -Math.PI / 2; carpet.position.set(0, 0.003, -N / 2); carpet.receiveShadow = true; g.add(carpet);
 
   // ---- the dance floor: n x n tiles (one InstancedMesh; each tile's colour is set every frame)
-  const F = STUDIO.floor, tw = (F.x1 - F.x0) / F.n, td = (F.z1 - F.z0) / F.n, fcx = (F.x0 + F.x1) / 2, fcz = (F.z0 + F.z1) / 2;
+  const F = { ...STUDIO.floor, x0: -half, x1: half, nx: Math.round(2 * half / STUDIO.floor.tile), nz: Math.round((STUDIO.floor.z1 - STUDIO.floor.z0) / STUDIO.floor.tile) };
+  const tw = (F.x1 - F.x0) / F.nx, td = (F.z1 - F.z0) / F.nz, fcx = (F.x0 + F.x1) / 2, fcz = (F.z0 + F.z1) / 2;
   bxm(F.x1 - F.x0 + 0.12, 0.014, F.z1 - F.z0 + 0.12, black, fcx, 0.007, fcz).castShadow = false;
   const tileGeo = new THREE.PlaneGeometry(tw - 0.035, td - 0.035); tileGeo.rotateX(-Math.PI / 2);
-  const tiles = new THREE.InstancedMesh(tileGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }), F.n * F.n);
+  const tiles = new THREE.InstancedMesh(tileGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }), F.nx * F.nz);
   const tileXZ = [];
-  for (let i = 0; i < F.n; i++) for (let j = 0; j < F.n; j++) {
-    const x = F.x0 + tw * (i + 0.5), z = F.z0 + td * (j + 0.5), k = i * F.n + j;
+  for (let i = 0; i < F.nx; i++) for (let j = 0; j < F.nz; j++) {
+    const x = F.x0 + tw * (i + 0.5), z = F.z0 + td * (j + 0.5), k = i * F.nz + j;
     tileXZ.push({ x, z, i, j });
     tiles.setMatrixAt(k, new THREE.Matrix4().makeTranslation(x, 0.0155, z));
     tiles.setColorAt(k, new THREE.Color(0x222244));
@@ -108,10 +112,10 @@ export function buildStudioShell(g, L, N) {
   g.add(tiles);
 
   // ---- the stage: a riser along the far wall, a curtain, a screen with an equaliser, a truss with lights, two mics, monitors and the PA
-  const S = STUDIO.stage, sd = N - (-S.zFront), sz = -N + sd / 2 + 0.0, sw = S.x1 - S.x0;
+  const S = STUDIO.stage, sd = N - (-S.zFront), sz = -N + sd / 2 + 0.0, sw = L - 0.02, nCurtain = Math.round(sw / 0.375), cw = sw / nCurtain;
   const stageTop = bxm(sw, S.h, sd, mat(0x2a2230, { roughness: 0.55 }), 0, S.h / 2, sz);
   bxm(sw, 0.03, 0.05, glow(0xff3fa4), 0, S.h - 0.005, S.zFront + 0.03);             // a lit lip along the front
-  for (let k = 0; k < 16; k++) bxm(sw / 16 - 0.02, 2.65, 0.1, mat(k % 2 ? 0x7d1220 : 0x9a1a2b, { roughness: 0.9 }), -sw / 2 + sw / 32 + k * (sw / 16), 1.33, -N + 0.08);    // the curtain
+  for (let k = 0; k < nCurtain; k++) bxm(cw - 0.02, 2.65, 0.1, mat(k % 2 ? 0x7d1220 : 0x9a1a2b, { roughness: 0.9 }), -sw / 2 + cw * (k + 0.5), 1.33, -N + 0.08);    // the curtain
   const screenMat = new THREE.MeshBasicMaterial({ color: 0x05060a });
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 1.1), screenMat); screen.position.set(0, 1.55, -N + 0.145); g.add(screen);
   const bars = Array.from({ length: 16 }, (_, k) => {
@@ -120,11 +124,11 @@ export function buildStudioShell(g, L, N) {
   });
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 0.5), new THREE.MeshBasicMaterial({ map: neonTex('STUDIO', '#ff3fa4', 512, 96, 'bold 78px sans-serif'), transparent: true, depthWrite: false }));
   sign.position.set(0, 2.95, -N + 0.15); g.add(sign);
-  // the truss over the front of the stage, with six lights that throw coloured beams
-  bxm(sw + 0.4, 0.06, 0.06, chrome, 0, 2.85, -N + 1.6);
-  for (const s of [-1, 1]) bxm(0.06, 2.85, 0.06, chrome, s * (sw / 2 + 0.2), 1.43, -N + 1.6);
-  const beams = Array.from({ length: 6 }, (_, k) => {
-    const x = -2.2 + k * 0.88, pivot = new THREE.Group();
+  // the truss over the front of the stage (wall to wall, no posts: the ends of the stage are for the doors), with lights that throw coloured beams
+  bxm(sw - 0.1, 0.06, 0.06, chrome, 0, 2.85, -N + 1.6);
+  const nBeams = side > 4.9 ? 8 : 6, beamGap = (sw - 1.9) / (nBeams - 1) * (side > 4.9 ? 0.85 : 0.72);
+  const beams = Array.from({ length: nBeams }, (_, k) => {
+    const x = (k - (nBeams - 1) / 2) * beamGap, pivot = new THREE.Group();
     pivot.position.set(x, 2.8, -N + 1.6); g.add(pivot);
     const can = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.07, 0.22, 12), black); can.position.y = -0.05; pivot.add(can);
     const bm = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
@@ -139,19 +143,26 @@ export function buildStudioShell(g, L, N) {
     micHead.push(x);
     const wedge = bxm(0.6, 0.25, 0.4, black, x, S.h + 0.12, -7.5); wedge.rotation.x = -0.35;
   }
-  // PA stacks at the corners of the stage, a pair of subs beside the booth
+  // the PA, flown from the ceiling at either side of the stage (nothing on the floor there), and a pair of subs beside the booth
   const stack = (x, z, name) => {
     bxm(0.6, 0.7, 0.6, black, x, 0.35, z); bxm(0.55, 0.55, 0.5, dark, x, 0.97, z); bxm(0.5, 0.45, 0.45, black, x, 1.5, z);
     for (const y of [0.35, 0.97, 1.5]) { const c = new THREE.Mesh(new THREE.CircleGeometry(0.17, 18), mat(0x23262d, { metalness: 0.4 })); c.position.set(x, y, z + (y > 0.5 ? 0.255 : 0.305)); g.add(c); }
     fixtures.push({ name, x0: x - 0.32, x1: x + 0.32, z0: z - 0.32, z1: z + 0.32, h: 1.8 });
   };
-  stack(-3.5, -N + 0.6, 'PA stack left'); stack(3.5, -N + 0.6, 'PA stack right');
+  for (const s of [-1, 1]) {
+    const x = s * (side * 0.5 + 0.4), z = -N + 0.75;
+    bxm(0.02, 0.5, 0.02, chrome, x, 2.95, z);
+    for (let k = 0; k < 3; k++) {
+      const cab = bxm(0.5, 0.26, 0.36, k % 2 ? dark : black, x, 2.62 - k * 0.27, z + k * 0.02); cab.rotation.x = 0.08 * k;
+      for (const dx of [-0.12, 0.12]) { const c = new THREE.Mesh(new THREE.CircleGeometry(0.09, 16), mat(0x23262d, { metalness: 0.4 })); c.position.set(dx, 0, 0.182); cab.add(c); }
+    }
+  }
 
   // ---- the walls: neon along the top and bottom, acoustic panels on the booth side
   const neon = [0, 1, 2, 3].map(() => glow(0x19d3da));
   bxm(L, 0.05, 0.05, neon[0], 0, 3.1, -N + 0.03);
-  for (const s of [-1, 1]) { bxm(0.05, 0.05, N, neon[s < 0 ? 1 : 2], s * (side - 0.03), 3.1, -N / 2); bxm(0.05, 0.05, N, neon[3], s * (side - 0.03), 0.12, -N / 2); }
-  for (let k = 0; k < 6; k++) { const z = -1.2 - k * 1.45; if (Math.abs(z - STUDIO.booth.z) < 1.6) continue; bxm(0.06, 1.1, 1.1, mat(k % 2 ? 0x2a3a46 : 0x3b2a4a, { roughness: 0.95 }), side - 0.05, 1.7, z); }
+  for (const s of [-1, 1]) { bxm(0.05, 0.05, N, neon[s < 0 ? 1 : 2], s * (side - 0.03), 3.1, -N / 2); bxm(0.05, 0.05, -S.zFront, neon[3], s * (side - 0.03), 0.12, S.zFront / 2); }          // (the low strip stops at the stage, where a door may be)
+  for (let k = 0; k < 6; k++) { const z = -1.2 - k * 1.45; if (Math.abs(z - STUDIO.booth.z) < 1.6 || z - 0.6 < S.zFront) continue; bxm(0.06, 1.1, 1.1, mat(k % 2 ? 0x2a3a46 : 0x3b2a4a, { roughness: 0.95 }), side - 0.05, 1.7, z); }
 
   // ---- the mirror ball over the dance floor
   const ball = new THREE.Group(); ball.position.set(fcx, 2.55, fcz); g.add(ball);
@@ -160,7 +171,7 @@ export function buildStudioShell(g, L, N) {
   bxm(0.012, 0.7, 0.012, chrome, fcx, 2.9, fcz);
 
   // ---- the DJ booth: two turntables, a mixer and a laptop on a long desk against the +x wall
-  const B = STUDIO.booth, deckX = B.x - 0.05, deckZs = [B.z + 0.45, B.z - 0.45];
+  const B = { ...STUDIO.booth, x: side - 0.32 }, deckX = B.x - 0.05, deckZs = [B.z + 0.45, B.z - 0.45];
   bxm(0.55, 0.95, B.len, dark, B.x, 0.475, B.z, boothG);
   bxm(0.6, 0.06, B.len + 0.08, mat(0x2b2e36, { metalness: 0.3 }), B.x, 0.98, B.z, boothG);
   const ledStrip = bxm(0.02, 0.05, B.len - 0.2, glow(0xff3fa4), B.x - 0.28, 0.6, B.z, boothG);
@@ -186,9 +197,9 @@ export function buildStudioShell(g, L, N) {
   const records = [];
   for (const def of ALBUM_CATALOG) records.push({ id: `album:${def.id}`, kind: 'album', def, track: null, title: def.title });
   for (const def of ALBUM_CATALOG) for (const t of def.tracks || [def.track]) if (TRACKS[t] && TRACKS[t].step) records.push({ id: `single:${t}`, kind: 'single', def, track: t, title: TRACKS[t].label });
-  const WX = STUDIO.wallX, rowsOf = (kind) => STUDIO.rows.map((r, i) => ({ ...r, i })).filter((r) => r.kind === kind);
+  const WX = -side + 0.14, rowsOf = (kind) => STUDIO.rows.map((r, i) => ({ ...r, i })).filter((r) => r.kind === kind);
   const albumRows = rowsOf('album'), singleRows = rowsOf('single');
-  const wallLen = 5.6, wallZ0 = -2.35, wallZ1 = wallZ0 - wallLen, wallMid = (wallZ0 + wallZ1) / 2;
+  const wallLen = 5.6, wallZ0 = -2.0, wallZ1 = wallZ0 - wallLen, wallMid = (wallZ0 + wallZ1) / 2;
   bxm(0.1, 2.0, wallLen + 0.2, mat(0x2b1f2e, { roughness: 0.8 }), -side + 0.05, 1.1, wallMid, wallG);
   for (const r of STUDIO.rows) { bxm(0.22, 0.03, wallLen, mat(0x5b3a24), -side + 0.12, r.y - r.size / 2 - 0.01, wallMid, wallG); bxm(0.02, 0.025, wallLen, glow(0xff3fa4), -side + 0.23, r.y - r.size / 2 - 0.02, wallMid, wallG); }
   const wsign = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.42), new THREE.MeshBasicMaterial({ map: neonTex('RECORD WALL', '#19d3da', 512, 72, 'bold 56px sans-serif'), transparent: true, depthWrite: false }));
@@ -292,9 +303,9 @@ export function buildStudioShell(g, L, N) {
       const pulse = playing || mode !== 'idle' ? Math.pow(0.5 + 0.5 * Math.cos(t * Math.PI * 4), 2) : 0.3 + 0.2 * Math.sin(t);       // a beat at 120 bpm
       // the tiles
       for (const c of tileXZ) {
-        const k = c.i * F.n + c.j;
+        const k = c.i * F.nz + c.j;
         if (mode === 'party') tmpC.setHSL((c.i * 0.07 + c.j * 0.05 + t * 0.35) % 1, 1, 0.22 + 0.33 * pulse * (0.5 + 0.5 * Math.sin(t * 3 + c.i + c.j)));
-        else if (mode === 'show') tmpC.setHSL(0.86 + 0.06 * Math.sin(t + c.j * 0.4), 0.9, 0.12 + 0.18 * pulse * (c.j / F.n + 0.2));
+        else if (mode === 'show') tmpC.setHSL(0.86 + 0.06 * Math.sin(t + c.j * 0.4), 0.9, 0.12 + 0.18 * pulse * (c.j / F.nz + 0.2));
         else tmpC.setHSL(((c.i + c.j) % 2 ? 0.62 : 0.74), 0.6, 0.1 + 0.04 * Math.sin(t * 0.8 + c.i) + (playing ? 0.1 * pulse : 0));
         tiles.setColorAt(k, tmpC);
       }

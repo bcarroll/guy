@@ -9,7 +9,7 @@ import { makeYard } from './yardballs.js';
 import { buildRangeShell } from './rangeobjects.js';
 import { buildDust } from './library.js';
 import { buildBowlShell, makeBowlBuilders } from './bowlobjects.js';
-import { buildStudioShell } from './studioobjects.js';
+import { buildStudioShell, STUDIO } from './studioobjects.js';
 import { makeInstrumentBuilders } from './instruments.js';
 import { makeHomeBuilders } from './homeobjects.js';
 
@@ -1400,11 +1400,12 @@ export function buildRoom(scene) {
 
   // ---- The Studio's instruments (src/instruments.js): they stand on the stage facing the room (`n` metres in from the door wall, `lat` along it)
   const instB = makeInstrumentBuilders({ makeObject, box, mat });
-  const INSTR_LAYOUT = { bass: { n: 8.8, lat: -2.5 }, keyboard: { n: 8.8, lat: 2.5 }, xylophone: { n: 9.2, lat: 0 }, bongos: { n: 9.0, lat: 1.5 } };
+  // (on the stage, clear of the doors at its ends; `side`: how far out from the middle, as far as a narrow Studio lets it. The bass is taken from the front: `out`)
+  const INSTR_LAYOUT = { bass: { n: 9.1, side: -3.4, out: true }, keyboard: { n: 8.8, side: 3.4 }, xylophone: { n: 9.2, side: 0 }, bongos: { n: 9.0, side: 1.7 } };
   const studioSpot = (id) => (w) => {
     if (!w.doors.studio) return null;
-    const ax = w.shellAxes('studio'), s = INSTR_LAYOUT[id], p = w.shellPoint('studio', s.n, s.lat);
-    return { x: p.x, z: p.z, rot: w.rotFacing(-ax.toDoor.x, -ax.toDoor.z) };       // (the player stands at its +z, so that is the stage side: he faces the audience at the door)
+    const ax = w.shellAxes('studio'), s = INSTR_LAYOUT[id], lim = w.shellSize('studio').l / 2 - 1.6, p = w.shellPoint('studio', s.n, Math.max(-lim, Math.min(lim, s.side))), f = s.out ? 1 : -1;
+    return { x: p.x, z: p.z, rot: w.rotFacing(f * ax.toDoor.x, f * ax.toDoor.z) };       // (the player stands at its +z, so that is the stage side: he faces the audience at the door)
   };
   const NEW_OBJECTS = {            // object id -> [builder, preferred spot (or a function of the world that works it out)]
     botprinter: [bots.botprinter, { x: -3.5, z: 2.5 }],
@@ -1587,14 +1588,33 @@ export function buildRoom(scene) {
     const nx = Object.values(doors).find((d) => d.parent === 'main' && d.wall === (sx > 0 ? 'right' : 'left'));
     const nz = Object.values(doors).find((d) => d.parent === 'main' && d.wall === (sz > 0 ? 'front' : 'back'));
     const wx = nx ? nx.shell.bounds.maxX - nx.shell.bounds.minX : ROOM.w, dz = nz ? nz.shell.bounds.maxZ - nz.shell.bounds.minZ : ROOM.d;
+    // (a Studio wider than its wall takes the strip of the corner beside it: the corner starts where the Studio ends, and is as big as ever)
+    const ox = nz ? Math.max(0, sx > 0 ? nz.shell.bounds.maxX - ROOM.w / 2 : -ROOM.w / 2 - nz.shell.bounds.minX) : 0;
+    const oz = nx ? Math.max(0, sz > 0 ? nx.shell.bounds.maxZ - ROOM.d / 2 : -ROOM.d / 2 - nx.shell.bounds.minZ) : 0;
     return {
-      minX: sx > 0 ? ROOM.w / 2 : -ROOM.w / 2 - wx, maxX: sx > 0 ? ROOM.w / 2 + wx : -ROOM.w / 2,
-      minZ: sz > 0 ? ROOM.d / 2 : -ROOM.d / 2 - dz, maxZ: sz > 0 ? ROOM.d / 2 + dz : -ROOM.d / 2,
+      minX: sx > 0 ? ROOM.w / 2 + ox : -ROOM.w / 2 - ox - wx, maxX: sx > 0 ? ROOM.w / 2 + ox + wx : -ROOM.w / 2 - ox,
+      minZ: sz > 0 ? ROOM.d / 2 + oz : -ROOM.d / 2 - oz - dz, maxZ: sz > 0 ? ROOM.d / 2 + oz + dz : -ROOM.d / 2 - oz,
+    };
+  };
+  // How far along its wall the Studio goes, { lo, hi }: 12 m when the corners beside it are free, else up to the end of the wall on the side
+  // where a room stands (or is about to come back: `reserved`, the corners of the saved rooms). `saved`: what it had, which it never loses.
+  const CORNER_OF = { right: ['right-back', 'right-front'], left: ['left-back', 'left-front'], front: ['left-front', 'right-front'], back: ['left-back', 'right-back'] };       // at the low and the high end of each wall
+  const studioSpan = (wall, N, saved = null, reserved = []) => {
+    const W = WALL[wall], over = Math.max(0, (STUDIO.width - (W.hi - W.lo)) / 2);
+    const strip = (end) => {
+      const a = end < 0 ? W.lo - over : W.hi, b = end < 0 ? W.lo : W.hi + over, p = W.at(a, 0), q = W.at(b, 0), n = inwardOf(wall);
+      const xs = [p.x, q.x, p.x - n.x * N, q.x - n.x * N], zs = [p.z, q.z, p.z - n.z * N, q.z - n.z * N];
+      return { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) };
+    };
+    const free = (end) => !reserved.includes(CORNER_OF[wall][end < 0 ? 0 : 1]) && cellFree(strip(end));
+    return {
+      lo: Math.min(free(-1) ? W.lo - over : W.lo, saved && Number.isFinite(saved.lo) && cellFree(strip(-1)) ? Math.max(saved.lo, W.lo - over) : W.lo),
+      hi: Math.max(free(1) ? W.hi + over : W.hi, saved && Number.isFinite(saved.hi) && cellFree(strip(1)) ? Math.min(saved.hi, W.hi + over) : W.hi),
     };
   };
   const cellFree = (c) => ![MAIN_BOUNDS, ...Object.values(doors).map((d) => d.shell.bounds)].some((b) => c.maxX > b.minX + 0.01 && c.minX < b.maxX - 0.01 && c.maxZ > b.minZ + 0.01 && c.minZ < b.maxZ - 0.01);
   // The things built into a room that never move (the Shooting Range's screens and fixtures): a door must not open onto them.
-  const fixedIn = (pd) => [...((pd.shell.range && pd.shell.range.obstacles) || [])].map((o) => ({ x0: o.x0 - 0.3, x1: o.x1 + 0.3, z0: o.z0 - 0.3, z1: o.z1 + 0.3 }));
+  const fixedIn = (pd) => [...((pd.shell.range && pd.shell.range.obstacles) || []), ...((pd.shell.studio && pd.shell.studio.obstacles) || [])].map((o) => ({ x0: o.x0 - 0.3, x1: o.x1 + 0.3, z0: o.z0 - 0.3, z1: o.z1 + 0.3 }));
   // Where a door for a corner room could go: the doors it could have, best first. `why` says what is missing when there are none.
   const planCorner = (corners = Object.keys(CORNERS)) => {
     let why = 'corner';
@@ -1612,7 +1632,8 @@ export function buildRoom(scene) {
           if (dist(mid.x, mid.z) >= 0) continue;                                    // the corner must be on the far side of this wall
           const on = pts.filter(([x, z]) => Math.abs(dist(x, z)) < 1e-3).map(([x, z]) => W.uv({ x, y: 0, z }).u);
           if (on.length < 2) continue;
-          const lo = Math.max(W.lo, Math.min(...on)), hi = Math.min(W.hi, Math.max(...on));
+          let lo = Math.max(W.lo, Math.min(...on)), hi = Math.min(W.hi, Math.max(...on));
+          if (pd.shell.studio) { const N = pd.shell.N; lo = Math.max(lo, STUDIO.doorZ.from + N / 2 - 0.9); hi = Math.min(hi, STUDIO.doorZ.to + N / 2 + 0.9); }      // (in the Studio: on the stage, clear of the records and the booth)
           if (hi - lo < DOOR.w + 2 * DOOR.margin + 0.6) continue;                   // the walls must really share a stretch to put a door in
           const steps = Math.floor((hi - lo - 1.8) / 0.1 + 1e-6);
           for (let i = 0; i <= steps; i++) {
@@ -1757,12 +1778,13 @@ export function buildRoom(scene) {
   // the main room. It sits just outside the door wall, kept within that wall's length. `bounds` is its footprint on the floor.
   // Every added room is as big as GUY's room (same floor area, same depth) unless its catalog entry gives a `size` (depth away
   // from the door x width along the wall; either can be left out): a room that is cramped cannot hold what is built in it.
-  const buildShell = (def, wall, u, cell = null) => {
+  const buildShell = (def, wall, u, cell = null, opts = {}) => {
     const W = WALL[wall];
     if (cell) return buildCornerShell(def, wall, cell);
     const N = def.size && def.size.w ? def.size.w : (wall === 'right' || wall === 'left' ? ROOM.w : ROOM.d);          // away from the door wall
-    const L = def.size && def.size.d ? def.size.d : W.hi - W.lo;                                    // along the door wall
-    const c = Math.max(W.lo + L / 2, Math.min(W.hi - L / 2, u));
+    const span = def.wide ? studioSpan(wall, N, opts.span, opts.reserved) : null;
+    const L = span ? span.hi - span.lo : def.size && def.size.d ? def.size.d : W.hi - W.lo;                                    // along the door wall
+    const c = span ? (span.hi + span.lo) / 2 : Math.max(W.lo + L / 2, Math.min(W.hi - L / 2, u));
     const g = new THREE.Group();
     g.position.copy(W.at(c, 0));
     g.rotation.y = W.rotY;
@@ -1776,12 +1798,17 @@ export function buildRoom(scene) {
       return { group: g, bounds: bounds0, N, L, outdoor: true, yard, sides: yard.sides, fence: yard, linkable: true };
     }
     const sides = buildRoomBox(def, g, L, N);
+    if (span) for (const [a, b] of [[span.lo, W.lo], [W.hi, span.hi]]) {            // (GUY's own wall closes a room's fourth side: past its ends the room has its own piece)
+      if (b - a < 0.01) continue;
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(b - a, ROOM.h), sides.far.material), m = g.worldToLocal(W.at((a + b) / 2, ROOM.h / 2));
+      p.position.set(m.x, ROOM.h / 2, 0); p.rotation.y = Math.PI; p.receiveShadow = true; g.add(p);
+    }
     const bounds = wall === 'right' ? { minX: ROOM.w / 2, maxX: ROOM.w / 2 + N, minZ: c - L / 2, maxZ: c + L / 2 }
       : wall === 'left' ? { minX: -ROOM.w / 2 - N, maxX: -ROOM.w / 2, minZ: c - L / 2, maxZ: c + L / 2 }
       : wall === 'front' ? { minX: c - L / 2, maxX: c + L / 2, minZ: ROOM.d / 2, maxZ: ROOM.d / 2 + N }
         : { minX: c - L / 2, maxX: c + L / 2, minZ: -ROOM.d / 2 - N, maxZ: -ROOM.d / 2 };
     // the Shooting Range: its lanes, screens, bullseyes and enemies go in the room (src/rangeobjects.js); the screens are attached in addDoor
-    return { group: g, bounds, N, L, sides, range: def.shootingRange ? buildRangeShell(g, L, N) : null, bowl: def.bowlingAlley ? buildBowlShell(g, L, N) : null, studio: def.studio ? buildStudioShell(g, L, N) : null, linkable: !def.bowlingAlley && !def.studio && !def.elevator };          // (the Range's side walls take a corner room's door, clear of its fixtures)
+    return { group: g, bounds, N, L, sides, range: def.shootingRange ? buildRangeShell(g, L, N) : null, bowl: def.bowlingAlley ? buildBowlShell(g, L, N) : null, studio: def.studio ? buildStudioShell(g, L, N) : null, span, c, linkable: !def.bowlingAlley && !def.elevator };          // (the Range's side walls take a corner room's door, clear of its fixtures)
   };
 
   // The three walls of an added room as places to hang things: `<id>:far` (facing the door) and `<id>:a`, `<id>:b` (the sides).
@@ -1870,7 +1897,7 @@ export function buildRoom(scene) {
       if (doors[def.id]) return doors[def.id];
       const parent = opts.parent || 'main', pd = doors[parent];
       const fence = parent !== 'main' && pd.shell.fence ? { h: pd.shell.fence.FH, mat: (len, h) => pd.shell.fence.fencePiece(len, h) } : null;     // (a gate in the Backyard's fence)
-      const group = buildDoor(def, wall, u, parent === 'main' ? undefined : `${pd.shell.icon || ''} ${pd.name}`.trim(), fence), shell = buildShell(def, wall, u, opts.cell || null);
+      const group = buildDoor(def, wall, u, parent === 'main' ? undefined : `${pd.shell.icon || ''} ${pd.name}`.trim(), fence), shell = buildShell(def, wall, u, opts.cell || null, opts);
       shell.icon = def.icon;
       let cut, hidden = null;
       if (parent === 'main') { cut = buildDoorway(wall, u); wallMeshes[wall].visible = false; }      // the wall is rebuilt round the doorway
@@ -2018,7 +2045,7 @@ export function buildRoom(scene) {
     // A point in an added room in its own frame: `n` metres in from the door wall, `lat` along the wall from the middle of the room
     // (positive the way the wall's u grows). And the quarter turns that make an object's local +z point back towards the door.
     shellPoint(id, n, lat) {
-      const d = doors[id], p = WALL[d.wall].at(lat, 0), nv = inwardOf(d.wall);
+      const d = doors[id], p = WALL[d.wall].at(lat + (d.shell.span ? d.shell.c : 0), 0), nv = inwardOf(d.wall);          // (the middle of a Studio that is wider on one side is not the middle of the wall)
       return { x: p.x - nv.x * n, z: p.z - nv.z * n };
     },
     // The middle of a room (a new thing is put near it when somebody picks that room for it), or null if there is no such room.

@@ -280,7 +280,9 @@ export const MANIFEST = {
     { id: 'studio-sing', activity: 'studioshow', pose: 'sing', t: 1.0, view: 'front', room: 'studio', expect: 'standing at a microphone on the stage, one hand up at the microphone, the other arm out, swaying a little' },
     { id: 'studio-dj', activity: 'studiodj', pose: 'studiodj', t: 0.8, view: 'side', room: 'studio', expect: 'standing behind the DJ booth with the right hand on the turntable platter and the left hand on the mixer' },
     { id: 'studio-bow', activity: 'studioshow', pose: 'bow', t: 0.9, view: 'side', room: 'studio', expect: 'bowing from the hips with both arms hanging, the head down' },
-    { id: 'studio-bass', activity: 'playbass', pose: 'studioplay', t: 5, view: 'front', room: 'studio', objects: ['bass'], expect: 'standing at the upright bass: the right hand plucking low over the body, the left hand up the neck, both touching the instrument' },
+    { id: 'studio-bass', activity: 'playbass', pose: 'guitar', t: 5, view: 'front', room: 'studio', objects: ['bass'], expect: 'wearing the electric bass (off its empty stand, which is behind him with the amp), strap over the left shoulder, the strings facing the camera, the neck out to his left and up; the left hand round the neck, the right hand over the pickups' },
+    { id: 'studio-bass-side', activity: 'playbass', pose: 'guitar', t: 5, view: 'side', room: 'studio', objects: ['bass'], expect: 'the same from the side: the bass in front of his body with its back to him, not through him; the empty stand and the amp behind him' },
+    { id: 'studio-bass-take', activity: 'playbass', pose: 'takeGuitar', t: 0.9, view: 'side', room: 'studio', objects: ['bass'], expect: 'in front of the bass on its stand, the right hand gripping its neck to lift it off' },
     { id: 'studio-keys', activity: 'playkeys', pose: 'studioplay', t: 5, view: 'front', room: 'studio', objects: ['keyboard'], expect: 'standing behind the keyboard with both hands on the keys, leaning in a little' },
     { id: 'studio-xylo', activity: 'playxylo', pose: 'studioplay', t: 5, view: 'front', room: 'studio', objects: ['xylophone'], expect: 'standing at the xylophone, a hand on a bar, the other lifted between hits' },
     { id: 'studio-bongos', activity: 'playbongos', pose: 'studioplay', t: 5, view: 'front', room: 'studio', objects: ['bongos'], expect: 'standing at the bongos, hands slapping the skins' },
@@ -5307,7 +5309,7 @@ T.sweepStudio = () => {
     T.settle(); T.home();
   }
   // the instruments: each is added in the Studio, he stands at it and plays it: notes sound and the hands are on the instrument when they do
-  for (const [act, name] of Object.entries({ playbass: 'bass', playkeys: 'keyboard', playxylo: 'xylophone', playbongos: 'bongos' })) {
+  for (const [act, name] of Object.entries({ playkeys: 'keyboard', playxylo: 'xylophone', playbongos: 'bongos' })) {
     T.settle(); T.home(); b.queue = []; b.step = null; b.musicOff();
     T.addObject(name);
     const o = w.objects[name], inStudio = !!o && w.roomIdAt(o.x, o.z) === 'studio';
@@ -5321,6 +5323,90 @@ T.sweepStudio = () => {
     b.queue = []; b.step = null; b.skip(); b.choose('wander'); for (let i = 0; i < 60; i++) step(1 / 30);
     out.push(result(`studio: the ${name} is added in the Studio and he plays it (notes sound, the hand is on it at each one)`, inStudio && hits >= 12 && notes.size >= (name === 'bongos' ? 2 : 3) && far < 0.3, { inStudio, hits, notes: notes.size, far }));
     T.settle(); T.home();
+  }
+  // the bass is taken off its stand and worn: played facing the audience, the strings facing out, the hands on it, and put back afterwards.
+  // (It used to stay on the stand, its strings to the player and its back to the room, while he poked at it.)
+  {
+    T.settle(); T.home(); b.queue = []; b.step = null; b.musicOff();
+    T.addObject('bass');
+    const o = w.objects.bass, inStudio = !!o && w.roomIdAt(o.x, o.z) === 'studio', V = (x, y, z) => new THREE.Vector3(x, y, z);
+    let n = 0, held = true, body = 0, front = 1, handR = 0, handL = 0, out2 = 1, neck = 1, offStand = 9, walkedWith = true;
+    if (o) {
+      const toDoor = w.shellAxes('studio').toDoor, pluck = o.pluck, wp = V(0, 0, 0);
+      o.pluck = (note, v) => {
+        n++;
+        o.guitar.updateWorldMatrix(true, false); o.guitar.getWorldPosition(wp);
+        const root = G().root, fwd = V(Math.sin(root.rotation.y), 0, Math.cos(root.rotation.y)), left = V(Math.cos(root.rotation.y), 0, -Math.sin(root.rotation.y)), q = o.guitar.getWorldQuaternion(new THREE.Quaternion());
+        held = held && b.gtr.held && b.gname === 'bass';
+        body = Math.max(body, Math.hypot(wp.x - root.position.x, wp.z - root.position.z));
+        front = Math.min(front, V(0, 0, 1).applyQuaternion(q).dot(fwd)); neck = Math.min(neck, V(1, 0, 0).applyQuaternion(q).dot(left));
+        out2 = Math.min(out2, fwd.dot(toDoor));
+        handR = Math.max(handR, G().boneWorld('RightHandMiddle3').distanceTo(o.string(1))); handL = Math.max(handL, G().boneWorld('LeftHandMiddle1').distanceTo(o.guitar.localToWorld(V(0.46, 0, 0))));
+        offStand = Math.min(offStand, wp.distanceTo(o.group.localToWorld(o.rest.pos.clone())));
+        return pluck(note, v);
+      };
+      b.choose('playbass');
+      for (let i = 0; i < 90 * 30; i++) {
+        step(1 / 30);
+        if (b.gtr.held && b.step && b.step.type === 'walk') { b.late(); o.guitar.updateWorldMatrix(true, false); o.guitar.getWorldPosition(wp); if (Math.hypot(wp.x - G().root.position.x, wp.z - G().root.position.z) > 0.6) walkedWith = false; }
+        if (b.last !== 'playbass' && i > 300 && b.hereId() === 'main') break;
+      }
+      o.pluck = pluck;
+    }
+    out.push(result('studio: the bass is off its stand and on him while he plays it, strings facing out, neck to his left, and he faces the audience', inStudio && n >= 12 && held && body < 0.5 && front > 0.8 && neck > 0.5 && out2 > 0.9 && offStand > 0.5 && walkedWith, { inStudio, n, held, body, front, neck, out2, offStand, walkedWith }));
+    out.push(result('studio: both hands are on the bass when a note sounds (right fingers over the strings, left hand round the neck)', n > 0 && handR < 0.2 && handL < 0.2, { handR, handL }));
+    b.late();
+    out.push(result('studio: the bass is back on its stand when he has finished', !!o && !b.gtr.held && o.guitar.position.distanceTo(o.rest.pos) < 1e-3 && o.guitar.quaternion.angleTo(o.rest.quat) < 1e-3, { held: b.gtr.held }));
+    // told to do something else while he is wearing it: it goes back on its stand before he leaves the Studio
+    if (o) {
+      b.queue = []; b.step = null; b.choose('playbass');
+      for (let i = 0; i < 60 * 30 && !(b.pose === 'guitar' && b.step && b.step.t > 2); i++) step(1 / 30);
+      const was = b.gtr.held; b.skip(); let leftWith = false, put = false;
+      for (let i = 0; i < 40 * 30 && b.hereId() !== 'main'; i++) { step(1 / 30); if (b.gtr.held && b.hereId() !== 'studio') leftWith = true; if (!b.gtr.held) put = true; }
+      out.push(result('studio: interrupted while wearing the bass, he puts it back on its stand before he goes anywhere', was && put && !leftWith && !b.gtr.held, { was, put, leftWith }));
+      // taken away out of his hands
+      b.queue = []; b.step = null; b.choose('playbass');
+      for (let i = 0; i < 60 * 30 && !(b.pose === 'guitar' && b.step && b.step.t > 2); i++) step(1 / 30);
+      w.removeObject('bass'); b.objectRemoved('bass'); for (let i = 0; i < 30; i++) step(1 / 30);
+      out.push(result('studio: the bass removed while he is wearing it: he lets go and carries on', !b.gtr.held && !b.gtr.override && b.last !== undefined, { held: b.gtr.held }));
+    }
+    b.queue = []; b.step = null; b.skip(); b.choose('wander'); for (let i = 0; i < 60; i++) step(1 / 30);
+    T.settle(); T.home();
+  }
+  // how wide it is, and the doors on its stage to the corner rooms beside it
+  {
+    const overlaps = () => { const bs = [{ id: 'main', ...w.MAIN_BOUNDS }, ...Object.values(w.doors).map((d) => ({ id: d.id, ...d.shell.bounds }))], bad = []; for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) { const p = bs[i], q = bs[j]; if (p.minX < q.maxX - 1e-6 && q.minX < p.maxX - 1e-6 && p.minZ < q.maxZ - 1e-6 && q.minZ < p.maxZ - 1e-6) bad.push([p.id, q.id]); } return bad; };
+    for (const wall of ['right', 'left', 'front', 'back']) {
+      T.resetRooms(); T.settle(); T.home();
+      const ok = R().add('studio', { walls: [wall] }).ok, d = w.doors.studio;
+      out.push(result(`studio: on the ${wall} wall it is 12 m wide when nothing stands beside it`, ok && Math.abs(w.shellSize('studio').l - 12) < 1e-6 && Math.abs(w.shellSize('studio').n - 10) < 1e-6 && !overlaps().length, { ok, size: ok && w.shellSize('studio') }));
+      if (!ok) continue;
+      const near = { right: ['right-back', 'right-front'], left: ['left-back', 'left-front'], front: ['left-front', 'right-front'], back: ['left-back', 'right-back'] }[wall], made = [];
+      for (const [k, id] of ['library', 'bedroom'].entries()) made.push(R().add(id, { corners: [near[k]] }));
+      const where = ['library', 'bedroom'].map((id) => { const c = w.doors[id]; if (!c || c.parent !== 'studio') return null; const l = d.shell.group.worldToLocal(new THREE.Vector3(w.doorPoint(id, 0).x, 0, w.doorPoint(id, 0).z)); return { z: +l.z.toFixed(2), side: +(Math.abs(l.x) - d.shell.L / 2).toFixed(3), clear: !w.obstacles.some((o) => o.active !== false && !o.char && [c.rect, c.rectIn].some((r) => o.x1 > r.x0 && o.x0 < r.x1 && o.z1 > r.z0 && o.z0 < r.z1)) }; });
+      out.push(result(`studio: on the ${wall} wall two corner rooms open onto its stage, one at each end, with nothing in the way and no room on another`, made.every((m) => m.ok && m.parent === 'studio') && where.every((p) => p && p.z < -7.5 && p.z > -9.5 && Math.abs(p.side) < 0.01 && p.clear) && w.doors.library.wall !== w.doors.bedroom.wall && !overlaps().length, { where, parents: made.map((m) => m.parent), overlaps: overlaps() }));
+      // saved and loaded again: the same rooms on the same ground
+      const snap = JSON.parse(JSON.stringify(R().snapshot())), before2 = JSON.stringify(Object.fromEntries(Object.values(w.doors).map((x) => [x.id, x.shell.bounds])));
+      T.resetRooms(); R().restoreFrom(snap);
+      out.push(result(`studio: on the ${wall} wall the wide Studio and its corner rooms come back as they were`, JSON.stringify(Object.fromEntries(Object.values(w.doors).map((x) => [x.id, x.shell.bounds]))) === before2, { before2 }));
+      if (wall === 'right') {                                          // he walks to a corner room across the stage, and back
+        for (const id of ['library', 'bedroom']) {
+          T.settle(); T.home(); b.queue = []; b.step = null; b.skip(true); b.visitRoom(id);
+          let inside = false, back = false, via = false;
+          for (let i = 0; i < 120 * 30 && !back; i++) { step(1 / 30); const h = b.hereId(); if (h === 'studio') via = true; if (h === id) inside = true; if (inside && h === 'main') back = true; }
+          out.push(result(`studio: he goes through the Studio and its stage door into the ${w.doors[id].name}, and comes back`, via && inside && back, { via, inside, back }));
+        }
+      }
+    }
+    // a room already standing in a corner: the Studio stays off it; and one saved before it was wide comes back without growing over the corner rooms
+    T.resetRooms(); T.settle(); T.home();
+    R().add('workshop', { walls: ['front'] }); R().add('library', { corners: ['right-front'] }); R().add('studio', { walls: ['right'] });
+    out.push(result('studio: with a room in one corner it is wider on the other side only (10 m), and stands on nobody', w.doors.library && w.doors.library.parent === 'workshop' && Math.abs(w.shellSize('studio').l - 10) < 1e-6 && !overlaps().length, { l: w.doors.studio && w.shellSize('studio').l, overlaps: overlaps() }));
+    { const inR = (p) => { const bb = w.doors.studio.shell.bounds; return p.x > bb.minX + 0.4 && p.x < bb.maxX - 0.4 && p.z > bb.minZ + 0.4 && p.z < bb.maxZ - 0.4; }, sp = [-4, 4].map((l) => w.shellPoint('studio', 5, l)); out.push(result('studio: and its middle is the middle of the room, not of the wall', sp.every(inR) && w.studio.stageSpot(0) && inR(w.studio.stageSpot(0)) && inR(w.studio.deckStand()), { sp })); }
+    const old = JSON.parse(JSON.stringify(R().snapshot())); delete old.rooms.studio.span;
+    T.resetRooms(); R().restoreFrom(old);
+    out.push(result('studio: a home saved before the Studio was wide comes back with no room on another, the corner room where it was', !overlaps().length && Math.abs(w.shellSize('studio').l - 10) < 1e-6 && w.doors.library && Math.abs(w.doors.library.shell.bounds.minZ - 4) < 1e-6, { overlaps: overlaps(), b: w.doors.library && w.doors.library.shell.bounds }));
+    T.resetRooms(); T.settle(); T.home(); R().add('studio');
   }
   // a guitar pushed against a Studio wall hangs there, and comes off its hook when it is moved away again
   {

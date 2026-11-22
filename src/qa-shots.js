@@ -234,6 +234,34 @@ export function install(T, h) {
       T.freeze(); window.guy.root.visible = false; T.frameRoom('bowling'); await settleFrames(3);
       return { data: capture() };
     });
+    add('room-studio', 'rooms', async () => {                     // the stage wall to wall, the dance floor, the booth and the record wall
+      await clean(53);
+      const w = window.brain.w;
+      w.rooms.add('studio', { walls: ['right'] });
+      T.addObject('bass'); T.addObject('keyboard');
+      T.freeze(); window.guy.root.visible = false;
+      for (let i = 0; i < 20; i++) window.sim(0.05);
+      T.freeze();
+      const c = w.shellPoint('studio', 5, 0);
+      window.controls.dispatchEvent({ type: 'start' });
+      window.camera.position.set(c.x - 9.5, 8.5, c.z); window.controls.target.set(c.x + 0.5, 0.4, c.z); window.controls.update();
+      await settleFrames(3);
+      return { data: capture() };
+    });
+    // A corner room at each end of the Studio's stage: both doors, one open
+    add('room-studio-stagedoors', 'rooms', async () => {
+      await clean(54);
+      const w = window.brain.w;
+      w.rooms.add('studio', { walls: ['right'] }); w.rooms.add('library', { corners: ['right-back'] }); w.rooms.add('bedroom', { corners: ['right-front'] });
+      T.addObject('bass');
+      w.setDoorOpen('library', true); for (let i = 0; i < 40; i++) window.sim(0.05);
+      T.freeze(); window.guy.root.visible = false;
+      const c = w.shellPoint('studio', 4.5, 0), far = w.shellPoint('studio', 9, 0);
+      window.controls.dispatchEvent({ type: 'start' });
+      window.camera.position.set(c.x - 5.5, 4.6, c.z); window.controls.target.set(far.x, 0.8, far.z); window.controls.update();
+      await settleFrames(3);
+      return { data: capture() };
+    });
     // The corner rooms: seen from beyond their far wall (the camera is outside, so the walls between it and the room do not hide it)
     const frameCorner = (id) => {
       const b = window.brain.w.doors[id].shell.bounds, cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2, away = Math.sign(cz) || 1;

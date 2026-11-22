@@ -46,7 +46,7 @@ export function installArrange(Brain, H) {
       // 1. something he knows how to play is not in the room
       for (const [id, skill] of WANTS) {
         if (!this.skills.has(skill) || this.obj(id) || !cool(id)) continue;
-        if (id === 'guitar' && Object.values(w.objects).some((o) => o.guitar)) continue;          // (an electric one will do)
+        if (id === 'guitar' && Object.values(w.objects).some((o) => o.guitar && !o.bass)) continue;          // (an electric one will do)
         const st = ops.status(id);
         if (st === 'removed' || st === 'available') return { act: 'arrange', key: id, why: `wants the ${id === 'table' ? 'stereo' : id}`, add: [{ id, room: this.roomPick(id) }], remove: [] };
       }

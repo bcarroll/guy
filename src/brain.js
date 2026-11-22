@@ -1200,7 +1200,7 @@ export class Brain {
       },
       jamguitar: () => [`playing the guitar along with ${this.nowPlaying().title}`, ...this.guitarBegin(), this.play('guitar', rand(30, 45), { guitar: true, sync: true, strum: { pat: strumPattern(this.has) } }), ...this.guitarEnd()],
       // he was interrupted while holding the guitar: take it back to its stand
-      putguitar: () => ['putting the guitar back', this.walkAt(this.gname, 0, this.guitarDz(), Math.PI),
+      putguitar: () => [`putting the ${this.gname === 'bass' ? 'bass' : 'guitar'} back`, { ...this.walkAt(this.gname, this.guitarDx(), this.guitarDz(), Math.PI), fx: { guitar: true } },        // (it stays in his hands on the way)
         this.play('putGuitar', 2.4, { guitar: true, at: [1.3, () => this.setGuitarHeld(false)] })],
       // he was interrupted while holding the ball: put it down
       dropball: () => ['putting the ball down', this.play('putdown', 2.0, { ball: true, ballKind: this.heldKind && this.heldKind !== 'main' && this.inYard() ? this.heldKind : 'main', at: [1.0, () => this.releaseBall()] })],
@@ -1233,12 +1233,12 @@ export class Brain {
 
   // ---- Guitar ----
   electric() { const o = this.obj(this.gname); return !!(o && o.electric); }
-  guitars() { return Object.values(this.w.objects).filter((o) => o.guitar); }
+  guitars() { return Object.values(this.w.objects).filter((o) => o.guitar && !o.bass); }        // (the Studio's bass is worn the same way, but it is not a guitar: see studiobrain.js)
   guitarTaken(name) { const o = this.other; return !!o && ((o.using && o.using.has(name)) || o.skillWants(name)); }
   freeGuitar() { return this.guitars().some((g) => !this.guitarTaken(g.name)); }
   // choose the guitar for what he is about to play: the one in his hands, the one he was asked for, or one the other robot is not using
   pickGuitar() {
-    if (this.gtr.held && this.obj(this.gname)) { if (this.using) this.using.add(this.gname); return; }
+    if (this.gtr.held && this.obj(this.gname) && !this.obj(this.gname).bass) { if (this.using) this.using.add(this.gname); return; }
     const all = this.guitars(), free = all.filter((g) => !this.guitarTaken(g.name));
     const want = this.wantGuitar && free.find((g) => g.name === this.wantGuitar);
     this.wantGuitar = null;
@@ -1269,13 +1269,15 @@ export class Brain {
     let blend = pose === 'guitar' || pose === 'sitGuitar' || pose === 'walkGuitar' ? 1 : pose === 'takeGuitar' ? sm((t - 1.0) / 0.9) : 1 - sm((t - 0.2) / 0.9);
     const cur = { pos: new THREE.Vector3().lerpVectors(rest.pos, hold.pos, blend), q: rest.q.clone().slerp(hold.q, blend) };
     this.gtr.override = cur;
+    this.gtr.worn = blend > 0.6;                                     // (the strap is on him only once it is: it used to stretch from his shoulder to the stand)
 
     // strumming: eighth notes, a chord every bar (Am F C G)
     const st = this.gtr;
     if (pose === 'takeGuitar') { st.n = -1; st.yGoal = 0; st.fretGoal = 0; }
     if (pose === 'guitar' || pose === 'sitGuitar') {
       let n, chord;
-      if (s.fx.riff) {
+      if (s.fx.bassline) this.playBassline(s, t, guitar, st);          // the bass (studiobrain.js)
+      else if (s.fx.riff) {
         // a riff: single notes picked on top of a bass note, the fretting hand following the pitch
         n = Math.floor((t - 0.6) / 0.3);
         if (n !== st.n && n >= 0 && n < s.fx.riff.length * RIFF_STEPS * 2) {
@@ -1970,6 +1972,7 @@ export class Brain {
   // The room he is in right now ('main' while he is in a doorway), and its floor to wander on (kept a little way from the walls).
   // how far in front of the guitar he stands to take it (a guitar hung on a Studio wall is closer to the wall than one on its stand)
   guitarDz() { const o = this.obj(this.gname); return o && o.standDz ? o.standDz() : 0.62; }
+  guitarDx() { const o = this.obj(this.gname); return o && o.bass ? o.stand.x : 0; }          // (the bass's stand is beside its amp)
   hereId() { const r = this.w.roomIdAt(this.g.root.position.x, this.g.root.position.z); return r === 'door' || !this.w.doors[r] ? 'main' : r; }
   // The room (x, z) belongs to, doorways included: in a doorway, the room of the side of the door it is on.
   roomAt(x, z) {
@@ -2417,7 +2420,7 @@ export class Brain {
       soccergoal: ['goalshot', 'soccertoss'], basketballhoop: ['hoopshoot', 'hoopdribble'], lawnchair: ['yardsit'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], shed: ['mow'], mower: ['mow'],
       blasterrack: ['rangeshoot'], rangecontroller: ['rangeshoot'], scoreboard: ['rangehang', 'rangeshoot'], ballrack: ['bowl'], bowlscore: ['bowl', 'bowlwatch'],
       recordwall: ['studiodj'], djbooth: ['studiodj', 'studioshow', 'studioparty'], studiomachine: ['studiowatch'],
-    }[name] || (this.obj(name) && this.obj(name).seats ? REST_ACTS : this.obj(name) && this.obj(name).guitar ? ['guitar', 'riff', 'jamguitar'] : this.obj(name) && this.obj(name).heldBooks ? ['read'] : this.obj(name) && HOME_KIND_ACTS[this.obj(name).kind] ? HOME_KIND_ACTS[this.obj(name).kind] : this.obj(name) && this.obj(name).sit ? ['read', 'sit', 'sitguitar'] : []);
+    }[name] || (this.obj(name) && this.obj(name).seats ? REST_ACTS : this.obj(name) && this.obj(name).guitar && !this.obj(name).bass ? ['guitar', 'riff', 'jamguitar'] : this.obj(name) && this.obj(name).heldBooks ? ['read'] : this.obj(name) && HOME_KIND_ACTS[this.obj(name).kind] ? HOME_KIND_ACTS[this.obj(name).kind] : this.obj(name) && this.obj(name).sit ? ['read', 'sit', 'sitguitar'] : []);
     return list.filter((a) => this.available(a));
   }
 
@@ -2443,7 +2446,7 @@ export class Brain {
 
   // Does this step work with the object `name` (it needs it, stands at it, pushes it, sits on it, plays it)?
   stepUses(st, name) {
-    return !!(st && ((st.fx && st.fx.needs && st.fx.needs.includes(name)) || (st.anchor && st.anchor.name === name) || (st.push && st.push.obj.name === name) || (st.fx && st.fx.sit && (name === 'piano' || name === 'bench')) || (st.fx && st.fx.chairSit && name === (st.fx.chair || 'armchair')) || (st.fx && st.fx.guitar && name === 'guitar') || (st.fx && st.fx.piano && name === 'piano') || (st.fx && (st.fx.drums || st.fx.sitDrum) && name === 'drums') || (st.fx && st.fx.paint && name === 'easel') || (st.fx && st.fx.scope && name === 'telescope')) || (st && st.fx && st.fx.chair === name));
+    return !!(st && ((st.fx && st.fx.needs && st.fx.needs.includes(name)) || (st.anchor && st.anchor.name === name) || (st.push && st.push.obj.name === name) || (st.fx && st.fx.sit && (name === 'piano' || name === 'bench')) || (st.fx && st.fx.chairSit && name === (st.fx.chair || 'armchair')) || (st.fx && st.fx.guitar && name === this.gname) || (st.fx && st.fx.piano && name === 'piano') || (st.fx && (st.fx.drums || st.fx.sitDrum) && name === 'drums') || (st.fx && st.fx.paint && name === 'easel') || (st.fx && st.fx.scope && name === 'telescope')) || (st && st.fx && st.fx.chair === name));
   }
   // Is this robot working with `name` right now? Then the other robot must not move it, put it away or take it out of the room.
   inUse(name) {
@@ -2514,11 +2517,12 @@ export class Brain {
     this.studioCleanup();                                    // cut short in the Studio: the lights, the deck and the record in his hand go back
     let name = force;
     if (!name && this.ballHeld && this.inYard()) name = 'dropball';        // out in the yard with a ball in his hands: set it down before anything else
+    if (!name && this.gtr.held && !this.inMain() && this.roomOfObj(this.gname) === this.hereId() && !this.guitarLocked()) name = 'putguitar';      // cut short wearing the bass or a guitar in the room its stand is in: back on the stand before he leaves
     // He is in an added room: back through the door before anything else, unless he went there to use something that stands in it (a piano
     // dragged into the Workshop ...): then it is his room for now, and free activities happen there too.
     if (!name && !this.skillNext() && !this.inMain() && this.hereId() !== this.stayRoom && !this.lockedInside() && !this.lockedInRange() && !this.lockedInBowl() && !this.lockedInStudio() && !this.restStays() && !this.stuckIn()) name = 'leave';
     if (!name && this.carry === 'canvas') name = 'putcanvas';                  // cut short with a painting in his hands: back to the easel with it
-    if (!name && this.gtr.held && this.obj('guitar') && !this.guitarLocked()) name = 'putguitar'; // still holding the guitar: back on its stand (not while locked in on it)
+    if (!name && this.gtr.held && this.obj(this.gname) && !this.guitarLocked()) name = 'putguitar'; // still holding the guitar: back on its stand (not while locked in on it)
     if (!name && this.lampOffByMe && this.obj('lamp') && !this.obj('lamp').on) name = 'lighton'; // he switched it off for the stars and never put it back
     if (!name && this.ballHeld) name = 'dropball'; // still holding the ball: put it down first
     // He's still carrying a book or record: take it back first. The one exception is a record that is really standing by the
@@ -2651,8 +2655,8 @@ export class Brain {
       blasterrack: ['rangeshoot'], rangecontroller: ['rangeshoot'], scoreboard: ['rangehang', 'rangeshoot'], ballrack: ['bowl'], bowlscore: ['bowl', 'bowlwatch'],
       recordwall: ['studiodj'], djbooth: ['studiodj', 'studioshow', 'studioparty'], studiomachine: ['studiowatch'],
       bass: ['playbass'], keyboard: ['playkeys'], xylophone: ['playxylo'], bongos: ['playbongos'],
-    }[name] || (this.obj(name) && HOME_KIND_ACTS[this.obj(name).kind] ? HOME_KIND_ACTS[this.obj(name).kind] : this.obj(name) && this.obj(name).kind === 'footstool' ? ['dusttop'] : this.obj(name) && this.obj(name).guitar ? (k('guitar') ? (this.music ? ['jamguitar'] : ['guitar']) : []) : undefined);
-    if (this.obj(name) && this.obj(name).guitar) this.wantGuitar = name;
+    }[name] || (this.obj(name) && HOME_KIND_ACTS[this.obj(name).kind] ? HOME_KIND_ACTS[this.obj(name).kind] : this.obj(name) && this.obj(name).kind === 'footstool' ? ['dusttop'] : this.obj(name) && this.obj(name).guitar && !this.obj(name).bass ? (k('guitar') ? (this.music ? ['jamguitar'] : ['guitar']) : []) : undefined);
+    if (this.obj(name) && this.obj(name).guitar && !this.obj(name).bass) this.wantGuitar = name;
     if (name === 'botprinter') {
       const g = this.w.gal;
       if (g && g.exists()) return { ok: false, message: 'GAL is already here: the machine can only be used once.' };
@@ -2669,7 +2673,7 @@ export class Brain {
       if (!this.stoolJob()) return { ok: false, message: 'There is no window top to clean right now.' };
     }
     if (name === 'table' && !k('stereo') && !this.music) return { ok: false, message: "GUY doesn't know how to use the stereo yet. Maybe there's a manual on the shelf." };
-    if (this.obj(name) && this.obj(name).guitar && !k('guitar')) return { ok: false, message: "GUY hasn't learned the guitar yet. Add \"Guitar for Beginners\" to the shelf and he'll read it." };
+    if (this.obj(name) && this.obj(name).guitar && !this.obj(name).bass && !k('guitar')) return { ok: false, message: "GUY hasn't learned the guitar yet. Add \"Guitar for Beginners\" to the shelf and he'll read it." };
     if ((name === 'drums' || name === 'easel') && !this.standOk(name)) {
       return { ok: false, message: name === 'drums' ? "GUY can't get to the drum stool where the kit is. Move it away from the wall." : "GUY can't get in front of the easel where it is. Move it away from the wall." };
     }
@@ -3100,7 +3104,7 @@ export class Brain {
   // The book rides on the palm: its height runs along the fingers and its cover lies on the palm side of the hand.
   late() {
     const gt = this.obj(this.gname);
-    this.updateStrap(gt && this.gtr.override && this.pose !== 'idle' ? this.gtr.override : null);
+    this.updateStrap(gt && this.gtr.override && this.gtr.worn && this.pose !== 'idle' ? this.gtr.override : null);
     if (gt && gt.guitar) {
       if (this.gtr.override) {
         const o = this.gtr.override;
@@ -3690,7 +3694,7 @@ installLibrary(Brain);
 installYard(Brain, POSES, { clamp, rand, pick, makeGrid, cellBlocked, INFLATE, findPath });
 installRange(Brain, POSES, { pick });
 installBowl(Brain, POSES, { pick });
-installStudio(Brain, POSES, { pick });
+installStudio(Brain, POSES, { pick, chordAt: guitarChordAt });
 installRestaurant(Brain, POSES, { smooth, clamp, lerp, rand, pick });
 installArrange(Brain, { pick });
 installApproach(Brain);                                      // stations are used from whichever side is free (approach.js)
