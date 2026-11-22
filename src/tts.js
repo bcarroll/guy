@@ -9,6 +9,8 @@ export const VOICES = {
   guy: { pitch: 28, speed: 158, variant: 'm3', color: '#7fd1ff', name: 'GUY' },
   gal: { pitch: 72, speed: 172, variant: 'f3', color: '#ff7ac0', name: 'GAL' },
 };
+// the user's own words in the subtitle bar, while they talk to GUY through the microphone (a third colour)
+export const YOU = { color: '#ffd166', name: 'YOU' };
 const KEY = 'guy.voice.v1';
 export const CHATTER = ['silent', 'quiet', 'chatty'];      // silent: subtitles only; quiet (default): speaks only in an interaction or when the two talk; chatty: and a remark when starting something
 
@@ -54,7 +56,7 @@ export function initVoice({ subs, onSpeakStart = () => {}, onSpeakEnd = () => {}
   const log = [];                     // everything said (the QA harness and the HUD read it)
   const subtitle = (who, text) => {
     if (!subs) return;
-    const v = VOICES[who] || VOICES.guy;
+    const v = who === 'you' ? YOU : VOICES[who] || VOICES.guy;
     subs.innerHTML = ''; const b = document.createElement('b'); b.style.color = v.color; b.textContent = v.name + ': '; subs.append(b, document.createTextNode(text));
     subs.hidden = false; clearTimeout(subTimer); subTimer = setTimeout(() => { subs.hidden = true; }, 2500 + text.length * 70);
   };
@@ -100,7 +102,7 @@ export function initVoice({ subs, onSpeakStart = () => {}, onSpeakEnd = () => {}
   }
   const stop = () => { q.length = 0; try { node && node.stop(); } catch { /* already stopped */ } if (wake) wake(); };
   return {
-    say, stop, log, get settings() { return { ...st }; }, get speaking() { return busy; }, get current() { return current; },
+    say, stop, log, caption: (who, text) => subtitle(who, text), get settings() { return { ...st }; }, get speaking() { return busy; }, get current() { return current; },
     set(k, v) { if (k === 'muted') st.muted = !!v; else if (k === 'chatter' && CHATTER.includes(v)) st.chatter = v; else if (k === 'engine' && ['natural', 'robot'].includes(v)) { st.engine = v; if (v === 'natural') startNatural(); } else return false; save(); return true; },
     warm: () => { if (st.engine === 'natural') startNatural(); return load().then(() => true); },
     get naturalStatus() { return natural ? { ...natural.status } : { state: 'idle', progress: 0, error: '' }; },

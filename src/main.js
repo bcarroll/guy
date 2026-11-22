@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { initScreenLock } from './screenlock.js';
 import { initVoice as initTTS } from './tts.js';
 import { createVoice } from './voice.js';
+import { createMic } from './mic.js';
 import { initWorkstation } from './workstation.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { buildRoom, ROOM } from './room.js';
@@ -790,7 +791,43 @@ cmdBox.querySelector('#cmd-chatter').addEventListener('change', (e) => tts.set('
 cmdBox.querySelector('#cmd-chatter').value = tts.settings.chatter;
 const voiceSel = cmdBox.querySelector('#cmd-voice'); voiceSel.value = tts.settings.engine;
 voiceSel.addEventListener('change', (e) => tts.set('engine', e.target.value));
-window.__voice = { bark: voice.bark, run: (t) => voice.run(t), parse: voice.parse, tts, audienceOn: voice.audienceOn };
+window.__voice = { bark: voice.bark, run: (t) => voice.run(t), runAlternatives: (a) => voice.runAlternatives(a), parse: voice.parse, tts, audienceOn: voice.audienceOn, commands: voice.commands };
+window.__commands = voice.commands;           // the queues and the open question (debugging, and the QA harness)
+
+// The microphone (mic.js): hold 🎤 and talk, let go to send; a quick tap listens until a pause. What was heard goes the same way as
+// the typed box. Hidden in a browser without speech recognition. The music ducks while it listens, and GUY stops talking.
+const micBtn = document.getElementById('mic-btn');
+let micDown = 0, micDucked = false;
+const micDuck = (on) => {
+  const m = window.__guyAudio && window.__guyAudio().master;
+  if (!m) return;
+  if (on && !micDucked && m.gain.value === 0.5) { m.gain.value = 0.18; micDucked = true; }
+  else if (!on && micDucked) { if (m.gain.value === 0.18) m.gain.value = 0.5; micDucked = false; }
+};
+const mic = createMic({
+  onPartial: (t) => tts.caption('you', t + '…'),
+  onFinal: (alts) => { if (alts.length) { tts.caption('you', alts[0].text); voice.runAlternatives(alts); } },
+  onState: (st, detail) => {
+    micBtn.classList.toggle('listening', st === 'listening');
+    if (st === 'listening') { micDuck(true); sfx('micon'); tts.caption('you', 'Listening…'); }
+    else if (st === 'thinking') { micDuck(false); sfx('micoff'); }
+    else if (st === 'error') { micDuck(false); sfx('micoff'); tts.caption('guy', detail); }
+    else { micDuck(false); if (detail === 'nothing') { sfx('micoff'); tts.caption('guy', "I didn't hear anything. Hold the mic and try again."); } }
+  },
+});
+micBtn.hidden = !mic.supported;
+micBtn.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  if (mic.listening) { mic.stop(); micDown = 0; return; }       // a second tap: done talking
+  tts.stop(); tts.warm().catch(() => {});                      // (GUY stops talking so he is not heard as the user)
+  micDown = performance.now();
+  mic.start();
+});
+const micUp = () => { if (micDown && performance.now() - micDown > 350 && mic.listening) mic.stop(); micDown = 0; };   // held: letting go sends it; a quick tap keeps listening until a pause
+micBtn.addEventListener('pointerup', micUp);
+micBtn.addEventListener('pointercancel', micUp);
+micBtn.addEventListener('contextmenu', (e) => e.preventDefault());
+window.__mic = mic;
 
 
 // Capture phase so we run before OrbitControls and can keep it from orbiting while we handle an object.
