@@ -48,6 +48,9 @@ const OBJ = {
   lawnchair: ['sit in the lawn chair', 'Sitting in the lawn chair', 'the lawn chair'], basketballhoop: ['shoot some hoops', 'Shooting some hoops', 'the hoops'],
   soccergoal: ['take some shots at the goal', 'Taking some shots', 'the goal'], birdbath: ['see to the bird bath', 'Seeing to the bird bath', 'the bird bath'],
   skyswitch: ['flip the sky switch', 'Flipping the sky switch', 'the sky switch'], blasterrack: ['do some target practice', 'Target practice', 'the range'],
+  recordwall: ['spin a record', 'Spinning a record', 'the record'], djbooth: ['put on a show', 'Putting on a show', 'the show'],
+  bass: ['play the bass', 'Playing the bass', 'the bass'], keyboard: ['play the keyboard', 'Playing the keyboard', 'the keyboard'],
+  xylophone: ['play the xylophone', 'Playing the xylophone', 'the xylophone'], bongos: ['play the bongos', 'Playing the bongos', 'the bongos'],
 };
 const ACT = { dance: ['dance', 'Dancing', 'the dancing'], sit: ['sit down', 'Sitting down', 'the chair'], ponder: ['have a think', 'Thinking', 'the thinking'], wave: ['wave', 'Waving', 'the waving'], wander: ['have a wander', 'Wandering', 'the wander'] };
 export function labelOf(it, rooms = {}) {

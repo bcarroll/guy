@@ -110,6 +110,11 @@ export const OBJECT_CATALOG = [
   { id: 'botprinter', cat: 'robots', name: 'Build a Bot Machine', icon: '🤖', desc: 'A 3D printer that can be used once: it prints a second robot, GAL, and folds itself away into her. Heavy: only you can move it.', locked: true },
   // Learning Workstation: premium. GUY taps the screen and a panel lists the books on the shelf; Learn teaches him at once, no reading. The book stays on the shelf.
   { id: 'workstation', cat: 'robots', name: 'Learning Workstation', icon: '🖥️', desc: 'A desk and screen that lists every book on the shelf. Press Learn and GUY knows what is in it at once, with no reading. The book stays on the shelf so GAL can read it too. Heavy: only you can move it.', locked: true },
+  // The Studio's instruments (src/instruments.js): listed only while the Studio is added. GUY and GAL play them on the stage.
+  { id: 'bass', cat: 'music', name: 'Electric Bass', icon: '🎸', desc: 'A bass on its stand with a little amp. Plucked and fretted.', free: true, room: 'studio' },
+  { id: 'keyboard', cat: 'music', name: 'Electric Keyboard', icon: '🎹', desc: 'Two octaves on an X stand, with a synth sound.', free: true, room: 'studio' },
+  { id: 'xylophone', cat: 'music', name: 'Xylophone', icon: '🎶', desc: 'Twelve coloured bars played with mallets.', free: true, room: 'studio' },
+  { id: 'bongos', cat: 'music', name: 'Bongos', icon: '🪘', desc: 'A pair of bongo drums, slapped by hand.', free: true, room: 'studio' },
   { id: 'drums', cat: 'music', name: 'Drum Kit', icon: '🥁', desc: 'Kick, snare, hi-hat and cymbals on a stool. Comes with the book "Drumming for Robots".', free: true, book: 'drumming' },
   { id: 'easel', cat: 'hobbies', name: 'Painting Easel', icon: '🎨', desc: 'A canvas that really gets painted. Comes with the book "Painting for Robots".', free: true, book: 'painting' },
   { id: 'telescope', cat: 'hobbies', name: 'Telescope', icon: '🔭', desc: 'On a tripod by the window. Comes with the book "Stargazing for Robots".', free: true, book: 'stars' },
@@ -123,6 +128,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
   const chipBar = root.querySelector('.chips');
   let tab = 'objects';
   let cat = 'all';                   // the category filter on the Objects tab
+  let scope = null;                  // 'studio': the Studio Machine, which lists only what goes in the Studio (see renderScoped)
 
   const inRoom = (id) => (id === 'ball' ? !world.ballGone : !!(world.objects[id] || world.decor[id]));
   const builtCount = (id) => Object.values(world.objects).filter((o) => o.kind === id).length;      // built things in the room
@@ -297,7 +303,32 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
       <div class="side">${btn}${btn2}</div></div>`;
   }
 
+  // The Studio Machine: the same Catalog, scoped to the Studio. What is in the Studio (with Remove) and what can be added to it: music gear and
+  // the Studio's own pieces, new ones put in the Studio itself (never decor: the walls and rugs are the Catalog's).
+  function renderScoped() {
+    root.querySelectorAll('.tab').forEach((t) => { t.hidden = true; });
+    chipBar.hidden = true;
+    const handlers = [], here = [], add = [];
+    const mine = OBJECT_CATALOG.filter((d) => !d.decor && !d.built && !d.ball && (d.cat === 'music' || d.room === 'studio') && live(d));
+    for (const d of mine) {
+      const st = objectStatus(d), o = world.objects[d.id];
+      const inStudio = st === 'inroom' && o && world.roomIdAt(o.x, o.z) === 'studio';
+      const base = { icon: d.icon, name: d.name, desc: d.desc, status: inStudio ? 'inroom' : st };
+      if (inStudio) { const i = handlers.push(() => removeObject(d)) - 1; here.push(card({ ...base, label: 'Remove', action: i, danger: true })); }
+      else if (st === 'inroom') add.push(card({ ...base, status: 'inroom', label: '✓ In another room', note: 'Move it into the Studio by hand.' }));
+      else if (st === 'locked') add.push(card({ ...base, label: '🔒 Locked' }));
+      else { const i = handlers.push(() => addObject(d, world.roomSpot('studio'))) - 1; add.push(card({ ...base, label: st === 'removed' ? 'Put back' : 'Add', action: i, note: 'Goes in the Studio.' })); }
+    }
+    const hung = Object.values(world.objects).filter((o) => o.guitar && o.hung).length;
+    const groups = { 'In the Studio': here, 'Add to the Studio': add };
+    body.innerHTML = (hung ? `<div class="subhead">🎸 ${hung} guitar${hung > 1 ? 's' : ''} hanging on the walls. Push a guitar against a Studio wall to hang it.</div>` : '<div class="subhead">🎸 Push a guitar against a Studio wall to hang it there.</div>')
+      + Object.entries(groups).filter(([, c]) => c.length).map(([h, c]) => `<h4>${h}</h4>${c.join('')}`).join('');
+    body.querySelectorAll('[data-action]').forEach((el) => el.addEventListener('click', () => handlers[+el.dataset.action]()));
+  }
+
   function render() {
+    root.querySelectorAll('.tab').forEach((t) => { t.hidden = false; });
+    if (scope) { renderScoped(); return; }
     root.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.dataset.tab === tab));
     const groups = { 'In the room': [], 'Add to the room': [], 'Premium · coming soon': [] };
     const albumGroups = { 'On the shelf': [], 'Add to the shelf': [], 'Not available yet': [], 'Premium · coming soon': [] };
@@ -416,10 +447,10 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
   if (paintings) paintings.onChange(() => { if (!root.hidden) render(); });
   root.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => { tab = t.dataset.tab; render(); }));
   chipBar.addEventListener('click', (e) => { const b = e.target.closest('[data-cat]'); if (b) { cat = b.dataset.cat; render(); } });
-  const close = () => { root.hidden = true; };
+  const close = () => { root.hidden = true; scope = null; };
   root.querySelector('.close').addEventListener('click', close);
   root.addEventListener('pointerdown', (e) => { if (e.target === root) close(); });
   addEventListener('keydown', (e) => { if (e.key === 'Escape' && !root.hidden) close(); });
 
-  return { open() { render(); root.hidden = false; }, close, refresh: render, save, restoreExtras, ops, isOpen: () => !root.hidden };
+  return { open(s = null) { scope = s === 'studio' ? 'studio' : null; render(); root.hidden = false; }, close, refresh: render, save, restoreExtras, ops, isOpen: () => !root.hidden };
 }
