@@ -89,8 +89,19 @@ export class GalBrain extends Brain {
     super.choose(force);
   }
 
-  danceSpot() { return { x: 1.4, z: 0.9 }; }
-  waveSpot() { return { x: -1.4, z: 2.2 }; }
+  // beside GUY's spots, in the room the activity happens in: the stereo's room for a dance (in his own room, the spots she always had)
+  danceSpot() {
+    const id = this.spotRoom();
+    if (id === 'main') return { x: 1.4, z: 0.9 };
+    const b = this.roomBox(id);
+    return this.openSpotNear(Math.min(b.cx + 1.4, b.maxX), Math.min(b.cz + 0.5, b.maxZ), 0.9);
+  }
+  waveSpot() {
+    const id = this.spotRoom();
+    if (id === 'main') return { x: -1.4, z: 2.2 };
+    const b = this.roomBox(id);
+    return { x: Math.max(b.cx - 1.4, b.minX), z: b.cz };
+  }
 
   activities() {
     const acts = super.activities();
