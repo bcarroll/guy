@@ -26,6 +26,8 @@ import { TRACKS, trackSeconds } from './audio.js';
 import { POSES } from './brain.js';
 import { bowlSkill } from './bowlbrain.js';
 import { throwBall } from './bowlrules.js';
+import { createMic, MIC_ERRORS } from './mic.js';
+import { LIMITS } from './commands.js';
 import { install as installCharacters } from './qa-characters.js';
 import { install as installAudio } from './qa-audio.js';
 import { install as installShots } from './qa-shots.js';
@@ -1461,6 +1463,152 @@ T.sweepYardOrders = () => {
   return out;
 };
 
+// ---- 12d. Spoken commands: finish-then-obey (src/commands.js, src/voice.js, src/mic.js). The design's time limits: 5 s to wrap up a quick
+// activity ("One sec."), 10 s to finish a work step ("Let me finish this row, then I'll ..."), 30 s waiting behind a busy job when GAL
+// cannot take it ("I'm cooking and GAL can't take it. Give me about half a minute, then I'll ..."), then a question. Every command ends
+// in a start, a reason said out loud, a cancel or a "later": none is dropped without a word. The microphone is a stand-in that "hears".
+T.sweepCommands = () => {
+  const out = [], base = errors.length, w = W(), b = B(), V = window.__voice, C = V.commands;
+  window.__voiceNoAudio = true;
+  const said = (from) => V.tts.log.slice(from).map((l) => `${l.who}: ${l.text}`);
+  const L = (r) => r.lines.map((l) => `${l.who}: ${l.text}`).join(' | ');
+  const reset = () => { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; C.clear(); V.tts.stop(); };
+  const busyWith = (act, sec) => { b.queue = []; b.pendingActivity = null; b.step = b.play('idle', sec); b.step.t = 0; b.last = act; };   // a stand-in for a long job
+  const started = (names) => names.includes(b.last) && b.pendingActivity === null;
+  try {
+    galReset(); T.settle(); T.resetRooms(); T.removeAll(); T.forget(); T.home(); T.settle();
+    T.learn(['piano', 'guitar', 'stereo']); for (const id of ['piano', 'guitar', 'lamp', 'table']) T.addObject(id);
+    T.settle();
+    // 1. idle: he just starts, "Sure thing." (or another short yes)
+    reset();
+    const r1 = V.run('play the guitar');
+    out.push(result('commands: idle, he answers with a short yes and the command is tracked until it starts', r1.ok && r1.lines.length === 1 && ['Sure thing.', 'On it.', 'Okay!', 'You got it.'].includes(r1.lines[0].text) && C.list.length === 1 && C.list[0].cls === 'idle', { lines: L(r1), list: C.list }));
+    const t1 = runUntil(() => started(['guitar']), 15);
+    out.push(result('commands: ... and he starts it within a second or so', started(['guitar']) && t1 <= 2, { t: t1, last: b.last }));
+    // 2. a quick activity (playing the piano): "One sec.", and he starts the new command within 5 s
+    reset(); T.home(); T.settle();
+    b.interact('piano'); runUntil(() => ['sitpiano', 'piano'].includes(b.last) && !!b.step && b.step.type === 'play', 60);
+    const playing = ['sitpiano', 'piano'].includes(b.last);
+    const r2 = V.run('turn on the lamp');
+    const t2 = runUntil(() => started(['lamp', 'mood']), 15);
+    out.push(result('commands: playing the piano, "turn on the lamp": "One sec." and the lamp within 5 s', playing && r2.ok && r2.lines.length === 1 && r2.lines[0].text === 'One sec.' && started(['lamp', 'mood']) && t2 <= LIMITS.quick + 0.5, { playing, lines: L(r2), t: t2, last: b.last }));
+    // 2b. the wrap-up limit holds even when the wrap-up would run on (a long step after the command)
+    reset(); busyWith('dance', 100);
+    const r2b = V.run('turn on the lamp');
+    b.step = b.play('idle', 100); b.step.t = 0;                   // (a wrap-up that would take 100 s)
+    const t2b = runUntil(() => started(['lamp', 'mood']), 20);
+    out.push(result('commands: a wrap-up never takes longer than its limit: he stops where he is at 5 s and starts the command', r2b.ok && r2b.lines[0].text === 'One sec.' && started(['lamp', 'mood']) && t2b >= LIMITS.quick - 0.5 && t2b <= LIMITS.quick + 1, { lines: L(r2b), t: t2b }));
+    // 3. a work step (mowing): he finishes the step he is on ("Let me finish this row, then I'll play the piano.")
+    reset(); busyWith('mow', 3); const row = b.step;
+    const n3 = V.tts.log.length;
+    const r3 = V.run('play the piano');
+    const kept = b.step === row;
+    const t3 = runUntil(() => started(['sitpiano', 'piano']), 20);
+    out.push(result('commands: mowing, "play the piano": "Let me finish this row, then I\'ll play the piano." and he finishes the step he is on, then plays', r3.ok && r3.lines[0].text === "Let me finish this row, then I'll play the piano." && kept && started(['sitpiano', 'piano']) && t3 >= 2.5 && t3 <= 4.5 && !said(n3).some((l) => /That'll do/.test(l)), { lines: L(r3), kept, t: t3, said: said(n3) }));
+    reset(); busyWith('mow', 100);
+    const n3b = V.tts.log.length;
+    V.run('play the piano');
+    const t3b = runUntil(() => started(['sitpiano', 'piano']), 20);
+    out.push(result('commands: a work step that runs on is cut at 10 s, with "That\'ll do for now."', started(['sitpiano', 'piano']) && t3b >= LIMITS.step - 0.5 && t3b <= LIMITS.step + 1 && said(n3b).includes("guy: That'll do for now."), { t: t3b, said: said(n3b) }));
+    reset(); busyWith('paint', 100);
+    const r3c = V.run('play the piano');
+    out.push(result('commands: painting, he says he finishes this stroke first', /^Finishing this stroke first, then I'll play the piano\.$/.test(r3c.lines[0] && r3c.lines[0].text || ''), { lines: L(r3c) }));
+    // 4. a busy job and no GAL: it waits, he says how long, and he starts it when the job is over
+    reset(); busyWith('cook', 12);
+    const n4 = V.tts.log.length;
+    const r4 = V.run('play the piano');
+    out.push(result('commands: cooking with no GAL: "I\'m cooking and GAL can\'t take it. Give me about half a minute, then I\'ll play the piano." and it waits', r4.ok && r4.lines.length === 1 && r4.lines[0].text === "I'm cooking and GAL can't take it. Give me about half a minute, then I'll play the piano." && !b.pendingActivity && C.list.length === 1 && C.list[0].state === 'waiting', { lines: L(r4), list: C.list }));
+    const t4 = runUntil(() => started(['sitpiano', 'piano']), 30);
+    out.push(result('commands: ... when the cooking ends he says "Done cooking. Playing the piano now." and plays', started(['sitpiano', 'piano']) && t4 <= 14 && said(n4).includes('guy: Done cooking. Playing the piano now.'), { t: t4, said: said(n4) }));
+    reset(); busyWith('cook', 100);
+    const r4b = V.run('GUY, play the piano');
+    out.push(result('commands: named ("GUY, ...") while cooking: he keeps it himself and does not mention GAL', r4b.ok && r4b.lines[0].text === "I'm cooking. Give me about half a minute, then I'll play the piano.", { lines: L(r4b) }));
+    // 5. the 30 s question, and the answers
+    reset(); busyWith('cook', 300);
+    const n5 = V.tts.log.length;
+    V.run('play the guitar');
+    runUntil(() => !!C.question, 40);
+    const asked = said(n5).includes('guy: Still cooking. Should I stop and play the guitar?');
+    const r5 = V.run('yes please');
+    const t5 = runUntil(() => started(['guitar']), 10);
+    out.push(result('commands: after 30 s he asks "Still cooking. Should I stop and play the guitar?" and "yes" makes him stop and play', asked && r5.ok && r5.lines[0] && r5.lines[0].text === "Okay, I'll stop cooking. Playing the guitar now." && started(['guitar']) && t5 <= 6, { said: said(n5), lines: L(r5), t: t5 }));
+    reset(); busyWith('cook', 300);
+    const n5b = V.tts.log.length;
+    V.run('play the guitar'); runUntil(() => !!C.question, 40);
+    const r5b = V.run('no');
+    runUntil(() => false, 40);
+    out.push(result('commands: "no" keeps him cooking, he says he will do it when he is done, and he does not ask again', r5b.lines[0] && r5b.lines[0].text === "Okay, I'll play the guitar when I'm done cooking." && C.list.length === 1 && C.list[0].state === 'waiting' && said(n5b).filter((l) => /Should I stop/.test(l)).length === 1 && b.last === 'cook', { lines: L(r5b), said: said(n5b), list: C.list }));
+    reset(); busyWith('cook', 300);
+    const n5c = V.tts.log.length;
+    V.run('play the guitar'); runUntil(() => false, 85);
+    const s5c = said(n5c);
+    out.push(result('commands: no answer: he asks once more at 60 s, then leaves it for later with a line (it is not dropped silently)', s5c.filter((l) => /Should I stop/.test(l)).length === 2 && s5c.includes("guy: I'll leave the guitar for later.") && C.list.length === 0, { said: s5c }));
+    // 6. the queue: asking again replaces, three at most, "never mind the ..." drops one, "stop" drops them all
+    reset(); busyWith('cook', 300);
+    V.run('play the guitar'); V.run('play the guitar'); V.run('play the piano'); V.run('turn on the lamp');
+    const r6 = V.run('dance');
+    out.push(result('commands: asking for the same thing again replaces it; a fourth command is refused kindly', C.waitingFor(b) === 3 && !r6.ok && r6.lines[0].text === "I've already got 3 things to do. Want me to drop one?", { list: C.list, lines: L(r6) }));
+    const r6b = V.run('never mind the guitar');
+    out.push(result('commands: "never mind the guitar" drops just that one, and he says so', r6b.lines[0] && r6b.lines[0].text === "Okay, I'll leave the guitar." && C.waitingFor(b) === 2, { lines: L(r6b), list: C.list }));
+    V.run('stop');
+    out.push(result('commands: "stop" drops everything waiting', C.waitingFor(b) === 0, { list: C.list }));
+    // 7. the start watchdog: a command that never gets going is reported with a reason, not forgotten
+    reset();
+    const n7 = V.tts.log.length;
+    const choose0 = b.choose;
+    b.choose = function (f) { if (f === 'guitar') { this.pendingActivity = 'guitar'; return; } return choose0.call(this, f); };     // (something keeps it from starting)
+    try { V.run('play the guitar'); runUntil(() => !b.pendingActivity, 40); } finally { b.choose = choose0; }
+    out.push(result('commands: a command that has not started after 30 s is reported as failed, out loud', !b.pendingActivity && C.list.length === 0 && said(n7).some((l) => /^guy: (I couldn't play the guitar|Sorry, I couldn't get started)/.test(l)), { said: said(n7), pending: b.pendingActivity }));
+    reset();
+    const n7b = V.tts.log.length;
+    V.run('play the guitar'); runUntil(() => started(['guitar']), 10);
+    b.lastPlanError = new Error('test: the guitar went missing'); step(0.1);
+    out.push(result('commands: when the plan of a started command falls apart he says so', said(n7b).includes("guy: I couldn't play the guitar. Something's in the way."), { said: said(n7b) }));
+    b.lastPlanError = null;
+    // 8. a few guesses from the microphone: the first one that makes sense wins
+    reset();
+    const r8 = V.runAlternatives([{ text: 'guy play the pie and oh', confidence: 0.6 }, { text: 'guy play the piano', confidence: 0.5 }]);
+    out.push(result('commands: of the guesses "guy play the pie and oh" / "guy play the piano" the piano is taken', r8.ok && r8.intent.type === 'object' && r8.intent.name === 'piano', { intent: r8.intent }));
+    // 9. the microphone (a stand-in recogniser that "hears" when the button is let go)
+    reset();
+    const heard = [], states = [];
+    let say = [[{ transcript: 'guy turn on the lamp', confidence: 0.9 }]];
+    class FakeRec {
+      start() { FakeRec.last = this; }
+      stop() { this.onresult({ resultIndex: 0, results: [Object.assign([{ transcript: 'guy turn on' }], { isFinal: false })] }); for (const alts of say) this.onresult({ resultIndex: 0, results: [Object.assign(alts.slice(), { isFinal: true })] }); this.onend(); }
+      abort() { this.onerror({ error: 'aborted' }); this.onend(); }
+    }
+    const partial = [];
+    const mic = createMic({ Recognition: FakeRec, onPartial: (t) => partial.push(t), onState: (st, d) => states.push([st, d]), onFinal: (alts) => { heard.push(alts); V.runAlternatives(alts); } });
+    const okStart = mic.start(); const listening = mic.listening; mic.stop();
+    out.push(result('commands: the microphone: hold, talk, let go: the words go the same way as the typed box and he turns the lamp on', okStart && listening && !mic.listening && heard.length === 1 && heard[0][0].text === 'guy turn on the lamp' && partial[0] === 'guy turn on' && ['lamp', 'mood'].includes(b.pendingActivity) && states.map((s) => s[0]).join(',') === 'listening,thinking,idle' && FakeRec.last.maxAlternatives === 3 && FakeRec.last.interimResults && !FakeRec.last.continuous, { okStart, heard, partial, states, pending: b.pendingActivity }));
+    class DeniedRec { start() {} stop() { this.onerror({ error: 'not-allowed' }); this.onend(); } abort() {} }
+    const st2 = []; const mic2 = createMic({ Recognition: DeniedRec, onState: (st, d) => st2.push([st, d]) }); mic2.start(); mic2.stop();
+    out.push(result('commands: the microphone permission refused: he says so and points to the typed box', st2.some(([st, d]) => st === 'error' && d === MIC_ERRORS['not-allowed']) && /type to me/.test(MIC_ERRORS['not-allowed']), { st2 }));
+    const btn = document.getElementById('mic-btn'), real = window.__mic;
+    out.push(result('commands: the 🎤 button is there beside 💬 Talk, shown only where the browser can recognise speech', !!btn && btn.nextElementSibling && btn.nextElementSibling.id === 'talk-btn' && btn.hidden === !real.supported, { hidden: btn && btn.hidden, supported: real && real.supported }));
+    // 10. with GAL: she takes it when GUY is busy and she is free; named, GUY keeps it; both busy, it waits with GUY
+    reset();
+    const gb = galBuild();
+    if (!gb.ok) throw new Error('no GAL');
+    const gal = w.gal, gbr = gal.brain;
+    gbr.skills.learn('guitar'); gbr.skills.learn('piano');
+    reset(); gbr.queue = []; gbr.step = null; gbr.pendingActivity = null; gbr.last = 'wander'; gal.audience = null;
+    busyWith('cook', 300);
+    const r10 = V.run('play the guitar');
+    out.push(result('commands: GUY cooking, GAL free: "GAL will get right on that." and she does it', r10.ok && r10.lines[0].who === 'guy' && r10.lines[0].text === 'GAL will get right on that.' && r10.lines[1] && r10.lines[1].who === 'gal' && !!gbr.pendingActivity && C.waitingFor(b) === 0, { lines: L(r10), pending: gbr.pendingActivity }));
+    gal.audience = null; gbr.skip(true); gbr.pendingActivity = null; C.clear();
+    const r10b = V.run('GUY, play the piano');
+    out.push(result('commands: GUY cooking, GAL free, but GUY named: he keeps it ("I\'m cooking. Give me about half a minute, then I\'ll play the piano.")', r10b.ok && r10b.lines.length === 1 && r10b.lines[0].text === "I'm cooking. Give me about half a minute, then I'll play the piano." && !gbr.pendingActivity && C.waitingFor(b) === 1, { lines: L(r10b) }));
+    C.clear(); gal.audience = null;
+    gbr.queue = []; gbr.step = gbr.play('idle', 300); gbr.step.t = 0; gbr.last = 'serve';
+    const r10c = V.run('play the piano');
+    out.push(result('commands: GUY cooking and GAL serving: it waits with GUY, "I\'m cooking and GAL can\'t take it ..."', r10c.ok && r10c.lines[0].text === "I'm cooking and GAL can't take it. Give me about half a minute, then I'll play the piano." && C.waitingFor(b) === 1, { lines: L(r10c) }));
+  } catch (e) { if (e.message !== 'no GAL') out.push(result('commands: sweep ran without throwing', false, { error: String(e && e.stack || e).slice(0, 500) })); else out.push(result('commands: GAL could be built for the test', false)); }
+  finally { window.__voiceNoAudio = false; C.clear(); b.lock = null; try { galReset(); } catch { /* none */ } T.resetRooms(); T.home(); T.removeAll(); T.settle(); }
+  out.push(result('commands: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
 // ---- 12c. Telling him to mow the lawn (and the other yard jobs) by voice, and while he is already out in the yard (src/voice.js, brain.js update) ----
 // "mow the lawn" used to come back as "I did not catch that" (the parser knew nothing of the yard), and an order for the yard given while he was
 // already out there made him walk back indoors first (and, with no GAL, was refused as "busy").
@@ -5015,6 +5163,7 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.metal = S(T.sweepMetal);
   report.yardOrders = S(T.sweepYardOrders);
   report.yardVoice = S(T.sweepYardVoice);
+  report.commands = S(T.sweepCommands);
   report.mowerShed = S(T.sweepMowerShed);
   report.shed = S(T.sweepShed);
   report.range = S(T.sweepRange);

@@ -2683,7 +2683,7 @@ export class Brain {
       this.queue.push(this.walkAt('easel', 0, 0.85, null, true));
     } else if (s && s.type === 'play' && s.fx.chairSit) {
       s.t = Math.max(s.t, s.dur - 1.0); // stand up where he is; the book goes back next
-    } else this.step = null;
+    } else if (!this.finishStep) this.step = null;      // (finishStep: a spoken command lets him finish the step he is on, commands.js)
     if (!keepMusic && this.music && !this.userMusic && this.inMain()) this.queue.push(this.walkAt('table', 0, 0.55, Math.PI), this.play('reach', 1.8, { at: [0.9, () => { this.musicOff(); this.albumOnTable = false; }], target: () => this.stereoButton() }));
     this.ui('wrapping up');
   }
@@ -2721,6 +2721,7 @@ export class Brain {
       this.w.updateDoors(dt);             // doors swing open and shut
       if (this.w.restaurant) this.w.restaurant.update(dt);      // customers arrive, order, eat and pay (customers.js)
       if (this.w.gal) this.w.gal.update(dt);                    // GAL, the second robot (gal.js)
+      if (this.commands) this.commands.tick(dt);                // spoken commands: wrap-up limits, waiting behind a busy job, the start watchdog (commands.js)
     }
     if (this.w.paintings) this.w.paintings.update(dt);        // GUY's paintings: saved when they change, and put away ones filed in the Catalog
     this.skills.tick(dt);                 // skills whose book was forgotten fade away
