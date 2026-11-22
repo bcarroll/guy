@@ -1420,7 +1420,7 @@ const BANNED = /\b(fail|failed|error|wrong|can't|cannot|lost|broken|dangerous)\b
 const friendly = (msgs) => msgs.length > 0 && msgs.every((m) => m.length < 80 && !BANNED.test(m));    // short, kind wording (section 16 of the plan)
 const openTab = (tab) => { const m = machine(); m.hidden = false; m.querySelector(`[data-tab=${tab}]`).click(); return m; };
 const rectsOv = (a, b) => a.x1 > b.x0 && a.x0 < b.x1 && a.z1 > b.z0 && a.z0 < b.z1;
-// Take every added room away again (a test-only reset: the game never removes a room).
+// Take every added room away again (a test-only reset: it also deletes the furniture; the game's own removal is rooms.remove, tested by sweepRoomRemoval).
 T.resetRooms = () => {
   const b = B();
   for (const r of ROOM_CATALOG) R().reset(r.id);                                  // its furniture goes with it
@@ -2088,6 +2088,30 @@ T.sweepRooms = () => {
   }
   T.resetRooms(); putBackSince(before); machine().hidden = true;
   out.push(result('rooms: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
+// ---- 10b. Removing a room (rooms.remove), the parts sweepRooms does not cover: a rug on its floor and the corner rooms that open through it ----
+T.sweepRoomRemoval = () => {
+  const out = [], base = errors.length, w = W();
+  T.resetRooms(); T.settle(); T.home();
+  const before = new Set(Object.keys(w.removed));
+  unlockRoom('workshop'); R().add('workshop');
+  unlockRoom('library'); R().add('library');                                           // (a corner room: opens through the Workshop when it is beside one)
+  const kid = !!w.doors.library && w.doors.library.parent === 'workshop';
+  T.addObject('rug');
+  const rug = w.decor.rug, bd = w.doors.workshop.shell.bounds;
+  if (rug) rug.set((bd.minX + bd.maxX) / 2, (bd.minZ + bd.maxZ) / 2);                   // a rug laid on the Workshop's floor
+  const rugIn = !!rug && w.roomIdAt(rug.u, rug.v) === 'workshop';
+  const res = R().remove('workshop');
+  let t = 0; while (t < 30 && w.doors.workshop) { step(0.25); t += 0.25; }               // (waits only if a robot happened to be in there)
+  out.push(result('room removal: the room, its door and walls are gone', !R().isAdded('workshop') && !w.doors.workshop && w.extent().maxX === 5, { res, doors: Object.keys(w.doors) }));
+  out.push(result('room removal: a rug on its floor goes back to the Catalog too, not left floating', rugIn && !w.decor.rug && !!w.removed.rug, { rugIn, inRoom: !!w.decor.rug, removed: !!w.removed.rug }));
+  if (kid) out.push(result('room removal: the Library that opened through it goes too', !w.doors.library && !R().isAdded('library')));
+  const gone = R().remove('workshop');
+  out.push(result('room removal: removing a room that is not in the home does nothing', !gone.ok && !w.doors.workshop));
+  T.resetRooms(); putBackSince(before); machine().hidden = true;
+  out.push(result('room removal: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
 };
 
@@ -5296,6 +5320,7 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.corners = S(T.sweepCorners);
   report.home = S(T.sweepHome);
   report.library = S(T.sweepLibrary);
+  report.roomRemoval = S(T.sweepRoomRemoval);        // (last: each sweep's seed is its number, so a new one goes at the end and leaves the others' seeds alone)
   if (seed && T.unseed) T.unseed();
   window.__qaPaused = wasPaused;
   T.lastReport = report;

@@ -305,7 +305,8 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`, `
 - The right and front walls face away from the default camera, so the door is built from solid parts and the sign is drawn on both sides: the room's name facing GUY's room, "GUY's Room" facing the added room.
 - Saved in `guy.rooms.v1` (separate from `guy.room.v1`). A new visit starts with the core pieces back on the walls, so the saved door is placed again first and anything in its way is taken out again; if its saved spot is now taken by something fixed it finds a new one.
 - Entries with `room: '<id>'` are not listed (not even as locked) until that room is added and unlocked.
-- Test aids: `T.resetRooms()`, `R().add(id, { at, walls })`, `R().setUnlocked(id, bool)`, `R().snapshot()` / `R().restoreFrom()` (`R()` is `window.brain.w.rooms`).
+- **Removing a room** (Rooms tab, "Remove room", two taps: the first says "Tap to confirm"; `rooms.remove`): the room, its door and the corner rooms that open through it go; its furniture and any rug on its floor go back to the Catalog (built things to storage), what hung on its walls is put away, nothing is deleted; a robot inside walks out first. Covered by `T.sweepRooms` and `T.sweepRoomRemoval` (rug, corner room).
+- Test aids: `T.resetRooms()` (deletes furniture too: it is a test-only reset, not the game's removal), `R().add(id, { at, walls })`, `R().setUnlocked(id, bool)`, `R().snapshot()` / `R().restoreFrom()` (`R()` is `window.brain.w.rooms`).
 
 ## Saved layout and automatic updates (`src/layout.js`, `src/update.js`)
 
@@ -403,6 +404,8 @@ Rules (all covered by `sweepRooms`, `sweepDoors`, `sweepGating`, `sweepSaves`, `
 ## Regression watch (bugs found and fixed; make sure they stay fixed)
 - The Shooting Range and the Bowling Alley were pinned to 8 m wide (`size.d`), so on the front or back wall (10 m) they were narrower than every other room. `size` now only sets the depth and the width is the wall's, like the rest; `sweepRooms` compares their width with the Workshop's on the same wall.
 - Rooms could not be removed by the user (only the test-only `reset`). The Rooms tab now has **Remove room** on every added room (tap twice: the first asks): `rooms.remove(id)` takes the room, its door and the corner rooms that open into it; its furniture goes back to the Catalog (built things to storage), nothing is deleted. A robot inside walks out first (the doors count as locked from outside meanwhile, `door.closing`; `rooms.tick` in the frame loop drops the room once nobody is in it). Checked by `sweepRooms`.
+
+- A rug on the floor of a removed room was left behind, floating where the room had been (`rooms.remove` took only furniture). Floor decor inside the room now goes back to the Catalog too; `sweepRoomRemoval` checks it.
 
 - **Fixed: a body and arm inside furniture** (seed 42, `build` and the four book sweeps: GUY walked into the drum kit): `moveBy` let him walk in any direction once he was inside an obstacle's 20 cm margin, even into it. Now inside the margin he may only walk out or along it (never closer than 1 cm; the other robot's body, pushing, driving the mower and a goal inside the margin are exempt), slides round it toward his goal, and drifts away from it while walking close along it with his goal elsewhere, so his arms swing clear. Test: bot rules 3d. Wider limits (3 to 12 cm) were tried and each froze someone: GAL in the doorway behind GUY's body box, GUY pressed to the mower beside the fence, the wall tests along the easel. A small movable piece of furniture that blocks a walk for 3 s is moved aside first (`makeRoomFor`, not while carrying a book, ball or guitar, never what the plan still uses; no test of its own yet).
 

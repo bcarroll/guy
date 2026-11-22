@@ -193,6 +193,7 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
       const inRoom = (x, z) => x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ;
       shelvesHome(inRoom);
       for (const [name, o] of Object.entries(world.objects)) if (inRoom(o.x, o.z)) remove(name);       // to the Catalog (or storage), not lost
+      for (const [name, o] of Object.entries(world.decor)) if (!o.wall && inRoom(o.u, o.v)) remove(name);    // a rug on its floor too (what hangs on its walls goes with removeDoor)
       world.removeDoor(i);
       delete state[i];
       delete closing[i];
