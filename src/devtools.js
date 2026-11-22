@@ -2087,7 +2087,15 @@ T.sweepRooms = () => {
 
 // ---- 10b. Removing a room (rooms.remove), the parts sweepRooms does not cover: a rug on its floor and the corner rooms that open through it ----
 T.sweepRoomRemoval = () => {
+  const lostPlant = (() => {                              // (a test's own reset of a room must not destroy what his room came with: later sweeps then had no plant)
+    const w = W(); T.resetRooms(); T.removeAll(); T.settle(); T.home(); R().add('workshop', { walls: ['right'] }); T.addObject('plant');
+    const o = w.objects.plant, c = w.roomSpot('workshop'), at = w.findSpot(o, c, null); o.home = { x: at.x, z: at.z }; o.set(at.x, at.z);
+    const inside = w.roomIdAt(o.x, o.z); R().reset('workshop');
+    const kept = !!w.removed.plant, back = T.addObject('plant'), p = w.objects.plant;
+    const r = { inside, kept, back, room: p && w.roomIdAt(p.x, p.z) }; T.removeAll(); T.resetRooms(); return r;
+  })();
   const out = [], base = errors.length, w = W();
+  out.push(result('room removal: a test reset of a room his plant stands in leaves the plant in the Catalog, and it can be put back in his room', lostPlant.inside === 'workshop' && lostPlant.kept && lostPlant.back && lostPlant.room === 'main', lostPlant));
   T.resetRooms(); T.settle(); T.home();
   const before = new Set(Object.keys(w.removed));
   unlockRoom('workshop'); R().add('workshop');
@@ -3630,6 +3638,10 @@ T.sweepGal = () => {
     b.queue = []; b.step = null; b.choose('wander'); gb.queue = []; gb.step = null; gb.homeTried = -999; gb.choose('carryhome');
     let t8 = 0, hers = false; while (t8 < 200 && !home()) { b.homeTried = b.time; step(0.25); t8 += 0.25; if (gb.homeMove && gb.carry === 'flat') hers = true; }
     out.push(result('gal: she carries a bed left in the Workshop to the Bedroom herself', hers && home(), { hers, t8 }));
+    T.settle(); T.strand('bed'); gb.queue = []; gb.step = null; gb.homeTried = -999; b.homeTried = b.time + 999; gb.choose('carryhome');
+    let t9 = 0; while (t9 < 120 && !bed().packed) { b.homeTried = b.time; step(0.25); t9 += 0.25; }
+    const wasPacked = bed().packed; gb.beginBuild('footstool'); w.gal.remove();
+    out.push(result('gal: taken away with a bed flat in her arms and a stool half built, the bed stands again and nothing is left "being built"', wasPacked && !bed().packed && bed().group.visible && w.fits(bed(), bed().x, bed().z) && !(w.building || []).length, { wasPacked, building: (w.building || []).length }));
     galReset();
   }
   // 8. she is saved and comes back (not under ?fresh: the harness switches saving on for a moment with its own keys)
@@ -5098,7 +5110,7 @@ T.sweepHome = () => {
       while (t < 240 && !did) { step(0.25); t += 0.25; const st = b.step; if (acts.includes(b.last) && st && st.type === 'play' && st.fx && (st.fx.needs || st.fx.chairSit)) { did = true; inRoom = b.hereId() === HOME_ROOM[k]; } }
       res[k] = { ok: r.ok, did, inRoom, last: b.last };
       b.skip(); b.queue = []; b.step = null; b.pendingActivity = 'leave';
-      { let t2 = 0; while (t2 < 240 && !(b.inMain() && Object.values(w.doors).every((d) => d.open === 0))) { step(0.25); t2 += 0.25; } }
+      { let t2 = 0; while (t2 < 240 && !(b.inMain() && Object.values(w.doors).every((d) => d.open === 0))) { if (b.last === 'leave') b.pendingActivity = 'wander'; step(0.25); t2 += 0.25; } }       // (and stays: off to the Bedroom again at once, the doors were never all shut)
     }
     out.push(result('home: pointed at the bed, the wardrobe, the bedside table, a bookshelf, the reading chair, the desk or the globe he goes in through the Workshop and uses it there', Object.values(res).every((x) => x.ok && x.did && x.inRoom), res));
     out.push(result('home: afterwards he is back in his own room with the doors shut', b.inMain() && Object.values(w.doors).every((d) => d.open === 0), { here: b.hereId() }));

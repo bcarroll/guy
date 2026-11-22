@@ -2178,6 +2178,7 @@ export function buildRoom(scene) {
       const p = world.shellPoint('workshop', n * 0.5, 0);
       return world.addInstance(kind, null, null, true, { x: p.x, z: p.z });
     },
+    canAddNew: (id) => !!NEW_OBJECTS[id],          // (made afresh when it is added: not one of the things his room came with)
     // Objects that do not exist yet but can be added from the Catalog.
     addNew(id, avoid, where = null) {
       if (DECOR_NEW[id]) {
