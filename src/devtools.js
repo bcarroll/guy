@@ -36,6 +36,8 @@ import { install as installShots } from './qa-shots.js';
 import { counts as sfxCounts } from './sfx.js';
 import { BARKS, NO_BARK, resetBarks } from './barks.js';
 import { WHATS_NEW } from './whatsnew.js';
+import { TABS as HELP_TABS, ROOM_NOTES, helpHtml } from './help.js';
+import { CHANGELOG } from './changelog.js';
 const lcg = (seed) => { let a = seed | 0; return () => { a = (Math.imul(a, 1664525) + 1013904223) | 0; return (a >>> 0) / 4294967296; }; };      // (a small seeded generator: for a check that must not depend on the sweep's seed)
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -5347,6 +5349,49 @@ T.sweepRange = () => {
 // ---- 12f. The Studio (src/studioobjects.js, src/studiobrain.js): the room, the record wall, a DJ trip, a show, a party, hanging guitars -----------------
 // GAL dances where the music is: with the stereo in the Studio she switches it on there and dances on the Studio floor, not in
 // GUY's room (she once danced in his room and walked back to switch it off).
+// ---- Help (src/help.js): the ❓ button, every tab, What's new and the change log ----
+T.sweepHelp = () => {
+  const out = [], h = window.__help, root = document.getElementById('help'), btn = document.getElementById('help-btn');
+  if (!h || !root || !btn) return [result('help: the panel and its ❓ button are on the page', false, { h: !!h, root: !!root, btn: !!btn })];
+  h.close();
+  btn.click();
+  out.push(result('help: the ❓ button opens the panel on "Start here"', h.isOpen() && !root.hidden && h.tab === 'start' && btn.getAttribute('aria-expanded') === 'true'));
+  const empty = [];
+  for (const t of HELP_TABS) { root.querySelector(`.tab[data-tab="${t.id}"]`).click(); const body = root.querySelector('.body'); if (h.tab !== t.id || body.textContent.trim().length < 40) empty.push(t.id); }
+  out.push(result('help: every tab opens and has something to read', empty.length === 0, { empty }));
+  const missing = ROOM_CATALOG.filter((r) => !(ROOM_NOTES[r.id] || '').trim()).map((r) => r.id);
+  out.push(result('help: every room in the Catalog has a line in the Rooms tab', missing.length === 0, { missing }));
+  const rooms = helpHtml('rooms');
+  out.push(result('help: the Rooms tab names every room', ROOM_CATALOG.every((r) => rooms.includes(r.name.replace(/&/g, '&amp;')))));
+  const skillsTab = helpHtml('skills'), grouped = new Set(SKILL_GROUPS.flatMap(([, ids]) => ids));
+  const unlisted = Object.keys(SKILL_INFO).filter((id) => grouped.has(id) && !skillsTab.includes(SKILL_INFO[id].name.replace(/&/g, '&amp;')));
+  out.push(result('help: the Books and skills tab lists every skill in the Skills menu', unlisted.length === 0, { unlisted }));
+  h.show('new');
+  const news = [...root.querySelectorAll('.news')].map((x) => x.dataset.news);
+  out.push(result('help: What\'s new lists every update, newest first', news.length === WHATS_NEW.length && news.every((id, i) => id === WHATS_NEW[i].id), { shown: news.length, all: WHATS_NEW.length }));
+  const dates = CHANGELOG.map((d) => d.date);
+  const valid = dates.every((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(d)));
+  const sorted = dates.every((d, i) => i === 0 || dates[i - 1] > d);
+  const filled = CHANGELOG.every((d) => ['added', 'changed', 'removed'].some((k) => (d[k] || []).length) && Object.keys(d).every((k) => ['date', 'added', 'changed', 'removed'].includes(k)));
+  out.push(result('help: the change log has one entry per day, newest first, each with something added, changed or removed', valid && sorted && filled, { valid, sorted, filled }));
+  h.show('log');
+  out.push(result('help: the Change log tab shows every day', root.querySelectorAll('.day').length === CHANGELOG.length));
+  const secret = JSON.stringify([CHANGELOG, HELP_TABS.filter((t) => t.id !== 'new').map((t) => helpHtml(t.id))]).match(/air ?guitar|windmill|knee ?slide|easter egg/i);     // (What's new is WHATS_NEW as it stands: it has its own check)
+  out.push(result('help: no secret move or easter egg is given away in the help or the change log', !secret, { secret: secret && secret[0] }));
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  out.push(result('help: Escape closes it', !h.isOpen() && root.hidden && btn.getAttribute('aria-expanded') === 'false'));
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'h' }));
+  const byKey = h.isOpen();
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'H' }));
+  out.push(result('help: H opens and closes it', byKey && !h.isOpen()));
+  const skills = document.getElementById('skills');
+  document.getElementById('skills-btn').click();
+  btn.click();
+  out.push(result('help: opening help closes the Skills menu', h.isOpen() && skills.hidden));
+  h.close();
+  return out;
+};
+
 T.sweepGalDanceRoom = () => {
   const out = [], base = errors.length, w = W(), gal = w.gal;
   if (!gal.g || !gal.g.loaded) return [result('galdance: her model is loaded (wait a moment after the page opens)', false)];
@@ -6180,8 +6225,9 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.roomRemoval = S(T.sweepRoomRemoval);        // (last: each sweep's seed is its number, so a new one goes at the end and leaves the others' seeds alone)
   report.studio = S(T.sweepStudio);        // (after the others, so their seeds stay the same)
   report.guitarHold = S(T.sweepGuitarHold);
-  report.galDanceRoom = S(T.sweepGalDanceRoom);        // (last, so the others keep their seeds)
+  report.galDanceRoom = S(T.sweepGalDanceRoom);
   report.floorplan = S(T.sweepFloorplan);
+  report.help = S(T.sweepHelp);        // (last, so the others keep their seeds)
   if (seed && T.unseed) T.unseed();
   window.__qaPaused = wasPaused;
   T.lastReport = report;
