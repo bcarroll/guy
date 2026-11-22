@@ -180,7 +180,9 @@ export function install(T, h) {
         r.clear(); r.paused = true;
         const e = r.stage('cooked', m.id);
         if (e) {
-          await waitLoaded(e); e.state = 'eating'; e.timer = 99; e.eatT = 0;
+          await waitLoaded(e);
+          await frames(90);                                   // (settled first: straight after loading the arms are still coming down from the T-pose)
+          e.state = 'eating'; e.timer = 99; e.eatT = 0;
           const pts = [];
           for (let i = 0; i < 160; i++) { await frames(1); if (i % 4 === 0) pts.push(measure(e).R.clone()); }
           const s = measure(e), travel = Math.max(...pts.map((p) => p.distanceTo(pts[0]))), hi = Math.max(...pts.map((p) => p.y));
