@@ -1,7 +1,7 @@
 // The QA runner: everything that checks Guy's room, in one command, in a real (headless) browser.
 //
-//   npm test                      the lot: coverage, every sweep, rigs, customers, audio, and the pictures
-//   npm test -- --only=shots      just some of it: sweeps | rigs | customers | audio | guitar | shots  (comma separated)
+//   npm test                      the lot: the runner's own server, coverage, every sweep, rigs, customers, audio, and the pictures
+//   npm test -- --only=shots      just some of it: runner | sweeps | rigs | customers | audio | guitar | shots  (comma separated)
 //   npm test -- --filter=customer only the pictures whose id contains this
 //   npm test -- --repeat=3        run the sweeps three times: a sweep that fails only sometimes is reported as FLAKY (never retried
 //                                 until it passes: a failure that comes and goes is a bug that comes and goes)
@@ -12,35 +12,32 @@
 // Pictures go to qa/out (current, difference and a gallery: qa/out/index.html); approved ones live in qa/baselines.
 // Exit code 0 only when everything passed (and nothing was flaky).
 import puppeteer from 'puppeteer';
-import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
-import net from 'node:net';
+import { startServer, checkServer, freePort, portOpen } from './server.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'qa', 'out'), BASE = path.join(ROOT, 'qa', 'baselines');
 const arg = (name, dflt = null) => { const a = process.argv.slice(2).find((x) => x === `--${name}` || x.startsWith(`--${name}=`)); return a === undefined ? dflt : a.includes('=') ? a.split('=').slice(1).join('=') : true; };
-const ONLY = new Set(String(arg('only', 'sweeps,rigs,customers,audio,guitar,shots')).split(','));
+const ONLY = new Set(String(arg('only', 'runner,sweeps,rigs,customers,audio,guitar,shots')).split(','));
 const REPEAT = Math.max(1, Number(arg('repeat', 1)));
 const UPTO = Math.max(0, Number(arg('upto', 0)));                // stop the sweeps after this one (to replay a failure quickly: --seed=42 --upto=6)
 const SEED0 = Math.max(1, Number(arg('seed', 1)));            // the first seed: run i of the sweeps uses seed SEED0 + i (npm test -- --repeat=3 --seed=10 plays seeds 10, 11, 12)
 const FILTER = arg('filter', null), APPROVE = arg('approve', false), STRICT = !!arg('strict', false);
 const PORT = Number(arg('port', 5199));
+const BROWSER = ['sweeps', 'rigs', 'customers', 'audio', 'guitar', 'shots'].some((x) => ONLY.has(x));
+const CALL_LIMIT = 90 * 60000;                        // no single call to the browser takes this long (a whole run of the sweeps is the longest): a hang is an error, not a run that never ends
 const TOLERANCE = 0.004;                              // the fraction of a picture that may change before it counts as different
 
 const c = (n, s) => `\x1b[${n}m${s}\x1b[0m`, green = (s) => c(32, s), red = (s) => c(31, s), yellow = (s) => c(33, s), bold = (s) => c(1, s);
-const portOpen = (port) => new Promise((res) => { const s = net.connect(port, '127.0.0.1', () => { s.destroy(); res(true); }); s.on('error', () => res(false)); });
 const slug = (id) => id.replace(/[^a-z0-9_.-]/gi, '_');
 
 fs.mkdirSync(OUT, { recursive: true }); fs.mkdirSync(BASE, { recursive: true });
 let server = null;
-async function startServer() {
+async function serve() {
   if (await portOpen(PORT)) return;
-  server = spawn(process.execPath, [path.join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(PORT), '--strictPort'], { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
-  server.on('exit', (code) => { if (code) { console.error(red('the dev server stopped')); process.exit(2); } });
-  for (let i = 0; i < 80 && !(await portOpen(PORT)); i++) await new Promise((r) => setTimeout(r, 500));      // (vite's own message has colour codes in it: ask the port instead)
-  if (!(await portOpen(PORT))) throw new Error('the dev server did not start');
+  server = await startServer(ROOT, PORT, { onExit: (code) => { if (code) { console.error(red('the dev server stopped')); process.exit(2); } } });
 }
 
 const summary = [];                                    // { phase, name, status: pass|fail|flaky|new }
@@ -54,9 +51,15 @@ async function main() {
     console.log(green(`approved ${files.length} pictures from qa/out`));
     return;
   }
-  await startServer();
+  if (ONLY.has('runner')) {
+    const r = await checkServer(ROOT, await freePort());
+    add('runner', 'the dev server keeps answering however much it prints', r.pass ? 'pass' : 'fail', r.notes);
+    console.log(`  runner: ${r.pass ? green('pass') : red('FAIL ' + r.notes)} `.trimEnd());
+    if (!BROWSER) return verdict();
+  }
+  await serve();
   const browser = await puppeteer.launch({
-    headless: true, protocolTimeout: 0,
+    headless: true, protocolTimeout: CALL_LIMIT,
     args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--window-size=800,600'],
   });
   const page = await browser.newPage();
@@ -163,10 +166,13 @@ async function main() {
     if (pageErrors.length) add('page', 'no uncaught errors in the page', 'fail', pageErrors.slice(0, 5).join(' | '));
   } finally {
     await browser.close();
-    if (server) server.kill();
+    if (server) server.child.kill();
   }
+  verdict();
+}
 
-  // ---- the verdict
+// ---- the verdict
+function verdict() {
   const count = (s) => summary.filter((x) => x.status === s).length;
   console.log(bold('\nResult'));
   for (const x of summary.filter((y) => y.status !== 'pass')) {
@@ -191,4 +197,8 @@ function writeGallery(items) {
   console.log(`  gallery: qa/index.html`);
 }
 
-main().catch((e) => { console.error(red('QA run failed: ' + (e && e.stack || e))); if (server) server.kill(); process.exit(2); });
+main().catch((e) => {
+  console.error(red('QA run failed: ' + (e && e.stack || e)));
+  if (server) { console.error('the dev server last printed:\n' + server.tail()); server.child.kill(); }
+  process.exit(2);
+});
