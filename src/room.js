@@ -1587,6 +1587,22 @@ export function buildRoom(scene) {
     return best && { wall: best.wall, u: best.u, displace: best.hit };
   };
 
+  // Why a door cannot go on these walls (when planDoor finds no place): for each wall, the room already on it, or the things that never move
+  // and stand in the way of every spot on it (the Catalog says so: rooms.js explainNoWall).
+  const doorReport = (walls = ['right', 'front', 'back']) => walls.filter((wall) => WALL[wall]).map((wall) => {
+    const d = Object.values(doors).find((k) => k.wall === wall);
+    if (d) return { wall, room: d.name, fixed: [] };
+    const W = WALL[wall], fixed = new Set(), steps = Math.floor((W.hi - W.lo - 1.8) / 0.1 + 1e-6);
+    let free = false;
+    for (let i = 0; i <= steps; i++) {
+      const u = +(W.lo + 0.9 + i * 0.1).toFixed(2);
+      if (!doorSpotFree(wall, u)) continue;
+      const b = doorBlockers(wall, u);
+      if (b.fixed) fixed.add(b.fixed === 'bookstack' ? 'stack of books' : b.fixed); else free = true;
+    }
+    return { wall, room: null, fixed: [...fixed], free };
+  });
+
   // ---- Corner rooms ----
   // The floor around GUY's room is a 3 x 3 grid of rooms: his own in the middle, one room on each wall (the rooms on the four walls) and
   // four corners. A corner room has no wall of GUY's room to put a door in: it opens through a door in the side wall of the room beside it
@@ -1924,7 +1940,7 @@ export function buildRoom(scene) {
       return d;
     },
     // ---- doors and the rooms behind them (see src/rooms.js) ----
-    doors, links, gateOf, allDoors, linkId, missingLinks, planLink, addLink, removeLink, DOOR, planDoor, planCorner, cornerCell, CORNER_KEYS: Object.keys(CORNERS), doorBlockers, findWallSpot, canTransit, wallOk, insideRoom, dragTo, beginDrag, dropObject,
+    doors, links, gateOf, allDoors, linkId, missingLinks, planLink, addLink, removeLink, DOOR, planDoor, doorReport, planCorner, cornerCell, CORNER_KEYS: Object.keys(CORNERS), doorBlockers, findWallSpot, canTransit, wallOk, insideRoom, dragTo, beginDrag, dropObject,
     // Put a door for room `def` at (wall, u). The caller has already cleared whatever was in its way.
     // A corner room (opts.parent, opts.cell) has its door in the side wall `wall` of the room beside it (`parent`), and stands in `cell`.
     addDoor(def, wall, u, opts = {}) {

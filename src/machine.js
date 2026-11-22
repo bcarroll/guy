@@ -259,11 +259,26 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
     },
   };
 
+  // Add a room. When something would have to come out of GUY's room for its door (the Restaurant asks first: rooms.js offerFor), its card
+  // says what and asks: "Remove and add" puts the door there, "Not now" leaves everything as it is.
+  let roomOffer = null;
   function addRoom(r) {
-    const res = rooms.add(r.id);
+    const res = rooms.add(r.id, { ask: true });
+    roomOffer = res.offer ? { ...res.offer, text: res.messages.join(' ') } : null;
     notify(res.messages.join(' '));
     render();
   }
+  function acceptRoomOffer(r) {
+    const offer = roomOffer && roomOffer.id === r.id ? roomOffer : null;
+    roomOffer = null;
+    if (!offer) { render(); return; }
+    const res = rooms.add(r.id, { clear: offer });
+    roomOffer = res.offer ? { ...res.offer, text: res.messages.join(' ') } : null;     // (something else stands there now: it asks again)
+    notify(res.messages.join(' '));
+    save();
+    render();
+  }
+  function declineRoomOffer() { roomOffer = null; notify('Nothing was moved.'); render(); }
 
   // Take a room away (tapped twice: the first tap asks). Its furniture comes back to the Catalog; a robot in it walks out first.
   let confirmRoom = null;
@@ -423,7 +438,11 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
           const note = sure ? `Tap again to remove the ${r.name}${kids.length ? ` and the ${kids.join(' and the ')}` : ''}. Its furniture goes back to the Catalog.` : '✓ In your home';
           roomGroups['In your home'].push(card({ ...base, status: 'inroom', label: sure ? 'Tap to confirm' : 'Remove room', action: i, danger: true, note }));
         }
-        else { const i = handlers.push(() => addRoom(r)) - 1; roomGroups['Add a room'].push(card({ ...base, label: 'Add to my home', action: i, note: r.corner ? 'Goes in a free corner beside another room when there is one, otherwise gets a door on a wall. Anything in the way goes back to the Catalog.' : 'Puts a door on a wall. Anything in the way goes back to the Catalog.' })); }
+        else if (roomOffer && roomOffer.id === r.id) {
+          const yes = handlers.push(() => acceptRoomOffer(r)) - 1, no = handlers.push(() => declineRoomOffer()) - 1;
+          roomGroups['Add a room'].push(card({ ...base, label: 'Remove and add', action: yes, note: roomOffer.text, extra: { action: no, label: 'Not now' } }));
+        }
+        else { const i = handlers.push(() => addRoom(r)) - 1; roomGroups['Add a room'].push(card({ ...base, label: 'Add to my home', action: i, note: r.corner ? 'Goes in a free corner beside another room when there is one, otherwise gets a door on a wall. Anything in the way goes back to the Catalog.' : r.askToClear ? 'Puts a door on a wall. If something is in the way, you are asked first.' : 'Puts a door on a wall. Anything in the way goes back to the Catalog.' })); }
       }
     } else {
       for (const b of BOOK_CATALOG.filter(live)) {
