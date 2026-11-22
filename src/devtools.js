@@ -4461,6 +4461,13 @@ T.sweepSports = () => {
     b.inviteChance = 1; gb.inviteChance = 1;                                // (in the real game it is half the time: here every game is an invitation, so the sweep sees all of it)
     for (const id of ['outdoor', 'outdoor.soccer', 'outdoor.basketball']) gb.skills.known.add(id);
     const stopAll = () => { for (const x of [b, gb]) { x.unlock(false); x.queue = []; x.step = null; x.pendingActivity = null; x.last = 'wander'; x.using = new Set(); } };
+    // She (or he) really is free when the game starts: in GUY's room, nothing in hand, idle. Only marked free while standing out in the yard, the first
+    // thing she did was walk out of it, could not be called off that, and came back out to the hoop in time to be leaving again at the next game.
+    const bringIn = (x) => {
+      let t = 0;
+      while (t < 120 && !(x.inMain() && !x.held && !x.ballHeld && x.last === 'wander')) { if (!x.held && !x.ballHeld && !x.pendingActivity) x.pendingActivity = x.inMain() ? 'wander' : 'leave'; step(0.25); t += 0.25; }
+      x.pendingActivity = null; x.queue = [x.walk(-3, 2.2), x.play('idle', 200)]; x.step = null; x.last = 'wander'; x.using = new Set();       // (away from the yard door: stood in it she keeps the other from going out, and he gives up)
+    };
     const play = (shooter, other, act, partnerPose, maxGames, kind) => {
       const seen = { poses: new Set(), joined: 0, games: 0, near: 0, between: 0, frames: 0, minD: 9, errs: errors.length };
       const hoop = w.objects[kind === 'basketball' ? 'basketballhoop' : 'soccergoal'];
@@ -4470,8 +4477,8 @@ T.sweepSports = () => {
           const o = w.objects[id], ball = w.yard.balls[k]; if (!o || !ball) continue;
           const p = o.at(0, 0, d); ball.position.set(p.x, ball.userData.r || 0.12, p.z); ball.userData.vel.set(0, 0, 0); ball.userData.kinematic = false;
         }
-        T.settle();
-        other.queue = []; other.step = null; other.pendingActivity = null; other.last = 'wander'; other.using = new Set();      // (settling let her wander off into something: she starts each game with nothing special on)
+        bringIn(other); T.settle(); bringIn(other);      // (settling tidies GUY up; if he is the one to be invited it moves him, so he is made free again after it)
+        if (shooter !== b) bringIn(shooter);
         shooter.choose(act); seen.games++;
         const why = () => ({ otherLast: other.last, avail: other.available(kind === 'basketball' ? 'hoopdefend' : 'goalkeep'), whyNot: other.whyNot(kind === 'basketball' ? 'hoopdefend' : 'goalkeep'), pend: other.pendingActivity, lock: !!other.lock, stuck: other.stuckIn(), skills: [...other.skills.known].join(','), shooterLast: shooter.last, inYard: shooter.inYard(), playing: shooter.sportPlaying(kind), galIn: other.inYard() });
         let t = 0, joinedThis = false; const tl = []; let tprev = '';
