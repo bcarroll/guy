@@ -129,7 +129,7 @@ export function installHobbies(Brain, POSES, H) {
           const t = this.obj('telescope'), grid = makeGrid(this.w.obstacles, 0.62, 0, t.obstacle), sideGrid = makeGrid(this.w.obstacles, 0.4, 0, t.obstacle);   // he leans over the ends: more room than walking needs
           t.tube.updateWorldMatrix(true, false);
           const c = t.tube.localToWorld(V(0, 0, 0));
-          const out = Math.abs(c.x) / 4.6 > Math.abs(c.z) / 3.6 ? V(Math.sign(c.x), 0, 0) : V(0, 0, Math.sign(c.z));   // the nearest wall
+          const out = Math.abs(c.x) > Math.abs(c.z) ? V(Math.sign(c.x), 0, 0) : V(0, 0, Math.sign(c.z));   // the nearest wall
           if (mode === 'room') out.negate();
           const cur = t.aim, wy0 = cur.yaw + t.group.rotation.y;
           // the nearest wall (or into the room) first; when there is no room that way, the other three directions of the compass

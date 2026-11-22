@@ -29,7 +29,7 @@ export function bowlSkill(skills) {
 }
 
 export function installBowl(Brain, POSES, H) {
-  const { pick } = H;
+  const { pick, squat } = H;
 
   // ---- the poses
   // the delivery: a pendulum arm (back, then down and through) with a lunge; the left arm out for balance
@@ -62,9 +62,17 @@ export function installBowl(Brain, POSES, H) {
     const p = b.point();
     const k = smooth(clamp(t / Math.max(0.2, dur * 0.5), 0, 1)) * (1 - smooth(clamp((t - dur * 0.75) / (dur * 0.25), 0, 1)));
     const sh = g.boneWorld('RightArm');
-    const low = clamp((sh.y - p.y - 0.45) / 0.8, 0, 1);
-    g.hipsOffset.y = -0.38 * low * k;
+    // down by his feet (the pin deck, the crate of pins): he squats down to it, like the reach for the floor (POSES.reach), and leans out over
+    // his knees. (He used to stay standing, his hand a metre above the pins he was setting.)
+    const down = clamp((0.5 - p.y) / 0.3, 0, 1) * k;
+    if (down > 0) {
+      squat(g, 1.5 * down);
+      g.hipsOffset.y -= 0.84 * (1 - Math.cos(0.75 * 1.5 * down));
+      g.set('Spine', new THREE.Quaternion().setFromAxisAngle(V(1, 0, 0), 0.35 * down)); g.set('Spine1', new THREE.Quaternion().setFromAxisAngle(V(1, 0, 0), 0.45 * down));
+    } else g.hipsOffset.y = -0.38 * clamp((sh.y - p.y - 0.45) / 0.8, 0, 1) * k;
+    if (p.y < 0.5) g.reachAssist(p, k * (1 - 0.6 * down));
     g.reach('Right', sh.clone().lerp(p, 0.4 + 0.6 * k), 1, false);
+    if (p.y < 0.5) g.curl('Right', 0.35 * k);
   };
 
   Object.assign(Brain.prototype, {
@@ -73,8 +81,8 @@ export function installBowl(Brain, POSES, H) {
     bowlOpen() { return !!this.w.doors[ID] && !!this.w.bowl && !this.doorLockedFor(ID); },
     bowlLaneFor() {
       const prefer = this.isGal ? [2, 1, 0] : [0, 1, 2];
-      const taken = this.other ? this.other.bowlLane : null;
-      return prefer.find((i) => i !== taken) ?? prefer[0];
+      const taken = this.other ? [this.other.bowlLane, this.other.pinLane] : [];       // (bowling on it, or putting new pins on it)
+      return prefer.find((i) => !taken.includes(i)) ?? prefer[0];
     },
     bowlTrip(label, inner) {
       return [label, ...(this.inBowl() ? [] : this.doorIn(ID)), ...inner, ...(this.lockedInBowl() ? [] : this.doorOut(ID))];
@@ -145,6 +153,94 @@ export function installBowl(Brain, POSES, H) {
         },
       });
       return steps;
+    },
+
+    // ------------------------------------------------------------------ new pins for a lane (built in the Workshop: workshop.js `bowlingpins`)
+    // A set of maple pins standing about in its crate (he was cut short with it, or the alley was shut when it was made), and a lane for it:
+    // { o, pins: true, spot } or null. He carries it there: 'carryhome' (workbrain.js).
+    pinMove() {
+      const w = this.w;
+      if (!this.bowlOpen() || this.pinLaneFor() == null) return null;
+      for (const o of Object.values(w.objects)) {
+        if (o.kind !== 'bowlingpins' || o.stowed || o.hauled || o.packed || this.otherUses(o.name)) continue;
+        const r = this.roomOfObj(o.name);
+        if (r !== 'main' && this.doorLockedFor(r)) continue;
+        const p = w.bowl.crateSpot(this.pinLaneFor());
+        return { o, pins: true, spot: { x: p.x, z: p.z, room: ID } };
+      }
+      return null;
+    },
+    // The lane the new pins go on: one that still has its old pins, that nobody is bowling on (a lane in the middle of a game last).
+    pinLaneFor() {
+      const W = this.w.bowl, o = this.other;
+      if (!W) return null;
+      const free = this.w.plainLanes().filter((i) => !(o && (o.bowlLane === i || o.pinLane === i)) && !W.busy(i));
+      return free.find((i) => !W.laneState(i).game.rolls.length || W.laneState(i).game.done) ?? free[0] ?? null;
+    },
+    // from wherever the crate stands: up with it, to the alley, and the pins onto a lane
+    pinHomeSteps(n) {
+      const at = () => { const o = this.obj(n); return o ? V(o.x, 0.3, o.z) : this.g.pos.clone(); };
+      return ['carrying the maple pins to the Bowling Alley',
+        { type: 'plan', fn: () => { const o = this.obj(n); return o ? this.tripSteps(this.hereId(), this.roomOfObj(n)) : []; } },
+        this.stand(n, 0.6, at),
+        this.play('reach', 1.6, { at: [0.6, () => {
+          const o = this.obj(n);
+          if (!o || o.stowed || o.hauled || this.otherUses(n)) { this.queue.length = 0; return; }
+          this.homeMove = { name: n, from: { x: o.x, z: o.z, rot: o.rot }, whole: true };
+          this.startHaul(n); sfx('thud', 0.2);
+        }], target: at }),
+        { type: 'plan', fn: () => this.pinSetSteps(n) }];
+    },
+    // The crate is in his hands: into the alley, down the lane with it, the old pins back into the pit, the new ones out of the crate and onto
+    // their spots, a row at a time (the back row first, stepping back as he goes), and out again.
+    pinSetSteps(n) {
+      const w = this.w, ok = () => !!(this.w.bowl && this.obj(n) && this.homeMove && this.homeMove.name === n);
+      const stop = () => { if (this.homeMove && this.homeMove.name === n) this.homeCleanup(); this.pinCleanup(); this.queue.length = 0; return []; };
+      const plan = (fn) => ({ type: 'plan', fn: () => (ok() ? fn() : stop()) });
+      const crate = () => { const o = this.obj(n), p = this.g.root.position; if (!o) return this.g.pos.clone(); const dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz) || 1; return V(o.x + (dx / d) * 0.15, 0.24, o.z + (dz / d) * 0.15); };
+      const row = (r) => [
+        plan(() => { const s = w.bowl.crateStand(this.pinLane); return [this.walk(s.x, s.z, s.yaw)]; }),
+        this.play('bowlreach', 1.5, { bowl: { point: crate }, needs: [n], at: [0.85, () => { if (!ok()) return; this.obj(n).showRow(r, false); this.setCarry('pins', r + 1); sfx('click'); }] }),
+        plan(() => { const s = w.bowl.rowStand(this.pinLane, r); return [this.walk(s.x, s.z, s.yaw)]; }),
+        this.play('bowlreach', 1.7, { bowl: { point: () => (this.w.bowl ? this.w.bowl.rowPoint(this.pinLane, r) : this.g.pos.clone()) }, needs: [n], at: [1.0, () => { if (!ok()) return; w.bowl.placeRow(this.pinLane, r, 'maple'); this.setCarry(null); sfx('pins', 0.4); }] }),
+      ];
+      return [
+        plan(() => this.tripSteps(this.hereId(), ID)),
+        plan(() => {                                                        // (the alley was locked or taken away, or every lane has a set by now: it is set down here)
+          const i = this.hereId() === ID ? this.pinLaneFor() : null;
+          if (i == null) return stop();
+          this.pinLane = i;
+          const s = w.bowl.crateStand(i), c = w.bowl.crateSpot(i);
+          return [{ ...this.walk(s.x, s.z, Math.atan2(c.x - s.x, c.z - s.z)), tol: 0.25 },
+            this.play('reach', 1.6, { target: () => V(c.x, 0.3, c.z), at: [0.4, () => { if (ok()) { this.endHaul(c.x, c.z); sfx('thud', 0.3); } }] }),
+            this.play('idle', 0.5)];
+        }),
+        plan(() => {                                                        // the old pins go into the pit
+          this.obj(n).obstacle.active = false;                              // (his own crate, at his feet: not something to walk round)
+          const p = w.bowl.deckStand(this.pinLane);
+          return [this.walk(p.x, p.z, w.bowl.awayYaw()),
+            this.play('bowlreach', 1.7, { bowl: { point: () => (this.w.bowl ? this.w.bowl.deckPoint(this.pinLane) : this.g.pos.clone()) }, needs: [n], at: [0.9, () => { if (ok()) { w.bowl.beginSwap(this.pinLane); sfx('pins'); } }] }),
+            this.play('idle', 1.6)];
+        }),
+        ...[3, 2, 1, 0].flatMap(row),
+        plan(() => [this.play('idle', 0.6, { at: [0.1, () => {
+          const i = this.pinLane;
+          if (!ok() || !w.rackPins(n, i)) { stop(); return; }
+          this.homeMove = null; this.pinLane = null;
+          if (this.using) this.using.delete(n);
+          w.bowl.setPinStyle(i, 'maple'); w.bowl.endSwap(i, true);
+          sfx('chime');
+          if (this.onBuilt) this.onBuilt(`${this.who()} put the new maple pins on lane ${i + 1}.`);
+        }] })]),
+        { type: 'plan', fn: () => (this.hereId() === ID ? this.tripSteps(ID, 'main', true) : []) },
+      ];
+    },
+    // cut short: the pins he has out go back in the crate (where homeCleanup has set it down), and the lane waits for somebody to set its pins
+    pinCleanup() {
+      if (this.carry === 'pins') this.setCarry(null);
+      for (const o of Object.values(this.w.objects)) if (o.kind === 'bowlingpins' && o.fillCrate && !o.hauled && !this.otherUses(o.name)) o.fillCrate();
+      if (this.pinLane != null && this.w.bowl) this.w.bowl.endSwap(this.pinLane, false);
+      this.pinLane = null; this.builtWhole = null;
     },
 
     // ------------------------------------------------------------------ one roll

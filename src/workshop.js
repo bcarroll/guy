@@ -25,8 +25,9 @@ export const RECIPES = {
   metalchair: { name: 'Metal Chair', icon: '🪑', skill: 'workshop.metal', line: 'metal', run: 4.4, object: 'metalchair', cap: 3, serves: 'seat' },
   diningtable4: { name: 'Metal Dining Table', icon: '🍽️', skill: 'workshop.metal', line: 'metal', run: 5.0, object: 'diningtable4', cap: 2, serves: 'diners', to: 'restaurant' },
   eguitar: { name: 'Electric Guitar', icon: '🎸', skill: ['workshop.metal', 'workshop.materials'], line: 'both', run: 3.6, object: 'eguitar', cap: 1, serves: 'band' },
-  // Bowling Alley equipment (the Wood & Metal Basics book, chapters 4 and 5: pins and a ball turned from maple). They end up in the alley.
-  bowlingpins: { name: 'Maple Bowling Pins', icon: '🎳', skill: 'workshop.materials.ch4', line: 'wood', run: 5.0, object: 'bowlingpins', cap: 1, serves: 'bowl.pins', to: 'bowling' },
+  // Bowling Alley equipment (the Wood & Metal Basics book, chapters 4 and 5: pins and a ball turned from maple). They end up in the
+  // alley: a set of pins replaces the ten on one of the three lanes (`whole`: carried in its crate, in both hands, not flat-packed).
+  bowlingpins: { name: 'Maple Bowling Pins', icon: '🎳', skill: 'workshop.materials.ch4', line: 'wood', run: 5.0, object: 'bowlingpins', cap: 3, serves: 'bowl.pins', to: 'bowling', whole: true },
   bowlingball: { name: 'Wooden Bowling Ball', icon: '🎳', skill: 'workshop.materials.ch5', line: 'wood', run: 4.4, object: 'bowlingball', cap: 1, serves: 'bowl.ball', to: 'bowling' },
   // Furniture for the Bedroom and the Library (wooden, from the furniture books). Wanted once the room has been added and is still empty of it (needs.js); each
   // is carried flat-packed into its room and put together there. The bookshelves are not the skill bookshelf: they are only for the Library.

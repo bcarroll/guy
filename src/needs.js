@@ -4,7 +4,7 @@
 //   books   books are stacked on the floor: another bookshelf
 //   diners  customers cannot find a seat at the restaurant: another table and chairs
 //   band    a second guitar to play along with (an electric guitar, needs both workshop lines)
-//   bowl.pins / bowl.ball  the Bowling Alley has been added: maple pins, a wooden ball (the Wood & Metal book, chapters 4 and 5)
+//   bowl.pins / bowl.ball  the Bowling Alley has been added: a set of maple pins for each lane, a wooden ball (the Wood & Metal book, chapters 4 and 5)
 //   home.*   the Bedroom has been added: a bed, a wardrobe and a bedside table; the Library: two bookshelves, a reading chair, a reading
 //            desk (with its lamp) and a globe
 //   egg.<id> an easter egg (RECIPES with `egg`): wanted, last of all, once every object it lists stands in the main room
@@ -46,7 +46,8 @@ export function wants(b) {
   if (w.objects.guitar && anyone('guitar') && w.objects.metalfactory && w.objects.woodfactory && supply(w, 'band') === 0) out.push({ serves: 'band', n: 1, why: 'a second guitar to jam with' });
   // the Bowling Alley: maple pins and a wooden ball for it, once it has been added (they need their chapters: workshop.materials.ch4 and ch5)
   if (w.doors.bowling) {
-    if (supply(w, 'bowl.pins') === 0) out.push({ serves: 'bowl.pins', n: 1, why: 'the bowling alley could do with wooden pins' });
+    const sets = supply(w, 'bowl.pins'), lanes = w.bowl ? w.bowl.lanes.length : 0;
+    if (sets < lanes) out.push({ serves: 'bowl.pins', n: lanes - sets, why: 'a lane of the bowling alley could do with wooden pins' });
     if (supply(w, 'bowl.ball') === 0) out.push({ serves: 'bowl.ball', n: 1, why: 'the bowling alley could do with a wooden ball' });
   }
   // the Bedroom and the Library, once they have been added: a bed, a wardrobe and a bedside table; two bookshelves and a reading chair

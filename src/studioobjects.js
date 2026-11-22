@@ -3,8 +3,8 @@
 // Laid out in the room's own frame (like the Range and the Bowling Alley): x along the door wall from the middle of the room, z away from the
 // door as -z. The door is at z = 0 and the far wall at z = -N. The stage is against the far wall, the dance floor in the middle, the DJ booth
 // against the +x wall and the record wall against the -x wall. Everything here is a fixture (it is part of the room and cannot be moved); the
-// Studio Machine is how the user adds or removes the movable things (instruments, chairs ...) in this room. How wide the room is depends on
-// the ground beside it (room.js studioSpan: 12 m where it is free, 8 at least), so everything across it is worked out from its width (`L`).
+// Studio Machine is how the user adds or removes the movable things (instruments, chairs ...) in this room. Everything across it
+// is worked out from its width (`L`).
 //
 // The stage goes from side wall to side wall, and nothing is built against the walls at its ends: a door to a corner room goes there
 // (`doorZ`, room.js planCorner). It is a low riser the robots walk across at floor level. What they do here is in studiobrain.js.
@@ -19,7 +19,6 @@ const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const hex = (c) => '#' + new THREE.Color(c).getHexString();
 
 export const STUDIO = {
-  width: 12, minWidth: 8,                                    // along the door wall
   stage: { zFront: -7.3, h: 0.06 },                          // the riser: from the far wall to zFront, the whole width of the room
   doorZ: { from: -9.1, to: -7.95 },                          // a door to another room goes in a side wall here, up on the stage
   floor: { z0: -6.6, z1: -2.6, tile: 0.5 },                  // the dance floor: half-metre lit tiles, as wide as the room leaves space for

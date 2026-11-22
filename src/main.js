@@ -80,7 +80,7 @@ controls.update();
 
 // Frame the whole room so it fills the screen at any aspect ratio, until the user takes the camera.
 const roomBox = [];
-for (const x of [-5, 5]) for (const y of [0, 3.2]) for (const z of [-4, 4]) roomBox.push(new THREE.Vector3(x, y, z));
+for (const x of [-ROOM.w / 2, ROOM.w / 2]) for (const y of [0, ROOM.h]) for (const z of [-ROOM.d / 2, ROOM.d / 2]) roomBox.push(new THREE.Vector3(x, y, z));
 const camDir = new THREE.Vector3(6.5, 4, 9).normalize();
 const camTmp = new THREE.Vector3();
 let userMoved = false;
@@ -220,6 +220,7 @@ layout.restore();
 rooms.restore();
 machineUI.restoreExtras();         // the rooms are back, so what belongs to them (the Workshop's furniture) can be added now ...
 layout.restore();                  // ... and put where it was left
+rooms.linkRooms();                 // a door between every two rooms that share a wall, where nothing stands in the way
 world.paintings.restore();         // then GUY's paintings, on the walls of the rooms that are back
 world.gal.restore();               // and GAL, if GUY built her on an earlier visit
 layout.start();
@@ -349,7 +350,7 @@ function updateBall(dt) {
     v.x *= 0.995; v.z *= 0.995;
   }
   if (b.position.y <= r + 0.001) { const f = Math.exp(-dt * 0.9); v.x *= f; v.z *= f; }
-  const lim = [4.95 - r, 3.95 - r];
+  const lim = [ROOM.w / 2 - 0.05 - r, ROOM.d / 2 - 0.05 - r];
   if (Math.abs(b.position.x) > lim[0]) { b.position.x = Math.sign(b.position.x) * lim[0]; if (Math.abs(v.x) > 0.7) sfx('wallbump', Math.abs(v.x)); v.x *= -0.7; }
   if (Math.abs(b.position.z) > lim[1]) { b.position.z = Math.sign(b.position.z) * lim[1]; if (Math.abs(v.z) > 0.7) sfx('wallbump', Math.abs(v.z)); v.z *= -0.7; }
   collideBall(b, v, r);
@@ -383,7 +384,7 @@ function pick(e) {
   const targets = Object.values(world.objects).filter((o) => !o.stowed).map((o) => o.group);      // (not what is put away in the shed)
   targets.push(world.skillMachine);
   for (const d of Object.values(world.decor)) targets.push(d.group);
-  for (const d of Object.values(world.doors)) targets.push(d.group);
+  for (const d of world.allDoors()) targets.push(d.group);
   if (!world.ballGone) targets.push(world.ball);
   const rg = world.range, bw = world.bowl, rangeParts = { ...(rg ? { blasterrack: rg.display.group, rangecontroller: rg.panel.group, scoreboard: rg.board.group } : {}), ...(bw ? { ballrack: bw.rack.group, bowlscore: bw.board.group } : {}), ...(world.studio ? { recordwall: world.studio.wall.group, djbooth: world.studio.deck.group, studiomachine: world.studio.machine.group } : {}) };   // (the Bowling Alley's rack and scoreboard are picked the same way)
   targets.push(...Object.values(rangeParts));
@@ -398,7 +399,7 @@ function pick(e) {
     if (part) return { range: part, point };
     const obj = Object.values(world.objects).find((o) => o.group === n);
     if (obj) return { obj, point };
-    const door = Object.values(world.doors).find((d) => d.group === n);
+    const door = world.allDoors().find((d) => d.group === n);
     if (door) return { door, point };
     const decor = Object.values(world.decor).find((d) => d.group === n);
     if (decor) return { decor, point };
@@ -609,6 +610,13 @@ function interactLabel(name) {
 // own room, 'room' the face inside the room behind it). If GUY is already there it offers the way the other direction instead, so the button
 // always does something. Either way it is brain.visitRoom: he goes in when he is outside and comes back when he is inside.
 function doorChoice(door, side) {
+  if (door.link) {                                      // one of the other doors of a corner room: to the room on the far side of the face that was pressed
+    const p = brain.g.root.position, at = world.roomIdAt(p.x, p.z), name = (t) => `the ${world.doors[t].name}`;
+    let target = side === 'room' ? door.to : door.room;
+    const already = target === at;
+    if (already) target = target === door.room ? door.to : door.room;
+    return { side, target, already, label: `🚪 Go into ${name(target)}`, note: already ? `GUY is already in ${name(at)}` : '' };
+  }
   const p = brain.g.root.position, inRoom = world.roomIdAt(p.x, p.z) === door.id;
   const guyAt = inRoom ? door.id : 'main';
   let target = side === 'room' ? 'main' : door.id;
@@ -623,8 +631,8 @@ function openMenu(hit, x, y) {
   menuTarget = hit;
   if (hit.door) {                                       // a door: go through it (or come back), and lock it to keep the robots out
     const ch = doorChoice(hit.door, hit.side || (hit.point ? world.doorSide(hit.door.id, hit.point) : 'main')), locked = world.isDoorLocked(hit.door.id);
-    menuTarget = { ...hit, side: ch.side };
-    menuTitle.textContent = `${hit.door.name} door${locked ? ' (locked)' : ''}`;
+    menuTarget = { ...hit, side: ch.side, target: ch.target };
+    menuTitle.textContent = `${hit.door.link ? `${hit.door.name} and ${hit.door.toName}` : hit.door.name} door${locked ? ' (locked)' : ''}`;
     menuNote.textContent = ch.note;
     menu.querySelectorAll('[data-act]').forEach((b) => { b.hidden = b.dataset.act !== 'interact' && b.dataset.act !== 'lock'; });
     menu.querySelector('[data-act="interact"]').textContent = ch.label;
@@ -691,11 +699,11 @@ menu.addEventListener('click', (e) => {
   if (!act || !menuTarget) return;
   const t = menuTarget;
   if (t.door) {                                         // long-press a door > Go into the room (or Come back), or Lock / Unlock it
-    if (act === 'interact') showToast(brain.visitRoom(t.door.id).message);
+    if (act === 'interact') showToast(brain.visitRoom(t.door.link ? t.target : t.door.id, !!t.door.link).message);
     if (act === 'lock') {
       const now = !world.isDoorLocked(t.door.id);
       rooms.setDoorLocked(t.door.id, now);
-      showToast(now ? `The ${t.door.name} door is locked: GUY and GAL will stay out.` : `The ${t.door.name} door is unlocked.`);
+      showToast(now ? `The ${t.door.name} door is locked: GUY and GAL will ${t.door.link ? 'not go through it' : 'stay out'}.` : `The ${t.door.name} door is unlocked.`);
     }
     closeMenu();
     return;
@@ -749,7 +757,7 @@ menu.addEventListener('click', (e) => {
 });
 addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
 window.__guyOpenBooks = (name = 'shelf') => openBookMenu(world.objects[name], 200, 100);          // the long-press book list, for the QA harness
-window.__guyOpenDoorMenu = (id, side = 'main') => openMenu({ door: world.doors[id], side }, 120, 120);     // for the QA harness (side: the face pressed)
+window.__guyOpenDoorMenu = (id, side = 'main') => openMenu({ door: world.gateOf(id), side }, 120, 120);     // for the QA harness (side: the face pressed)
 window.__guyOpenMenu = (name) => openMenu(name === 'ball' ? { ball: true } : ['blasterrack', 'rangecontroller', 'scoreboard', 'ballrack', 'bowlscore', 'recordwall', 'djbooth', 'studiomachine'].includes(name) ? { range: name } : { obj: brain.obj(name) }, 120, 120);     // for the QA harness
 addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') { setSoundMuted(!soundMuted); showToast(soundMuted ? 'Sound muted (M or the speaker to turn it back on)' : 'Sound on'); } });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -901,7 +909,7 @@ canvas.addEventListener('pointermove', (e) => {
   }
   if (drag.ball) {
     const p = floorAt(e, 0.5);
-    if (p) world.ball.position.set(THREE.MathUtils.clamp(p.x, -4.8, 4.8), 0.5, THREE.MathUtils.clamp(p.z, -3.8, 3.8));
+    if (p) world.ball.position.set(THREE.MathUtils.clamp(p.x, -4.8, 4.8), 0.5, THREE.MathUtils.clamp(p.z, -ROOM.d / 2 + 0.2, ROOM.d / 2 - 0.2));
     return;
   }
   const p = floorAt(e);
@@ -1021,7 +1029,8 @@ function roomRectOf(p) {
     const b = d.shell.bounds;
     if (p.x > b.minX && p.x < b.maxX && p.z > b.minZ && p.z < b.maxZ) return d.shell.outdoor ? null : b;
   }
-  return p.x > -5 && p.x < 5 && p.z > -4 && p.z < 4 ? { minX: -5, maxX: 5, minZ: -4, maxZ: 4 } : null;
+  const m = world.MAIN_BOUNDS;
+  return p.x > m.minX && p.x < m.maxX && p.z > m.minZ && p.z < m.maxZ ? m : null;
 }
 function keepInView(dt) {
   const from = controls.target, len = camera.position.distanceTo(from);

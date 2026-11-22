@@ -3,7 +3,7 @@ import { strapLine, makeStrapMesh, layStrap } from './strap.js';
 import { Q } from './guy.js';
 import { playNote, playPluck, startBeat, startTrack, trackSeconds, TRACKS, BEAT } from './audio.js';
 import { ALBUM_CATALOG } from './albums.js';
-import { ROOM } from './room.js';
+import { ROOM, WALK } from './room.js';
 import { TIMING_SKILLS } from './skills.js';
 import { randomSong, makeJam, plinkSong } from './songs.js';
 import { installHobbies } from './hobbybrain.js';
@@ -1116,7 +1116,7 @@ export class Brain {
             // try directions until GUY has somewhere free to stand behind the ball (with room for his legs and arms to swing)
             for (let i = 0; i < 60; i++) {
               const grid = makeGrid(w.obstacles, 0.55);       // never tighter: his hips and arms swing into furniture, so with no free spot he leaves the ball alone
-              const dir = new THREE.Vector3(rand(-3.5, 3.5) - b.x, 0, rand(-2, 3) - b.z).normalize();
+              const dir = new THREE.Vector3(rand(-3.5, 3.5) - b.x, 0, rand(-3, 4) - b.z).normalize();
               const from = b.clone().addScaledVector(dir, -0.5);
               if (!this.onFloor(from.x, from.z, 0.1) || cellBlocked(grid, from.x, from.z)) continue;
               return [this.walk(from.x, from.z, Math.atan2(dir.x, dir.z)), this.play('kick', 1.2, { at: [0.5, () => this.kickBall(dir, skilled)] })];
@@ -1151,7 +1151,7 @@ export class Brain {
         const w = this.w, id = this.visitId && w.doors[this.visitId] ? this.visitId : Object.keys(w.doors).find((d) => !this.doorLockedFor(d)), door = w.doors[id];
         this.visitId = null;
         if (!door || this.doorLockedFor(id)) return ['the door is locked', this.play('idle', 0.5)];
-        if (this.parentOf(id) !== 'main') {                                    // a corner room: in through the room beside it, a look round, and back out
+        if (this.parentOf(id) !== 'main' || this.hereId() !== 'main') {        // a corner room: in through the room beside it, a look round, and back out (or another room, from a corner room beside it)
           const cb = door.shell.bounds, direct = (p) => ({ ...this.walk(p.x, p.z), direct: true });
           const look = [];
           for (let i = 0; i < 3; i++) look.push(direct({ x: rand(cb.minX + 1.2, cb.maxX - 1.2), z: rand(cb.minZ + 1.2, cb.maxZ - 1.2) }), this.play('idle', rand(1.5, 3)));
@@ -1184,12 +1184,13 @@ export class Brain {
           const f = (d) => { const bb = w.doors[d].shell.bounds; return Math.hypot((bb.minX + bb.maxX) / 2 - p.x, (bb.minZ + bb.maxZ) / 2 - p.z); };
           return f(a) - f(c);
         })[0];
+        const way = id && id === here ? this.route(here, 'main') : null;
+        if (way && way.length && way[0].id !== here) return [`coming back from the ${w.doors[id].name}`, ...this.edgeSteps(way[0])];      // (by another door: its own is locked, or that way is shorter)
         if (!id) { this.g.root.position.set(0, 0, 2); return ['collecting himself', this.play('idle', 0.5)]; }      // the room is gone: back to the middle of his own
         const out = this.doorStand(id), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false);
         const direct = (q) => ({ ...this.walk(q.x, q.z), direct: true });
         return [`coming back from the ${w.doors[id].name}`,
-          this.play('idle', 0.1, { at: [0, () => w.setDoorOpen(id, true)] }),
-          direct(inn), { ...direct(out), ...this.doorFrame(id) }, this.walk(out.x, out.z, face),
+          ...this.openFromInside(id, direct(inn)), { ...direct(out), ...this.doorFrame(id) }, this.walk(out.x, out.z, face),
           this.play('reach', 1.6, { at: [0.8, () => this.closeDoor(id)], target: () => w.doorKnob(id) })];
       },
       // making up riffs: a new idea (or two) and sometimes one of the favourites he kept. The good new ones are remembered (riffs.js).
@@ -1528,7 +1529,7 @@ export class Brain {
       const S2 = { x: B.x - d.x * off, z: B.z - d.z * off };
       const bd = room && room.bd;
       const inRoom = room ? (q) => q.x >= bd.minX + 0.6 && q.x <= bd.maxX - 0.6 && q.z >= bd.minZ + 0.6 && q.z <= bd.maxZ - 0.6   // (nor against a fence)
-        : (q) => (Math.abs(q.x) <= 4.5 && q.z >= -3.5 && q.z <= 3.6) || this.w.walkable(q.x, q.z); // GUY can't stand in the wall (but he can in an open doorway: a piece shoved against the door from outside)
+        : (q) => inWalk(q.x, q.z) || this.w.walkable(q.x, q.z); // GUY can't stand in the wall (but he can in an open doorway: a piece shoved against the door from outside)
       if (!inRoom(S) || !inRoom(S2) || cellBlocked(guyGrid, S.x, S.z) || cellBlocked(guyGrid, S2.x, S2.z) || !lineClear(guyGrid, S, S2)) return null;
       // the piece itself never goes through a wall (a doorway only), and is never left in one: a chair shoved to the edge of the grid
       // used to end up half in the next room, and then nobody could move it
@@ -1817,7 +1818,7 @@ export class Brain {
       if (taken && c.name === taken) return false;
       const l = c.local(0, c.sit.gap), x = c.x + l.x, z = c.z + l.z;
       const grid = makeGrid(this.w.obstacles, INFLATE, 0, c.obstacle);
-      return Math.abs(x) < 4.5 && z > -3.5 && z < 3.6 && !cellBlocked(grid, x, z);
+      return inWalk(x, z) && !cellBlocked(grid, x, z);
     });
   }
 
@@ -1908,7 +1909,7 @@ export class Brain {
       .filter(([n]) => this.obj(n))
       .map(([n, dx, dz]) => { const o = this.obj(n), l = o.local(dx, dz); return { x: o.x + l.x, z: o.z + l.z }; });
     for (let i = 0; i < 40; i++) {
-      const x = rand(-5 + obj.w / 2 + 0.5, 5 - obj.w / 2 - 0.5), z = rand(-4 + obj.d / 2 + 0.5, 4 - obj.d / 2 - 0.5);
+      const x = rand(-ROOM.w / 2 + obj.w / 2 + 0.5, ROOM.w / 2 - obj.w / 2 - 0.5), z = rand(-ROOM.d / 2 + obj.d / 2 + 0.5, ROOM.d / 2 - obj.d / 2 - 0.5);
       const x0 = x - obj.w / 2 - 0.5, x1 = x + obj.w / 2 + 0.5, z0 = z - obj.d / 2 - 0.5, z1 = z + obj.d / 2 + 0.5;
       if (w.obstacles.some((o) => o !== obj.obstacle && x1 > o.x0 && x0 < o.x1 && z1 > o.z0 && z0 < o.z1)) continue;
       if (anchors.some((a) => a.x > x0 - 0.2 && a.x < x1 + 0.2 && a.z > z0 - 0.2 && a.z < z1 + 0.2)) continue;
@@ -1985,21 +1986,21 @@ export class Brain {
     const r = this.w.roomIdAt(x, z);
     if (r !== 'door') return this.w.doors[r] ? r : 'main';
     let best = null, bd = Infinity;
-    for (const d of Object.values(this.w.doors)) {
+    for (const d of this.w.allDoors()) {
       const p = this.w.doorPoint(d.id, 0), q = this.w.doorPoint(d.id, 1), dist = Math.hypot(x - p.x, z - p.z);
-      if (dist < bd) { bd = dist; best = (x - p.x) * (q.x - p.x) + (z - p.z) * (q.z - p.z) >= 0 ? this.parentOf(d.id) : d.id; }
+      if (dist < bd) { bd = dist; best = (x - p.x) * (q.x - p.x) + (z - p.z) * (q.z - p.z) >= 0 ? d.parent : d.link ? d.room : d.id; }
     }
     return best || 'main';
   }
   // Where he can stand in a room (the limits of its floor).
   roomBounds(id) {
     const d = this.w.doors[id], b = d && d.shell.bounds;
-    return b ? { minX: b.minX + 0.5, maxX: b.maxX - 0.5, minZ: b.minZ + 0.5, maxZ: b.maxZ - 0.5 } : { minX: -4.5, maxX: 4.5, minZ: -3.5, maxZ: 3.6 };
+    return b ? { minX: b.minX + 0.5, maxX: b.maxX - 0.5, minZ: b.minZ + 0.5, maxZ: b.maxZ - 0.5 } : { ...WALK };
   }
   // Is (x, z) on the floor of a room (main or an added one), at least `m` metres in from its walls? (Not in a doorway.)
   onFloor(x, z, m = 0, mz = m) {
     const id = this.w.roomIdAt(x, z);
-    if (id === 'main') return Math.abs(x) <= 4.5 - m && z >= -3.5 + mz && z <= 3.6 - mz;
+    if (id === 'main') return inWalk(x, z, m, mz);
     const d = this.w.doors[id];
     if (!d) return false;
     const b = d.shell.bounds;
@@ -2036,7 +2037,7 @@ export class Brain {
   spotRoom() { return this.actRoom || this.hereId(); }
   roomBox(id = this.spotRoom()) {
     const d = this.w.doors[id];
-    if (id === 'main' || !d) return { minX: -4.2, maxX: 4.2, minZ: -3.2, maxZ: 3.4, cx: 0, cz: 0.1 };
+    if (id === 'main' || !d) return { minX: -4.2, maxX: 4.2, minZ: -4.2, maxZ: 4.4, cx: 0, cz: 0.1 };
     const b = d.shell.bounds;
     return { minX: b.minX + 0.9, maxX: b.maxX - 0.9, minZ: b.minZ + 0.9, maxZ: b.maxZ - 0.9, cx: (b.minX + b.maxX) / 2, cz: (b.minZ + b.maxZ) / 2 };
   }
@@ -2332,7 +2333,7 @@ export class Brain {
       }
     }
     if (act === 'putback' || act === 'dropball' || act === 'yardtidy' || act === 'putguitar' || act === 'leave' || act === 'hangpaint' || act === 'putcanvas') return false;
-    if (act === 'visit') return (this.inMain() || (!!this.visitId && this.parentOf(this.visitId) === this.hereId())) && Object.keys(this.w.doors).some((id) => !this.doorLockedFor(id));
+    if (act === 'visit') return (this.inMain() || (!!this.visitId && this.adjoining(this.visitId, this.hereId()))) && Object.keys(this.w.doors).some((id) => !this.doorLockedFor(id));
     // the Workshop: it has to be added (and its door unlocked), and for building there has to be something to build
     if (['tidytools', 'build'].includes(act)) {
       if (!this.w.doors.workshop || this.doorLockedFor('workshop')) return false;
@@ -2396,7 +2397,8 @@ export class Brain {
   inMain() { return this.w.inMain(this.g.root.position.x, this.g.root.position.z); }
 
   // The user asked GUY to go through a door (or, from inside, to come back). Returns { ok, message }.
-  visitRoom(id) {
+  // (`link`: through the door between a corner room and the room beside it, from either of the two)
+  visitRoom(id, link = false) {
     const d = this.w.doors[id];
     if (!d) return { ok: false, message: "There isn't a door like that." };
     const inside = !this.inMain();
@@ -2405,7 +2407,7 @@ export class Brain {
     this.unlock(false);
     this.skip();
     this.visitId = id;
-    const through = inside && this.parentOf(id) === this.hereId();            // a corner room, asked for while he is in the room beside it: straight in
+    const through = inside && (link ? this.adjoining(this.hereId(), id) : this.parentOf(id) === this.hereId());            // a corner room, asked for while he is in the room beside it: straight in
     this.pendingActivity = inside && !through ? 'leave' : 'visit';
     return { ok: true, message: inside && !through ? 'GUY is coming back.' : `GUY is going into the ${d.name}.` };
   }
@@ -2518,6 +2520,7 @@ export class Brain {
     this.restCleanup();                                      // cut short in the Restaurant: the dish goes back, the order waits again
     this.shelfCleanup();                                     // cut short carrying a bookshelf to the Library: it is put together again (before workCleanup drops the flat pack)
     this.homeCleanup();                                      // cut short carrying a built thing out of the Workshop to its room: the same
+    this.pinCleanup();                                       // cut short putting new pins on a lane of the Bowling Alley
     this.workCleanup();                                      // cut short in the Workshop: what he carries goes back in the stock
     this.yardCleanup();                                      // cut short mowing: the shed door is shut again
     this.studioCleanup();                                    // cut short in the Studio: the lights, the deck and the record in his hand go back
@@ -2788,7 +2791,7 @@ export class Brain {
   update(dt) {
     this.time += dt;
     if (!this.isGal) {                    // (once a frame, by the first character: GAL's brain skips these)
-      for (const d of Object.values(this.w.doors)) {            // a door that was locked while open shuts as soon as nobody is in the doorway
+      for (const d of this.w.allDoors()) {            // a door that was locked while open shuts as soon as nobody is in the doorway
         if (!d.locked || !d.openTo) continue;
         const inDoorway = (br) => !!(br && br.g && this.w.roomIdAt(br.g.root.position.x, br.g.root.position.z) === 'door');
         if (!inDoorway(this) && !inDoorway(this.other)) d.openTo = 0;
@@ -2881,7 +2884,7 @@ export class Brain {
             if (!cellBlocked(wide, s.x, s.z)) { s.plainGrid = this.grid; this.grid = wide; }      // (he may start close to furniture: the path leaves it by the nearest free cell)
           }
           // a direct walk goes straight there only when the straight line is clear: otherwise he goes round (the screens of the range, say)
-          const inDoorway = (x, z) => !(Math.abs(x) <= 4.5 && z >= -3.5 && z <= 3.6) && this.w.walkable(x, z);
+          const inDoorway = (x, z) => !inWalk(x, z) && this.w.walkable(x, z);
           // (in an open doorway the grid knows nothing of the walls: from one spot of the doorway to another he walks the straight way, not round a corner of the room)
           const doorwayWalk = ra === 'main' && inDoorway(root.position.x, root.position.z) && inDoorway(s.x, s.z) && [0.25, 0.5, 0.75].every((t) => this.w.walkable(lerp(root.position.x, s.x, t), lerp(root.position.z, s.z, t)));
           const straight = doorwayWalk || (s.direct && lineClear(this.grid, root.position, { x: s.x, z: s.z }));
@@ -3588,7 +3591,8 @@ function makeHeldBook() {
 // that only sim moves, so a minute of music is a minute of simulated play however fast or slow the machine runs it.
 const nowSec = () => (window.__simNow !== undefined ? window.__simNow : performance.now() / 1000);
 const DRIVE_BEHIND = 0.8;           // how far behind the lawn mower he stands, middle to middle
-const CELL = 0.2, X0 = -4.6, Z0 = -3.6, NX = 47, NZ = 37, INFLATE = 0.28;
+const CELL = 0.2, X0 = -4.6, Z0 = -4.6, NX = 47, NZ = 47, INFLATE = 0.28;
+const inWalk = (x, z, m = 0, mz = m) => x >= WALK.minX + m && x <= WALK.maxX - m && z >= WALK.minZ + mz && z <= WALK.maxZ - mz;      // on the floor of his own room
 const MAIN_FRAME = { X0, Z0, NX, NZ };
 
 function makeGrid(obstacles, inflate = INFLATE, wall = 0, skip = null, fr = MAIN_FRAME) {
@@ -3699,7 +3703,7 @@ installHome(Brain, POSES, { rand, pick });
 installLibrary(Brain);
 installYard(Brain, POSES, { clamp, rand, pick, makeGrid, cellBlocked, INFLATE, findPath });
 installRange(Brain, POSES, { pick });
-installBowl(Brain, POSES, { pick });
+installBowl(Brain, POSES, { pick, squat });
 installStudio(Brain, POSES, { pick, chordAt: guitarChordAt });
 installRestaurant(Brain, POSES, { smooth, clamp, lerp, rand, pick });
 installArrange(Brain, { pick });

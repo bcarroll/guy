@@ -7,8 +7,7 @@ import { OBJECT_CATALOG } from './machine.js';
 import { dev } from './devunlock.js';
 
 export const ROOM_CATALOG = [
-  // `size` ({ w: depth away from the door, d: width along the wall }) is optional: left out (either part), a room is as deep as GUY's room
-  // and as wide as the wall its door is in, like every other room.
+  // (every room is the same square as GUY's room: ROOM in room.js. No entry has a size of its own.)
   { id: 'workshop', name: 'Workshop', icon: '🛠️', unlocked: true, doorWalls: ['right', 'front', 'back', 'left'],
     desc: 'A place to build things. Adds a door to your room.',
     look: { frame: 0x6b4a2b, door: 0xb5532f, panel: 0xc9683f, floor: 0x8c9096, wall: 0xb4b8bd } },
@@ -22,19 +21,19 @@ export const ROOM_CATALOG = [
     desc: 'An outdoor room with a lawn and a fence. Soccer, basketball, a lawn chair, a bird bath, and an artificial sun and moon you can switch.',
     look: { frame: 0x6b4a2b, door: 0x6f9f4a, panel: 0x8cc063, floor: 0x5fa046, wall: 0xb48a58 } },
   // The Shooting Range: three lanes with holographic bullseyes and enemies. GUY and GAL shoot from their own lanes (src/rangeobjects.js,
-  // src/rangebrain.js). Deeper than a room's default, so the lanes have room to shoot down; as wide as the other rooms.
-  { id: 'range', name: 'Shooting Range', icon: '🎯', unlocked: true, shootingRange: true, size: { w: 10 }, doorWalls: ['right', 'front', 'back', 'left'],
+  // src/rangebrain.js). The lanes run the length of the room.
+  { id: 'range', name: 'Shooting Range', icon: '🎯', unlocked: true, shootingRange: true, doorWalls: ['right', 'front', 'back', 'left'],
     desc: 'A shooting range with three lanes. Holographic bullseyes and enemies pop up down the range, and the robots take shots at them: from their own lane, and across the screens when the line is clear.',
     look: { frame: 0x3b4150, door: 0x3d4a63, panel: 0x5ef2ff, floor: 0x9a9fa6, wall: 0xc9ccd2 } },
   // The Bowling Alley: three lanes with ten pins each, ball returns, a rack of house balls and a scoreboard (src/bowlobjects.js, src/bowlbrain.js,
-  // rules and physics in src/bowlrules.js). Same size as the Range.
-  { id: 'bowling', name: 'Bowling Alley', icon: '🎳', unlocked: true, bowlingAlley: true, size: { w: 10 }, doorWalls: ['right', 'front', 'back', 'left'],
+  // rules and physics in src/bowlrules.js).
+  { id: 'bowling', name: 'Bowling Alley', icon: '🎳', unlocked: true, bowlingAlley: true, doorWalls: ['right', 'front', 'back', 'left'],
     desc: 'A bowling alley with three lanes. The robots roll balls at ten pins, keep score on the board, and set the pins up again by hand (or with an Automatic Pinsetter, if the Metal Factory can build one).',
     look: { frame: 0x3a2a55, door: 0x6a2a7a, panel: 0xff3fa4, floor: 0x1c1745, wall: 0x2b2a4a } },
   // The Studio: a stage with lights and a curtain, a dance floor, a DJ booth, a Studio Machine (the skill machine for this room) and a wall of
-  // sixty records that play on the booth's decks (src/studioobjects.js, src/studiobrain.js). Guitars hang on its walls. `wide`: wider than the wall
-  // its door is in, into the corners beside it that no room stands in (world.studioSpan). Corner rooms can open onto its stage (room.js planCorner).
-  { id: 'studio', name: 'Studio', icon: '🎤', unlocked: true, studio: true, size: { w: 10 }, wide: true, doorWalls: ['right', 'front', 'back', 'left'],
+  // sixty records that play on the booth's decks (src/studioobjects.js, src/studiobrain.js). Guitars hang on its walls.
+  // Corner rooms can open onto its stage (room.js planCorner).
+  { id: 'studio', name: 'Studio', icon: '🎤', unlocked: true, studio: true, doorWalls: ['right', 'front', 'back', 'left'],
     desc: 'A music studio with a stage, a dance floor, a DJ booth and a big wall of records. The robots put on shows, throw dance parties and spin records. Its Studio Machine manages the room, guitars can hang on its walls, and corner rooms can open off the stage.',
     look: { frame: 0x2a2233, door: 0x7a2a4a, panel: 0xffb43f, floor: 0x241f2e, wall: 0x3b2f4a } },
   // Corner rooms: empty rooms for whatever the user wants to put in them (the Catalog's Rooms list, and every piece of furniture can be moved
@@ -72,8 +71,29 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
     return (cat && cat.name) || (o && o.label) || name;
   };
 
+  // the other doors of a corner room (a door into each room it stands beside): where each is, and whether it is locked
+  const linksOf = (id) => { const l = Object.values(world.links).filter((x) => x.room === id); return l.length ? { links: Object.fromEntries(l.map((x) => [x.to, { u: x.u, ...(x.locked ? { locked: true } : {}) }])) } : {}; };
+  // Give every corner room a door into each room beside it that it has none into yet. What stands in the way goes to the Catalog, like for any door.
+  function linkRooms() {
+    const made = [];
+    for (const { room, to } of world.missingLinks()) {
+      const p = world.planLink(room, to);
+      if (!p) continue;                                    // (a wall with no clear stretch: nothing is forced, and it is tried again the next time something changes)
+      for (const name of p.hit) remove(name);
+      if (world.addLink(p)) made.push({ room, to, displaced: p.hit });
+    }
+    if (made.length) { save(); refit(); }
+    return made;
+  }
+  const linkNote = (made, id) => {
+    const l = made.filter((m) => m.room === id || m.to === id), out = l.map((m) => `There is a door between the ${world.doors[m.room].name} and the ${world.doors[m.to].name} too.`);
+    const moved = l.flatMap((m) => m.displaced);
+    if (moved.length) out.push(`Moved ${moved.length === 1 ? `the ${label(moved[0])}` : `${moved.length} things`} to make space for it.`);
+    return out;
+  };
+
   const snapshot = () => ({ rooms: Object.fromEntries(Object.entries(state).filter(([id, s]) => s.added && world.doors[id] && !closing[id])
-    .map(([id, s]) => [id, { added: true, wall: s.wall, u: s.u, ...(s.parent && s.parent !== 'main' ? { parent: s.parent, corner: s.corner } : {}), ...(world.doors[id].shell.span ? { span: world.doors[id].shell.span } : {}), ...(s.unlocked !== undefined ? { unlocked: s.unlocked } : {}), ...(s.doorLocked ? { doorLocked: true } : {}), ...(world.doors[id].shell.dust ? { dust: world.doors[id].shell.dust.snapshot() } : {}) }])) });
+    .map(([id, s]) => [id, { added: true, wall: s.wall, u: s.u, ...(s.parent && s.parent !== 'main' ? { parent: s.parent, corner: s.corner } : {}), ...(s.unlocked !== undefined ? { unlocked: s.unlocked } : {}), ...(s.doorLocked ? { doorLocked: true } : {}), ...linksOf(id), ...(world.doors[id].shell.dust ? { dust: world.doors[id].shell.dust.snapshot() } : {}) }])) });
   const save = () => {
     if (!persist) return;
     try { localStorage.setItem(KEY, JSON.stringify(snapshot())); } catch { /* no storage */ }
@@ -81,11 +101,11 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
   const changed = () => { save(); refit(); listeners.forEach((f) => f()); };
 
   // Take the pieces in a door's way out of the room (they go to the Catalog, like any removal) and build the door.
-  function place(r, wall, u, corner = null, extra = {}) {
+  function place(r, wall, u, corner = null) {
     const b = world.doorBlockers(wall, u);
     if (b.fixed) return null;
     for (const name of b.hit) remove(name);
-    world.addDoor(r, wall, u, { ...extra, ...(corner ? { parent: corner.parent, cell: corner.cell } : {}) });
+    world.addDoor(r, wall, u, corner ? { parent: corner.parent, cell: corner.cell } : {});
     state[r.id] = { ...(state[r.id] || {}), id: r.id, added: true, wall, u, ...(corner ? { parent: corner.parent, corner: corner.corner } : {}) };
     world.setDoorLocked(r.id, !!state[r.id].doorLocked);             // (a saved room comes back locked if it was)
     return b.hit;
@@ -104,10 +124,10 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
   // A room with a door on a wall of GUY's room. A corner room with nowhere in a corner ends up here too: no room needs another one.
   function addOnWall(r, opts) {
     const spot = opts.at || world.planDoor(opts.walls || (r.doorWalls && r.doorWalls.length ? r.doorWalls : WALL_ORDER));
-    const hit = spot ? place(r, spot.wall, spot.u, null, { span: spot.span, reserved: opts.reserved }) : null;       // (how wide a saved Studio was, and the corners other saved rooms are about to come back to)
+    const hit = spot ? place(r, spot.wall, spot.u) : null;
     if (!spot || !hit) return { ok: false, messages: ['No clear wall for a door right now. Try moving something.'] };
     changed();
-    const messages = [`${r.name} added! There is a new door.`];
+    const messages = [`${r.name} added! There is a new door.`, ...linkNote(opts.at ? [] : linkRooms(), r.id)];
     if (hit.length === 1) messages.push(`Moved the ${label(hit[0])} to make space for the door.`);
     else if (hit.length > 1) messages.push(`Moved ${hit.length} things to make space. Find them in the Catalog.`);
     return { ok: true, wall: spot.wall, u: spot.u, displaced: hit, messages };
@@ -127,7 +147,7 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
     const hit = spot ? place(r, spot.wall, spot.u, spot) : null;
     if (!spot || !hit) return { ok: false, messages: ['No clear wall for a door right now. Try moving something.'] };
     changed();
-    const messages = [`${r.name} added! There is a new door in the ${world.doors[spot.parent].name}.`];
+    const messages = [`${r.name} added! There is a new door in the ${world.doors[spot.parent].name}.`, ...linkNote(opts.at ? [] : linkRooms(), r.id)];
     if (hit.length === 1) messages.push(`Moved the ${label(hit[0])} to make space for the door.`);
     else if (hit.length > 1) messages.push(`Moved ${hit.length} things to make space. Find them in the Catalog.`);
     return { ok: true, wall: spot.wall, u: spot.u, parent: spot.parent, corner: spot.corner, displaced: hit, messages };
@@ -138,19 +158,25 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
     const out = [];
     // (a corner room opens into the room beside it: that one comes back first)
     const entries = Object.entries((data && data.rooms) || {}).sort(([, a], [, b]) => (a.parent ? 1 : 0) - (b.parent ? 1 : 0));
-    const reserved = entries.map(([, s]) => s).filter((s) => s.added && s.parent && s.corner && s.parent !== 'main').map((s) => s.corner);       // (a Studio never grows over a corner room that is coming back)
     for (const [id, s] of entries) {
       const r = def(id);
       if (!r || !s.added) continue;
       if (s.unlocked !== undefined) state[id] = { ...(state[id] || {}), id, unlocked: s.unlocked };
       if (s.doorLocked) state[id] = { ...(state[id] || {}), id, doorLocked: true };
-      const res = add(id, { reserved, at: { wall: s.wall, u: s.u, ...(s.span ? { span: s.span } : {}), ...(s.parent ? { parent: s.parent, corner: s.corner } : {}) } });
+      const res = add(id, { at: { wall: s.wall, u: s.u, ...(s.parent ? { parent: s.parent, corner: s.corner } : {}) } });
       if (s.dust && world.doors[id] && world.doors[id].shell.dust) world.doors[id].shell.dust.apply(s.dust);      // (as clean as it was)
       out.push({ id, ok: res.ok || !!res.already, displaced: res.displaced || [] });
       if (!res.ok && !res.already) {                       // the saved spot is taken by something fixed: find a new one
         const again = add(id);
         out.push({ id, ok: again.ok, moved: true });
       }
+    }
+    // the other doors of the corner rooms, where they were (the rooms either side are all back now); new ones are added once the furniture is
+    // back where it was (main.js calls linkRooms after the layout), so that they go where nothing stands
+    for (const [id, s] of entries) for (const [to, l] of Object.entries((s && s.links) || {})) {
+      if (!world.doors[id] || !world.doors[to] || !l || !Number.isFinite(l.u) || !world.missingLinks().some((m) => m.room === id && m.to === to)) continue;
+      const k = world.addLink({ room: id, to, u: l.u });
+      if (k && l.locked) world.setDoorLocked(k.id, true);
     }
     return out;
   }
@@ -182,7 +208,7 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
   // first (nobody is moved by magic): until then its doors count as locked from outside, and the room goes the moment they are out.
   const family = (id) => [id, ...Object.values(world.doors).filter((k) => k.parent === id).flatMap((k) => family(k.id))];
   // (in the doorway counts as in: the wall closes up where the door was, and he must be clear of it, on either side)
-  const near = (p, i) => { const q = world.doorPoint(i, 0); return Math.hypot(q.x - p.x, q.z - p.z) < 0.6; };
+  const near = (p, i) => [i, ...Object.values(world.links).filter((l) => l.room === i || l.to === i).map((l) => l.id)].some((k) => { const q = world.doorPoint(k, 0); return Math.hypot(q.x - p.x, q.z - p.z) < 0.6; });
   const robotsIn = (ids) => robots().filter((b) => {
     const p = b.g.root.position;
     return ids.includes(world.roomIdAt(p.x, p.z)) || ids.some((i) => near(p, i));
@@ -215,6 +241,7 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
     }
     for (const i of ids) {                                 // nobody goes in now, and a locked door would keep them in: unlock it
       world.doors[i].closing = true;
+      for (const l of Object.values(world.links)) if (l.room === i || l.to === i) world.setDoorLocked(l.id, false);
       if (state[i] && state[i].doorLocked) { state[i].doorLocked = false; world.setDoorLocked(i, false); }
     }
     closing[id] = { ids, asked: new Map() };
@@ -259,6 +286,7 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
   }
   // Lock or unlock a room's door (long-press the door): while it is locked the robots stay out of the room. Saved with the rooms.
   function setDoorLocked(id, value) {
+    if (world.links[id]) { world.setDoorLocked(id, !!value); changed(); return true; }      // (one of the other doors of a corner room: only that door)
     if (!added(id)) return false;
     state[id] = { ...(state[id] || {}), id, doorLocked: !!value };
     world.setDoorLocked(id, !!value);
@@ -274,7 +302,7 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
     catalog: ROOM_CATALOG, def, add, remove: removeRoom, tick,
     corners: (id) => (added(id) ? family(id).slice(1).map((i) => world.doors[i].name) : []),     // the rooms that would go with it
     isClosing: (id) => !!closing[id], restore, restoreFrom, snapshot, reset, setUnlocked, setDoorLocked,
-    isAdded: added, isUnlocked: unlocked, isDoorLocked: (id) => added(id) && !!(state[id] && state[id].doorLocked),
+    linkRooms, isAdded: added, isUnlocked: unlocked, isDoorLocked: (id) => (world.links[id] ? world.isDoorLocked(id) : added(id) && !!(state[id] && state[id].doorLocked)),
     // a catalog entry is listed when it has no room, or its room is added and unlocked
     isLive: (roomId) => !roomId || (added(roomId) && unlocked(roomId)),
     onChange: (f) => listeners.push(f),

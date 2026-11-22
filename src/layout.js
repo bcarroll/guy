@@ -9,7 +9,7 @@
 import { RECIPES, STORAGE_CAP } from './workshop.js';
 
 const KEY = 'guy.layout.v1';
-const VERSION = 1;
+const VERSION = 2;                                   // 2: every room is the same 10 m square (GUY's room was 10 x 8: see fromV1)
 
 const num = (n) => typeof n === 'number' && Number.isFinite(n);
 const r2 = (n) => Math.round(n * 100) / 100;
@@ -21,6 +21,7 @@ export function initLayout({ world, guy, remove, persist, key = KEY }) {
     const objects = {}, decor = {};
     for (const [name, o] of Object.entries(world.objects)) {
       objects[name] = { x: r2(o.x), z: r2(o.z), rot: o.rot };
+      if (o.lane !== undefined) objects[name].lane = o.lane;        // a set of maple pins that stands on a lane of the Bowling Alley
       if (o.aim) objects[name].aim = { yaw: r2(o.aim.yaw), pitch: r2(o.aim.pitch) };      // the telescope tube
     }
     for (const [name, d] of Object.entries(world.decor)) decor[name] = { u: r2(d.u), v: r2(d.v), rot: d.rot };
@@ -35,10 +36,26 @@ export function initLayout({ world, guy, remove, persist, key = KEY }) {
     };
   }
 
+  // A layout saved when GUY's room was 8 m deep (walls at z = -4 and 4; now -5 and 5). What stood by the back or front wall, or in a room beyond
+  // it, moves the metre that the wall moved, so it is still by that wall (and still in that room); everything else stays where it is.
+  function fromV1(data) {
+    const grow = (z, half) => (num(z) && Math.abs(z) + half > 3.4 ? r2(z + Math.sign(z)) : z);
+    const objects = {}, decor = {};
+    for (const [name, p] of Object.entries(data.objects || {})) {
+      const o = world.objects[name], turned = p && (Math.round(p.rot) || 0) % 2;
+      objects[name] = p && { ...p, z: grow(p.z, o ? (turned ? o.bw : o.bd) / 2 : 0.3) };
+    }
+    for (const [name, p] of Object.entries(data.decor || {})) {
+      const d = world.decor[name];
+      decor[name] = p && d && !d.wall ? { ...p, v: grow(p.v, (Math.round(p.rot) || 0) % 2 ? d.hx : d.hz) } : p;
+    }
+    return { ...data, v: VERSION, objects, decor, ball: data.ball ? { ...data.ball, z: grow(data.ball.z, 0.18) } : data.ball };
+  }
+
   // Put the saved layout back. Returns what it did (for the QA harness); junk or an old format does nothing.
   function apply(data) {
     const did = { applied: false, removed: [], replaced: [], guyMoved: false };
-    if (!data || typeof data !== 'object' || data.v !== VERSION) return did;
+    if (!data || typeof data !== 'object' || (data.v !== VERSION && data.v !== 1)) return did;
     did.applied = true;
     for (const it of Array.isArray(data.instances) ? data.instances : []) {                  // things GUY built that were in the room
       if (it && typeof it.name === 'string' && typeof it.kind === 'string' && !world.objects[it.name]) world.addInstance(it.kind, null, it.name, true);
@@ -46,6 +63,7 @@ export function initLayout({ world, guy, remove, persist, key = KEY }) {
     for (const name of Array.isArray(data.out) ? data.out : []) {
       if (typeof name === 'string' && (world.objects[name] || world.decor[name])) { remove(name); did.removed.push(name); }
     }
+    if (data.v === 1) data = fromV1(data);           // (the things GUY built are there now: how big a piece is says whether it stood by a wall)
     for (const [name, p] of Object.entries(data.objects || {})) {
       const o = world.objects[name];
       if (!o || !p || !num(p.x) || !num(p.z)) continue;
@@ -62,6 +80,9 @@ export function initLayout({ world, guy, remove, persist, key = KEY }) {
     }
     // every piece must still fit: furniture inside the room and clear of the others, wall pieces clear of each other and the door
     for (const [name, o] of Object.entries(world.objects)) {
+      const at = (data.objects || {})[name];
+      if (at && num(at.lane) && world.rackPins(name, at.lane)) continue;      // (on its lane)
+      if (o.lane !== undefined) continue;
       if (world.fits(o, o.x, o.z)) continue;
       const spot = world.findSpot(o, { x: o.x, z: o.z }, null);
       if (spot) { o.set(spot.x, spot.z); did.replaced.push(name); }
@@ -74,7 +95,7 @@ export function initLayout({ world, guy, remove, persist, key = KEY }) {
     const b = data.ball;
     if (b === null && !world.ballGone) { remove('ball'); did.removed.push('ball'); }
     else if (b && num(b.x) && num(b.z) && !world.ballGone && !world.obstacles.some((o) => b.x > o.x0 - 0.5 && b.x < o.x1 + 0.5 && b.z > o.z0 - 0.5 && b.z < o.z1 + 0.5)
-      && Math.abs(b.x) < 4.5 && Math.abs(b.z) < 3.5) {
+      && Math.abs(b.x) < 4.5 && Math.abs(b.z) < 4.5) {
       world.ball.position.set(b.x, 0.18, b.z);
       world.ball.userData.vel.set(0, 0, 0);
     }
@@ -106,7 +127,7 @@ export function initLayout({ world, guy, remove, persist, key = KEY }) {
     for (let r = 0.25; r < 6; r += 0.25) {
       for (let i = 0; i < 16; i++) {
         const x = p.x + Math.cos((i / 16) * Math.PI * 2) * r, z = p.z + Math.sin((i / 16) * Math.PI * 2) * r;
-        if (Math.abs(x) < 4.4 && z > -3.4 && z < 3.4 && clear(x, z)) { p.set(x, 0, z); return true; }
+        if (Math.abs(x) < 4.4 && z > -4.4 && z < 4.4 && clear(x, z)) { p.set(x, 0, z); return true; }
       }
     }
     return false;
