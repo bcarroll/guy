@@ -258,7 +258,8 @@ export const POSES = {
     const e = env(t, dur, 0.7);
     const head = g.root.worldToLocal(g.boneWorld('Head')), rq = g.root.getWorldQuaternion(new THREE.Quaternion());
     const chin = g.root.localToWorld(new THREE.Vector3(-0.05, head.y - 0.12, 0.2));
-    g.reach('Right', chin, e, false, { hand: { fingers: new THREE.Vector3(0.9, 0.5, 0.1).normalize().applyQuaternion(rq), palm: new THREE.Vector3(0, 0, -1).applyQuaternion(rq) }, pole: new THREE.Vector3(-0.2, -1, -0.5) });
+    // (the hand turns to the chin as the arm comes up, not before: turned fully while the arm was still low, on the way down, it bent the wrist past 110 degrees)
+    g.reach('Right', chin, e, false, { hand: { fingers: new THREE.Vector3(0.9, 0.5, 0.1).normalize().applyQuaternion(rq), palm: new THREE.Vector3(0, 0, -1).applyQuaternion(rq), weight: e * e * (3 - 2 * e) }, pole: new THREE.Vector3(-0.2, -1, -0.5) });
     const belly = g.root.localToWorld(new THREE.Vector3(-0.05, head.y - 0.55, 0.3));
     g.reach('Left', belly, e, false, { hand: { fingers: new THREE.Vector3(-1, 0, 0.3).normalize().applyQuaternion(rq), palm: new THREE.Vector3(0, 1, 0).applyQuaternion(rq) }, pole: new THREE.Vector3(0.2, -1, -0.5) });
     g.set('Head', Q('z', 0.14 * e, 'x', 0.05 * e, 'y', Math.sin(t * 0.7) * 0.15 * e));
