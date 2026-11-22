@@ -144,12 +144,12 @@ export function installHobbies(Brain, POSES, H) {
             if (this.w.obstacles.some((o) => o !== t.obstacle && o.active !== false && tip.x > o.x0 - 0.45 && tip.x < o.x1 + 0.45 && tip.z > o.z0 - 0.45 && tip.z < o.z1 + 0.45)) continue;
             // where he will stand to look through it (behind the eyepiece for 'sky', in front of the lens for 'room')
             const spot = c.clone().addScaledVector(dir, mode === 'room' ? 1.25 : -1.15);
-            if (!this.onFloor(spot.x, spot.z, 0.2) || cellBlocked(grid, spot.x, spot.z)) continue;
+            if (!this.onFloorOf('telescope', spot.x, spot.z, 0.2) || cellBlocked(grid, spot.x, spot.z)) continue;
             // stand beside the tube to swing it: the side that is free
             const perp = V(-dir.z, 0, dir.x);
             for (const sgn of [1, -1]) {
               const side = c.clone().addScaledVector(perp, sgn * 0.78);
-              if (!this.onFloor(side.x, side.z, 0.1) || cellBlocked(sideGrid, side.x, side.z)) continue;
+              if (!this.onFloorOf('telescope', side.x, side.z, 0.1) || cellBlocked(sideGrid, side.x, side.z)) continue;
               const cd = V(Math.sin(wy0), 0, Math.cos(wy0));
               const toHand = V(cd.x, 0, cd.z);
               // swing with whichever hand is on the tube's front end side
@@ -164,24 +164,31 @@ export function installHobbies(Brain, POSES, H) {
         }
       }
     },
+    // Where he stands to look through the telescope (or to clean it) for the current aim, and the way he faces; null when there is no room.
+    scopeStandFor(kind) {
+      const t = this.obj('telescope'), grid = makeGrid(this.w.obstacles, kind === 'care' ? 0.55 : 0.62, 0, t.obstacle);
+      const E = t.eyepiece(), O = t.objective();
+      const d = O.clone().sub(E).normalize(), dh = V(d.x, 0, d.z).normalize();
+      const c = t.tube.localToWorld(V(0, 0, 0));
+      const ok = (p) => this.onFloorOf('telescope', p.x, p.z, 0.1) && !cellBlocked(grid, p.x, p.z);
+      const cands = [];
+      if (kind === 'peer') for (const back of [0.3, 0.4, 0.5, 0.6]) cands.push([E.clone().addScaledVector(dh, -back), dh.clone()]);
+      else if (kind === 'wrong') for (const out of [0.55, 0.65, 0.8]) cands.push([O.clone().addScaledVector(dh, out), dh.clone().negate()]);
+      else {
+        // beside the tube, level with its middle or a little along it either way (a tube against a wall has no room on the wall side)
+        const perp = V(-dh.z, 0, dh.x);
+        for (const along of [0.15, 0, -0.15, -0.3]) for (const sgn of [1, -1]) cands.push([c.clone().addScaledVector(perp, sgn * 0.74).addScaledVector(dh, along), perp.clone().multiplyScalar(-sgn)]);
+      }
+      for (const [p, face] of cands) if (ok(p)) return { p, face };
+      return null;
+    },
     // Walk to where he looks through the telescope (or to where he cleans it) for the current aim.
     scopeSpot(kind) {
       return {
         type: 'plan',
         fn: () => {
-          const t = this.obj('telescope'), grid = makeGrid(this.w.obstacles, kind === 'care' ? 0.55 : 0.62, 0, t.obstacle);
-          const E = t.eyepiece(), O = t.objective();
-          const d = O.clone().sub(E).normalize(), dh = V(d.x, 0, d.z).normalize();
-          const c = t.tube.localToWorld(V(0, 0, 0));
-          const ok = (p) => this.onFloor(p.x, p.z, 0.1) && !cellBlocked(grid, p.x, p.z);
-          const cands = [];
-          if (kind === 'peer') for (const back of [0.3, 0.4, 0.5, 0.6]) cands.push([E.clone().addScaledVector(dh, -back), dh.clone()]);
-          else if (kind === 'wrong') for (const out of [0.55, 0.65, 0.8]) cands.push([O.clone().addScaledVector(dh, out), dh.clone().negate()]);
-          else {
-            const perp = V(-dh.z, 0, dh.x);
-            for (const sgn of [1, -1]) cands.push([c.clone().addScaledVector(perp, sgn * 0.74).addScaledVector(dh, 0.15), perp.clone().multiplyScalar(-sgn)]);
-          }
-          for (const [p, face] of cands) if (ok(p)) return [{ ...this.walk(p.x, p.z, Math.atan2(face.x, face.z)), tol: 0.2 }];       // (pressed against the wall a few centimetres short is close enough)
+          const r = this.scopeStandFor(kind);
+          if (r) return [{ ...this.walk(r.p.x, r.p.z, Math.atan2(r.face.x, r.face.z)), tol: 0.2 }];       // (pressed against the wall a few centimetres short is close enough)
           this.queue.length = 0; this.ui("can't get at the telescope"); return [];
         },
       };
@@ -190,10 +197,12 @@ export function installHobbies(Brain, POSES, H) {
     // ------------------------------------------------------------------ per-step state
     computeHobby(s, dt) {
       this.hobProps = {};
+      // The kit's resting sticks and the easel's palette are shared by both robots: only the one holding them may put them back,
+      // or the idle robot shows the sticks on the snare again while the other is drumming with them.
       const d = this.obj('drums');
-      if (d && d.restSticks) d.restSticks.forEach((m) => (m.visible = true));
+      if (d && d.restSticks && d.sticksBy === this) { d.sticksBy = null; d.restSticks.forEach((m) => (m.visible = true)); }
       const e = this.obj('easel');
-      if (e && e.restPalette) e.restPalette.visible = true;
+      if (e && e.restPalette && e.paletteBy === this) { e.paletteBy = null; e.restPalette.visible = true; }
       if (s.type !== 'play' || !s.fx) return null;
       if (s.fx.work) return this.computeWork(s, dt);                    // hands at work (the stove: restbrain.js)
       if (s.fx.drums) return this.computeDrums(s);
@@ -224,9 +233,10 @@ export function installHobbies(Brain, POSES, H) {
       root.rotation.y = d.yaw + Math.PI;
     },
 
-    stickDir(hand) {
+    // pitch: how far the tip points down (0.3 rad onto the drums; about level for a cymbal, which is struck with the shaft from below)
+    stickDir(hand, pitch = 0.3) {
       const sgn = hand === 'L' ? 1 : -1;      // GUY's left is +x in his own frame
-      return this.fwdVec().multiplyScalar(Math.cos(0.3)).addScaledVector(UPV, -Math.sin(0.3)).addScaledVector(this.leftVec(), -sgn * 0.12).normalize();
+      return this.fwdVec().multiplyScalar(Math.cos(pitch)).addScaledVector(UPV, -Math.sin(pitch)).addScaledVector(this.leftVec(), -sgn * 0.12).normalize();
     },
 
     computeDrums(s) {
@@ -250,7 +260,7 @@ export function installHobbies(Brain, POSES, H) {
       const start = fx.startAt ?? 2.4, endGap = 2.0;
       const holding = T >= start - 0.6 && T < D - endGap + 0.8;
       this.hobProps.sticks = holding;
-      d.restSticks.forEach((m) => (m.visible = !holding));
+      if (holding) { d.sticksBy = this; d.restSticks.forEach((m) => (m.visible = false)); }
       // Timing comes with the advanced books (Fills & Solos, Playing in the Band): such a drummer locks onto the stereo's beat, or
       // onto the tempo the other robot is playing, wherever the song is. With only the basic book the beat is steady but her own.
       const f = fx.sync && this.music ? { bl: this.beatLen, beat: this.currentBeat() } : this.tempoToFollow('drums');
@@ -285,19 +295,24 @@ export function installHobbies(Brain, POSES, H) {
       for (const hd of ['L', 'R']) {
         const sgn = hd === 'L' ? -1 : 1;
         const rest = pads.snare.clone().addScaledVector(lat, sgn * 0.04).add(V(0, 0.016, 0));
-        let pos;
+        let pos, cym = 0;
+        // how much the hand is on a cymbal (crash, ride: up at shoulder height). A drummer reaches one with the stick about level and
+        // the wrist below it; keeping the stick tipped down as for the snare put the fist over her head with the wrist bent back.
+        const cymOf = (k) => (k === 'crash' || k === 'ride' ? 1 : 0);
         if (!playing) pos = rest;
         else {
           const last = dr.last[hd], next = dr.q[hd][0];
           const from = last ? pads[last.pad] : rest;
-          if (!next) pos = from.clone().add(V(0, 0.07 + 0.02 * Math.sin(T * 3), 0));
+          const c0 = last ? cymOf(last.pad) : 0;
+          if (!next) { pos = from.clone().add(V(0, 0.07 + 0.02 * Math.sin(T * 3), 0)); cym = c0; }
           else {
             const bh = b + 0.1 / bl, t0 = last ? last.time : next.time - 1, gap = Math.max(0.25, next.time - t0), u = clamp((bh - t0) / gap, 0, 1);   // the arm leads the beat a little: the skeleton follows with a lag
+            cym = lerp(c0, cymOf(next.pad), sm(u / 0.7));
             pos = from.clone().lerp(pads[next.pad], sm(u / 0.7));
-            pos.y += clamp(gap * bl * 0.45, 0.04, 0.2) * Math.sin(Math.PI * u);
+            pos.y += clamp(gap * bl * 0.45, 0.04, 0.2) * Math.sin(Math.PI * u) * (1 - 0.7 * cym);   // (a cymbal is not hit from high above)
           }
         }
-        const f = this.stickDir(hd);
+        const f = this.stickDir(hd, lerp(0.3, -0.12, cym));
         out[hd] = { wrist: pos.clone().addScaledVector(f, -tipLen), f, palm: V(0, -1, 0).addScaledVector(lat, -sgn * 0.25), tip: pos };
       }
       return out;
@@ -342,7 +357,7 @@ export function installHobbies(Brain, POSES, H) {
       this.hobProps.brush = !finger;
       this.hobProps.palette = paletteHeld;
       this.hobProps.paletteFrame = { lf, up: UPV };
-      e.restPalette.visible = !paletteHeld;
+      if (paletteHeld) { e.paletteBy = this; e.restPalette.visible = false; }
       if (this.hobProps.brush && pp.brushT === undefined) pp.brushT = T;
 
       const out = { finger, palette: paletteHeld };

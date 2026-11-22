@@ -25,12 +25,16 @@ import { ALBUM_CATALOG } from './albums.js';
 import { TRACKS, trackSeconds } from './audio.js';
 import { POSES } from './brain.js';
 import { bowlSkill } from './bowlbrain.js';
+import { throwBall } from './bowlrules.js';
+import { createMic, MIC_ERRORS } from './mic.js';
+import { LIMITS } from './commands.js';
 import { install as installCharacters } from './qa-characters.js';
 import { install as installAudio } from './qa-audio.js';
 import { install as installShots } from './qa-shots.js';
 import { counts as sfxCounts } from './sfx.js';
 import { BARKS, NO_BARK, resetBarks } from './barks.js';
 import { WHATS_NEW } from './whatsnew.js';
+const lcg = (seed) => { let a = seed | 0; return () => { a = (Math.imul(a, 1664525) + 1013904223) | 0; return (a >>> 0) / 4294967296; }; };      // (a small seeded generator: for a check that must not depend on the sweep's seed)
 
 // ---------------------------------------------------------------------------------------------------------------
 // MANIFEST: what the test knows about each asset. Keep in sync with the game (T.coverage() tells you what is missing).
@@ -56,6 +60,10 @@ export const MANIFEST = {
     workstation: { skills: [] },      // the Learning Workstation (premium): tested by sweepWorkstation
     footstool: { room: 'workshop', built: true }, woodshelves: { room: 'workshop', built: true }, builtchair: { room: 'workshop', built: true }, metalchair: { room: 'workshop', built: true }, bookshelf2: { room: 'workshop', built: true }, eguitar: { room: 'workshop', built: true },
     bowlingpins: { room: 'workshop', built: true, alsoRoom: 'bowling' }, bowlingball: { room: 'workshop', built: true, alsoRoom: 'bowling' }, pinsetter: { room: 'workshop', built: true, alsoRoom: 'bowling' },      // (the Bowling Alley's equipment: it goes in the alley, so that has to be there; the pinsetter is an easter egg)
+    // furniture GUY and GAL build for the Bedroom and the Library once those rooms are added (they go into the room, so it has to be there)
+    bed: { room: 'workshop', built: true, alsoRoom: 'bedroom' }, wardrobe: { room: 'workshop', built: true, alsoRoom: 'bedroom' }, bedside: { room: 'workshop', built: true, alsoRoom: 'bedroom' },
+    libshelf: { room: 'workshop', built: true, alsoRoom: 'library' }, readingchair: { room: 'workshop', built: true, alsoRoom: 'library' },
+    libdesk: { room: 'workshop', built: true, alsoRoom: 'library' }, globe: { room: 'workshop', built: true, alsoRoom: 'library' },
     diningtable3: { room: 'workshop', built: true, alsoRoom: 'restaurant' }, diningtable4: { room: 'workshop', built: true, alsoRoom: 'restaurant' },       // (they go in the Restaurant, so it has to be there)
     // the Restaurant (another added room): the kitchen and the dining room
     stove: { room: 'restaurant', skills: ['restaurant'] }, kitchencounter: { room: 'restaurant', skills: ['restaurant'] }, register: { room: 'restaurant', skills: ['restaurant'] },
@@ -99,6 +107,16 @@ export const MANIFEST = {
     tidytools: { objects: ['toolbox'], skills: ['workshop'], room: 'workshop', touches: ['toolbox'] },
     dusttop: { objects: ['window', 'window2', 'footstool'], skills: ['decorate'], room: 'workshop', max: 90, touches: ['footstool'] },
     build: { objects: ['woodfactory', 'metalfactory'], skills: ['workshop', 'decorate'], room: 'workshop', recipe: 'footstool', max: 260, touches: ['woodfactory', 'metalfactory', 'tree', 'telescope', 'flowerplant', 'plant', 'footstool', 'chair', 'chair2', 'armchair', 'armchair2', 'builtchair', 'metalchair'] },
+    // the Bedroom and the Library (corner rooms): the furniture they built there (homebrain.js)
+    makebed: { objects: ['bed'], room: 'bedroom', max: 120, touches: ['bed'] },
+    homesit: { objects: ['bed', 'readingchair'], room: 'bedroom', max: 120, touches: ['bed', 'readingchair'] },
+    wardrobe: { objects: ['wardrobe', 'bedside'], room: 'bedroom', max: 120, touches: ['wardrobe', 'bedside'] },
+    browse: { objects: ['libshelf'], room: 'library', max: 120, touches: ['libshelf'] },
+    study: { objects: ['libdesk'], room: 'library', max: 120, touches: ['libdesk'] },
+    spinglobe: { objects: ['globe'], room: 'library', max: 120, touches: ['globe'] },
+    // the Library (librarybrain.js): its dust and cobwebs wiped away; the bookshelf carried in from his room (the skill shelf: it is always there)
+    libclean: { room: 'library', max: 150, touches: [] },
+    moveshelf: { objects: ['shelf'], room: 'library', max: 200, touches: ['shelf'] },
     // the Restaurant: `customer` is the state of a customer set up before it starts (customers.js stage()); the rest as for the Workshop
     takeorder: { objects: ['stove', 'kitchencounter', 'register', 'diningtable'], skills: ['restaurant'], room: 'restaurant', customer: 'waiting', touches: ['diningtable'] },
     cook: { objects: ['stove', 'kitchencounter', 'register', 'diningtable'], skills: ['restaurant'], room: 'restaurant', customer: 'ordered', max: 200, touches: ['stove', 'kitchencounter'] },
@@ -184,6 +202,15 @@ export const MANIFEST = {
   tracks: ['default', ...ALBUM_CATALOG.flatMap((a) => a.tracks)],     // every track on every record; coverage fails for a track no record lists
   // the visual checkpoints: freeze GUY at (activity, pose, t) and look from `view`. See assets.md for the full checklist.
   visual: [
+    // the Bedroom and the Library (homebrain.js)
+    { id: 'makebed-smooth', activity: 'makebed', pose: 'reach', t: 2.4, view: 'front', expect: 'standing at the side of the bed, one hand flat on the blanket smoothing it, the other arm down, the blanket flat and the pillows plump' },
+    { id: 'homesit-bed', activity: 'homesit', pose: 'sitRest', t: 6, view: 'side', expect: 'seated on the foot of the bed, thighs on the mattress, shins over the edge, feet on the floor, hands on his knees' },
+    { id: 'wardrobe-reach', activity: 'wardrobe', pose: 'reach', t: 2.0, view: 'front', expect: 'both wardrobe doors swung open, one hand reaching in among the hanging clothes (or the bedside drawer pulled out with his hand in it)' },
+    { id: 'browse-shelf', activity: 'browse', pose: 'reach', t: 1.8, view: 'front', expect: 'standing at the library shelf, one hand touching the spines of the books on a shelf, no hand through the shelf' },
+    { id: 'study-page', on: 'libdesk', activity: 'study', pose: 'reach', t: 1.4, view: 'front', expect: 'standing at the reading desk, the green banker lamp lit, fingertips on the open book turning a page over; no hand through the desk' },
+    { id: 'spinglobe-hand', on: 'globe', activity: 'spinglobe', pose: 'reach', t: 0.7, view: 'front', expect: 'standing at the globe, the flat of his hand on the front of the globe, sweeping it round; the globe on its tripod, tilted in its brass ring' },
+    { id: 'libclean-floor', inRoom: 'library', dist: 3.4, activity: 'libclean', pose: 'reach', t: 2.0, view: 'side', expect: 'squatting with both feet flat on the floor, leaning out over his knees, one hand down at a grey patch of dust on the Library floor (not floating, not kneeling through the floor)' },
+    { id: 'moveshelf-setup', inRoom: 'library', activity: 'moveshelf', pose: 'reach', t: 2.2, view: 'side', expect: 'crouched beside a side wall of the Library where the bookshelf he carried in is growing back into place, its books on it; the flat pack gone from his hands' },
     { id: 'read-grab-mid', activity: 'read', pose: 'grab', t: 1.2, view: 'hand:Right', expect: 'palm on the book spine, fingers pointing in and a little up (never the back of the hand towards the book), arm in front of him' },
     { id: 'read-stand-shelf', activity: 'read', pose: 'readStand', t: 8, view: 'side', skills: ['speedreading'], expect: 'speed reading standing a step back from the bookshelf: the open book floats in front of his chest, clear of the shelf, both hands on its lower edges' },
     { id: 'read-sit', activity: 'read', pose: 'readSit', t: 8, view: 'front', expect: 'book open with pages facing GUY, both hands on the lower edges, seated in the chair with legs clear of it' },
@@ -1171,7 +1198,8 @@ T.moment = (activity, pose, t = 0, view = 'front', opts = {}) => {
   if (opts.album) b.forceAlbum = (W().objects.shelf.albums[0] || { def: {} }).def.id;
   b.queue = []; b.step = null; b.choose(activity);
   let guard = 0;
-  const ok = () => b.step && b.pose === pose && b.step.t >= t && (!opts.turning || (b.read && b.read.turning && b.read.turnT > 0.8)) && (!opts.push || b.step.push) && (!opts.range || (opts.range === 'carry' ? (b.rangeHold && b.step.type === 'walk') : opts.range === 'fired' ? (b.step.fx && b.step.fx.range && b.step.fx.range.fired) : (b.step.fx && b.step.fx.range && (opts.range === 'shoot' ? !b.step.fx.range.single : b.step.fx.range.tag === opts.range)))) && (!opts.yard || (b.inYard() && b.step.t >= t)) && (!opts.album || (b.held && b.held.kind === 'album'));
+  const ok = () => b.step && b.pose === pose && b.step.t >= t && (!opts.turning || (b.read && b.read.turning && b.read.turnT > 0.8)) && (!opts.push || b.step.push) && (!opts.range || (opts.range === 'carry' ? (b.rangeHold && b.step.type === 'walk') : opts.range === 'fired' ? (b.step.fx && b.step.fx.range && b.step.fx.range.fired) : (b.step.fx && b.step.fx.range && (opts.range === 'shoot' ? !b.step.fx.range.single : b.step.fx.range.tag === opts.range)))) && (!opts.yard || (b.inYard() && b.step.t >= t)) && (!opts.album || (b.held && b.held.kind === 'album'))
+    && (!opts.on || (b.step.fx && (b.step.fx.needs || []).some((n) => n === opts.on || (W().objects[n] || {}).kind === opts.on))) && (!opts.inRoom || b.hereId() === opts.inRoom);      // (opts.on: at that object, not a door knob on the way; opts.inRoom: in that room)
   while (!ok() && guard++ < 40000) step(1 / 30);
   T.freeze(); T.look(view, opts.dist);                                       // (opts.dist: how far back the camera stands, for a picture of someone up on a stool)
   return { reached: guard < 40000, state: T.state(), hands: T.hands() };
@@ -1348,7 +1376,7 @@ T.sweepSounds = () => {
     for (let attempt = 0; attempt < 4; attempt++) {
       T.prep(activity); T.run(activity, { prep: false });
       if ((sfxCounts[name] || 0) - c0 >= min) return;
-      const obj = { stargaze: 'telescope', sit: 'armchair' }[activity];
+      const obj = { stargaze: 'telescope', scopecare: 'telescope', sit: 'armchair' }[activity];
       if (!obj || !w.objects[obj]) return;
       w.removeObject(obj); b.objectRemoved(obj); T.addObject(obj); T.settle();
     }
@@ -1383,7 +1411,9 @@ T.resetRooms = () => {
   if (W().gal.exists()) W().gal.remove();                                       // GAL goes too (the machine is not given back)
   delete W().removed.botprinter;
   W().restaurant.clear(); W().restaurant.paused = false; W().restaurant.nServed = 0; W().restaurant.stats = { arrived: 0, paid: 0, gaveUp: 0 };
-  b.carry = null; b.restJob = null;
+  b.carry = null; b.restJob = null; b.shelfMove = null; for (const pp of b.popping || []) pp.o.group.scale.setScalar(1); b.popping = [];
+  const sh = W().objects.shelf;                                                   // the skill shelf back in its own place (a Library sweep carries it off)
+  if (sh) { if (sh.packed) W().unpackShelf('shelf', null); sh.rot = 0; sh.group.rotation.y = 0; sh.group.scale.setScalar(1); sh.home = { x: 4.7, z: 0.2 }; sh.set(4.7, 0.2); }
   if (!b.inMain()) T.home();                                                     // nobody is left standing in a room that is gone
 };
 // Put back what a door took out of the room (only what was not already out before the sweep began).
@@ -1433,6 +1463,152 @@ T.sweepYardOrders = () => {
   return out;
 };
 
+// ---- 12d. Spoken commands: finish-then-obey (src/commands.js, src/voice.js, src/mic.js). The design's time limits: 5 s to wrap up a quick
+// activity ("One sec."), 10 s to finish a work step ("Let me finish this row, then I'll ..."), 30 s waiting behind a busy job when GAL
+// cannot take it ("I'm cooking and GAL can't take it. Give me about half a minute, then I'll ..."), then a question. Every command ends
+// in a start, a reason said out loud, a cancel or a "later": none is dropped without a word. The microphone is a stand-in that "hears".
+T.sweepCommands = () => {
+  const out = [], base = errors.length, w = W(), b = B(), V = window.__voice, C = V.commands;
+  window.__voiceNoAudio = true;
+  const said = (from) => V.tts.log.slice(from).map((l) => `${l.who}: ${l.text}`);
+  const L = (r) => r.lines.map((l) => `${l.who}: ${l.text}`).join(' | ');
+  const reset = () => { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; C.clear(); V.tts.stop(); };
+  const busyWith = (act, sec) => { b.queue = []; b.pendingActivity = null; b.step = b.play('idle', sec); b.step.t = 0; b.last = act; };   // a stand-in for a long job
+  const started = (names) => names.includes(b.last) && b.pendingActivity === null;
+  try {
+    galReset(); T.settle(); T.resetRooms(); T.removeAll(); T.forget(); T.home(); T.settle();
+    T.learn(['piano', 'guitar', 'stereo']); for (const id of ['piano', 'guitar', 'lamp', 'table']) T.addObject(id);
+    T.settle();
+    // 1. idle: he just starts, "Sure thing." (or another short yes)
+    reset();
+    const r1 = V.run('play the guitar');
+    out.push(result('commands: idle, he answers with a short yes and the command is tracked until it starts', r1.ok && r1.lines.length === 1 && ['Sure thing.', 'On it.', 'Okay!', 'You got it.'].includes(r1.lines[0].text) && C.list.length === 1 && C.list[0].cls === 'idle', { lines: L(r1), list: C.list }));
+    const t1 = runUntil(() => started(['guitar']), 15);
+    out.push(result('commands: ... and he starts it within a second or so', started(['guitar']) && t1 <= 2, { t: t1, last: b.last }));
+    // 2. a quick activity (playing the piano): "One sec.", and he starts the new command within 5 s
+    reset(); T.home(); T.settle();
+    b.interact('piano'); runUntil(() => ['sitpiano', 'piano'].includes(b.last) && !!b.step && b.step.type === 'play', 60);
+    const playing = ['sitpiano', 'piano'].includes(b.last);
+    const r2 = V.run('turn on the lamp');
+    const t2 = runUntil(() => started(['lamp', 'mood']), 15);
+    out.push(result('commands: playing the piano, "turn on the lamp": "One sec." and the lamp within 5 s', playing && r2.ok && r2.lines.length === 1 && r2.lines[0].text === 'One sec.' && started(['lamp', 'mood']) && t2 <= LIMITS.quick + 0.5, { playing, lines: L(r2), t: t2, last: b.last }));
+    // 2b. the wrap-up limit holds even when the wrap-up would run on (a long step after the command)
+    reset(); busyWith('dance', 100);
+    const r2b = V.run('turn on the lamp');
+    b.step = b.play('idle', 100); b.step.t = 0;                   // (a wrap-up that would take 100 s)
+    const t2b = runUntil(() => started(['lamp', 'mood']), 20);
+    out.push(result('commands: a wrap-up never takes longer than its limit: he stops where he is at 5 s and starts the command', r2b.ok && r2b.lines[0].text === 'One sec.' && started(['lamp', 'mood']) && t2b >= LIMITS.quick - 0.5 && t2b <= LIMITS.quick + 1, { lines: L(r2b), t: t2b }));
+    // 3. a work step (mowing): he finishes the step he is on ("Let me finish this row, then I'll play the piano.")
+    reset(); busyWith('mow', 3); const row = b.step;
+    const n3 = V.tts.log.length;
+    const r3 = V.run('play the piano');
+    const kept = b.step === row;
+    const t3 = runUntil(() => started(['sitpiano', 'piano']), 20);
+    out.push(result('commands: mowing, "play the piano": "Let me finish this row, then I\'ll play the piano." and he finishes the step he is on, then plays', r3.ok && r3.lines[0].text === "Let me finish this row, then I'll play the piano." && kept && started(['sitpiano', 'piano']) && t3 >= 2.5 && t3 <= 4.5 && !said(n3).some((l) => /That'll do/.test(l)), { lines: L(r3), kept, t: t3, said: said(n3) }));
+    reset(); busyWith('mow', 100);
+    const n3b = V.tts.log.length;
+    V.run('play the piano');
+    const t3b = runUntil(() => started(['sitpiano', 'piano']), 20);
+    out.push(result('commands: a work step that runs on is cut at 10 s, with "That\'ll do for now."', started(['sitpiano', 'piano']) && t3b >= LIMITS.step - 0.5 && t3b <= LIMITS.step + 1 && said(n3b).includes("guy: That'll do for now."), { t: t3b, said: said(n3b) }));
+    reset(); busyWith('paint', 100);
+    const r3c = V.run('play the piano');
+    out.push(result('commands: painting, he says he finishes this stroke first', /^Finishing this stroke first, then I'll play the piano\.$/.test(r3c.lines[0] && r3c.lines[0].text || ''), { lines: L(r3c) }));
+    // 4. a busy job and no GAL: it waits, he says how long, and he starts it when the job is over
+    reset(); busyWith('cook', 12);
+    const n4 = V.tts.log.length;
+    const r4 = V.run('play the piano');
+    out.push(result('commands: cooking with no GAL: "I\'m cooking and GAL can\'t take it. Give me about half a minute, then I\'ll play the piano." and it waits', r4.ok && r4.lines.length === 1 && r4.lines[0].text === "I'm cooking and GAL can't take it. Give me about half a minute, then I'll play the piano." && !b.pendingActivity && C.list.length === 1 && C.list[0].state === 'waiting', { lines: L(r4), list: C.list }));
+    const t4 = runUntil(() => started(['sitpiano', 'piano']), 30);
+    out.push(result('commands: ... when the cooking ends he says "Done cooking. Playing the piano now." and plays', started(['sitpiano', 'piano']) && t4 <= 14 && said(n4).includes('guy: Done cooking. Playing the piano now.'), { t: t4, said: said(n4) }));
+    reset(); busyWith('cook', 100);
+    const r4b = V.run('GUY, play the piano');
+    out.push(result('commands: named ("GUY, ...") while cooking: he keeps it himself and does not mention GAL', r4b.ok && r4b.lines[0].text === "I'm cooking. Give me about half a minute, then I'll play the piano.", { lines: L(r4b) }));
+    // 5. the 30 s question, and the answers
+    reset(); busyWith('cook', 300);
+    const n5 = V.tts.log.length;
+    V.run('play the guitar');
+    runUntil(() => !!C.question, 40);
+    const asked = said(n5).includes('guy: Still cooking. Should I stop and play the guitar?');
+    const r5 = V.run('yes please');
+    const t5 = runUntil(() => started(['guitar']), 10);
+    out.push(result('commands: after 30 s he asks "Still cooking. Should I stop and play the guitar?" and "yes" makes him stop and play', asked && r5.ok && r5.lines[0] && r5.lines[0].text === "Okay, I'll stop cooking. Playing the guitar now." && started(['guitar']) && t5 <= 6, { said: said(n5), lines: L(r5), t: t5 }));
+    reset(); busyWith('cook', 300);
+    const n5b = V.tts.log.length;
+    V.run('play the guitar'); runUntil(() => !!C.question, 40);
+    const r5b = V.run('no');
+    runUntil(() => false, 40);
+    out.push(result('commands: "no" keeps him cooking, he says he will do it when he is done, and he does not ask again', r5b.lines[0] && r5b.lines[0].text === "Okay, I'll play the guitar when I'm done cooking." && C.list.length === 1 && C.list[0].state === 'waiting' && said(n5b).filter((l) => /Should I stop/.test(l)).length === 1 && b.last === 'cook', { lines: L(r5b), said: said(n5b), list: C.list }));
+    reset(); busyWith('cook', 300);
+    const n5c = V.tts.log.length;
+    V.run('play the guitar'); runUntil(() => false, 85);
+    const s5c = said(n5c);
+    out.push(result('commands: no answer: he asks once more at 60 s, then leaves it for later with a line (it is not dropped silently)', s5c.filter((l) => /Should I stop/.test(l)).length === 2 && s5c.includes("guy: I'll leave the guitar for later.") && C.list.length === 0, { said: s5c }));
+    // 6. the queue: asking again replaces, three at most, "never mind the ..." drops one, "stop" drops them all
+    reset(); busyWith('cook', 300);
+    V.run('play the guitar'); V.run('play the guitar'); V.run('play the piano'); V.run('turn on the lamp');
+    const r6 = V.run('dance');
+    out.push(result('commands: asking for the same thing again replaces it; a fourth command is refused kindly', C.waitingFor(b) === 3 && !r6.ok && r6.lines[0].text === "I've already got 3 things to do. Want me to drop one?", { list: C.list, lines: L(r6) }));
+    const r6b = V.run('never mind the guitar');
+    out.push(result('commands: "never mind the guitar" drops just that one, and he says so', r6b.lines[0] && r6b.lines[0].text === "Okay, I'll leave the guitar." && C.waitingFor(b) === 2, { lines: L(r6b), list: C.list }));
+    V.run('stop');
+    out.push(result('commands: "stop" drops everything waiting', C.waitingFor(b) === 0, { list: C.list }));
+    // 7. the start watchdog: a command that never gets going is reported with a reason, not forgotten
+    reset();
+    const n7 = V.tts.log.length;
+    const choose0 = b.choose;
+    b.choose = function (f) { if (f === 'guitar') { this.pendingActivity = 'guitar'; return; } return choose0.call(this, f); };     // (something keeps it from starting)
+    try { V.run('play the guitar'); runUntil(() => !b.pendingActivity, 40); } finally { b.choose = choose0; }
+    out.push(result('commands: a command that has not started after 30 s is reported as failed, out loud', !b.pendingActivity && C.list.length === 0 && said(n7).some((l) => /^guy: (I couldn't play the guitar|Sorry, I couldn't get started)/.test(l)), { said: said(n7), pending: b.pendingActivity }));
+    reset();
+    const n7b = V.tts.log.length;
+    V.run('play the guitar'); runUntil(() => started(['guitar']), 10);
+    b.lastPlanError = new Error('test: the guitar went missing'); step(0.1);
+    out.push(result('commands: when the plan of a started command falls apart he says so', said(n7b).includes("guy: I couldn't play the guitar. Something's in the way."), { said: said(n7b) }));
+    b.lastPlanError = null;
+    // 8. a few guesses from the microphone: the first one that makes sense wins
+    reset();
+    const r8 = V.runAlternatives([{ text: 'guy play the pie and oh', confidence: 0.6 }, { text: 'guy play the piano', confidence: 0.5 }]);
+    out.push(result('commands: of the guesses "guy play the pie and oh" / "guy play the piano" the piano is taken', r8.ok && r8.intent.type === 'object' && r8.intent.name === 'piano', { intent: r8.intent }));
+    // 9. the microphone (a stand-in recogniser that "hears" when the button is let go)
+    reset();
+    const heard = [], states = [];
+    let say = [[{ transcript: 'guy turn on the lamp', confidence: 0.9 }]];
+    class FakeRec {
+      start() { FakeRec.last = this; }
+      stop() { this.onresult({ resultIndex: 0, results: [Object.assign([{ transcript: 'guy turn on' }], { isFinal: false })] }); for (const alts of say) this.onresult({ resultIndex: 0, results: [Object.assign(alts.slice(), { isFinal: true })] }); this.onend(); }
+      abort() { this.onerror({ error: 'aborted' }); this.onend(); }
+    }
+    const partial = [];
+    const mic = createMic({ Recognition: FakeRec, onPartial: (t) => partial.push(t), onState: (st, d) => states.push([st, d]), onFinal: (alts) => { heard.push(alts); V.runAlternatives(alts); } });
+    const okStart = mic.start(); const listening = mic.listening; mic.stop();
+    out.push(result('commands: the microphone: hold, talk, let go: the words go the same way as the typed box and he turns the lamp on', okStart && listening && !mic.listening && heard.length === 1 && heard[0][0].text === 'guy turn on the lamp' && partial[0] === 'guy turn on' && ['lamp', 'mood'].includes(b.pendingActivity) && states.map((s) => s[0]).join(',') === 'listening,thinking,idle' && FakeRec.last.maxAlternatives === 3 && FakeRec.last.interimResults && !FakeRec.last.continuous, { okStart, heard, partial, states, pending: b.pendingActivity }));
+    class DeniedRec { start() {} stop() { this.onerror({ error: 'not-allowed' }); this.onend(); } abort() {} }
+    const st2 = []; const mic2 = createMic({ Recognition: DeniedRec, onState: (st, d) => st2.push([st, d]) }); mic2.start(); mic2.stop();
+    out.push(result('commands: the microphone permission refused: he says so and points to the typed box', st2.some(([st, d]) => st === 'error' && d === MIC_ERRORS['not-allowed']) && /type to me/.test(MIC_ERRORS['not-allowed']), { st2 }));
+    const btn = document.getElementById('mic-btn'), real = window.__mic;
+    out.push(result('commands: the 🎤 button is there beside 💬 Talk, shown only where the browser can recognise speech', !!btn && btn.nextElementSibling && btn.nextElementSibling.id === 'talk-btn' && btn.hidden === !real.supported, { hidden: btn && btn.hidden, supported: real && real.supported }));
+    // 10. with GAL: she takes it when GUY is busy and she is free; named, GUY keeps it; both busy, it waits with GUY
+    reset();
+    const gb = galBuild();
+    if (!gb.ok) throw new Error('no GAL');
+    const gal = w.gal, gbr = gal.brain;
+    gbr.skills.learn('guitar'); gbr.skills.learn('piano');
+    reset(); gbr.queue = []; gbr.step = null; gbr.pendingActivity = null; gbr.last = 'wander'; gal.audience = null;
+    busyWith('cook', 300);
+    const r10 = V.run('play the guitar');
+    out.push(result('commands: GUY cooking, GAL free: "GAL will get right on that." and she does it', r10.ok && r10.lines[0].who === 'guy' && r10.lines[0].text === 'GAL will get right on that.' && r10.lines[1] && r10.lines[1].who === 'gal' && !!gbr.pendingActivity && C.waitingFor(b) === 0, { lines: L(r10), pending: gbr.pendingActivity }));
+    gal.audience = null; gbr.skip(true); gbr.pendingActivity = null; C.clear();
+    const r10b = V.run('GUY, play the piano');
+    out.push(result('commands: GUY cooking, GAL free, but GUY named: he keeps it ("I\'m cooking. Give me about half a minute, then I\'ll play the piano.")', r10b.ok && r10b.lines.length === 1 && r10b.lines[0].text === "I'm cooking. Give me about half a minute, then I'll play the piano." && !gbr.pendingActivity && C.waitingFor(b) === 1, { lines: L(r10b) }));
+    C.clear(); gal.audience = null;
+    gbr.queue = []; gbr.step = gbr.play('idle', 300); gbr.step.t = 0; gbr.last = 'serve';
+    const r10c = V.run('play the piano');
+    out.push(result('commands: GUY cooking and GAL serving: it waits with GUY, "I\'m cooking and GAL can\'t take it ..."', r10c.ok && r10c.lines[0].text === "I'm cooking and GAL can't take it. Give me about half a minute, then I'll play the piano." && C.waitingFor(b) === 1, { lines: L(r10c) }));
+  } catch (e) { if (e.message !== 'no GAL') out.push(result('commands: sweep ran without throwing', false, { error: String(e && e.stack || e).slice(0, 500) })); else out.push(result('commands: GAL could be built for the test', false)); }
+  finally { window.__voiceNoAudio = false; C.clear(); b.lock = null; try { galReset(); } catch { /* none */ } T.resetRooms(); T.home(); T.removeAll(); T.settle(); }
+  out.push(result('commands: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
 // ---- 12c. Telling him to mow the lawn (and the other yard jobs) by voice, and while he is already out in the yard (src/voice.js, brain.js update) ----
 // "mow the lawn" used to come back as "I did not catch that" (the parser knew nothing of the yard), and an order for the yard given while he was
 // already out there made him walk back indoors first (and, with no GAL, was refused as "busy").
@@ -1798,7 +1974,8 @@ T.sweepRooms = () => {
   out.push(result('rooms: the toast says the Workshop was added', /Workshop added/.test(toast), { toast }));
   m = openTab('rooms');
   const after = machineCard('Workshop');
-  out.push(result('rooms: the Workshop then shows "In your home" with a Remove button and no Add button', !!after && after.classList.contains('inroom') && [...after.querySelectorAll('.act')].every((a) => a.textContent === 'Remove room') && !/Add to my home/.test(after.textContent)));
+  const rmBtn = after && after.querySelector('.act');
+  out.push(result('rooms: the Workshop then shows "In your home" with a Remove room button and no Add button', !!after && /In your home/.test(after.textContent) && !!rmBtn && rmBtn.textContent === 'Remove room', { text: after && after.textContent }));
   const e = w.extent(), v = new THREE.Vector3();
   let inView = true;
   for (const x of [e.minX, e.maxX]) for (const y of [0, 3.2]) for (const z of [e.minZ, e.maxZ]) { v.set(x, y, z).project(window.camera); if (Math.abs(v.x) > 1.001 || Math.abs(v.y) > 1.001) inView = false; }
@@ -1809,6 +1986,59 @@ T.sweepRooms = () => {
   R().reset('workshop');
   out.push(result('rooms: taking the room away removes the door and its room, and the camera frames the main room again',
     !Object.keys(w.doors).length && !w.room.children.includes(door.group) && !w.room.children.includes(door.shell.group) && w.extent().maxX === 5 && w.extent().minZ === -4));
+  // the Shooting Range and the Bowling Alley are as wide as any other room on the same wall (a wall of GUY's room is 10 m or 8 m long)
+  {
+    const widths = {};
+    for (const wall of ['front', 'right']) for (const id of ['workshop', 'range', 'bowling']) {
+      T.resetRooms(); R().add(id, { walls: [wall] });
+      widths[`${id}@${wall}`] = w.doors[id] && +w.doors[id].shell.L.toFixed(2);
+    }
+    T.resetRooms();
+    out.push(result('rooms: the Shooting Range and the Bowling Alley are as wide as the Workshop on the same wall',
+      ['front', 'right'].every((wl) => widths[`workshop@${wl}`] > 0 && widths[`range@${wl}`] === widths[`workshop@${wl}`] && widths[`bowling@${wl}`] === widths[`workshop@${wl}`]), widths));
+  }
+  // taking a room away from the Catalog: two taps (the first asks), the room and its door go, its furniture goes back to the Catalog
+  {
+    unlockRoom('workshop'); R().add('workshop'); T.settle(); T.home();
+    T.addObject('toolbox');
+    const tb = w.objects.toolbox, bd = w.doors.workshop.shell.bounds;
+    if (tb) tb.set((bd.minX + bd.maxX) / 2, (bd.minZ + bd.maxZ) / 2);
+    m = openTab('rooms');
+    machineCard('Workshop').querySelector('.act').click();
+    const asked = machineCard('Workshop').querySelector('.act');
+    const still = !!w.doors.workshop;
+    asked.click(); step(0.1);
+    const toastRm = document.getElementById('toast').textContent;
+    messages.push(toastRm);
+    m = openTab('rooms');
+    const back = machineCard('Workshop'), backBtn = back && back.querySelector('.act');
+    out.push(result('rooms: Remove room asks first (Tap to confirm), then takes the room and its door away and says so',
+      still && asked.textContent === 'Tap to confirm' && !w.doors.workshop && !R().isAdded('workshop') && /removed/.test(toastRm) && !!backBtn && backBtn.textContent === 'Add to my home', { asked: asked.textContent, toastRm }));
+    out.push(result('rooms: the furniture of a removed room goes back to the Catalog, not lost', !w.objects.toolbox && !!w.removed.toolbox, { inRoom: !!w.objects.toolbox, removed: !!w.removed.toolbox }));
+    R().add('workshop'); T.settle();
+    out.push(result('rooms: added again, its furniture can be put back from the Catalog', !!w.removed.toolbox && W().catalogOps.status('toolbox') === 'removed', { status: W().catalogOps.status('toolbox') }));
+    // GUY is in the room when it is removed: he walks out through the door first (nobody is moved by magic), then it goes
+    const b = window.brain;
+    b.unlock(false); b.queue = []; b.step = null;
+    b.visitRoom('workshop');
+    let t = 0; while (t < 60 && b.hereId() !== 'workshop') { step(0.25); t += 0.25; }
+    const wasIn = b.hereId() === 'workshop';
+    const res = R().remove('workshop');
+    messages.push(...res.messages);
+    const waiting = res.waiting && !!w.doors.workshop && R().isClosing('workshop') && !R().snapshot().rooms.workshop;
+    let t2 = 0, jump = 0; const path = [], door = w.doorPoint('workshop', 0);
+    let near = 9, last = b.g.root.position.clone();
+    while (t2 < 90 && w.doors.workshop) {
+      step(0.1); t2 += 0.1;
+      const p = b.g.root.position;
+      path.push(w.roomIdAt(p.x, p.z)); jump = Math.max(jump, p.distanceTo(last)); last = p.clone();
+      near = Math.min(near, Math.hypot(p.x - door.x, p.z - door.z));
+    }
+    out.push(result('rooms: removed while GUY is in it, he walks out through the door first and then the room goes', wasIn && waiting && /coming out/.test(res.messages[0]) && !w.doors.workshop && b.inMain() && near < 0.4 && jump < 0.3, { wasIn, waiting, res, t2, near, jump, room: b.hereId() }));
+    T.settle(); T.home();
+    delete w.removed.toolbox;                                       // (the room is gone: the toolbox is not kept for later tests)
+  }
+  T.resetRooms();
   const none = R().add('workshop', { walls: [] });
   messages.push(...none.messages);
   out.push(result('rooms: with no wall free it explains, and nothing changes', !none.ok && friendly(none.messages) && !Object.keys(w.doors).length && Object.keys(w.removed).length === before.size, { none }));
@@ -1842,39 +2072,25 @@ T.sweepRooms = () => {
   return out;
 };
 
-// ---- 10b. Removing a room from the Rooms tab (rooms.remove): its things go back to the Catalog and its door comes off ----
+// ---- 10b. Removing a room (rooms.remove), the parts sweepRooms does not cover: a rug on its floor and the corner rooms that open through it ----
 T.sweepRoomRemoval = () => {
-  const out = [], base = errors.length, w = W(), b = B();
+  const out = [], base = errors.length, w = W();
   T.resetRooms(); T.settle(); T.home();
   const before = new Set(Object.keys(w.removed));
   unlockRoom('workshop'); R().add('workshop');
-  for (const id of ['workbench', 'toolbox']) T.addObject(id);
-  R().add('library');                                                                  // (opens through the Workshop when it is beside one)
-  const kid = w.doors.library && w.doors.library.parent === 'workshop';
-  const inside = Object.keys(w.objects).filter((n) => ['workbench', 'toolbox'].includes(n));
-  const p = w.doorPoint('workshop', -2); b.g.root.position.set(p.x, 0, p.z);            // GUY is standing in the room when it goes
-  const door = w.doors.workshop;
-  let m = openTab('rooms');
-  let card = machineCard('Workshop'), btn = card && card.querySelector('.act');
-  out.push(result('room removal: a room in the home has a "Remove room" button', !!btn && btn.textContent === 'Remove room', { text: btn && btn.textContent }));
-  if (btn) btn.click();
-  step(0.5);
-  m = openTab('rooms'); card = machineCard('Workshop'); btn = card && card.querySelector('.act');
-  out.push(result('room removal: the first tap only asks "Really remove?" and changes nothing', R().isAdded('workshop') && !!btn && btn.textContent === 'Really remove?' && !!w.doors.workshop, { text: btn && btn.textContent }));
-  if (btn) btn.click();
-  step(1);
-  const toast = document.getElementById('toast').textContent;
-  out.push(result('room removal: the second tap takes the room away: door, walls and room are gone', !R().isAdded('workshop') && !w.doors.workshop && !w.room.children.includes(door.group) && !w.room.children.includes(door.shell.group) && w.extent().maxX === 5, { doors: Object.keys(w.doors) }));
-  out.push(result('room removal: everything that was in it is back in the Catalog, none of it left standing', inside.length === 2 && inside.every((n) => !w.objects[n] && !!w.removed[n]), { inside }));
-  out.push(result('room removal: GUY was walked out and stands in his own room', b.inMain() && w.roomIdAt(b.g.root.position.x, b.g.root.position.z) !== 'workshop', { room: b.hereId() }));
+  unlockRoom('library'); R().add('library');                                           // (a corner room: opens through the Workshop when it is beside one)
+  const kid = !!w.doors.library && w.doors.library.parent === 'workshop';
+  T.addObject('rug');
+  const rug = w.decor.rug, bd = w.doors.workshop.shell.bounds;
+  if (rug) rug.set((bd.minX + bd.maxX) / 2, (bd.minZ + bd.maxZ) / 2);                   // a rug laid on the Workshop's floor
+  const rugIn = !!rug && w.roomIdAt(rug.u, rug.v) === 'workshop';
+  const res = R().remove('workshop');
+  let t = 0; while (t < 30 && w.doors.workshop) { step(0.25); t += 0.25; }               // (waits only if a robot happened to be in there)
+  out.push(result('room removal: the room, its door and walls are gone', !R().isAdded('workshop') && !w.doors.workshop && w.extent().maxX === 5, { res, doors: Object.keys(w.doors) }));
+  out.push(result('room removal: a rug on its floor goes back to the Catalog too, not left floating', rugIn && !w.decor.rug && !!w.removed.rug, { rugIn, inRoom: !!w.decor.rug, removed: !!w.removed.rug }));
   if (kid) out.push(result('room removal: the Library that opened through it goes too', !w.doors.library && !R().isAdded('library')));
-  out.push(result('room removal: the toast says so kindly', /Workshop removed/.test(toast) && toast.length < 120 && !BANNED.test(toast), { toast }));
-  out.push(result('room removal: the Rooms tab offers the Workshop again ("Add to my home")', (() => { openTab('rooms'); const c = machineCard('Workshop'); return !!c && /Add to my home/.test(c.textContent); })()));
   const gone = R().remove('workshop');
-  out.push(result('room removal: removing a room that is not in the home does nothing', !gone.ok && !Object.keys(w.doors).length));
-  R().add('workshop');
-  const back = ['workbench', 'toolbox'].map((id) => T.addObject(id));
-  out.push(result('room removal: adding the room again works, and its things can be put back from the Catalog', R().isAdded('workshop') && ['workbench', 'toolbox'].every((n) => !!w.objects[n]), { back }));
+  out.push(result('room removal: removing a room that is not in the home does nothing', !gone.ok && !w.doors.workshop));
   T.resetRooms(); putBackSince(before); machine().hidden = true;
   out.push(result('room removal: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
@@ -2084,6 +2300,32 @@ T.sweepLayout = () => {
     const day = clone(L().snapshot()); y.snapNight(true); L().apply(clone(day));
     out.push(result('layout: the backyard remembers night and day', night.sky === true && sk === true && day.sky === false && y.isNight() === false, { sk }));
     y.snapNight(false); if (!wasYard) R().reset('backyard'); }
+  // 7c. pieces in walls: GUY's shoving never leaves one there, a saved one is put back on the floor, and one stuck there can still be dragged out
+  { if (!R().isAdded('workshop')) { unlockRoom('workshop'); R().add('workshop'); }
+    T.addObject('chair'); T.settle();
+    const ch = w.objects.chair, b = B(), home = { x: ch.x, z: ch.z }, room = { fr: w.frameOf('workshop'), bd: w.doors.workshop.shell.bounds };
+    let plans = 0; const bad = [];
+    for (const [cx, cz] of [[4.4, -2.6], [4.4, 2.4], [-4.4, 2.4], [2, 3.4], [2, -3.4], [5.6, 0.2], [5.6, 3.4], [14.4, 0]]) {
+      if (!w.fits(ch, cx, cz)) continue;
+      ch.set(cx, cz);
+      for (const d of [0.8, 1.2, 1.6]) for (let k = 0; k < 8; k++) for (const rm of [room, null]) {
+        const p = b.planPush(ch, cx + Math.cos(k * Math.PI / 4) * d, cz + Math.sin(k * Math.PI / 4) * d, null, rm);
+        if (!p) continue;
+        plans++;
+        const ends = p.filter((st) => st.push).map((st) => [st.x + st.push.relx, st.z + st.push.relz]);
+        if (ends.some(([x, z]) => !w.wallOk(ch, x, z)) || !w.insideRoom(ch, ...ends.at(-1))) bad.push([cx, cz, ends.at(-1).map((v) => +v.toFixed(2))]);
+      }
+    }
+    out.push(result('layout: GUY shoving a chair out of his way (near the walls, in both rooms) never leaves it half in a wall', plans > 0 && !bad.length, { plans, bad: bad.slice(0, 4) }));
+    const wd = w.doors.workshop, stuckAt = { x: 5.0, z: Math.abs(wd.u - 2.6) > 1.2 ? 2.6 : -2.6 };          // (on the wall line, away from the door)
+    ch.set(stuckAt.x, stuckAt.z);
+    const snap = clone(L().snapshot()); L().apply(clone(snap));
+    out.push(result('layout: a saved chair standing in a wall is put back on a floor when the game loads', w.insideRoom(ch, ch.x, ch.z) && w.fits(ch, ch.x, ch.z), { at: [ch.x, ch.z] }));
+    ch.set(stuckAt.x, stuckAt.z);
+    w.beginDrag(ch); for (let i = 0; i < 30; i++) w.dragTo(ch, stuckAt.x - 1.2, stuckAt.z); w.dropObject(ch);
+    out.push(result('layout: a chair stuck in a wall can be dragged out of it', w.insideRoom(ch, ch.x, ch.z) && w.fits(ch, ch.x, ch.z), { at: [+ch.x.toFixed(2), +ch.z.toFixed(2)] }));
+    ch.set(home.x, home.z);
+    R().reset('workshop'); }
   // 8. GUY stands on a free spot even if the saved layout has furniture where he starts
   G().root.position.set(w.objects.armchair.x, 0, w.objects.armchair.z);
   const moved = L().unstickGuy();
@@ -2275,6 +2517,38 @@ T.sweepCorners = () => {
   // 10. taking only a corner room away puts the Workshop's wall back whole
   R().reset('library');
   out.push(result('corners: taking a corner room away puts the side wall back whole', !w.doors.library && w.doors.workshop.shell.sides[dlWall.split(':')[1]].visible === true && !!w.doors.bedroom, { visible: w.doors.workshop.shell.sides[dlWall.split(':')[1]].visible }));
+  // 11. the Shooting Range takes a corner room's door in its side wall, clear of the blaster case, the controller and the scoreboard
+  const walkTo = (id) => {                                   // he goes in (main, the room beside it, the corner room) and back again: the rooms he passed through
+    T.home(); b.queue = []; b.step = null;
+    const r = b.visitRoom(id), seen = [];
+    let t = 0;
+    while (t < 160) { step(0.25); t += 0.25; const h = w.roomIdAt(g.pos.x, g.pos.z); if (h !== 'door' && seen[seen.length - 1] !== h) seen.push(h); if (b.hereId() === id) break; }
+    return { ok: !!(r && r.ok), seen, t };
+  };
+  {
+    T.resetRooms(); T.home();
+    R().add('range', { walls: ['front'] });
+    const gr = R().add('bedroom');
+    const d = w.doors.bedroom, pad = (o) => ({ x0: o.x0 - 0.2, x1: o.x1 + 0.2, z0: o.z0 - 0.2, z1: o.z1 + 0.2 });
+    const hits = d ? w.range.obstacles.filter((o) => { const p = pad(o); return [d.rect, d.rectIn].some((r) => r.x1 > p.x0 && r.x0 < p.x1 && r.z1 > p.z0 && r.z0 < p.z1); }).map((o) => o.name || 'screen') : ['no door'];
+    out.push(result('corners: beside the Shooting Range a corner room gets its door in the Range\'s side wall, where nothing of the Range stands', gr.ok && !!d && d.parent === 'range' && /^range:[ab]$/.test(d.wall) && !hits.length && !overlaps().length, { gr, wall: d && d.wall, hits }));
+    const tr = walkTo('bedroom');
+    out.push(result('corners: he gets to it through the Range (main, Range, Bedroom)', tr.ok && tr.seen.join() === ['main', 'range', 'bedroom'].join(), tr));
+  }
+  // 12. the Backyard's side fences take a gate into a corner room (the fence is cut round it; a fence is still no place for a picture)
+  {
+    T.resetRooms(); T.home();
+    R().add('backyard', { walls: ['left'] });
+    const gl = R().add('library');
+    const d = w.doors.library, yard = w.doors.backyard;
+    const side = d && d.wall.split(':')[1];
+    out.push(result('corners: beside the Backyard a corner room gets a garden gate in the side fence, and the fence there is cut round it', gl.ok && !!d && d.parent === 'backyard' && /^backyard:[ab]$/.test(d.wall) && d.gate && yard.shell.sides[side].visible === false && d.cut.children.length >= 2 && !overlaps().length, { gl, wall: d && d.wall, gate: d && d.gate }));
+    out.push(result('corners: the fences are not walls to hang a painting on', !w.hangWalls().some((h) => h.key.startsWith('backyard:')), { walls: w.hangWalls().map((h) => h.key) }));
+    const tr = walkTo('library');
+    out.push(result('corners: he gets to it across the lawn and through the gate (main, Backyard, Library)', tr.ok && tr.seen.join() === ['main', 'backyard', 'library'].join(), tr));
+    R().reset('library');
+    out.push(result('corners: taking that room away puts the fence back whole', !w.doors.library && yard.shell.sides[side].visible === true));
+  }
   T.resetRooms(); T.home(); T.removeAll(); putBackSince(before); T.settle(); machine().hidden = true;
   out.push(result('corners: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
@@ -3095,6 +3369,7 @@ const galBuild = () => {
   let t = 0; while (t < 80 && !(w.gal.exists() && !w.gal.emerge)) { step(0.5); t += 0.5; }
   return { ok: w.gal.exists() && !w.gal.emerge, t };
 };
+T.galBuild = () => galBuild(); T.galReset = () => galReset();         // (the pictures use them: GAL playing the guitar)
 T.sweepGal = () => {
   const out = [], base = errors.length, w = W(), b = B(), gal = w.gal;
   if (!gal.g || !gal.g.loaded) return [result('gal: her model is loaded (wait a moment after the page opens)', false)];
@@ -3182,6 +3457,26 @@ T.sweepGal = () => {
   gb.skills.learn('drums.band');
   const plan2 = gal.planDuo();
   out.push(result('gal: when she already has the skills there is nothing to read: GUY just asks her to come and play', !plan2 || plan2.galInst !== 'drums' || plan2.books.every((id) => id !== 'drumband')));
+  // 5b. she plays a solo on her own while GUY does something else. The kit's resting sticks are shared: GUY's brain used to put them
+  // back on the snare every frame while hers held them (sticks on the kit and in her hands), and on a crash hit her fist went over
+  // her head with the wrist bent back (the stick kept the snare's downward tilt for a cymbal at shoulder height).
+  {
+    galReset(); galBuild(); gb = gal.brain;
+    T.addObject('drums'); skillsOf().known.clear();
+    for (const s of ['drums', 'drums.solo']) gb.skills.learn(s);
+    b.queue = []; b.step = null; gb.queue = []; gb.step = null; gb.choose('drumsolo');
+    const kit = w.objects.drums, e5b = errors.length;
+    let held = 0, both = 0, high = -9, tb = 0;
+    while (tb < 60 && !(held && gb.last !== 'drumsolo')) {
+      step(0.05); tb += 0.05;
+      if (gb.last !== 'drumsolo' || b.pose === 'drumSit' || !gb.hobProps.sticks) continue;
+      held++;
+      if (kit.restSticks && kit.restSticks.some((m) => m.visible)) both++;
+      for (const side of ['Left', 'Right']) high = Math.max(high, gb.handFrame(side).wrist.y - gal.g.boneWorld(`${side}Arm`).y);
+    }
+    out.push(result('gal: while she drums (GUY busy elsewhere) the sticks are in her hands only, not also lying on the snare', held > 40 && both === 0 && errors.length === e5b, { held, both }));
+    out.push(result('gal: drumming, crash included, her wrists stay below her head (at most 15 cm above the shoulder)', held > 40 && high < 0.15, { high: +high.toFixed(2) }));
+  }
   // 6. her own idea: switch the stereo on, ask GUY to dance, dance, and the last one to stop switches the music off
   galReset(); galBuild(); gb = gal.brain;
   for (const id of ['table']) T.addObject(id);
@@ -3244,11 +3539,23 @@ T.sweepGal = () => {
   const e6d = errors.length;
   b.queue = []; b.step = null; b.skip(true); gb.queue = []; gb.step = null; gb.skip(true);
   b.choose('guitar'); gb.choose('guitar');
-  let t6d = 0, both = 0, close6d = 0, electric = false; const used = new Set();
+  let t6d = 0, both = 0, close6d = 0, electric = false; const used = new Set(), fretGal = [], fretGuy = [];
   while (t6d < 70) {
     step(0.25); t6d += 0.25;
     if (b.pose === 'guitar' && gb.pose === 'guitar') { both++; used.add(b.gname + '+' + gb.gname); electric = electric || b.electric() || gb.electric(); }
     if (Math.hypot(b.g.pos.x - gb.g.pos.x, b.g.pos.z - gb.g.pos.z) < 0.25) close6d++;
+    // her fretting hand, in the guitar's own frame (neck top edge at y 0.026, strings side +z): knuckles at the top edge, fingertips over it
+    for (const [x, arr] of [[gb, fretGal], [b, fretGuy]]) {
+      const F = x.pose === 'guitar' && x.step && x.step.t > 2 && x.lastCtx && x.lastCtx.guitar && x.lastCtx.guitar.cur;
+      if (!F) continue;
+      const Fi = F.q.clone().invert(), loc = (n) => x.g.boneWorld(n).sub(F.pos).applyQuaternion(Fi);
+      arr.push({ kY: loc('LeftHandMiddle1').y, tipsZ: ['Index', 'Middle', 'Ring', 'Pinky'].reduce((a, f) => a + loc(`LeftHand${f}3`).z, 0) / 4 });
+    }
+  }
+  {
+    const med = (a, k) => { const v = a.map((o) => o[k]).sort((p, q) => p - q); return v.length ? +v[Math.floor(v.length / 2)].toFixed(3) : null; };
+    const g = { kY: med(fretGal, 'kY'), tipsZ: med(fretGal, 'tipsZ') }, u = { kY: med(fretGuy, 'kY'), tipsZ: med(fretGuy, 'tipsZ') };
+    out.push(result('gal: her fretting hand sits like his: knuckles at the top edge of the neck and fingertips over it on the strings (her shorter hand used to make a fist under the neck, upside down)', fretGal.length > 10 && g.kY > 0.015 && g.tipsZ > 0.03 && Math.abs(g.kY - u.kY) < 0.012, { gal: g, guy: u, n: fretGal.length }));
   }
   out.push(result('gal: with an electric guitar as well as the acoustic one, GUY and GAL both play a guitar at the same time, one each, and the electric one sounds electric', both > 20 && used.size === 1 && !used.has('guitar+guitar') && ![...used][0].split('+').every((n, _i, a) => n === a[0]) && electric && close6d <= 6 && errors.length === e6d, { both, used: [...used], electric, close6d, errs: errors.slice(e6d, e6d + 1) }));
   // 7. both help in the restaurant: customers are looked after by whoever gets there, nothing is done twice
@@ -4550,10 +4857,16 @@ T.sweepBowl = () => {
   // the physics: a straight ball at the pocket knocks pins down and they lie where they fell; a gutter ball does nothing; the sweep and rack work
   {
     const from = bw.group.localToWorld(new window.THREE.Vector3(0.03, 0.3, -2.2));
-    const res = bw.roll(0, { from, aim: 0.035, hook: 0, noise: 0, power: 1.1 });
+    const res = bw.roll(0, { from, aim: 0.035, hook: 0, noise: 0, power: 1.1, rnd: lcg(7) });      // (a fixed throw: how many pins a ball at the pocket knocks over is a chance, tested below over many throws)
     for (let i = 0; i < 60 * (res.tHit + 5); i++) bw.update(1 / 60);
     const down = res.count, left = bw.standing(0).length;
     out.push(result('bowling: a ball at the pocket knocks pins over, the others stay up, and everything comes to rest', down >= 5 && down + left === 10 && !bw.busy(0), { down, left }));
+    {
+      const rnd = lcg(11), n = 400, counts = [];
+      for (let k = 0; k < n; k++) counts.push(throwBall([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], { x0: 0.03, aim: 0.035, hook: 0, noise: 0, power: 1.1 }, rnd).down.length);
+      const mean = counts.reduce((a, c) => a + c, 0) / n, few = counts.filter((c) => c < 5).length;
+      out.push(result('bowling: a ball at the pocket knocks over 8 or more pins on average, and fewer than 5 only rarely (it is a chance: many throws, not one)', mean >= 8 && few / n < 0.03, { mean: +mean.toFixed(2), few }));
+    }
     const a = bw.record(0, down);
     bw.manualReset(0);
     out.push(result('bowling: after the first roll the pins that fell are swept away (the others stand), after the second all ten are set again', (down === 10 ? a.next === 'rack' : a.next === 'sweep') && bw.standing(0).length === 10 - (down === 10 ? 10 : down) + (down === 10 ? 10 : 0), { next: a.next, standing: bw.standing(0).length }));
@@ -4642,6 +4955,194 @@ T.sweepBowl = () => {
   return out;
 };
 
+// ---- The Bedroom and the Library: the furniture GUY and GAL build to furnish them, and how it is used (src/homeobjects.js, homebrain.js) ----
+const HOME_RECIPES = ['bed', 'wardrobe', 'bedside', 'libshelf', 'readingchair', 'libdesk', 'globe'];
+const HOME_ROOM = { bed: 'bedroom', wardrobe: 'bedroom', bedside: 'bedroom', libshelf: 'library', readingchair: 'library', libdesk: 'library', globe: 'library' };
+T.sweepHome = () => {
+  const out = [], base = errors.length, w = W(), b = B(), g = G();
+  const FURN = ['workshop', 'workshop.materials', 'workshop.furniture'];
+  const homeWants = () => wants(b).map((x) => x.serves).filter((s) => s.startsWith('home.'));
+  const built = (k) => kindIn(w, k);
+  // 1. nothing is wanted before the rooms are added; then the Bedroom wants a bed, a wardrobe and a bedside table, the Library two shelves and a chair
+  needSetup('right', FURN);
+  const none = homeWants().length === 0 && b.pickRecipe() === null;
+  R().add('bedroom');
+  const bw = homeWants();
+  R().add('library');
+  const lw = homeWants();
+  out.push(result('home: nothing is wanted before the rooms are added; the Bedroom wants a bed, a wardrobe and a bedside table, the Library two bookshelves and a reading chair',
+    none && ['home.bed', 'home.wardrobe', 'home.bedside'].every((s) => bw.includes(s)) && !bw.includes('home.shelf') && ['home.shelf', 'home.readchair', 'home.desk', 'home.globe'].every((s) => lw.includes(s)), { none, bw, lw }));
+  out.push(result('home: the Bedroom and the Library are in the corners beside the Workshop', !!w.doors.bedroom && !!w.doors.library && w.doors.bedroom.parent === 'workshop' && w.doors.library.parent === 'workshop', { b: w.doors.bedroom && w.doors.bedroom.parent, l: w.doors.library && w.doors.library.parent }));
+  // 2. without the furniture book none of it is built
+  T.forget(); T.learn(['workshop']);
+  const locked = HOME_RECIPES.every((id) => !b.canBuild(id));
+  T.learn(['workshop.materials', 'workshop.furniture']);
+  out.push(result('home: it needs the furniture books (and the Wood Factory): without them none of it can be built, with them all of it can', locked && HOME_RECIPES.every((id) => b.canBuild(id)), { locked }));
+  // 3. he builds all of it, one piece after another, and carries each into its room
+  const times = [];
+  for (let i = 0; i < 12 && homeWants().length; i++) times.push(buildToEnd(b, 1300));
+  const where = Object.fromEntries(HOME_RECIPES.map((k) => [k, built(k).map((o) => w.roomIdAt(o.x, o.z))]));
+  out.push(result('home: he builds a bed, a wardrobe and a bedside table for the Bedroom, two bookshelves, a reading chair, a reading desk and a globe for the Library, and puts each together in its own room',
+    times.every((t) => t > 0) && HOME_RECIPES.every((k) => where[k].length === (k === 'libshelf' ? 2 : 1) && where[k].every((r) => r === HOME_ROOM[k])), { times, where }));
+  out.push(result('home: every piece fits where it stands, none is left in the Workshop or in storage, and then nothing more is wanted', HOME_RECIPES.every((k) => built(k).every((o) => w.fits(o, o.x, o.z))) && HOME_RECIPES.every((k) => !w.stock.items[k]) && homeWants().length === 0 && b.pickRecipe() === null, { wants: homeWants(), stock: { ...w.stock.items } }));
+  out.push(result('home: the heavy pieces (the bed, the wardrobe, the bookshelves, the desk) stay where they are put', ['bed', 'wardrobe', 'libshelf', 'libdesk'].every((k) => built(k).every((o) => o.weight === 'heavy'))));
+  // 4. the bed has its head to the far wall, away from the door
+  {
+    const bed = built('bed')[0], head = bed.local(0, 1.0), q = w.doorPoint('bedroom', 0);
+    const far = (p) => Math.hypot(p.x - q.x, p.z - q.z);
+    out.push(result('home: the bed has its head against the far wall, away from the door', far({ x: bed.x + head.x, z: bed.z + head.z }) > far(bed), { head: far({ x: bed.x + head.x, z: bed.z + head.z }), bed: far(bed) }));
+  }
+  // 5. he uses it: pointed at each piece he goes in through the Workshop and does the right thing there, and comes out again
+  {
+    const cases = [['bed', ['makebed', 'homesit']], ['wardrobe', ['wardrobe']], ['bedside', ['wardrobe']], ['libshelf', ['browse']], ['readingchair', ['homesit']], ['libdesk', ['study']], ['globe', ['spinglobe']]];
+    const res = {};
+    for (const [k, acts] of cases) {
+      const o = built(k)[0];
+      T.home(); T.settle(); b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; b.stayRoom = null;
+      const r = b.interact(o.name);
+      let t = 0, did = false, inRoom = false;
+      while (t < 240 && !did) { step(0.25); t += 0.25; const st = b.step; if (acts.includes(b.last) && st && st.type === 'play' && st.fx && (st.fx.needs || st.fx.chairSit)) { did = true; inRoom = b.hereId() === HOME_ROOM[k]; } }
+      res[k] = { ok: r.ok, did, inRoom, last: b.last };
+      b.skip(); b.queue = []; b.step = null; b.pendingActivity = 'leave';
+      { let t2 = 0; while (t2 < 240 && !(b.inMain() && Object.values(w.doors).every((d) => d.open === 0))) { step(0.25); t2 += 0.25; } }
+    }
+    out.push(result('home: pointed at the bed, the wardrobe, the bedside table, a bookshelf, the reading chair, the desk or the globe he goes in through the Workshop and uses it there', Object.values(res).every((x) => x.ok && x.did && x.inRoom), res));
+    out.push(result('home: afterwards he is back in his own room with the doors shut', b.inMain() && Object.values(w.doors).every((d) => d.open === 0), { here: b.hereId() }));
+  }
+  // 5b. the bed and the reading chair are not chairs of his own room: sitting there is its own activity, and the plain 'sit' never uses them
+  {
+    const names = b.chairs().map((c) => c.name);
+    out.push(result('home: the bed and the reading chair are for the Bedroom and the Library only: the plain Sit Down never picks them', !names.some((n) => /^(bed|readingchair)_/.test(n)), { names }));
+  }
+  // 6. the layout is saved: turned about and moved, the pieces come back where they were after a reload
+  {
+    built('readingchair')[0].rotate(1);
+    const snap = JSON.parse(JSON.stringify(w.layout.snapshot()));
+    const pos = Object.fromEntries(HOME_RECIPES.flatMap((k) => built(k).map((o) => [o.name, [o.x, o.z, o.rot]])));
+    T.removeAll();
+    const gone = HOME_RECIPES.every((k) => !built(k).length) && HOME_RECIPES.every((k) => w.stock.items[k] > 0);
+    w.layout.apply(snap);
+    const same = Object.entries(pos).every(([n, p]) => w.objects[n] && Math.abs(w.objects[n].x - p[0]) < 0.02 && Math.abs(w.objects[n].z - p[1]) < 0.02 && w.objects[n].rot === p[2] && w.roomIdAt(w.objects[n].x, w.objects[n].z) === HOME_ROOM[w.objects[n].kind]);
+    out.push(result('home: taken out of the rooms they go to storage, and a restored layout puts every piece back in its room where, and turned the way, it was', gone && same && HOME_RECIPES.every((k) => !w.stock.items[k]), { gone, same, stock: { ...w.stock.items } }));
+  }
+  // 7. taking a room away takes its furniture with it, and adding it again makes him want it all again
+  R().reset('bedroom');
+  const lost = !built('bed').length && !built('wardrobe').length && !built('bedside').length && built('libshelf').length === 2 && homeWants().length === 0;
+  const kept = ['bed', 'wardrobe', 'bedside'].every((k) => w.stock.items[k] === 1);
+  R().add('bedroom');
+  const again = ['bed', 'wardrobe', 'bedside'].map((k) => w.addInstance(k, null, null)).map((n) => n && w.roomIdAt(w.objects[n].x, w.objects[n].z));
+  out.push(result('home: taking the Bedroom away takes its furniture out of it into storage (nothing is lost, the Library is untouched), and adding it again puts it back in the room', lost && kept && again.every((r) => r === 'bedroom'), { lost, kept, again, stock: { ...w.stock.items } }));
+  T.resetRooms(); T.removeAll(); T.settle(); machine().hidden = true;
+  out.push(result('home: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
+// ---- The Library: the bookshelves carried into it, its dust and cobwebs (librarybrain.js, library.js, room.js libraryShelfSpot) ----------
+T.sweepLibrary = () => {
+  const out = [], base = errors.length, w = W(), b = B();
+  T.resetRooms(); T.removeAll(); T.settle(); T.home();
+  const sh = w.objects.shelf;
+  const shelfBooks = () => sh.books.filter((r) => r.mesh.parent === sh.group).length;
+  const books0 = shelfBooks(), nBooks = sh.books.length;
+  // 1. no Library: nothing to move, no dust to clean
+  out.push(result('library: without a Library no shelf is moved and there is nothing to clean', !b.available('moveshelf') && !b.available('libclean') && b.shelfMoveNext() === null));
+  // 2. a Library: dusty, with cobwebs in its four corners; the skill shelf (and a shelf he built) is wanted in it
+  R().add('workshop', { walls: ['right'] }); R().add('library');
+  const dust = w.doors.library && w.doors.library.shell.dust;
+  out.push(result('library: a new Library is dusty: six patches on the floor and a cobweb in each of its four corners, all of them showing', !!dust && dust.spots.filter((s) => s.kind === 'floor').length === 6 && dust.spots.filter((s) => s.kind === 'web').length === 4 && dust.spots.every((s) => s.level === 1 && s.mesh.visible), { n: dust && dust.spots.length }));
+  w.stock.items.bookshelf2 = 1;
+  const b2 = w.addInstance('bookshelf2', null, null, false, { x: -3.8, z: 2.5 });
+  const moves = b.shelfMoves().map((m) => m.o.name);
+  out.push(result('library: the skill shelf and the shelf he built (in his room) are both wanted in the Library, the skill shelf first', moves[0] === 'shelf' && moves.includes(b2), { moves, b2 }));
+  // 3. he carries each in: taken apart (out of sight, flat in his arms), through the doors, put together against a side wall, books and all
+  const carried = {};
+  for (let i = 0; i < 2; i++) {
+    T.home(); b.queue = []; b.step = null; b.pendingActivity = 'moveshelf';
+    let t = 0, packedSeen = false, flat = false, name = null;
+    const rooms = new Set();
+    while (t < 240) {
+      step(0.25); t += 0.25;
+      if (b.shelfMove) name = b.shelfMove.name;
+      const o = name && w.objects[name];
+      if (o && o.packed) { packedSeen = true; flat = flat || b.carry === 'flat'; rooms.add(b.hereId()); }
+      if (o && !o.packed && w.roomIdAt(o.x, o.z) === 'library' && b.last !== 'moveshelf') break;
+    }
+    if (name) carried[name] = { t, packedSeen, flat, rooms: [...rooms] };
+  }
+  const inLib = (o) => !!o && !o.packed && o.group.visible && w.roomIdAt(o.x, o.z) === 'library' && w.fits(o, o.x, o.z);
+  out.push(result('library: both shelves were taken apart, carried flat through the Workshop and put together in the Library, where they fit', inLib(sh) && inLib(w.objects[b2]) && Object.values(carried).length === 2 && Object.values(carried).every((c) => c.packedSeen && c.flat && c.rooms.includes('workshop')), { carried, shelf: [sh.x, sh.z], b2: w.objects[b2] && [w.objects[b2].x, w.objects[b2].z] }));
+  const B2 = w.objects[b2];
+  const front = (o) => { const l = o.local(-1, 0), c = w.roomSpot('library'); return (l.x * (c.x - o.x) + l.z * (c.z - o.z)) > 0; };
+  out.push(result("library: each stands against a side wall of the Library with its books facing into the room, and none is left in GUY's room or packed", !!B2 && front(sh) && front(B2) && !Object.values(w.objects).some((o) => o.mainOnly && (o.packed || w.roomIdAt(o.x, o.z) === 'main')) && b.carry !== 'flat', { rot: [sh.rot, B2 && B2.rot] }));
+  out.push(result('library: the books went with it: every book is still on the skill shelf, and nothing more is wanted', shelfBooks() === books0 && sh.books.length === nBooks && b.shelfMoves().length === 0 && !b.available('moveshelf'), { books0, now: shelfBooks() }));
+  // 4. reading still works: the book comes off the shelf in the Library
+  {
+    w.stock.items.readingchair = 1; const rc = w.addInstance('readingchair', null, null, false);
+    T.home(); b.queue = []; b.step = null; b.readFrom = null; b.pendingActivity = 'read';
+    let t = 0, took = false, where = null, sat = null, couldNot = 0;
+    const ui0 = b.ui; b.ui = (m) => { if (/could not/.test(String(m))) couldNot++; return ui0.call(b, m); };
+    while (t < 260 && !sat) { step(0.25); t += 0.25; if (b.held && !took) { took = true; where = b.hereId(); } if (b.pose === 'readSit' && b.step && b.step.fx && b.step.fx.chair) sat = b.step.fx.chair; }
+    b.ui = ui0;
+    out.push(result('library: he still reads: he goes into the Library for a book from the shelf there, and sits down with it in the reading chair there (not in a chair of his own room, through the wall)', took && where === 'library' && sat === rc && !couldNot, { took, where, sat, rc, couldNot, t }));
+    // while one robot carries the shelf off, reading at it is not offered (it was: he walked to where it had stood and could not get there)
+    sh.packed = true; const noRead = !b.available('read'); sh.packed = false;
+    out.push(result('library: while the skill shelf is packed up on its way, reading is not offered', noRead));
+    T.settle();
+  }
+  // 5. cut short with the shelf flat in his arms: it is put together again, never lost
+  {
+    sh.rot = 0; sh.group.rotation.y = 0; sh.set(4.7, 0.2);                           // (back in his room, to be carried again)
+    T.home(); b.queue = []; b.step = null; b.pendingActivity = 'moveshelf';
+    let t = 0; while (t < 120 && !sh.packed) { step(0.25); t += 0.25; }
+    const wasPacked = sh.packed;
+    b.queue = []; b.step = null; b.pendingActivity = 'wander'; step(0.5);
+    out.push(result('library: cut short while carrying the skill shelf, it is put together where he is (or back where it was): visible, in a room it may stand in, not lost', wasPacked && !sh.packed && sh.group.visible && ['main', 'library'].includes(w.roomIdAt(sh.x, sh.z)) && w.fits(sh, sh.x, sh.z) && b.carry !== 'flat' && !b.shelfMove, { wasPacked, at: [sh.x, sh.z], room: w.roomIdAt(sh.x, sh.z) }));
+    T.settle();
+  }
+  // 6. cleaning: a few spots at a time, wiped away while he wipes; the dust comes back slowly; how clean it is is saved
+  {
+    T.home(); b.queue = []; b.step = null; b.pendingActivity = 'libclean';
+    let t = 0; while (t < 200 && !(t > 5 && b.last !== 'libclean')) { step(0.25); t += 0.25; }
+    const cleaned = dust.spots.filter((s) => s.level < 0.05);
+    out.push(result('library: told to clean, he goes into the Library and wipes three spots away (cobwebs or dust) and they disappear', cleaned.length === 3 && cleaned.every((s) => !s.mesh.visible), { cleaned: cleaned.length, levels: dust.snapshot() }));
+    for (let k = 0; k < 6 && b.available('libclean'); k++) { b.queue = []; b.step = null; b.pendingActivity = 'libclean'; let t2 = 0; while (t2 < 200 && !(t2 > 5 && b.last !== 'libclean')) { step(0.25); t2 += 0.25; } }
+    const unreached = dust.spots.filter((s) => s.level > 0.5 && !b.dustStand(s, dust));
+    out.push(result('library: in the end every patch and cobweb is clean (with the shelves in, every one can still be got to)', dust.dirty(0.5).length === 0 && !b.available('libclean'), { left: dust.snapshot(), unreached: unreached.map((s) => s.id) }));
+    const snap = JSON.parse(JSON.stringify(R().snapshot()));
+    out.push(result('library: how clean it is is saved with the rooms', Array.isArray(snap.rooms.library.dust) && snap.rooms.library.dust.every((v) => v < 0.1), { dust: snap.rooms.library.dust }));
+    T.home();
+    const keepShelf = [sh.x, sh.z, sh.rot];
+    R().reset('library'); R().restoreFrom({ rooms: { library: snap.rooms.library } });
+    const d2 = w.doors.library && w.doors.library.shell.dust;
+    out.push(result('library: restored, it is as clean as it was (not dusty again)', !!d2 && d2.dirty(0.1).length === 0, { levels: d2 && d2.snapshot() }));
+    if (d2) d2.update(1200);
+    out.push(result('library: the dust settles again slowly: after 20 minutes the floor is half dusty, the cobwebs less, and nothing is thick yet', !!d2 && d2.spots.filter((s) => s.kind === 'floor').every((s) => s.level > 0.4 && s.level < 0.6) && d2.spots.filter((s) => s.kind === 'web').every((s) => s.level > 0.15 && s.level < 0.3), { levels: d2 && d2.snapshot() }));
+    void keepShelf;
+  }
+  // 7. the Library taken away with the shelf in it: it comes back into his room (the skill shelf can never go to the Catalog)
+  {
+    T.home(); b.queue = []; b.step = null;
+    sh.rot = 0; sh.group.rotation.y = 0; sh.set(4.7, 0.2);
+    b.pendingActivity = 'moveshelf';
+    let t = 0; while (t < 240 && !(w.roomIdAt(sh.x, sh.z) === 'library' && !sh.packed && b.last !== 'moveshelf')) { step(0.25); t += 0.25; }
+    const was = w.roomIdAt(sh.x, sh.z);
+    T.home(); b.queue = []; b.step = null; b.pendingActivity = null;
+    R().remove('library'); step(1);
+    out.push(result("library: taking the Library away brings the bookshelf back into GUY's room, books and all, where it fits", was === 'library' && !w.doors.library && w.roomIdAt(sh.x, sh.z) === 'main' && w.fits(sh, sh.x, sh.z) && sh.group.visible && shelfBooks() === books0, { was, at: [sh.x, sh.z] }));
+  }
+  // 7b. a piece growing into place when the clock is set back (a picture's setup does that) keeps its size (it used to blow up thousands of times)
+  {
+    b.popping = [{ o: sh, t: 0.3 }]; b.lateWork2(); b.time -= 40; b.lateWork2(); b.time += 40; for (let i = 0; i < 12; i++) { b.time += 0.1; b.lateWork2(); }
+    out.push(result('library: a piece growing into place stays its own size even if the clock goes back, and ends at full size', Math.abs(sh.group.scale.x - 1) < 1e-6 && !b.popping.length, { scale: sh.group.scale.x }));
+    sh.group.scale.setScalar(1); b.popping = [];
+  }
+  // 8. a shelf may stand in his room or the Library, nowhere else
+  { const wb = w.doors.workshop.shell.bounds; out.push(result('library: a bookshelf may not be left in the Workshop', !w.fits(sh, (wb.minX + wb.maxX) / 2, (wb.minZ + wb.maxZ) / 2))); }
+  T.resetRooms(); T.removeAll(); T.settle(); machine().hidden = true;
+  out.push(result('library: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   const wasPaused = window.__qaPaused;
   if (seed) window.__qaPaused = true;                     // (the page's own animation loop would move the game between sweeps, by however long the page has been open: a seeded run is the simulation alone)      // (`upTo`: stop after that sweep: to replay a failure with everything that ran before it)
@@ -4686,6 +5187,7 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.metal = S(T.sweepMetal);
   report.yardOrders = S(T.sweepYardOrders);
   report.yardVoice = S(T.sweepYardVoice);
+  report.commands = S(T.sweepCommands);
   report.mowerShed = S(T.sweepMowerShed);
   report.shed = S(T.sweepShed);
   report.range = S(T.sweepRange);
@@ -4703,6 +5205,8 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.arrange = S(T.sweepArrange);
   report.paintings = S(T.sweepPaintings);
   report.corners = S(T.sweepCorners);
+  report.home = S(T.sweepHome);
+  report.library = S(T.sweepLibrary);
   report.roomRemoval = S(T.sweepRoomRemoval);        // (last: each sweep's seed is its number, so a new one goes at the end and leaves the others' seeds alone)
   if (seed && T.unseed) T.unseed();
   window.__qaPaused = wasPaused;
@@ -4827,6 +5331,30 @@ T.sweepArrange = () => {
     let tOwn = 0; while (tOwn < 240 && !w.objects.guitar) { b.lastWish = -999; step(0.5); tOwn += 0.5; if (tOwn > 5 && !b.step && !b.queue.length) b.choose(); }
     out.push(result('arrange: left alone with the skill and no guitar, he goes to the workstation by himself and orders one', !!w.objects.guitar, { tOwn }));
     if (w.objects.guitar) { w.removeObject('guitar'); b.objectRemoved('guitar'); }
+    // 5c. the Workshop is for making things, not keeping them: an instrument is never ordered into it, and what is left there (an instrument,
+    // a bed built for the Bedroom) he sends to its own room (a drum kit and a guitar used to stay in the Workshop for good)
+    {
+      const picks = new Set(); for (let i = 0; i < 40; i++) { picks.add(b.roomPick('guitar')); picks.add(b.roomPick('drums')); }
+      out.push(result('arrange: a guitar or drum kit he orders goes in his own room, never the Workshop', picks.size === 1 && picks.has('main'), { picks: [...picks] }));
+      unlockRoom('bedroom'); if (!w.rooms.isAdded('bedroom')) w.rooms.add('bedroom');
+      T.addObject('drums'); if (w.objects.drums) { w.removeObject('drums'); b.objectRemoved('drums'); }
+      w.stock.items.bed = 1;
+      const ws = w.roomSpot('workshop');
+      const inWs = [ops.add('drums', ws), ops.add('bed', ws)];
+      const bed = () => Object.values(w.objects).find((o) => o.kind === 'bed');
+      const at = () => ({ drums: w.objects.drums && w.roomIdAt(w.objects.drums.x, w.objects.drums.z), bed: bed() && w.roomIdAt(bed().x, bed().z) });
+      const before = at();
+      // on his own: left alone, he goes to the workstation and sends each to its room
+      b.queue = []; b.step = null; b.pendingActivity = null; b.wishFails = {}; T.settle();
+      let tm = 0; while (tm < 300 && !(at().drums === 'main' && at().bed === 'bedroom')) { b.lastWish = -999; step(0.5); tm += 0.5; if (tm > 5 && !b.step && !b.queue.length) b.choose(); }
+      const after = at(), bd = bed(), site = w.instanceSite('bed');
+      out.push(result('arrange: a drum kit and a bed left in the Workshop: he goes to the workstation and sends the drums to his room and the bed to its place in the Bedroom', inWs.every(Boolean) && before.drums === 'workshop' && before.bed === 'workshop' && after.drums === 'main' && after.bed === 'bedroom' && !!bd && Math.hypot(bd.x - site.x, bd.z - site.z) < 0.3, { inWs, before, after, tm, bedAt: bd && [bd.x, bd.z], site }));
+      b.wishFails = {}; b.lastWish = -999;
+      out.push(result('arrange: once everything is where it belongs he has nothing left to move', !b.misplaced().length, { left: b.misplaced().map((m) => m.o.name) }));
+      if (w.objects.drums) { w.removeObject('drums'); b.objectRemoved('drums'); }
+      if (bd) w.storeInstance(bd.name);
+      delete w.stock.items.bed;
+    }
     // 6. nothing to order: no wish, and with no workstation an order is refused in words
     skillsOf().known.clear(); b.lastWish = -999; b.wishFails = {};
     out.push(result('arrange: without the skill he has no wish for the guitar', !b.arrangeWish() || b.arrangeWish().key !== 'guitar'));
@@ -4878,6 +5406,25 @@ T.sweepWorkstation = () => {
     out.push(result('workstation: the book is not used up: it stays on the shelf', !!rec && w.objects.shelf.books.length === shelfBooks));
     const before = skillsOf().known.size; btnOf('stars').click();
     out.push(result('workstation: a disabled row does nothing', skillsOf().known.size === before));
+    // 4b. dragged into another room he still uses it: he walks there through the door (he used to give up at once: 'learn' and
+    // 'arrange' were planned as if the workstation were always in his own room)
+    ws.close();
+    if (!w.rooms.isAdded('workshop')) { unlockRoom('workshop'); w.rooms.add('workshop'); }
+    T.settle();
+    const home0 = { x: m.x, z: m.z }, along = (p) => { for (let i = 1; i <= 40; i++) w.dragTo(m, m.x + (p.x - m.x) * i / 40, m.z + (p.z - m.z) * i / 40); };
+    along(w.doorPoint('workshop', 1.4)); along(w.doorPoint('workshop', -2.4)); w.dropObject(m);
+    const inWs = b.roomOfObj('workstation') === 'workshop';
+    b.queue = []; b.step = null; T.home();
+    const r4 = b.interact('workstation');
+    const t4 = runUntil(() => ws.isOpen(), 90);
+    const sp4 = m.screenPoint(), gp4 = G().root.position;
+    out.push(result('workstation: dragged into the Workshop, GUY walks through the door to it and the panel opens', inWs && r4.ok && ws.isOpen() && Math.hypot(sp4.x - gp4.x, sp4.z - gp4.z) < 1.6, { inWs, at: { x: m.x, z: m.z }, msg: r4.message, t: t4, label: label() }));
+    ws.close(); b.queue = []; b.step = null; T.home();
+    const ro = b.arrangeOrder({ add: [{ id: 'plant', room: 'main' }], remove: [] });
+    const t4b = runUntil(() => !!w.objects.plant, 90);
+    out.push(result('workstation: in the Workshop, an order (add a plant) is still carried out there', ro.ok && !!w.objects.plant, { msg: ro.message, t: t4b, label: label() }));
+    if (w.objects.plant) { w.removeObject('plant'); b.objectRemoved('plant'); }
+    along(w.doorPoint('workshop', 1.4)); along(home0); w.dropObject(m); b.queue = []; b.step = null; T.home(); T.settle();
     // 5. the other robot: the book is still there for her, and she can use the workstation too
     ws.close(); out.push(result('workstation: the panel closes', !ws.isOpen()));
     const gb = galBuild();
