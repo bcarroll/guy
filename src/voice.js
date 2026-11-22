@@ -3,7 +3,10 @@
 // The parser is rules only (no network): normalise the sentence, match it against a small table, run it through the same entry
 // points the menus use (interact, requestRead, visitRoom, lockOn), and speak the answer. English only.
 // run(text) returns { ok, intent, lines: [{ who, text }] }; every line is also sent to the speaker (tts.js).
+// What happens to a command once a robot has it (wrapping up within a time limit, waiting behind a busy job, the start watchdog) is
+// commands.js; the microphone that feeds run() / runAlternatives() is mic.js.
 import { barkFor, barkReady, barkSpoke } from './barks.js';
+import { createCommands, classOf, busyJob, labelOf, firstWords, yesNo as yesNoText } from './commands.js';
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 export const OK = ['Sure thing.', 'On it.', 'Okay!', 'You got it.'];
 export const GAL_OK = ['On it.', 'Right away.', 'Okay, I will.'];
@@ -128,8 +131,12 @@ export function createVoice({ world, brain, say = () => {}, speaking = null, scr
     }
   }
 
+  const commands = createCommands({ speak: (who, t) => speak(who, t), perform: (b, it) => act(b, it, 'quick'), fix, whoOf: (b) => (b === brain ? 'guy' : 'gal') });
+  brain.commands = commands;
   function run(text) {
     lines.length = 0;
+    // an open yes/no question ("Still cooking. Should I stop and mow?"): a short yes or no answers it
+    if (commands.answer(text)) return { ok: true, intent: { type: 'answer' }, lines: lines.slice() };
     const it = parse(text, { rooms: roomList() });
     const res = (ok) => ({ ok, intent: it, lines: lines.slice() });
     if (it.type === 'empty') return res(false);
@@ -148,34 +155,67 @@ export function createVoice({ world, brain, say = () => {}, speaking = null, scr
       world.rooms.setDoorLocked(it.room, it.lock);
       speak('guy', it.lock ? 'Door locked.' : 'Door unlocked.'); return res(true);
     }
-    // a request for a robot
+    // a request for a robot. Who does it (the design's queue rule): GUY when he is free or wraps up quickly; GAL when GUY is busy
+    // and she is free (or when she is asked, or has the user's audience); GUY keeps it when he is named ("GUY, mow the lawn"), and
+    // when GAL cannot take it he queues it behind his job and starts it when the job ends. Nothing is dropped without a word.
     const explicit = it.type === 'gal';
+    const named = !explicit && /^ (hey |ok |okay |hi )?guy /.test(norm(text));
     const req = explicit ? it.inner : it;
-    const aud = !explicit && audienceOn();
+    const aud = !explicit && !named && audienceOn();
     if (req.type === 'jam') {
       const g = gal();
       const plan = galOk() && g.planDuo && g.planDuo();
       if (!plan || !g.startDuo(plan)) { speak('guy', galOk() ? 'We cannot jam right now.' : 'I need GAL to jam. She is not here.'); return res(false); }
       return res(true);                                // the lines come from the duo itself (gal.js)
     }
+    const label = labelOf(req, Object.fromEntries(roomList().map((r) => [r.id, r.name])));
+    // "stop", "never mind": whatever is waiting goes too ("never mind the lawn" drops just that one)
+    if (req.type === 'next') {
+      const b = aud || explicit ? (galOk() ? gal().brain : null) : brain;
+      const rest = / never ?mind /.test(norm(text)) ? parse(norm(text).replace(/ never ?mind (about )?/, ' '), { rooms: roomList() }) : null;
+      if (b && rest && rest.type !== 'next' && rest.type !== 'unknown' && rest.type !== 'empty' && commands.cancel(b, rest)) { speak(b === brain ? 'guy' : 'gal', `Okay, I'll leave ${labelOf(rest)[2]}.`); return res(true); }
+      if (b) commands.cancel(b);
+    }
     // the object he was asked to use is in the room he is in (the yard, say): then he does it himself, he does not hand it to GAL
     const here = req.type === 'object' && req.name !== 'sit' && !!brain.obj(req.name) && world.roomIdAt(brain.obj(req.name).x, brain.obj(req.name).z) === world.roomIdAt(brain.g.root.position.x, brain.g.root.position.z);
     const guyFree = !guyBusy(brain, here);
-    if (aud || explicit || !guyFree) {
+    const galFree = galOk() && !busyJob(gal().brain);
+    if (aud || explicit || (!guyFree && !named && galFree)) {
       if (!galOk()) { speak('guy', explicit ? 'GAL is not here.' : 'I am busy, and GAL is not here.'); return res(false); }
-      const r = doIt(gal().brain, req);
+      const gb = gal().brain, cls = classOf(gb);
+      const r = act(gb, req, cls);
       if (!r.ok) { speak('gal', fix(r.message, 'gal')); return res(false); }                  // she was asked, so she answers (with the reason)
       if (!aud) speak('guy', explicit ? 'Okay, GAL will take care of it.' : 'GAL will get right on that.');
-      startAudience(); speak('gal', pick(GAL_OK)); return res(true);
+      startAudience(); speak('gal', pick(GAL_OK)); commands.track(gb, req, cls, label); return res(true);
     }
-    const r = doIt(brain, req);
-    if (r.ok) { speak('guy', pick(OK)); return res(true); }
+    // GUY's job keeps him (cooking, serving...) and GAL cannot take it: it waits for the job, and he says how long
+    if (busyJob(brain) && req.type !== 'next') {
+      const q = commands.enqueue(brain, req, label, !named);
+      speak('guy', q.line); return res(q.ok);
+    }
+    const cls = classOf(brain);
+    const r = act(brain, req, cls);
+    if (r.ok) { speak('guy', firstWords(brain, cls, label[0], pick(OK))); commands.track(brain, req, cls, label); return res(true); }
     // GUY cannot (no skill, no book, locked door...): GAL might be able to
-    if (galOk() && req.type !== 'visit' && req.type !== 'comeback') {
-      const r2 = doIt(gal().brain, req);
-      if (r2.ok) { speak('guy', 'I cannot do that yet. GAL will get right on that.'); startAudience(); speak('gal', pick(GAL_OK)); return res(true); }
+    if (galFree && req.type !== 'visit' && req.type !== 'comeback') {
+      const gb = gal().brain, gcls = classOf(gb);
+      const r2 = act(gb, req, gcls);
+      if (r2.ok) { speak('guy', 'I cannot do that yet. GAL will get right on that.'); startAudience(); speak('gal', pick(GAL_OK)); commands.track(gb, req, gcls, label); return res(true); }
     }
     speak('guy', fix(r.message, 'guy')); return res(false);
+  }
+  // do an intent, wrapping up the way the robot's current activity calls for: a work step (painting, mowing...) is finished first
+  function act(b, req, cls) {
+    b.finishStep = cls === 'step';
+    try { return doIt(b, req); } finally { b.finishStep = false; }
+  }
+  // speech gives a few guesses at what was said: the first one the parser understands wins ("guy play the pie and oh" vs "... piano")
+  function runAlternatives(alts) {
+    const list = (alts || []).map((a) => (typeof a === 'string' ? a : a && a.text) || '').filter((t) => t.trim());
+    if (!list.length) return run('');
+    if (commands.question && list.some((t) => yesNoText(t))) return run(list.find((t) => yesNoText(t)));
+    const hit = list.find((t) => { const p = parse(t, { rooms: roomList() }); return p.type !== 'unknown' && p.type !== 'empty'; });
+    return run(hit || list[0]);
   }
   // a short remark as a robot starts something (chatty mode only; at most one every 25 s per robot, and never over a line being spoken)
   function bark(who, act) {
@@ -187,5 +227,5 @@ export function createVoice({ world, brain, say = () => {}, speaking = null, scr
     if (said) barkSpoke(who, now);
     return said;
   }
-  return { run, bark, parse: (t) => parse(t, { rooms: roomList() }), audienceOn, lines };
+  return { run, runAlternatives, bark, parse: (t) => parse(t, { rooms: roomList() }), audienceOn, lines, commands };
 }
