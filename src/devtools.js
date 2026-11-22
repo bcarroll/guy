@@ -5304,7 +5304,6 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.shed = S(T.sweepShed);
   report.range = S(T.sweepRange);
   report.bowl = S(T.sweepBowl);
-  report.studio = S(T.sweepStudio);
   report.doorMoves = S(T.sweepDoorMoves);
   report.allRooms = S(T.sweepAllRooms);
   report.needs = S(T.sweepNeeds);
@@ -5321,6 +5320,7 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.home = S(T.sweepHome);
   report.library = S(T.sweepLibrary);
   report.roomRemoval = S(T.sweepRoomRemoval);        // (last: each sweep's seed is its number, so a new one goes at the end and leaves the others' seeds alone)
+  report.studio = S(T.sweepStudio);        // (after the others, so their seeds stay the same)
   if (seed && T.unseed) T.unseed();
   window.__qaPaused = wasPaused;
   T.lastReport = report;

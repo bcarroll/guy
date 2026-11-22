@@ -866,11 +866,16 @@ export function buildRoom(scene) {
     // ---- hanging on a wall of the Studio. A guitar dragged against one of its walls hangs there on a wooden board (the stand goes away, the
     // footprint shrinks to the board); dragged off again it is back on its stand. GUY and GAL take it down and hang it back the same way
     // (the rest pose moves with it). See hangCheck below, which decides.
-    const plaque = new THREE.Group();
-    box(0.34, 1.3, 0.02, mat(0x5b3a24), 0, 1.3, -0.04, plaque);
-    for (const y of [0.78, 1.82]) box(0.05, 0.03, 0.06, mat(0xc9d0d8, { metalness: 0.7, roughness: 0.3 }), 0, y, -0.005, plaque);       // the hooks it hangs from
-    plaque.visible = false;
-    obj.group.add(plaque);
+    // (the board is built the first time the guitar is hung, not with every guitar: building it draws ids from the random numbers, and a
+    // guitar that never goes near the Studio must leave them as they were, or every seeded test and picture after it would change)
+    let plaque = null;
+    const makePlaque = () => {
+      plaque = new THREE.Group();
+      box(0.34, 1.3, 0.02, mat(0x5b3a24), 0, 1.3, -0.04, plaque);
+      for (const y of [0.78, 1.82]) box(0.05, 0.03, 0.06, mat(0xc9d0d8, { metalness: 0.7, roughness: 0.3 }), 0, y, -0.005, plaque);       // the hooks it hangs from
+      plaque.visible = false;
+      obj.group.add(plaque);
+    };
     obj.stand = standParts; obj.hung = false;
     obj.standDz = () => (obj.hung ? 0.55 : 0.62);                       // how far in front of it GUY stands to take it down
     obj.setHung = (on) => {
@@ -878,7 +883,8 @@ export function buildRoom(scene) {
       if (obj.hung === on) return;
       obj.hung = on;
       for (const m of standParts) m.visible = !on;
-      plaque.visible = on;
+      if (on && !plaque) makePlaque();
+      if (plaque) plaque.visible = on;
       obj.bd = on ? 0.1 : 0.45;
       obj.rest.pos.set(0, on ? 1.0 : 0.62, on ? 0.02 : 0.07);
       if (!obj.guitarMoved || !obj.guitarMoved()) gtr.position.copy(obj.rest.pos);
