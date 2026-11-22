@@ -1,6 +1,7 @@
 // Natural voices: Kokoro-82M (Apache 2.0) running in the browser. The model (about 90 MB, quantized) is fetched once from the Hugging
 // Face hub; transformers.js keeps it in the browser's Cache Storage, so every later visit loads it from disk with no network.
-// Until it is ready the caller keeps using the offline eSpeak voices (tts.js), so a line is never held up by the download.
+// tts.js picks one engine per exchange: on a device that has the model cached it waits for it to load; during the first download an
+// exchange uses the offline eSpeak voices, and the natural ones take over at the next exchange once they are ready (never mid-exchange).
 export const MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 export const NATURAL_VOICES = { guy: 'am_michael', gal: 'af_heart' };
 

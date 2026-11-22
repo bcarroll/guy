@@ -6760,6 +6760,58 @@ T.sweepVoice = async () => {
     out.push(result('voice: natural voices are opt-out and never download during a QA run (fresh = offline eSpeak)', V.tts.settings.engine === 'natural' && V.tts.naturalStatus.state === 'idle' && V.tts.set('engine', 'robot') && V.tts.settings.engine === 'robot' && !V.tts.set('engine', 'nope')));
     V.tts.set('engine', 'natural');
   } catch (e) { out.push(result('voice: offline voices ran without throwing', false, { error: String(e && e.stack || e).slice(0, 400) })); }
+  // 11. one voice per exchange: GAL must never answer in the robot voice and GUY reply in the natural one (the model used to be picked per line)
+  try {
+    const { initVoice } = await import('/src/tts.js');
+    const { useAudio } = await import('/src/audio.js');
+    const wav = () => {                                   // 20 ms of silence as a WAV
+      const n = 441, b = new ArrayBuffer(44 + n * 2), d = new DataView(b), w = (o, t) => [...t].forEach((c, i) => d.setUint8(o + i, c.charCodeAt(0)));
+      w(0, 'RIFF'); d.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt '); d.setUint32(16, 16, true); d.setUint16(20, 1, true); d.setUint16(22, 1, true);
+      d.setUint32(24, 22050, true); d.setUint32(28, 44100, true); d.setUint16(32, 2, true); d.setUint16(34, 16, true); w(36, 'data'); d.setUint32(40, n * 2, true);
+      return b;
+    };
+    // a stand-in for tts-natural.js: ready after `after` ms; fails each line `fail` times first (Infinity: always)
+    const fakeNatural = ({ after = 0, fail = 0 } = {}) => {
+      const fns = new Set(), status = { state: 'downloading', progress: 0, error: '' }; let ok = false, p = null; const tries = new Map();
+      const m = {
+        status, onStatus: (fn) => { fns.add(fn); }, ready: () => ok, calls: 0,
+        load: () => p || (p = new Promise((r) => setTimeout(() => { ok = true; status.state = 'ready'; fns.forEach((fn) => fn({ ...status })); r(true); }, after))),
+        render: async (who, text) => { m.calls++; const k = who + text, t = (tries.get(k) || 0) + 1; tries.set(k, t); if (t <= fail) throw new Error('fake failure'); return wav(); },
+      };
+      return m;
+    };
+    const run = async (opts, lines, { pause = 0, more = [] } = {}) => {
+      const done = [], robot = { calls: 0 }, ac = new OfflineAudioContext(1, 22050, 22050), restore = useAudio(ac, ac.destination);
+      const was = window.__voiceNoAudio; window.__voiceNoAudio = false;
+      try {
+        const v = initVoice({ persist: false, gap: 300, wait: 3000, robot: async () => { robot.calls++; return wav(); }, onSpeakEnd: (l) => done.push(l), ...opts });
+        lines.forEach(([who, text]) => v.say(who, text));
+        const until = async (n) => { for (let t = 0; t < 200 && done.length < n; t++) await wait(50); };
+        await until(lines.length);
+        if (more.length) { await wait(pause); more.forEach(([who, text]) => v.say(who, text)); await until(lines.length + more.length); }
+        v.stop();
+        return { lines: done.map((l) => ({ who: l.who, engine: l.engine, played: l.played, why: l.why })), robot: robot.calls };
+      } finally { restore(); window.__voiceNoAudio = was; }
+    };
+    const talk = [['gal', 'GUY, can you hand me that?'], ['guy', 'Sure, here you go.'], ['gal', 'Thanks.']];
+    const same = (r) => r.lines.length && r.lines.every((l) => l.engine === r.lines[0].engine);
+    let fake = fakeNatural({ after: 150 });
+    const first = await run({ natural: () => Promise.resolve(fake), cached: () => false }, talk, { pause: 700, more: [['guy', 'Next time.']] });
+    out.push(result('voice: first download: a whole exchange keeps one voice while the natural voices load (no robot GAL then natural GUY)', same({ lines: first.lines.slice(0, 3) }) && first.lines[0].engine === 'robot' && /downloading/.test(first.lines[0].why || ''), first));
+    out.push(result('voice: first download: once they have loaded, the next exchange is natural', first.lines[3] && first.lines[3].engine === 'natural', first));
+    fake = fakeNatural({ after: 400 });
+    const cachedRun = await run({ natural: () => Promise.resolve(fake), cached: () => true }, talk);
+    out.push(result('voice: downloaded before: lines wait for the natural voices instead of speaking robot meanwhile', cachedRun.lines.length === 3 && cachedRun.lines.every((l) => l.engine === 'natural' && l.played) && cachedRun.robot === 0, cachedRun));
+    fake = fakeNatural({ fail: 1 });
+    const flaky = await run({ natural: () => Promise.resolve(fake), cached: () => true }, talk);
+    out.push(result('voice: a natural line that fails once is tried again and still spoken naturally', flaky.lines.every((l) => l.engine === 'natural' && l.played) && flaky.robot === 0 && fake.calls === 6, { ...flaky, calls: fake.calls }));
+    fake = fakeNatural({ fail: Infinity });
+    const broken = await run({ natural: () => Promise.resolve(fake), cached: () => true }, talk.slice(0, 2));
+    out.push(result('voice: a natural line that keeps failing is a subtitle only, never the robot voice, and says why', broken.lines.every((l) => l.engine === 'natural' && !l.played && /failed on this line/.test(l.why || '')) && broken.robot === 0, broken));
+    fake = fakeNatural({ after: 0 }); fake.load = () => Promise.reject(new Error('offline')); fake.status.state = 'failed'; fake.status.error = 'offline';
+    const failed = await run({ natural: () => Promise.resolve(fake), cached: () => true }, talk);
+    out.push(result('voice: natural voices that failed to load: both robots use the robot voice, with the reason', same(failed) && failed.lines[0].engine === 'robot' && /failed to load: offline/.test(failed.lines[0].why || '') && failed.robot === 3, failed));
+  } catch (e) { out.push(result('voice: one voice per exchange ran without throwing', false, { error: String(e && e.stack || e).slice(0, 400) })); }
   out.push(result('voice: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
 };
