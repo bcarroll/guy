@@ -13,6 +13,7 @@ The big changes to GUY's room, newest first. The game shows the same list under 
 - Skills menu: GAL really brings what GUY asked for, and he plays it when it comes.
 - The Studio is wider than its wall and reaches into the free corners; corner rooms can open off the end of its stage.
 - GAL dances in the room the stereo is in, not always in GUY's room.
+- GUY and GAL wear the bass with its strap over the shoulder, and their hands close round the neck of a guitar or bass.
 
 ## 2026-11-21
 

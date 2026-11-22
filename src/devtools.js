@@ -284,7 +284,8 @@ export const MANIFEST = {
     { id: 'studio-bow', activity: 'studioshow', pose: 'bow', t: 0.9, view: 'side', room: 'studio', expect: 'bowing from the hips with both arms hanging, the head down' },
     { id: 'studio-bass', activity: 'playbass', pose: 'guitar', t: 5, view: 'front', room: 'studio', objects: ['bass'], expect: 'wearing the electric bass (off its empty stand, which is behind him with the amp), strap over the left shoulder, the strings facing the camera, the neck out to his left and up; the left hand round the neck, the right hand over the pickups' },
     { id: 'studio-bass-side', activity: 'playbass', pose: 'guitar', t: 5, view: 'side', room: 'studio', objects: ['bass'], expect: 'the same from the side: the bass in front of his body with its back to him, not through him; the empty stand and the amp behind him' },
-    { id: 'studio-bass-take', activity: 'playbass', pose: 'takeGuitar', t: 0.9, view: 'side', room: 'studio', objects: ['bass'], expect: 'in front of the bass on its stand, the right hand gripping its neck to lift it off' },
+    { id: 'studio-bass-take', activity: 'playbass', pose: 'takeGuitar', t: 0.95, view: 'side', room: 'studio', objects: ['bass'], expect: 'leaning in to the bass on its stand, the right hand closed round its neck (fingers behind it, thumb over the strings) to lift it off; no strap yet' },
+    { id: 'guitar-take', activity: 'guitar', pose: 'takeGuitar', t: 0.95, view: 'side', expect: 'leaning in to the guitar on its stand, the right hand closed round its neck to lift it off; no strap yet' },
     { id: 'studio-keys', activity: 'playkeys', pose: 'studioplay', t: 5, view: 'front', room: 'studio', objects: ['keyboard'], expect: 'standing behind the keyboard with both hands on the keys, leaning in a little' },
     { id: 'studio-xylo', activity: 'playxylo', pose: 'studioplay', t: 5, view: 'front', room: 'studio', objects: ['xylophone'], expect: 'standing at the xylophone, a hand on a bar, the other lifted between hits' },
     { id: 'studio-bongos', activity: 'playbongos', pose: 'studioplay', t: 5, view: 'front', room: 'studio', objects: ['bongos'], expect: 'standing at the bongos, hands slapping the skins' },
@@ -5305,6 +5306,71 @@ T.sweepGalDanceRoom = () => {
   return out;
 };
 
+// ---- Taking a guitar or the bass off its stand, wearing it and putting it back: the hand really closes round the neck, and the strap lies on the
+// body (over the left shoulder and across the back), for both robots.
+T.sweepGuitarHold = () => {
+  const out = [], base = errors.length, w = W(), b = B(), V = (x, y, z) => new THREE.Vector3(x, y, z);
+  T.settle(); T.resetRooms(); T.removeAll(); T.forget(); T.settle(); T.home();
+  unlockRoom('studio'); R().add('studio'); T.addObject('guitar'); T.addObject('bass'); T.learn(['guitar']); T.settle();
+  const built = T.galBuild();
+  out.push(result('guitar hold: GAL is there to test with', built.ok));
+  // the torso's triangles in the world, as they are now; and whether a point is inside it (it hits the body going outwards, and going up)
+  const torso = (g) => {
+    const tris = [];
+    g.root.updateMatrixWorld(true);
+    g.model.traverse((m) => {
+      if (!m.isSkinnedMesh) return;
+      const ok = m.skeleton.bones.map((x) => /(Hips|Spine|Spine1|Spine2|LeftShoulder|RightShoulder)$/.test(x.name)), SI = m.geometry.attributes.skinIndex, SW = m.geometry.attributes.skinWeight, ix = m.geometry.index;
+      const main = (k) => { let bb = 0, ww = -1; for (let c = 0; c < 4; c++) if (SW.getComponent(k, c) > ww) { ww = SW.getComponent(k, c); bb = SI.getComponent(k, c); } return bb; };
+      m.skeleton.update();
+      for (let t = 0, n = ix ? ix.count : SI.count; t < n; t += 3) {
+        const id = [0, 1, 2].map((j) => (ix ? ix.getX(t + j) : t + j));
+        if (id.every((k) => ok[main(k)])) tris.push(id.map((k) => m.getVertexPosition(k, V(0, 0, 0)).applyMatrix4(m.matrixWorld)));
+      }
+    });
+    return tris;
+  };
+  const inside = (tris, p, g) => {
+    const ray = new THREE.Ray(), hit = V(0, 0, 0), dir = V(p.x - g.root.position.x, 0, p.z - g.root.position.z).normalize();
+    return [dir, V(0, 1, 0)].every((d) => { ray.set(p, d); return tris.some((t) => ray.intersectTriangle(t[0], t[1], t[2], false, hit) && hit.distanceTo(p) < 0.4 && hit.distanceTo(p) > 0.002); });
+  };
+  for (const br of [b, w.gal.brain]) for (const [inst, act] of [['guitar', 'guitar'], ['bass', 'playbass']]) {
+    const who = `${br === b ? 'GUY' : 'GAL'}, ${inst}`, other = br === b ? w.gal.brain : b, g = br.g, o = w.objects[inst];
+    T.settle(); T.home();
+    for (const x of [b, w.gal.brain]) { x.queue = []; x.step = null; if (x.gtr.held) x.setGuitarHeld(false); x.gtr.override = null; x.resetGuitarMesh(); x.unlock(false); x.stayRoom = null; }
+    other.choose('wander'); br.wantGuitar = 'guitar'; br.choose(act);
+    const at = (pose, t) => { for (let i = 0; i < 120 * 30; i++) { if (br.pose === pose && br.step && br.step.type === 'play' && br.step.t >= t) return true; other.queue = []; step(1 / 30); } return false; };
+    const loc = (n) => { o.guitar.updateWorldMatrix(true, false); return o.guitar.worldToLocal(g.boneWorld(n)); };
+    const grip = () => { const k = loc('RightHandMiddle1'), m = loc('RightHandMiddle3'), th = loc('RightHandThumb3'); return { k: k.toArray(), m: m.toArray(), th: th.toArray(), ok: k.x > 0.25 && k.x < 0.7 && k.y < -0.02 && k.y > -0.075 && Math.abs(k.z) < 0.04 && m.z < -0.004 && Math.abs(m.y) < 0.035 && th.z > 0.015 && Math.abs(th.y) < 0.045 }; };
+    const a = at('takeGuitar', 0.95), g1 = a ? grip() : {};
+    out.push(result(`guitar hold: ${who}: before it comes off the stand the hand is closed round the neck (knuckles beside it, fingertips behind it, thumb in front)`, a && g1.ok, g1));
+    let far = 0;
+    while (br.pose === 'takeGuitar' && br.step.t < 1.45) { step(1 / 30); const p = loc('RightHand').lerp(loc('RightHandMiddle1'), 0.75); far = Math.max(far, Math.hypot(p.y, p.z)); }
+    out.push(result(`guitar hold: ${who}: the neck stays in the hand while it is lifted (it used to rise by itself)`, a && far > 0 && far < 0.11, { far }));
+    const pl = at('guitar', 4);
+    if (pl) {
+      br.late();
+      const tris = torso(g), cur = br.gtr.override, L = br.strapLine(cur), pts = L ? [...L.front.slice(1, -1), ...L.back.slice(1, -1)] : [], bad = pts.filter((p) => inside(tris, p, g)).length;
+      const left = V(Math.cos(g.root.rotation.y), 0, -Math.sin(g.root.rotation.y)), fw = V(Math.sin(g.root.rotation.y), 0, Math.cos(g.root.rotation.y)), top = L && L.back[0], sh = g.boneWorld('LeftShoulder'), arm = g.boneWorld('LeftArm');
+      const over = !!top && top.y > sh.y && top.clone().sub(g.root.position).dot(left) > 0.03 && top.clone().sub(g.root.position).dot(left) < arm.clone().sub(g.root.position).dot(left);
+      const behind = !!L && Math.min(...L.back.map((p) => p.clone().sub(g.boneWorld('Spine2')).dot(fw))) < -0.05;
+      const shown = !!br.strap && br.strap.every((m) => m.visible);
+      out.push(result(`guitar hold: ${who}: the strap goes up the chest, over the left shoulder and across the back, and is nowhere inside the body`, pts.length > 40 && bad === 0 && over && behind && shown, { bad, of: pts.length, over, behind, shown }));
+      // (the check can tell: the straight strap it used to be is found inside the chest)
+      const s0 = sh.clone().add(V(0, 0.07, 0)).addScaledVector(fw, -0.03), old = [[br.gp(cur, -0.27, 0, 0), s0], [s0, br.gp(cur, 0.22, 0, 0)]].flatMap(([p, q]) => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((k) => p.clone().lerp(q, k / 10)));
+      out.push(result(`guitar hold: ${who}: (the old straight strap is caught by that check)`, old.some((p) => inside(tris, p, g))));
+    } else out.push(result(`guitar hold: ${who}: he plays it`, false));
+    const c = at('putGuitar', 1.2), g2 = c ? grip() : {};
+    out.push(result(`guitar hold: ${who}: putting it back the hand is round the neck until it stands`, c && g2.ok, g2));
+    for (let i = 0; i < 90; i++) step(1 / 30);
+    out.push(result(`guitar hold: ${who}: then he lets go: it is on its stand, the strap is gone`, !br.gtr.held && o.guitar.position.distanceTo(o.rest.pos) < 1e-3 && br.strap.every((m) => !m.visible), { held: br.gtr.held }));
+  }
+  for (const x of [b, w.gal.brain]) { x.queue = []; x.step = null; }
+  T.galReset(); T.settle(); T.home(); T.resetRooms();
+  out.push(result('guitar hold: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 T.sweepStudio = () => {
   const out = [], base = errors.length, w = W(), b = B();
   T.settle(); T.resetRooms(); T.removeAll(); T.forget(); T.settle(); T.home();
@@ -5407,7 +5473,7 @@ T.sweepStudio = () => {
       b.queue = []; b.step = null; b.choose('playbass');
       for (let i = 0; i < 60 * 30 && !(b.pose === 'guitar' && b.step && b.step.t > 2); i++) step(1 / 30);
       const was = b.gtr.held; b.skip(); let leftWith = false, put = false;
-      for (let i = 0; i < 40 * 30 && b.hereId() !== 'main'; i++) { step(1 / 30); if (b.gtr.held && b.hereId() !== 'studio') leftWith = true; if (!b.gtr.held) put = true; }
+      for (let i = 0; i < 40 * 30 && b.hereId() !== 'main' && !put; i++) { step(1 / 30); if (b.gtr.held && b.hereId() !== 'studio') leftWith = true; if (!b.gtr.held) put = true; }      // (until it is back: after that he is free to take it up again)
       out.push(result('studio: interrupted while wearing the bass, he puts it back on its stand before he goes anywhere', was && put && !leftWith && !b.gtr.held, { was, put, leftWith }));
       // taken away out of his hands
       b.queue = []; b.step = null; b.choose('playbass');
@@ -5914,7 +5980,8 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.library = S(T.sweepLibrary);
   report.roomRemoval = S(T.sweepRoomRemoval);        // (last: each sweep's seed is its number, so a new one goes at the end and leaves the others' seeds alone)
   report.studio = S(T.sweepStudio);        // (after the others, so their seeds stay the same)
-  report.galDanceRoom = S(T.sweepGalDanceRoom);        // (after the others, so their seeds stay the same)
+  report.guitarHold = S(T.sweepGuitarHold);
+  report.galDanceRoom = S(T.sweepGalDanceRoom);
   report.help = S(T.sweepHelp);        // (last, so the others keep their seeds)
   if (seed && T.unseed) T.unseed();
   window.__qaPaused = wasPaused;

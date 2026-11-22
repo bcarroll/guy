@@ -5,7 +5,7 @@
 export const CHANGELOG = [
   { date: '2026-11-22',
     added: ['Help: the ❓ button (or H) explains how the game works, what you can do, what is new and this change log.'],
-    changed: ['Skills menu: GAL really brings what GUY asked for, and he plays it when it comes.', 'The Studio is wider than its wall and reaches into the free corners; corner rooms can open off the end of its stage.', 'GAL dances in the room the stereo is in, not always in GUY\'s room.'] },
+    changed: ['Skills menu: GAL really brings what GUY asked for, and he plays it when it comes.', 'The Studio is wider than its wall and reaches into the free corners; corner rooms can open off the end of its stage.', 'GAL dances in the room the stereo is in, not always in GUY\'s room.', 'GUY and GAL wear the bass with its strap over the shoulder, and their hands close round the neck of a guitar or bass.'] },
   { date: '2026-11-21',
     added: ['The Studio: a stage, a dance floor, a DJ booth, a Studio Machine and a wall of records; guitars hang on its walls; electric bass, keyboard, xylophone and bongos.', 'Voice control: hold the 🎤 button and talk. GUY finishes what he is doing first, and GAL takes the request when he is busy.', 'The Library becomes a real library: the robots carry the bookshelves in, furnish it and clean off the dust.', 'Side doors on the Shooting Range and gates on the Backyard, so corner rooms can open off them.'],
     changed: ['The Skills menu does the skill where GUY is, with GAL\'s help.', 'Built furniture left in the Workshop is carried to its own room.', 'A rug on a removed room\'s floor goes back to the Catalog.', 'Chairs are never left inside walls.'] },
