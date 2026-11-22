@@ -26,6 +26,7 @@ import { ALBUM_CATALOG } from './albums.js';
 import { TRACKS, trackSeconds } from './audio.js';
 import { POSES } from './brain.js';
 import { bowlSkill } from './bowlbrain.js';
+import { strapLine } from './strap.js';
 import { throwBall } from './bowlrules.js';
 import { createMic, MIC_ERRORS } from './mic.js';
 import { LIMITS } from './commands.js';
@@ -1509,8 +1510,8 @@ T.sweepCommands = () => {
   window.__voiceNoAudio = true;
   const said = (from) => V.tts.log.slice(from).map((l) => `${l.who}: ${l.text}`);
   const L = (r) => r.lines.map((l) => `${l.who}: ${l.text}`).join(' | ');
-  const reset = () => { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; C.clear(); V.tts.stop(); };
-  const busyWith = (act, sec) => { b.queue = []; b.pendingActivity = null; b.step = b.play('idle', sec); b.step.t = 0; b.last = act; };   // a stand-in for a long job
+  const reset = () => { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; b.using = new Set(); C.clear(); V.tts.stop(); };
+  const busyWith = (act, sec) => { b.queue = []; b.pendingActivity = null; b.step = b.play('idle', sec); b.step.t = 0; b.last = act; b.using = new Set(b.exclusiveFor(act)); };   // a stand-in for a long job
   const started = (names) => names.includes(b.last) && b.pendingActivity === null;
   try {
     galReset(); T.settle(); T.resetRooms(); T.removeAll(); T.forget(); T.home(); T.settle();
@@ -1656,7 +1657,7 @@ T.sweepYardVoice = () => {
   unlockRoom('backyard'); R().add('backyard');
   for (const id of ['lawnchair', 'shed', 'mower']) T.addObject(id);
   T.settle();
-  const reset = () => { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; };
+  const reset = () => { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; b.using = new Set(); };
   // 1. from his own room: the sentence is understood, and he really mows (the mower leaves its spot)
   reset(); T.home(); T.settle();
   const m0 = w.objects.mower && { x: w.objects.mower.x, z: w.objects.mower.z };
@@ -1732,7 +1733,7 @@ T.sweepMowerShed = () => {
   unlockRoom('backyard'); R().add('backyard');
   for (const id of ['shed', 'mower']) T.addObject(id);
   T.settle();
-  const reset = () => { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; };
+  const reset = () => { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; b.using = new Set(); };
   const inside = () => w.yard.isStowed('mower');          // (put away in the shed: hidden)
   const mowOnce = (limit = 420) => {
     reset(); T.home(); T.settle();
@@ -1782,7 +1783,7 @@ T.sweepShed = () => {
   const ids = ['shed', 'mower', 'soccergoal', 'basketballhoop', 'lawnchair', 'birdbath', 'skyswitch'];
   for (const id of ids) T.addObject(id);
   T.learn(['outdoor', 'outdoor.soccer', 'outdoor.basketball']); T.settle();
-  const reset = () => { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; b.ballHeld = false; };
+  const reset = () => { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; b.using = new Set(); b.ballHeld = false; };
   const keys = () => y.items().map((i) => i.key);
   const allOut = () => { for (const k of y.stowedKeys()) y.unstow(k); };
   const until = (cond, limit) => { let t = 0; while (t < limit && !cond()) { step(0.25); t += 0.25; } return t; };
@@ -1956,7 +1957,7 @@ T.sweepAllRooms = () => {
   T.learn(['piano', 'stereo']);                                   // (playing along needs the skill: without it the checks below would pass for the wrong reason)
   T.settle();
   const bd = w.doors.workshop.shell.bounds, cx = (bd.minX + bd.maxX) / 2, cz = (bd.minZ + bd.maxZ) / 2;
-  const reset = () => { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; b.stayRoom = null; };
+  const reset = () => { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; b.using = new Set(); b.stayRoom = null; };
   const PIANO = ['plink', 'piano', 'sitpiano'];
   // 1. the piano is dragged into the Workshop and he is told to play it from his own room
   const pi = w.objects.piano; pi.set(cx, cz - 0.8);
@@ -3659,6 +3660,23 @@ T.sweepGal = () => {
   }
   const said6 = gal.log.join(' | ');
   out.push(result('gal: her own idea: she switches the stereo on, asks GUY to dance, he stops what he is doing, they dance, and the music goes off when they have both finished', wasOn && !b.music && /GAL asks GUY: dance/.test(said6) && seen6.some((s) => s === 'dance/dance') && errors.length === e6, { seen6: seen6.slice(0, 10), said6, t6 }));
+  // ... and when he comes to stand on the very spot she is walking to (he was on his way somewhere when she set off), she goes round to him and asks
+  {
+    b.musicOff(); gal.partyMusic = false; T.settle(); T.home(); gal.guyBrain.unlock(false);
+    const bp = b.g.root.position, gp2 = gal.g.root.position, log0 = gal.log.length;
+    bp.set(0, 0, 3); gp2.set(0, 0, -3);
+    b.queue = []; b.step = b.play('idle', 60); b.step.t = 0; b.last = 'wander'; b.pendingActivity = null;
+    gb.pendingActivity = null; gb.orders.length = 0; gb.queue = [gb.walkToLeader(), gb.play('wave', 2.6, { at: [1.0, () => gal.askGuy('dance')] })]; gb.step = null; gb.last = 'invitedance';
+    let tw = 0, moved = false, asked = -1;
+    while (tw < 25 && asked < 0) {
+      step(0.05); tw += 0.05;
+      const s = gb.step;
+      if (!moved && s && s.beside && gp2.z > -1.2) { bp.set(s.x, 0, s.z); moved = true; }                      // (he is standing on her spot now)
+      if (gal.log.slice(log0).some((x) => /GAL asks GUY: dance/.test(x))) asked = tw;
+    }
+    out.push(result('gal: GUY comes to stand on the spot she is walking to: she goes up to him where he is now and asks, instead of waiting for the spot and giving up', moved && asked > 0 && asked < 15, { moved, asked, t: tw, last: gb.last }));
+    gb.skip(true); b.skip(true); b.pendingActivity = null; gb.pendingActivity = null; T.settle(); T.home();
+  }
   out.push(result('gal: she asks nothing of GUY while he is locked on something', (() => { const was = b.lock; b.lock = { name: 'piano' }; const ok = !gal.canInvite() && !gal.askGuy('dance'); b.lock = was; return ok; })()));
   // 6b. keeping time: GUY plays the guitar on his own tempo and GAL plays beside him (each instrument in BAND that keeps a beat).
   // With only the basic book her beat is her own; once she has read an advanced one she locks onto his tempo (Brain.tempoToFollow).
@@ -5373,11 +5391,66 @@ T.sweepGalDanceRoom = () => {
 // ---- Taking a guitar or the bass off its stand, wearing it and putting it back: the hand really closes round the neck, and the strap lies on the
 // body (over the left shoulder and across the back), for both robots.
 T.sweepGuitarHold = () => {
+  const strapAnyWay = (() => {                             // (the strap's line whatever way round the instrument is: the ends in every direction about his chest)
+    const g = G(), c = g.boneWorld('Spine2'), bad = []; window.scene.updateMatrixWorld(true);
+    for (let i = 0; i < 24; i++) for (let k = 0; k < 24; k++) for (const r of [0.25, 0.6]) {
+      const P = (n) => c.clone().add(new window.THREE.Vector3(Math.sin((n / 24) * 6.283) * r, Math.cos((n / 24) * 6.283) * r * 0.8, Math.cos((n / 24) * 6.283 + i) * r));
+      let ok = false; try { const l = strapLine(g, P(i), P(k)); ok = !l || [...l.front, ...l.back].every((p) => Number.isFinite(p.x + p.y + p.z)); } catch { ok = false; }
+      if (!ok) bad.push([i, k, r]);
+    }
+    return bad;
+  })();
   const out = [], base = errors.length, w = W(), b = B(), V = (x, y, z) => new THREE.Vector3(x, y, z);
   T.settle(); T.resetRooms(); T.removeAll(); T.forget(); T.settle(); T.home();
   unlockRoom('studio'); R().add('studio'); T.addObject('guitar'); T.addObject('bass'); T.learn(['guitar']); T.settle();
   const built = T.galBuild();
   out.push(result('guitar hold: GAL is there to test with', built.ok));
+  out.push(result('guitar hold: the strap has a line whichever way round the instrument is (it threw every frame when its two ends were neighbours on the outline)', strapAnyWay.length === 0, { bad: strapAnyWay.length, first: strapAnyWay.slice(0, 3) }));
+  // taking it, wherever in his 8 cm he stands and however he is turned, the neck stays in his hand: no quarter of a second with the arm flung off it
+  {
+    const o = w.objects.guitar, g = b.g, far = {};
+    for (const [dx, dz] of [[0.055, 0.055], [0.05, 0], [-0.055, 0.055], [0, 0]]) for (const turn of [-0.04, -0.02, 0, 0.015, 0.04]) {
+      const x = w.gal.brain; x.queue = []; x.step = null; b.queue = []; b.step = null; if (b.gtr.held) b.setGuitarHeld(false); b.gtr.override = null; b.resetGuitarMesh(); b.unlock(false); b.pendingActivity = null;
+      x.g.root.position.set(-4, 0, 4); g.root.position.set(o.x, 0, o.z + 2); b.wantGuitar = 'guitar'; b.choose('guitar');
+      for (let n = 0; n < 1500 && !(b.pose === 'takeGuitar' && b.step); n++) { x.queue = []; x.step = null; step(1 / 30); }
+      const l = o.local(dx, b.guitarDz() + dz); g.root.position.x = o.x + l.x; g.root.position.z = o.z + l.z; g.root.rotation.y = o.yaw + Math.PI + turn;
+      let m = 0, n = 0;
+      while (b.pose === 'takeGuitar' && b.step && b.step.t < 1.45) { step(1 / 30); if (b.step && b.step.t > 0.95) { n++; o.guitar.updateWorldMatrix(true, false); const loc = (q) => o.guitar.worldToLocal(g.boneWorld(q)), p = loc('RightHand').lerp(loc('RightHandMiddle1'), 0.75); m = Math.max(m, Math.hypot(p.y, p.z)); } }
+      if (!n || m > 0.12) far[`${dx},${dz} turned ${turn}`] = +m.toFixed(2);
+    }
+    b.queue = []; b.step = null; if (b.gtr.held) b.setGuitarHeld(false); b.gtr.override = null; b.resetGuitarMesh(); T.settle(); T.home();
+    out.push(result('guitar hold: taking a guitar the arm never flips off the neck, wherever he stands at it and however he is turned', !Object.keys(far).length, { far }));
+  }
+  // whichever way she comes from, GAL's shorter arm gets round the neck (she stopped up to 8 cm from her mark, and her fingertips short of it)
+  {
+    const x = w.gal.brain, o = w.objects.guitar, tips = [];
+    x.skills.learn('guitar');
+    for (let i = 0; i < 8; i++) {
+      b.queue = []; b.step = null; x.queue = []; x.step = null; if (x.gtr.held) x.setGuitarHeld(false); x.gtr.override = null; x.resetGuitarMesh(); x.unlock(false); x.pendingActivity = null;
+      const a = (i / 8) * Math.PI * 2, at = w.findSpot({ name: 'x', w: 0.5, d: 0.5, h: 1, obstacle: null, local: () => ({ x: 0, z: 0 }) }, { x: Math.sin(a) * 3, z: Math.cos(a) * 3 }, null);
+      x.g.root.position.set(at.x, 0, at.z); b.g.root.position.set(4, 0, 4); x.wantGuitar = 'guitar'; x.choose('guitar');
+      for (let n = 0; n < 1500 && !(x.pose === 'takeGuitar' && x.step && x.step.t >= 0.95); n++) { b.queue = []; b.step = null; step(1 / 30); }
+      o.guitar.updateWorldMatrix(true, false); tips.push(+o.guitar.worldToLocal(x.g.boneWorld('RightHandMiddle3')).z.toFixed(4));
+    }
+    x.queue = []; x.step = null; if (x.gtr.held) x.setGuitarHeld(false); x.gtr.override = null; x.resetGuitarMesh(); T.settle(); T.home();
+    out.push(result('guitar hold: GAL gets her fingers well behind the neck whichever way she came to the guitar', tips.every((z) => z < -0.01), { tips }));
+  }
+  // a guitar whose front is against a wall cannot be taken off its stand: nobody sets out to play it (they kept choosing it and giving up), he says why,
+  // and he never pushes it to such a place himself when he rearranges his room
+  {
+    const gt = w.objects.guitar, at0 = { x: gt.x, z: gt.z, rot: gt.rot };
+    T.home(); b.queue = []; b.step = null; b.skip(true); b.pendingActivity = null;
+    const free = b.available('riff');
+    gt.rot = 0; gt.set(-0.6, 4.2);
+    const wall = b.available('riff'), why = b.whyNot('riff');
+    gt.rot = 2; gt.set(-0.6, 4.2);
+    const turned = b.available('riff');
+    gt.rot = at0.rot; gt.set(at0.x, at0.z);
+    const bad = [];
+    for (let i = 0; i < 300; i++) { const s = b.freeObjectSpot(gt); if (!s) continue; const l = gt.local(0, 0.62); if (!w.walkable(s.x + l.x, s.z + l.z)) bad.push([+s.x.toFixed(2), +s.z.toFixed(2)]); }
+    out.push(result('guitar hold: a guitar that faces a wall is left alone (and he says why); turned round it is played again', free && !wall && turned && /no room to stand/.test(why || ''), { free, wall, turned, why }));
+    out.push(result('guitar hold: rearranging his room he never puts the guitar where nobody can stand in front of it', !bad.length, { bad: bad.slice(0, 4), n: bad.length }));
+  }
   // the torso's triangles in the world, as they are now; and whether a point is inside it (it hits the body going outwards, and going up)
   const torso = (g) => {
     const tris = [];
@@ -5538,9 +5611,11 @@ T.sweepStudio = () => {
     if (o) {
       b.queue = []; b.step = null; b.choose('playbass');
       for (let i = 0; i < 60 * 30 && !(b.pose === 'guitar' && b.step && b.step.t > 2); i++) step(1 / 30);
-      const was = b.gtr.held; b.skip(); let leftWith = false, put = false;
+      const was = b.gtr.held, wanted = b.wantGuitar; b.wantGuitar = 'guitar';                    // (somebody pointed at the guitar in his own room some time before)
+      b.skip(); let leftWith = false, put = false;
       for (let i = 0; i < 40 * 30 && b.hereId() !== 'main' && !put; i++) { step(1 / 30); if (b.gtr.held && b.hereId() !== 'studio') leftWith = true; if (!b.gtr.held) put = true; }      // (until it is back: after that he is free to take it up again)
-      out.push(result('studio: interrupted while wearing the bass, he puts it back on its stand before he goes anywhere', was && put && !leftWith && !b.gtr.held, { was, put, leftWith }));
+      b.wantGuitar = wanted;
+      out.push(result('studio: interrupted while wearing the bass, he puts it back on its stand before he goes anywhere (also when a guitar in another room was asked for earlier)', was && put && !leftWith && !b.gtr.held, { was, put, leftWith }));
       // taken away out of his hands
       b.queue = []; b.step = null; b.choose('playbass');
       for (let i = 0; i < 60 * 30 && !(b.pose === 'guitar' && b.step && b.step.t > 2); i++) step(1 / 30);

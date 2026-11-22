@@ -93,7 +93,9 @@ export function strapLine(g, heel, pin) {
   ring = [...ring.slice(i), ...ring.slice(0, i)];
   let e = ring.findIndex((p) => p.tag === 'pin');
   if (e < 0) { e = ring.reduce((m, p, j) => (j && far(p, E) < far(ring[m], E) ? j : m), 1) + 1; ring = [...ring.slice(0, e), E]; }
-  const chain = ring.slice(0, e + 1), topAt = Math.min(chain.length - 2, Math.max(1, chain.reduce((m, p, j) => (p.y > chain[m].y ? j : m), 0)));
+  let chain = ring.slice(0, e + 1);
+  if (chain.length < 3) chain = [H, body.reduce((m, p) => (p.y > m.y ? p : m)), E];       // (the instrument is at such an angle, coming off its stand, that its two ends are neighbours on the outline: straight over the shoulder; there used to be nothing between them, and it threw every frame)
+  const topAt = Math.min(chain.length - 2, Math.max(1, chain.reduce((m, p, j) => (p.y > chain[m].y ? j : m), 0)));
   const up = (p) => plane.o.clone().addScaledVector(plane.s, p.y).addScaledVector(plane.n, p.w).add(r.set(0, 0, p.x)).applyMatrix4(M);
   const sample = (line) => {
     const P = line.map(up), len = [0], out = [];

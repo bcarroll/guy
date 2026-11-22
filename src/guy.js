@@ -227,6 +227,9 @@ export class Guy {
     const f = S.clone().addScaledVector(u, dist).sub(E).normalize();                // forearm direction
     const Rarm = new THREE.Quaternion().setFromUnitVectors(a0, a);
     const Rtf = new THREE.Quaternion().setFromUnitVectors(f0, f);
+    // `steady` (0 to 1): the forearm as the upper arm bent at the elbow. Turned straight from the T-pose it has no defined twist when it points across
+    // the body, the opposite way: it flipped there, and the hand was flung off the guitar's neck for a quarter of a second.
+    if (opts && opts.steady) Rtf.slerp(new THREE.Quaternion().setFromUnitVectors(f0.clone().applyQuaternion(Rarm).normalize(), f).multiply(Rarm), opts.steady);
     const Rfore = Rarm.clone().invert().multiply(Rtf);
     // undo the current turn of the shoulder girdle: applied = D^-1 * desired, with D = parentWorld * parentRest^-1
     const armName = `${side}Arm`;
