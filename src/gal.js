@@ -89,6 +89,23 @@ export class GalBrain extends Brain {
     super.choose(force);
   }
 
+  // Up to GUY, wherever he is in the room by the time she gets there. He goes on with what he is doing while she is on her way: if he has moved
+  // half a metre, the spot beside him moves with him (`beside`, read by the walk in brain.js). She used to walk to a spot beside where he had
+  // been; when he had come to stand on that very spot she waited a quarter of a minute for it to be free and gave up, and never asked him.
+  walkToLeader() {
+    const lead = this.leader, w = this.w, at = () => ({ x: lead.g.root.position.x, z: lead.g.root.position.z });
+    const spot = () => {
+      const p = at(), me = this.g.root.position, a0 = Math.atan2(me.x - p.x, me.z - p.z), room = lead.hereId();
+      const free = (x, z) => w.roomIdAt(x, z) === room && w.walkable(x, z) && !w.obstacles.some((o) => o !== this.selfOb && o.active !== false && x > o.x0 - 0.3 && x < o.x1 + 0.3 && z > o.z0 - 0.3 && z < o.z1 + 0.3);
+      for (let i = 0; i < 12; i++) {                                           // (straight on first, then round him to either side)
+        const a = a0 + (i % 2 ? 1 : -1) * Math.ceil(i / 2) * (Math.PI / 6), x = p.x + Math.sin(a) * 1.15, z = p.z + Math.cos(a) * 1.15;
+        if (free(x, z)) return { x, z, yaw: Math.atan2(p.x - x, p.z - z) };
+      }
+      const x = p.x + Math.sin(a0) * 1.15, z = p.z + Math.cos(a0) * 1.15;
+      return { x, z, yaw: Math.atan2(p.x - x, p.z - z) };
+    };
+    return { type: 'plan', fn: () => { const s = spot(); return [{ ...this.walk(s.x, s.z, s.yaw), beside: { at, spot, was: at() } }]; } };
+  }
   // beside GUY's spots, in the room the activity happens in: the stereo's room for a dance (in his own room, the spots she always had)
   danceSpot() {
     const id = this.spotRoom();
@@ -124,14 +141,7 @@ export class GalBrain extends Brain {
         const gr = lead.g.root.position, room = w.roomIdAt(gr.x, gr.z);
         if (!this.inMain() && room !== w.roomIdAt(this.g.root.position.x, this.g.root.position.z)) steps.push(...acts.leave().slice(1));
         if (this.inMain() && room !== 'main' && room !== 'door' && w.doors[room]) steps.push(...this.tripSteps('main', room));
-        steps.push({
-          type: 'plan',
-          fn: () => {
-            const p = lead.g.root.position, me = this.g.root.position;
-            const d = Math.hypot(me.x - p.x, me.z - p.z) || 1, x = p.x + (me.x - p.x) / d * 1.15, z = p.z + (me.z - p.z) / d * 1.15;
-            return [this.walk(x, z, Math.atan2(p.x - x, p.z - z))];
-          },
-        });
+        steps.push(this.walkToLeader());
         steps.push(this.play('wave', 2.8, { at: [1.0, () => w.gal.arrived(this)] }));
         return ['going to find GUY', ...steps];
       },
@@ -139,14 +149,7 @@ export class GalBrain extends Brain {
       invitedance: () => {
         const steps = [this.walkAt('table', 0, 0.55, Math.PI),
           this.play('reach', 1.8, { at: [0.9, () => { this.musicOn(); w.gal.partyMusic = true; }], needs: ['table'], target: () => this.stereoButton() }),
-          {
-            type: 'plan',
-            fn: () => {
-              const p = lead.g.root.position, me = this.g.root.position;
-              const d = Math.hypot(me.x - p.x, me.z - p.z) || 1, x = p.x + (me.x - p.x) / d * 1.15, z = p.z + (me.z - p.z) / d * 1.15;
-              return [this.walk(x, z, Math.atan2(p.x - x, p.z - z))];
-            },
-          },
+          this.walkToLeader(),
           this.play('wave', 2.6, { at: [1.0, () => w.gal.askGuy('dance')], onEnd: () => { this.pendingActivity = 'dance'; } })];
         return ['turning the music on and asking GUY to dance', ...steps];
       },

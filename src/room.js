@@ -2156,10 +2156,11 @@ export function buildRoom(scene) {
     // Nearest place to `pref` where `obj` fits with room to walk around it and, if given, not right next to `avoid`.
     // Is the spot where GUY stands to use `obj` (if it has one) free if `obj` stood at (x, z)?
     ownStandClear(obj, x, z) {
-      const own = { easel: [0, 0.8], drums: [0.55, 1.15] }[obj.name];
+      const gtr = obj.guitar && !obj.bass, own = gtr ? [0, 0.62] : { easel: [0, 0.8], drums: [0.55, 1.15] }[obj.name];
       if (!own) return true;
       const l = obj.local(own[0], own[1]), sx = x + l.x, sz = z + l.z;
       const b = boundsAt(x, z);                       // the room the object is in
+      if (gtr) return sx > b.minX + 0.5 && sx < b.maxX - 0.5 && sz > b.minZ + 0.5 && sz < b.maxZ - 0.5 && !obstacles.some((o) => o !== obj.obstacle && !o.char && o.active !== false && sx > o.x0 - 0.25 && sx < o.x1 + 0.25 && sz > o.z0 - 0.25 && sz < o.z1 + 0.25);       // (just room to stand there)
       return !(sx < b.minX + 0.8 || sx > b.maxX - 0.8 || sz < b.minZ + 0.8 || sz > b.maxZ - 0.6 || obstacles.some((o) => o !== obj.obstacle && sx > o.x0 - 0.6 && sx < o.x1 + 0.6 && sz > o.z0 - 0.6 && sz < o.z1 + 0.6));
     },
     // Would `obj` at (x, z) sit on top of a place where GUY has to stand to use something else?

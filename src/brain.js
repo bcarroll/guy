@@ -130,21 +130,22 @@ const GUITAR_CHORDS = [
 function guitarHands(g, ctx, fade) {
   const b = ctx.guitar;
   if (!b) return;
+  g.set('Spine1', Q('x', 0.05));              // (before the lean, which adds to it: set after it, it threw away two fifths of the lean, and GAL's hand stopped short of the neck)
   const handLen = g.limb.Right.handLen;
   // palms face the instrument: the strumming hand looks into the soundboard, the fretting hand wraps the neck from behind
   if (b.wR > 0) {
     // (a grip needs the wrist there, not the fingertips: he leans in as far as that takes)
-    if (b.grip && (b.handBlend ?? 0) < 0.5) g.leanTo('Right', b.R, Math.min(1, b.wR * fade));
+    if (b.lean) g.leanTo('Right', b.lean.at, b.lean.weight * fade);
+    else if (b.grip && (b.handBlend ?? 0) < 0.5) g.leanTo('Right', b.R, Math.min(1, b.wR * fade));
     else g.reachAssist(b.R, Math.min(1, b.wR * fade));
     // taking it off / putting it on the stand he closes his hand round the neck (b.grip); the exact strumming hand only once it is on him
     const hand = (b.handBlend ?? 1) > 0.5 ? { hand: { fingers: b.fingersDir, palm: b.axisZ.clone().negate() } } : b.grip ? { hand: b.grip } : {};
-    g.reach('Right', b.R, b.wR * fade, b.stopR ?? 0, { ...hand, pole: GUITAR_RIGHT_POLE });
+    g.reach('Right', b.R, b.wR * fade, b.stopR ?? 0, { ...hand, pole: GUITAR_RIGHT_POLE, steady: b.steady });
     g.curl('Right', b.close ?? 0.2);
     if (b.thumb) for (const i of [2, 3]) g.target[`RightHandThumb${i}`].copy(Q('x', b.thumb));        // the thumb over the strings, against the fingers
   }
   // fretting hand: wrist under the neck, fingers pointing up and curling over it, thumb behind
   if (b.wL > 0) { g.reach('Left', b.L, b.wL * fade, 0, b.wL > 0.9 ? { hand: b.leftHand } : null); g.curl('Left', 1.0); }   // exact hand orientation only once the hand is on the neck (a wrist blended through it bends past 120 degrees)
-  g.set('Spine1', Q('x', 0.05));
 }
 
 function ballHands(g, ctx, fade) {
@@ -1241,11 +1242,11 @@ export class Brain {
   electric() { const o = this.obj(this.gname); return !!(o && o.electric); }
   guitars() { return Object.values(this.w.objects).filter((o) => o.guitar && !o.bass); }        // (the Studio's bass is worn the same way, but it is not a guitar: see studiobrain.js)
   guitarTaken(name) { const o = this.other; return !!o && ((o.using && o.using.has(name)) || o.skillWants(name)); }
-  freeGuitar() { return this.guitars().some((g) => !this.guitarTaken(g.name)); }
+  freeGuitar() { const held = this.gtr.held && this.obj(this.gname); return !!(held && !held.bass) || this.guitars().some((g) => !this.guitarTaken(g.name) && this.standOk(g.name)); }      // (one with room to stand in front of it: facing a wall it cannot be taken off its stand)
   // choose the guitar for what he is about to play: the one in his hands, the one he was asked for, or one the other robot is not using
   pickGuitar() {
     if (this.gtr.held && this.obj(this.gname) && !this.obj(this.gname).bass) { if (this.using) this.using.add(this.gname); return; }
-    const all = this.guitars(), free = all.filter((g) => !this.guitarTaken(g.name));
+    const all = this.guitars(), open = all.filter((g) => !this.guitarTaken(g.name)), reach = open.filter((g) => this.standOk(g.name)), free = reach.length ? reach : open;
     const want = this.wantGuitar && free.find((g) => g.name === this.wantGuitar);
     this.wantGuitar = null;
     const pick = want || free.find((g) => g.name === this.gname) || free[0] || all[0];
@@ -1345,6 +1346,7 @@ export class Brain {
       const hold1 = 1 - sm(blend / 0.5), close = sm((t - 0.6) / 0.25);                // (he lets the neck turn in his hand as it comes round to his left one)
       out = { R: grip.wrist.lerp(short, 1 - hold1).lerp(strum, toStrum), wR: reach, L: fretPt, wL: sm((t - 1.4) / 0.5), stopR: 0 };
       out.handBlend = toStrum;
+      out.steady = 1 - toStrum;
       out.grip = { fingers: grip.fingers, palm: grip.palm, weight: hold1 * sm((t - 0.1) / 0.4) };
       out.close = lerp(lerp(0.12, GRIP_CLOSE, close), 0.2, toStrum);
       out.thumb = 0.5 * close * (1 - toStrum);
@@ -1356,6 +1358,8 @@ export class Brain {
       out.grip = { fingers: grip.fingers, palm: grip.palm, weight: hold1 * (1 - away) };
       out.close = lerp(0.2, lerp(GRIP_CLOSE, 0.12, open), toNeck);
       out.thumb = 0.5 * toNeck * (1 - open);
+      // (he bends down to the stand ahead of the instrument: leaning only as it went, his arm was still catching up with his body when it stood)
+      out.lean = { at: this.gp(rest, GRIP_AT[0], GRIP_AT[1], GRIP_AT[2]).addScaledVector(new THREE.Vector3(0, 0, 1).applyQuaternion(rest.q), kn), weight: sm((t - 0.15) / 0.55) * (1 - away) };
     } else {
       out = { R: strum, wR: 1, L: fretPt, wL: 1, stopR: 0 };
     }
@@ -1915,7 +1919,7 @@ export class Brain {
       if (anchors.some((a) => a.x > x0 - 0.2 && a.x < x1 + 0.2 && a.z > z0 - 0.2 && a.z < z1 + 0.2)) continue;
       if (Math.abs(x) < obj.w / 2 + 1.5 && Math.abs(z - 0.4) < obj.d / 2 + 1.5) continue;   // the middle of the room is where he dances
       // the place he stands to use it must have room round it too
-      const stand = { easel: [0, 0.8], drums: [0.55, 1.15] }[obj.name];
+      const stand = obj.guitar && !obj.bass ? [0, 0.62] : { easel: [0, 0.8], drums: [0.55, 1.15] }[obj.name];        // (a guitar used to be pushed up to a wall it faced, and nobody could take it off its stand any more)
       if (stand) {
         const l = obj.local(stand[0], stand[1]), sx = x + l.x, sz = z + l.z;
         if (!this.onFloor(sx, sz, 0.3) || w.obstacles.some((o) => o !== obj.obstacle && sx > o.x0 - 0.6 && sx < o.x1 + 0.6 && sz > o.z0 - 0.6 && sz < o.z1 + 0.6)) continue;
@@ -2020,6 +2024,7 @@ export class Brain {
   roomForAct(name) {
     const wanted = this.skillRoom(name);                           // (a dance chosen in the Skills menu: where he is, the stereo may be in another room)
     if (wanted) return wanted;
+    if (name === 'putguitar') return this.roomOfObj(this.gname) || 'main';      // (the one he is wearing goes back on its own stand, whatever guitar he was asked for before: he walked out of the Studio with the bass on to put it away in the room of a guitar somebody had pointed at)
     if (ACT_OBJ[name] === 'guitar') return this.roomOfObj(this.wantGuitar || this.gname) || this.roomOfObj('guitar') || 'main';
     if (ACT_OBJ[name]) return this.roomOfObj(ACT_OBJ[name]) || 'main';
     if (HOME_ACTS[name]) { const o = this.homeObj(name); return o ? this.roomOfObj(o.name) || 'main' : 'main'; }
@@ -2193,15 +2198,15 @@ export class Brain {
     if (this.onStereoChange) this.onStereoChange();
   }
 
-  // Is the place he stands to use the drum kit or the easel inside the room and free? Pushed up against a wall (stool or easel side
+  // Is the place he stands to use the drum kit, the easel or a guitar inside the room and free? Pushed up against a wall (stool or easel side
   // to the wall) it is not, and he must not try to walk there.
   standOk(name) {
-    const o = this.obj(name), own = { drums: [0.55, 1.15], easel: [0, 0.8] }[name];
+    const o = this.obj(name), own = o && o.guitar && !o.bass ? [0, o.standDz ? o.standDz() : 0.62] : { drums: [0.55, 1.15], easel: [0, 0.8] }[name];
     if (!o || !own) return true;
     const l = o.local(own[0], own[1]), x = o.x + l.x, z = o.z + l.z;
     if (!this.onFloor(x, z, 0.1, 0)) return false;
     const room = this.roomOfObj(name), fr = room === 'main' ? MAIN_FRAME : this.w.frameOf(room);       // (in whichever room it stands)
-    if (cellBlocked(makeGrid(this.w.obstacles, 0.05, 0, o.obstacle, fr), x, z)) return false;       // not inside another object (furniture merely nearby is fine: he walks round it)
+    if (cellBlocked(makeGrid(this.w.obstacles.filter((ob) => !ob.char), 0.05, 0, o.obstacle, fr), x, z)) return false;       // not inside another object (furniture merely nearby is fine: he walks round it; the other robot standing there will move on)
     // and a way there: a stool behind a bench that is wedged against the wall cannot be reached (the kit has to be moved, or the bench)
     const g = this.g.root.position, from = this.hereId() === room ? { x: g.x, z: g.z } : room === 'main' ? { x: 0, z: 2 } : this.w.doorPoint(room, -1.0);
     const grid = makeGrid(this.w.obstacles.filter((ob) => !ob.char), INFLATE, 0, o.obstacle, fr);
@@ -2239,6 +2244,7 @@ export class Brain {
         if (!this.mowCoverage({ tidied: true }) && !this.mowRoute({ pushable: true, tidied: true })) return 'there is no clear stretch of lawn';
       }
     }
+    if (['guitar', 'riff', 'jamguitar', 'sitguitar'].includes(act) && this.guitars().length && !this.guitars().some((g) => this.standOk(g.name))) return 'there is no room to stand in front of the guitar: move it away from the wall';
     if (act === 'learn' && !this.obj('workstation')) return 'there is no workstation';
     if (HOME_ACTS[act]) return 'there is nothing here to do that with, or the other robot is using it';
     return `(${act} is not possible just now)`;
@@ -2844,6 +2850,10 @@ export class Brain {
     let finished = false;
 
     if (s.type === 'walk') {
+      if (s.beside && s.path) {                                                // on the way to somebody (gal.js walkToLeader): he has moved on, so the spot beside him has too
+        const p = s.beside.at();
+        if (Math.hypot(p.x - s.beside.was.x, p.z - s.beside.was.z) > 0.5 && this.roomAt(p.x, p.z) === this.hereId()) { const q = s.beside.spot(); Object.assign(s, { x: q.x, z: q.z, yaw: q.yaw, path: null, rem: undefined, remT: 0, press: null, waitT: 0 }); s.beside.was = p; }
+      }
       if (s.drive) finished = this.driveStep(s, dt * k);                       // steering the push mower along a path (yardbrain.js mowing)
       if (!s.path && !s.drive) {
         if (s.anchor) {
