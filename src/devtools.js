@@ -117,6 +117,8 @@ export const MANIFEST = {
     // the Library (librarybrain.js): its dust and cobwebs wiped away; the bookshelf carried in from his room (the skill shelf: it is always there)
     libclean: { room: 'library', max: 150, touches: [] },
     moveshelf: { objects: ['shelf'], room: 'library', max: 200, touches: ['shelf'] },
+    // a thing built for another room left standing in the Workshop (`strand`: moved there first): carried flat to its own room (workbrain.js)
+    carryhome: { objects: ['bed'], room: 'workshop', strand: ['bed'], max: 200, touches: ['bed'] },
     // the Restaurant: `customer` is the state of a customer set up before it starts (customers.js stage()); the rest as for the Workshop
     takeorder: { objects: ['stove', 'kitchencounter', 'register', 'diningtable'], skills: ['restaurant'], room: 'restaurant', customer: 'waiting', touches: ['diningtable'] },
     cook: { objects: ['stove', 'kitchencounter', 'register', 'diningtable'], skills: ['restaurant'], room: 'restaurant', customer: 'ordered', max: 200, touches: ['stove', 'kitchencounter'] },
@@ -210,6 +212,7 @@ export const MANIFEST = {
     { id: 'study-page', on: 'libdesk', activity: 'study', pose: 'reach', t: 1.4, view: 'front', expect: 'standing at the reading desk, the green banker lamp lit, fingertips on the open book turning a page over; no hand through the desk' },
     { id: 'spinglobe-hand', on: 'globe', activity: 'spinglobe', pose: 'reach', t: 0.7, view: 'front', expect: 'standing at the globe, the flat of his hand on the front of the globe, sweeping it round; the globe on its tripod, tilted in its brass ring' },
     { id: 'libclean-floor', inRoom: 'library', dist: 3.4, activity: 'libclean', pose: 'reach', t: 2.0, view: 'side', expect: 'squatting with both feet flat on the floor, leaning out over his knees, one hand down at a grey patch of dust on the Library floor (not floating, not kneeling through the floor)' },
+    { id: 'carryhome-setup', inRoom: 'bedroom', activity: 'carryhome', pose: 'reach', t: 2.2, view: 'side', expect: 'crouched in the Bedroom beside the bed he carried out of the Workshop as it grows back into place, head to the far wall; the flat pack gone from his hands' },
     { id: 'moveshelf-setup', inRoom: 'library', activity: 'moveshelf', pose: 'reach', t: 2.2, view: 'side', expect: 'crouched beside a side wall of the Library where the bookshelf he carried in is growing back into place, its books on it; the flat pack gone from his hands' },
     { id: 'read-grab-mid', activity: 'read', pose: 'grab', t: 1.2, view: 'hand:Right', expect: 'palm on the book spine, fingers pointing in and a little up (never the back of the hand towards the book), arm in front of him' },
     { id: 'read-stand-shelf', activity: 'read', pose: 'readStand', t: 8, view: 'side', skills: ['speedreading'], expect: 'speed reading standing a step back from the bookshelf: the open book floats in front of his chest, clear of the shelf, both hands on its lower edges' },
@@ -424,6 +427,15 @@ T.addAlbum = (id) => { // premium records are locked in the UI: the harness adds
   return { ok: true, devBypass: true };
 };
 T.learn = (ids) => ids.forEach((id) => skillsOf().learn(id));
+// Leave a built thing of `kind` standing in the Workshop (as when he is cut short carrying it to its room): returns its name, or null.
+T.strand = (kind) => {
+  const w = W(), o = Object.values(w.objects).find((x) => x.kind === kind);
+  if (!o || !w.doors.workshop) return null;
+  const { n } = w.shellSize('workshop'), c = w.shellPoint('workshop', n * 0.5, 0), at = w.findSpot(o, { x: c.x, z: c.z }, null);
+  if (!at) return null;
+  o.home = { x: at.x, z: at.z }; o.set(at.x, at.z);
+  return o.name;
+};
 T.forget = () => skillsOf().known.clear();
 
 // make sure an activity can run: objects present, skills learnt, music playing if it needs to
@@ -438,6 +450,7 @@ T.prep = (name) => {
   if (m.room === 'backyard' && W().yard) W().yard.snapNight(false);                                          // always the same daylight for the pictures                           // the room the activity happens in
   for (const id of m.objects || []) if (T.addObject(id)) done.push(id);
   T.learn(m.skills || []);
+  for (const k of m.strand || []) T.strand(k);
   if (m.recipe) {                                                                                    // what to build (the house's real needs are tested by sweepNeeds)
     const r = RECIPES_DEF[m.recipe];
     for (const [n, o] of Object.entries(W().objects)) if (o.kind === r.object) { W().storeInstance(n); B().objectRemoved(n); }       // (and none of them already: he stops at the recipe's cap)
@@ -3203,10 +3216,12 @@ const needSetup = (wall = 'right', skills = [], { metal = false, chair = true } 
 };
 // run his 'build' to the end (the delivery is part of it); returns the simulated seconds, or -1 if it never finished
 const buildToEnd = (brain, max = 1100) => {
+  const had = new Set(Object.keys(W().objects)); buildToEnd.clear = null;        // (how far outside the piece he stands the moment it is put together, m; below 0: in it)
   brain.queue = []; brain.step = null; brain.choose('build');
   let t = 0, armed = false;
   while (t < max) {
     step(0.25); t += 0.25;
+    if (buildToEnd.clear === null) { const o = Object.values(W().objects).find((x) => x.kind && !had.has(x.name)), p = brain.g.root.position; if (o) buildToEnd.clear = +Math.max(Math.abs(p.x - o.x) - o.w / 2, Math.abs(p.z - o.z) - o.d / 2).toFixed(2); }
     if (!armed && brain.last === 'build') { armed = true; brain.pendingActivity = 'wander'; }
     if (armed && brain.last !== 'build' && !(W().building || []).length) return t;
   }
@@ -3242,6 +3257,17 @@ T.sweepNeeds = () => {
   needSetup('front', ['workshop', 'workshop.metal'], { metal: true, chair: false });
   const e4 = errors.length, t4 = buildToEnd(b);
   out.push(result('needs: knowing only metalwork he builds a metal chair (welded) and puts it together in the room', t4 > 0 && kindIn(w, 'metalchair', 'main').length === 1 && errors.length === e4, { t4, errs: errors.slice(e4, e4 + 1) }));
+  // 4b. the stool is never put down in furniture: with the stereo table under the second window he finds room beside it, and with the wall under a window full that window is left alone
+  {
+    needSetup('right', ['decorate', 'workshop']); for (const id of ['window', 'window2', 'table']) T.addObject(id);
+    w.stock.items.footstool = 1; const sn = w.addInstance('footstool', null, null), st = w.objects[sn], tb = w.objects.table, w2 = w.decor.window2;
+    const along = [];
+    for (let x = w2.u - 1.2; x <= w2.u + 1.2; x += 0.2) { tb.set(x, -3.5); const s = b.stoolSpot(st, w2); along.push(!s || w.fits(st, s.x, s.z)); }
+    const free = [w2.u - 1.2, w2.u + 1.2].some((x) => { tb.set(x, -3.5); return !!b.stoolSpot(st, w2); });
+    tb.set(w2.u, -3.5); const job = b.stoolJob();
+    out.push(result('needs: the foot stool is only ever put where it fits: beside the stereo table under a window, never in it, and a window with no room is left alone', !!sn && along.every(Boolean) && free && (!job || [...job.spots.values()].every((s) => w.fits(st, s.x, s.z))) && b.stoolSpot(st, { ...w2, hw: 0.2 }) === null, { along, free }));
+    tb.set(3.2, -3.5);
+  }
   // 5. the top of a window is out of reach: a foot stool, put together right by the window; and he can then stand on it to clean
   needSetup('back', ['workshop', 'decorate'], { chair: true });
   for (const id of ['window', 'window2']) T.addObject(id);
@@ -3587,6 +3613,25 @@ T.sweepGal = () => {
     out.push(result('gal: GUY and GAL both cooking at the stove at the same moment stand apart (not in the same spot)', cs7.every(Boolean) && both7 > 1 && minD7 > 0.45, { both7, minD7 }));
   }
   w.restaurant.headless = wasHead; w.restaurant.paused = false;
+  // 7b. a bed left in the Workshop: GUY and GAL never carry the same one (both used to set off for it), and GAL carries one by herself
+  {
+    galReset(); galBuild(); gb = gal.brain;
+    R().add('workshop', { walls: ['right'] }); R().add('bedroom'); T.addObject('bed');
+    const bed = () => Object.values(w.objects).find((o) => o.kind === 'bed'), home = () => { const o = bed(); return !!o && !o.packed && w.roomIdAt(o.x, o.z) === 'bedroom'; };
+    T.strand('bed');
+    b.queue = []; b.step = null; gb.queue = []; gb.step = null; b.homeTried = gb.homeTried = -999;
+    const stranded = !!bed() && w.roomIdAt(bed().x, bed().z) === 'workshop';
+    b.choose('carryhome');
+    const offered = gb.available('carryhome');
+    gb.choose('carryhome');
+    let t7 = 0, both = 0; while (t7 < 200 && !home()) { step(0.25); t7 += 0.25; if (b.homeMove && gb.homeMove) both += 0.25; }
+    out.push(result('gal: a bed GUY has set off to carry home is left to him: GAL is not offered it, they never both carry it, and it gets to the Bedroom', stranded && !offered && both === 0 && home(), { stranded, offered, both, t7 }));
+    T.settle(); T.strand('bed');
+    b.queue = []; b.step = null; b.choose('wander'); gb.queue = []; gb.step = null; gb.homeTried = -999; gb.choose('carryhome');
+    let t8 = 0, hers = false; while (t8 < 200 && !home()) { b.homeTried = b.time; step(0.25); t8 += 0.25; if (gb.homeMove && gb.carry === 'flat') hers = true; }
+    out.push(result('gal: she carries a bed left in the Workshop to the Bedroom herself', hers && home(), { hers, t8 }));
+    galReset();
+  }
   // 8. she is saved and comes back (not under ?fresh: the harness switches saving on for a moment with its own keys)
   galReset(); galBuild(); gb = gal.brain;
   const keep = gal.opts.persist; gal.opts.persist = true;
@@ -4979,12 +5024,61 @@ T.sweepHome = () => {
   T.learn(['workshop.materials', 'workshop.furniture']);
   out.push(result('home: it needs the furniture books (and the Wood Factory): without them none of it can be built, with them all of it can', locked && HOME_RECIPES.every((id) => b.canBuild(id)), { locked }));
   // 3. he builds all of it, one piece after another, and carries each into its room
-  const times = [];
-  for (let i = 0; i < 12 && homeWants().length; i++) times.push(buildToEnd(b, 1300));
+  const times = [], clears = [];
+  for (let i = 0; i < 12 && homeWants().length; i++) { times.push(buildToEnd(b, 1300)); clears.push(buildToEnd.clear); }
+  out.push(result('home: he stands clear of every new piece as he puts it together (his legs were in the bed)', clears.length >= 8 && clears.every((c) => c !== null && c > 0.1), { clears }));
+  {
+    const n = () => [Object.keys(w.objects).length, w.obstacles.length, Object.keys(w.removed).length].join(), n0 = n();
+    out.push(result('home: measuring a piece that is not built yet leaves nothing behind, and gives its real size', w.instanceKinds().every((k) => { const s = w.instanceSize(k); return s && s.bw > 0 && s.bd > 0; }) && n() === n0 && built('bed').every((o) => o.bw === w.instanceSize('bed').bw && o.bd === w.instanceSize('bed').bd), { n0, n1: n() }));
+  }
   const where = Object.fromEntries(HOME_RECIPES.map((k) => [k, built(k).map((o) => w.roomIdAt(o.x, o.z))]));
   out.push(result('home: he builds a bed, a wardrobe and a bedside table for the Bedroom, two bookshelves, a reading chair, a reading desk and a globe for the Library, and puts each together in its own room',
     times.every((t) => t > 0) && HOME_RECIPES.every((k) => where[k].length === (k === 'libshelf' ? 2 : 1) && where[k].every((r) => r === HOME_ROOM[k])), { times, where }));
   out.push(result('home: every piece fits where it stands, none is left in the Workshop or in storage, and then nothing more is wanted', HOME_RECIPES.every((k) => built(k).every((o) => w.fits(o, o.x, o.z))) && HOME_RECIPES.every((k) => !w.stock.items[k]) && homeWants().length === 0 && b.pickRecipe() === null, { wants: homeWants(), stock: { ...w.stock.items } }));
+  // 3b. cut short on the way with it flat-packed in his arms, it is set down in the Workshop: afterwards he (or GAL) carries it to its own room.
+  //     (It used to stay in the Workshop for good: the bed, the wardrobe and the Library shelves piled up there.)
+  {
+    const res = {};
+    for (const k of ['bed', 'libshelf']) {
+      const o0 = built(k).find((o) => w.roomIdAt(o.x, o.z) === HOME_ROOM[k]); w.storeInstance(o0.name); b.objectRemoved(o0.name); delete w.stock.items[k];
+      const had = new Set(built(k).map((o) => o.name));
+      T.home(); b.queue = []; b.step = null; b.forceRecipe = k; b.choose('build');
+      let t = 0, cut = false;
+      while (t < 600 && !cut) { step(0.25); t += 0.25; if (b.carry === 'flat' && b.hereId() === 'workshop') { cut = true; b.queue = []; b.step = null; b.pendingActivity = 'wander'; step(0.5); } }
+      const o = built(k).find((x) => !had.has(x.name));
+      res[k] = { cut, dropped: !!o && w.roomIdAt(o.x, o.z), offered: b.available('carryhome') };
+    }
+    out.push(result('home: cut short carrying a bed or a bookshelf to its room, it is set down in the Workshop, and carrying it home is offered', Object.values(res).every((r) => r.cut && r.dropped === 'workshop' && r.offered), res));
+    // locked: not offered while its room is locked, offered again once it is open
+    w.setDoorLocked('bedroom', true);
+    const lockedOff = !!w.doors.bedroom.locked && !b.homeMoves().some((m) => m.o.kind === 'bed');
+    w.setDoorLocked('bedroom', false);
+    out.push(result('home: a bed left in the Workshop is not carried while the Bedroom is locked, and is again once it is unlocked', lockedOff && b.homeMoves().some((m) => m.o.kind === 'bed'), { lockedOff }));
+    // left alone, they carry each in: taken apart (flat in their arms), through the doors, and put together where it belongs
+    let t = 0, flat = false, inside = 0, checked = 0;
+    const g2 = b.other, setDown = new Map();                        // (robot -> the piece it carries; once it stands again, is the robot inside it?)
+    while (t < 900 && (b.homeMoves().length || b.homeMove || (g2 && g2.homeMove))) {
+      step(0.25); t += 0.25;
+      for (const x of [b, g2].filter(Boolean)) {
+        if (x.homeMove && x.carry === 'flat') { flat = true; setDown.set(x, x.homeMove.name); }
+        const o = w.objects[setDown.get(x)], p = x.g.root.position;
+        if (o && !o.packed) { checked++; if (Math.abs(p.x - o.x) < o.w / 2 + 0.1 && Math.abs(p.z - o.z) < o.d / 2 + 0.1) inside++; setDown.delete(x); }      // (measured the moment it is put together)
+      }
+    }
+    const ok = ['bed', 'libshelf'].every((k) => built(k).every((o) => !o.packed && o.group.visible && w.roomIdAt(o.x, o.z) === HOME_ROOM[k] && w.fits(o, o.x, o.z)));
+    out.push(result('home: left alone, they carry the bed to the Bedroom and the bookshelf to the Library, flat-packed, and put each together there where it fits, standing clear of it (his legs were in the bed as it grew); nothing is left in the Workshop', ok && flat && checked === 2 && !inside && !b.homeMoves().length, { t, flat, inside, checked, where: Object.fromEntries(['bed', 'libshelf'].map((k) => [k, built(k).map((o) => [w.roomIdAt(o.x, o.z), o.packed])])) }));
+    // cut short while carrying it home: it is put together again (where he stands, or back where it was), never lost
+    const bd = built('bed')[0]; T.strand('bed');
+    T.home(); b.homeTried = -999; b.queue = []; b.step = null; b.pendingActivity = 'carryhome';
+    let t2 = 0; while (t2 < 200 && !bd.packed) { step(0.25); t2 += 0.25; }
+    const wasPacked = bd.packed;
+    b.queue = []; b.step = null; b.pendingActivity = 'wander'; step(0.5);
+    out.push(result('home: cut short carrying the bed home, it is put together again: visible, where it fits, not lost, nothing left in his arms', wasPacked && !bd.packed && bd.group.visible && !!w.objects[bd.name] && w.fits(bd, bd.x, bd.z) && b.carry !== 'flat' && !b.homeMove, { wasPacked, room: w.roomIdAt(bd.x, bd.z) }));
+    // and it still goes home in the end
+    let t3 = 0; while (t3 < 600 && w.roomIdAt(bd.x, bd.z) !== 'bedroom') { step(0.5); t3 += 0.5; }
+    { let t4 = 0; while (t4 < 120 && (b.homeMove || bd.packed)) { step(0.5); t4 += 0.5; } }
+    out.push(result('home: ...and it is carried to the Bedroom after all', w.roomIdAt(bd.x, bd.z) === 'bedroom' && !bd.packed, { t3, room: w.roomIdAt(bd.x, bd.z) }));
+  }
   out.push(result('home: the heavy pieces (the bed, the wardrobe, the bookshelves, the desk) stay where they are put', ['bed', 'wardrobe', 'libshelf', 'libdesk'].every((k) => built(k).every((o) => o.weight === 'heavy'))));
   // 4. the bed has its head to the far wall, away from the door
   {
@@ -5077,6 +5171,7 @@ T.sweepLibrary = () => {
   out.push(result('library: the books went with it: every book is still on the skill shelf, and nothing more is wanted', shelfBooks() === books0 && sh.books.length === nBooks && b.shelfMoves().length === 0 && !b.available('moveshelf'), { books0, now: shelfBooks() }));
   // 4. reading still works: the book comes off the shelf in the Library
   {
+    T.forget();                                                       // (something to read: an earlier sweep can leave him having read every book on the shelf)
     w.stock.items.readingchair = 1; const rc = w.addInstance('readingchair', null, null, false);
     T.home(); b.queue = []; b.step = null; b.readFrom = null; b.pendingActivity = 'read';
     let t = 0, took = false, where = null, sat = null, couldNot = 0;
