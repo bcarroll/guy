@@ -4,7 +4,7 @@
 // whenever a room, character, major feature or control is added, changed or taken away, and the same line to CHANGELOG.md.
 export const CHANGELOG = [
   { date: '2026-11-22',
-    added: ['Help: the ❓ button (or H) explains how the game works, what you can do, what is new and this change log.'],
+    added: ['Help: the ❓ button (or H) explains how the game works, what you can do, what is new and this change log.', 'Drumming for Robots has a Chapter 4, Slow & Latin: a half-time ballad groove and a bossa nova, learned by practising at the kit.'],
     changed: ['Skills menu: GAL really brings what GUY asked for, and he plays it when it comes.', 'Every room is the same 10 m square, so the house lines up with no overlaps or gaps; a corner room has a door into each room beside it.', 'New bowling pins are carried to a lane and set up there by hand.', 'GAL dances in the room the stereo is in, not always in GUY\'s room.', 'GUY and GAL wear the bass with its strap over the shoulder, and their hands close round the neck of a guitar or bass.'] },
   { date: '2026-11-21',
     added: ['The Studio: a stage, a dance floor, a DJ booth, a Studio Machine and a wall of records; guitars hang on its walls; electric bass, keyboard, xylophone and bongos.', 'Voice control: hold the 🎤 button and talk. GUY finishes what he is doing first, and GAL takes the request when he is busy.', 'The Library becomes a real library: the robots carry the bookshelves in, furnish it and clean off the dust.', 'Side doors on the Shooting Range and gates on the Backyard, so corner rooms can open off them.'],

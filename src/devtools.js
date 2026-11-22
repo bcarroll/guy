@@ -215,7 +215,7 @@ export const MANIFEST = {
     'workshop.ch2': { content: 'steps' }, 'workshop.ch3': { content: 'steps' }, 'workshop.materials.ch2': { content: 'steps' }, 'workshop.materials.ch3': { content: 'steps' },
     'workshop.materials.ch4': { content: 'steps' }, 'workshop.materials.ch5': { content: 'steps' }, 'bowling.ch2': { content: 'steps' }, 'bowling.ch3': { content: 'steps' },       // (ch4 and ch5 unlock the recipes for the alley's pins and ball, ch2 and ch3 the hook and spares: sweepBowl)
     'workshop.furniture.ch2': { content: 'steps' }, 'workshop.furniture.ch3': { content: 'steps' }, 'workshop.metal.ch2': { content: 'steps' }, 'workshop.metal.ch3': { content: 'steps' },
-    'drums.ch2': { content: 'drums', styles: ['reggae', 'funk'] }, 'drums.ch3': { content: 'drums', styles: ['paradiddle'] }, 'drums.solo.ch2': { content: 'drums', styles: ['solo2'] },
+    'drums.ch2': { content: 'drums', styles: ['reggae', 'funk'] }, 'drums.ch3': { content: 'drums', styles: ['paradiddle'] }, 'drums.ch4': { content: 'drums', styles: ['halftime', 'bossa'] }, 'drums.solo.ch2': { content: 'drums', styles: ['solo2'] },
   },
   tracks: ['default', ...ALBUM_CATALOG.flatMap((a) => a.tracks)],     // every track on every record; coverage fails for a track no record lists
   // the visual checkpoints: freeze GUY at (activity, pose, t) and look from `view`. See assets.md for the full checklist.
@@ -3966,10 +3966,19 @@ T.sweepChapters = () => {
   sk0.known.clear(); sk0.fading.clear(); T.learn(['drums', 'drums.solo']);
   const seen = (act, n = 150) => new Set(Array.from({ length: n }, () => styleOf(act)));
   const plain = seen('drums'), solo1 = seen('drumsolo');
-  out.push(result('chapters: with only the basic drum books he plays none of the chapter grooves and solos', !['reggae', 'funk', 'paradiddle'].some((x) => plain.has(x)) && !solo1.has('solo2'), { plain: [...plain], solo1: [...solo1] }));
+  out.push(result('chapters: with only the basic drum books he plays none of the chapter grooves and solos', !['reggae', 'funk', 'paradiddle', 'halftime', 'bossa'].some((x) => plain.has(x)) && !solo1.has('solo2'), { plain: [...plain], solo1: [...solo1] }));
   T.learn(['drums.ch2', 'drums.ch3', 'drums.solo.ch2']);
   const full = seen('drums'), solo2 = seen('drumsolo');
   out.push(result('chapters: with the drum chapters learned the new grooves and the long solo turn up', ['reggae', 'funk', 'paradiddle'].every((x) => full.has(x)) && solo2.has('solo2') && solo2.has('solo'), { full: [...full], solo2: [...solo2] }));
+  out.push(result('chapters: before chapter 4 of the drumming book he plays no half-time or bossa nova', !full.has('halftime') && !full.has('bossa'), { full: [...full] }));
+  T.learn(['drums.ch4']);
+  const slow = seen('drums', 200);
+  out.push(result('chapters: with chapter 4 learned the half-time and bossa nova grooves turn up, and the older ones still do', ['halftime', 'bossa', 'rock', 'reggae', 'paradiddle'].every((x) => slow.has(x)), { slow: [...slow] }));
+  // the two chapter 4 grooves are what they say: half-time has one snare a bar, on beat 3; the bossa nova's rim clicks follow a two-bar clave
+  const at = (style, k, from = 0, to = 64) => { const out2 = []; for (let n = from; n < to; n++) if (drumStep(style, n).some((h) => h.k === k)) out2.push(n); return out2; };
+  const half = at('halftime', 'snare'), bossaRim = at('bossa', 'snare'), rimBar = (n) => at('bossa', 'snare', n * 8, n * 8 + 8).map((x) => x % 8).join();
+  out.push(result('chapters: half-time plays the snare once a bar, on beat 3, and keeps the kick on beat 1', half.length === 8 && half.every((n) => n % 8 === 4) && at('halftime', 'kick').filter((n) => n % 8 === 0).length === 8, { half }));
+  out.push(result('chapters: the bossa nova rim clicks repeat every two bars, not every bar, and its kick lands on the and of 2', rimBar(0) !== rimBar(1) && rimBar(0) === rimBar(2) && rimBar(1) === rimBar(3) && bossaRim.length === 20 && at('bossa', 'kick').some((n) => n % 8 === 3), { bar0: rimBar(0), bar1: rimBar(1) }));
   // 8. in the game: starting an instrument activity is a practice session
   sk0.known.clear(); sk0.fading.clear(); sk0.practiced.clear(); T.learn(['piano']);
   T.addObject('piano'); T.addObject('bench'); T.settle();
