@@ -30,21 +30,38 @@
   @media (min-width: 701px) and (max-width: 1500px) { #hud { top: 34px; bottom: auto; } #hud small { display: none; } }
   @media (min-width: 1501px) { #hud { max-width: calc(100vw - 1180px); } }
   @media (max-width: 700px) { #hud { top: 12px; bottom: auto; left: 12px; } #btns { left: 12px; right: 12px; bottom: 12px; justify-content: center; flex-wrap: wrap; } }
-  #skills { position: fixed; right: 16px; bottom: 72px; width: min(330px, calc(100vw - 32px)); max-height: 70vh; overflow: auto; background: rgba(24,26,32,.96);
-            color: #eee; border-radius: 12px; padding: 12px 14px; box-shadow: 0 8px 28px rgba(0,0,0,.55); font-size: 13px; z-index: 4; }
+  #skills { position: fixed; right: 16px; bottom: 72px; width: min(440px, calc(100vw - 32px)); max-height: min(74vh, 720px); display: flex; flex-direction: column; background: #151a24; color: #e8edf5;
+            border: 1px solid rgba(255,255,255,.12); border-radius: 16px; font-size: 14px; z-index: 5; box-shadow: 0 12px 40px rgba(0,0,0,.45); overflow: hidden; }
   #skills[hidden] { display: none; }
-  #skills h3 { margin: 0 0 8px; font-size: 15px; }
-  #skills .skill { padding: 8px 0; border-top: 1px solid rgba(255,255,255,.1); opacity: .6; }
-  #skills .skill.known { opacity: 1; }
-  #skills .skill.do { cursor: pointer; }
-  #skills .skill.do:hover { background: rgba(143,240,164,.1); }
-  #skills .skill.do .name::after { content: ' ▶'; font-size: 11px; opacity: .7; }
-  #skills .name { font-weight: 600; }
-  #skills .skill.known .name { color: #8ff0a4; }
-  #skills .book { color: #9db4d0; margin: 2px 0 4px; }
-  #skills ul { margin: 0; padding-left: 18px; color: #c9ced6; }
-  #skills ul.chapters { margin-top: 6px; padding-left: 4px; list-style: none; }
-  #skills ul.chapters small { display: block; padding-left: 16px; color: #9db4d0; }
+  #skills header { flex: none; display: flex; align-items: center; gap: 8px; padding: 12px 10px 2px 16px; }
+  #skills h3 { margin: 0; flex: 1; font-size: 18px; color: #9fe9ff; }
+  #skills .where { flex: none; line-height: 1.4; padding: 0 16px 8px; color: #9db4d0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #skills header button { min-width: 44px; min-height: 44px; border: 0; border-radius: 10px; background: none; color: #b9c4d6; font: inherit; font-size: 18px; cursor: pointer; }
+  #skills header .stop { background: rgba(255,120,120,.16); color: #ffb3b3; font-size: 14px; font-weight: 600; padding: 0 14px; }
+  #skills header .stop[hidden] { display: none; }
+  #skills header button:hover { background: rgba(255,255,255,.1); color: #fff; }
+  #skills .list { overflow: auto; padding: 0 14px 6px; overscroll-behavior: contain; }
+  #skills h4 { margin: 10px 2px 6px; font-size: 13px; font-weight: 600; color: #8fa3bd; }
+  #skills .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  #skills .skill { display: flex; align-items: center; gap: 10px; min-height: 60px; padding: 8px 10px; text-align: left; border: 1px solid rgba(255,255,255,.08); border-radius: 12px;
+                   background: rgba(255,255,255,.06); color: inherit; font: inherit; cursor: pointer; touch-action: manipulation; }
+  #skills .skill:hover { background: rgba(255,255,255,.12); }
+  #skills .skill:active { transform: scale(.98); }
+  #skills button:focus-visible { outline: 2px solid #9fe9ff; outline-offset: 2px; }
+  #skills .ic { font-size: 24px; width: 30px; flex: none; text-align: center; }
+  #skills .tx { min-width: 0; display: block; }
+  #skills .name { display: block; font-weight: 600; line-height: 1.2; }
+  #skills .note { display: block; margin-top: 3px; font-size: 12px; line-height: 1.2; color: #a9b7ca; }
+  #skills .skill.here .note { color: #8ff0a4; }
+  #skills .skill.help .note { color: #ffb3dc; }
+  #skills .skill.go .note { color: #9fd4ff; }
+  #skills .skill.no .ic, #skills .skill.no .name { opacity: .5; }
+  #skills .skill.no .note { color: #e8b878; }
+  #skills .skill.now { background: #1f6b48; border-color: #49c98a; }
+  #skills .skill.now .note { color: #c9ffe0; }
+  #skills .empty { margin: 6px 2px 12px; color: #c9ced6; line-height: 1.5; }
+  #skills .foot { flex: none; padding: 8px 16px 12px; color: #8d9bb0; font-size: 12px; }
+  @media (max-width: 700px) { #skills { left: 0; right: 0; bottom: 0; width: auto; max-height: 72vh; border-radius: 18px 18px 0 0; border-width: 1px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); } }
   #machine { position: fixed; inset: 0; z-index: 8; background: rgba(5,8,14,.62); display: grid; place-items: center; backdrop-filter: blur(3px); }
   #machine[hidden] { display: none; }
   #machine .panel { width: min(640px, 94vw); max-height: 86vh; display: flex; flex-direction: column; background: #151a24; color: #e8edf5;
@@ -195,9 +212,12 @@
   </select>
   <button id="skip-btn" title="Next activity (Space)">⏭ Next</button>
   <button id="fs-btn" title="Fullscreen">⛶ Full</button>
-  <button id="skills-btn" title="What GUY has learned (K)">📚 Skills</button>
+  <button id="skills-btn" title="Ask GUY to do something he has learned (K)" aria-expanded="false">📚 Skills</button>
 </div>
-<div id="skills" hidden><h3>What GUY has learned</h3><div class="list"></div></div>
+<div id="skills" role="dialog" aria-label="Skills: ask GUY to do something" hidden>
+  <header><h3>Ask GUY to…</h3><button type="button" class="stop" hidden>Stop</button><button type="button" class="close" title="Close (Esc)" aria-label="Close">✕</button></header>
+  <div class="where"></div><div class="list"></div><div class="foot"></div>
+</div>
 <div id="toast"></div>
 <div id="machine" hidden>
   <div class="panel">

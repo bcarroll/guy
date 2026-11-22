@@ -105,6 +105,29 @@ export function install(T, h) {
       });
     }
   };
+  // Carrying a light thing to the room he is in, for a skill chosen in the Skills menu (skillrun.js): walking with it, both hands under its
+  // sides, from the side and the front; and at a shut door, one hand on the knob and the other still holding it
+  const CARRY = { guitar: 'guitar', lamp: 'lighting', easel: 'easel', telescope: 'telescope' };
+  const carryShot = (thing, view, door = false) => add(`skill-carry-${thing}-${door ? 'door' : view}`, 'checkpoints', async () => {
+    await clean(61);
+    const w = window.brain.w, b = window.brain, p = window.guy.root.position;
+    w.rooms.add('workshop', { walls: ['right'] });
+    T.addObject(thing); T.learn([CARRY[thing]]); T.settle(); T.home();
+    const c = w.roomSpot('workshop'); b.skip(true); b.queue = []; b.step = null; b.pendingActivity = null; p.x = c.x; p.z = c.z; b.stayRoom = 'workshop';
+    const r = b.useSkill(CARRY[thing]);
+    const there = () => b.hauling && b.hauling.k > 0.98 && b.hauling.dir > 0 && b.step && (door ? b.pose === 'reach' && b.step.t > 0.75 && Math.hypot(p.x - w.doorPoint('workshop', 0).x, p.z - w.doorPoint('workshop', 0).z) < 1.4 && b.roomHere() === 'main' : b.pose === 'walk' && b.moving && b.hereId() === 'workshop' && b.step.t > 1.0);
+    let t = 0; while (t < 90 && !there()) { window.sim(0.05); t += 0.05; }
+    const ok = !!there();
+    T.freeze();
+    T.frameAt(p.x, p.z, window.guy.root.rotation.y + (door ? Math.PI : 0), view, 2.6, 0.95);      // (at the door: from the side away from the bookshelf)
+    await settleFrames(3);
+    const data = capture();
+    b.skip(true); b.homeCleanup();
+    return { ok, why: `never carried it there (${r.message})`, data };
+  });
+  for (const thing of Object.keys(CARRY)) for (const view of ['side', 'front']) carryShot(thing, view);
+  carryShot('easel', 'side', true);
+  carryShot('telescope', 'side', true);
   // GAL playing the guitar, her fretting hand up close from behind her left shoulder (her shorter hand once made a fist under the neck)
   add('gal-guitar-fretting', 'characters', async () => {
     await clean(23);

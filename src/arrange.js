@@ -66,7 +66,7 @@ export function installArrange(Brain, H) {
     misplaced() {
       const w = this.w, ok = this.openRooms(), out = [];
       for (const o of Object.values(w.objects)) {
-        if (o.hauled || o.stowed || o.removable === false || this.inUse(o.name) || this.otherUses(o.name)) continue;
+        if (o.hauled || o.stowed || o.removable === false || this.inUse(o.name) || this.otherUses(o.name) || this.skillWants(o.name)) continue;
         const id = o.kind || o.name, here = w.roomIdAt(o.x, o.z);
         if (here !== 'workshop') continue;                       // (only out of the Workshop: anywhere else, it is where the user wants it)
         let homes = ROOMS[id], own = false;

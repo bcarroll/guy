@@ -184,9 +184,20 @@ export function installWorkshop(Brain, POSES, H) {
       }
       return null;
     },
+    // How a thing is held while it is carried whole: how high it is lifted, how far in front of him, which way round (`turn`), and where each
+    // hand takes hold (`half` either side of its middle, at `y` on it, `z` towards (-) or away from him). The default is the foot stool's.
+    haulGrip(o) {
+      const key = o.guitar ? 'guitar' : o.name;
+      return { guitar: { lift: 0.42, ahead: 0.46, turn: 0, half: 0.12, y: 0.42, z: 0 },               // by the cradle of its stand
+        lamp: { lift: 0.14, ahead: 0.5, turn: 0, half: 0.02, y: 0.86, z: 0, apart: 0.2 },            // by the pole, one hand above the other
+        easel: { lift: 0.16, ahead: 0.52, turn: Math.PI, half: 0.31, y: 0.88, z: 0 },                  // by its two uprights, the canvas towards him
+        telescope: { lift: 0.14, ahead: 0.46, turn: Math.PI, half: 0.03, y: 0.94, z: 0, apart: 0.16, tube: 1.35 },    // by its closed legs, the tube swung upright
+      }[key] || { lift: 0.62, ahead: 0.5, turn: 0, half: o.bw / 2 + 0.03, y: 0, z: 0, plain: true };
+    },
     startHaul(name) {
       const o = this.obj(name); if (!o) return;
-      this.hauling = { o, k: 0, dir: 1, from: { x: o.x, z: o.z }, to: null };
+      if (o.hung) o.setHung(false);                                     // (a guitar off its hook on a Studio wall: back on its stand)
+      this.hauling = { o, k: 0, dir: 1, from: { x: o.x, z: o.z }, to: null, grip: this.haulGrip(o), aim: o.aim ? { ...o.aim } : null };
       o.hauled = true; o.hauledYaw = o.group.rotation.y; o.obstacle.active = false;
     },
     // set it down at (x, z): it lowers into place from where he holds it
@@ -197,8 +208,14 @@ export function installWorkshop(Brain, POSES, H) {
     // where his hands go while he holds it (left and right of the piece, in front of him)
     haulHands() {
       const h = this.hauling, root = this.g.root, yaw = root.rotation.y, fx = Math.sin(yaw), fz = Math.cos(yaw), lx = Math.cos(yaw), lz = -Math.sin(yaw);
-      const c = new THREE.Vector3(root.position.x + fx * 0.5, 0.62, root.position.z + fz * 0.5), half = h.o.bw / 2 + 0.03;
-      return { L: c.clone().add(new THREE.Vector3(lx * half, 0, lz * half)), R: c.clone().add(new THREE.Vector3(-lx * half, 0, -lz * half)) };
+      const q = h.grip, lift = q.lift, c = new THREE.Vector3(root.position.x + fx * (q.ahead + q.z), lift + q.y, root.position.z + fz * (q.ahead + q.z));
+      const side = (s) => c.clone().add(new THREE.Vector3(s * lx * q.half, s * (q.apart || 0) / 2, s * lz * q.half));
+      if (q.plain) return { L: side(1), R: side(-1) };
+      // (the hands close round it from the sides: fingers forward, palms inward; the wrist is half a hand back from what they hold)
+      const hl = this.g.limb.Right.handLen * 0.55, out = 0.03;
+      const hand = (s) => { const f = new THREE.Vector3(fx - s * lx * 0.25, 0.1, fz - s * lz * 0.25).normalize(), palm = new THREE.Vector3(-s * lx, 0, -s * lz); palm.addScaledVector(f, -palm.dot(f)).normalize(); return { p: side(s).addScaledVector(f, -hl).addScaledVector(palm, -out), hand: { fingers: f, palm } }; };
+      const L = hand(1), R = hand(-1);
+      return { L: L.p, R: R.p, handL: L.hand, handR: R.hand };
     },
     updateHaul() {
       const h = this.hauling;
@@ -206,10 +223,13 @@ export function installWorkshop(Brain, POSES, H) {
       const dt = Math.min(0.1, this.time - (this.haulT0 ?? this.time)); this.haulT0 = this.time;
       h.k = Math.min(1, Math.max(0, h.k + h.dir * dt / 0.9));
       const root = this.g.root, yaw = root.rotation.y, k = h.k * h.k * (3 - 2 * h.k);
-      const cx = root.position.x + Math.sin(yaw) * 0.5, cz = root.position.z + Math.cos(yaw) * 0.5, o = h.o;
+      const o = h.o, q = h.grip, cx = root.position.x + Math.sin(yaw) * q.ahead, cz = root.position.z + Math.cos(yaw) * q.ahead;
       const base = h.dir > 0 ? h.from : (h.to || h.from);
-      o.group.position.set(base.x + (cx - base.x) * k, 0.62 * k, base.z + (cz - base.z) * k);
-      o.hauledYaw = o.group.rotation.y + (yaw - o.group.rotation.y) * 0.3;
+      o.group.position.set(base.x + (cx - base.x) * k, q.lift * k, base.z + (cz - base.z) * k);
+      const way = h.dir > 0 || q.plain ? yaw + q.turn : o.yaw, dy = Math.atan2(Math.sin(way - o.group.rotation.y), Math.cos(way - o.group.rotation.y));      // (on the way down it turns to the way it will stand)
+      o.hauledYaw = o.group.rotation.y + (h.dir > 0 && k > 0.98 ? dy : dy * Math.min(1, dt * 9));
+      if (q.tube && h.aim && o.setAim) o.setAim(h.aim.yaw, h.aim.pitch + (q.tube - h.aim.pitch) * k);
+      if (o.fold) o.fold(k);
       if (h.dir < 0 && h.k <= 0) {                                             // down on the floor: it is a piece of furniture again
         o.hauled = false; o.obstacle.active = true; o.hauledYaw = undefined;
         o.set(h.to ? h.to.x : o.x, h.to ? h.to.z : o.z);
@@ -306,6 +326,14 @@ export function installWorkshop(Brain, POSES, H) {
       if (!m) return;
       this.homeMove = null;
       const o = this.obj(m.name);
+      if (m.whole) {                                                             // (in his arms as it is: set down on the nearest free floor)
+        this.dropHaul();
+        if (!o) return;
+        const q = this.g.root.position, ry = this.g.root.rotation.y, ah = { x: q.x + Math.sin(ry) * 0.7, z: q.z + Math.cos(ry) * 0.7 };
+        const at = this.w.fits(o, ah.x, ah.z) ? ah : this.w.findSpot(o, { x: q.x, z: q.z }, null), to = at && this.w.roomIdAt(at.x, at.z) !== 'door' ? at : m.from;
+        o.set(to.x, to.z);
+        return;
+      }
       if (this.carry === 'flat' || this.carry === 'mflat') this.setCarry(null);
       if (!o || !o.packed) return;
       const p = this.g.root.position, yaw = this.g.root.rotation.y;
@@ -313,6 +341,25 @@ export function installWorkshop(Brain, POSES, H) {
       const here = this.w.fits(o, ahead.x, ahead.z) ? ahead : this.w.findSpot(o, ahead, null);
       const back = here && this.w.roomIdAt(here.x, here.z) !== 'door' ? here : m.from;
       this.w.unpackShelf(m.name, { x: back.x, z: back.z, rot: back === m.from ? m.from.rot : o.rot });
+    },
+    // let go of what is in his arms (it is a piece of furniture on the floor again, wherever it is put)
+    dropHaul() {
+      const h = this.hauling;
+      if (!h) return;
+      this.hauling = null; this.haulT0 = undefined;
+      if (h.aim && h.o.setAim) h.o.setAim(h.aim.yaw, h.aim.pitch);
+      if (h.o.fold) h.o.fold(0);
+      h.o.hauled = false; h.o.hauledYaw = undefined; h.o.obstacle.active = true; h.o.group.position.y = 0;
+    },
+    // what he was carrying has been taken away by the user
+    carryGone() {
+      const m = this.homeMove;
+      this.homeMove = null;
+      this.dropHaul();
+      if (this.carry === 'flat' || this.carry === 'mflat') this.setCarry(null);
+      const o = m && (this.w.removed[m.name] || this.obj(m.name));
+      if (o && o.packed) { o.packed = false; o.group.visible = true; }
+      this.queue = []; this.step = null;
     },
     carryHomeSteps() {
       const m = this.homeMoves()[0];
@@ -483,7 +530,7 @@ export function installWorkshop(Brain, POSES, H) {
       }
       if (this.carry !== 'canvas') this.setCarry(null);                                       // (the hardware of a guitar he did not finish is just dropped)
       this.dropBuilding();
-      if (this.hauling) { const o = this.hauling.o; o.hauled = false; o.obstacle.active = true; o.hauledYaw = undefined; const p = this.g.root.position; o.set(p.x + Math.sin(this.g.root.rotation.y) * 0.6, p.z + Math.cos(this.g.root.rotation.y) * 0.6); o.group.position.y = 0; this.hauling = null; this.haulT0 = undefined; }
+      if (this.hauling) { const o = this.hauling.o; if (o.fold) o.fold(0); o.hauled = false; o.obstacle.active = true; o.hauledYaw = undefined; const p = this.g.root.position; o.set(p.x + Math.sin(this.g.root.rotation.y) * 0.6, p.z + Math.cos(this.g.root.rotation.y) * 0.6); o.group.position.y = 0; this.hauling = null; this.haulT0 = undefined; }
       if (this.onStool) { const f = this.onStool; this.g.root.position.set(f.from.x, 0, f.from.z); this.onStool = null; }
       for (const id of ['woodfactory', 'metalfactory']) { const f = this.obj(id); if (f && f.tray.children.length) f.clearMade(); }
     },

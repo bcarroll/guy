@@ -9,7 +9,8 @@ import { buildRoom, ROOM } from './room.js';
 import { Guy } from './guy.js';
 import { Brain } from './brain.js';
 import { initAudio, audio } from './audio.js';
-import { Skills, SKILL_INFO } from './skills.js';
+import { Skills } from './skills.js';
+import { initSkillsMenu } from './skillsmenu.js';
 import { sfx, drag as sfxDrag, setMuted, isMuted } from './sfx.js';
 import { initMachine } from './machine.js';
 import { initRooms } from './rooms.js';
@@ -129,31 +130,14 @@ world.gal.preload();
 // GUY's paintings: hung on the walls of any room, the rest kept in the Catalog (they are saved unless ?fresh)
 world.paintings = new Paintings(world, { persist: !params.has('fresh') });
 
-// ---- skills panel + "learned something" toast ----
+// ---- the Skills menu (skillsmenu.js) + "learned something" toast ----
+// Tapping a learned skill: GUY uses it, in the room he is in (skillrun.js: useSkill). He may call GAL to help.
 const panel = document.getElementById('skills');
 const toast = document.getElementById('toast');
 let toastTimer = 0;
-// Tapping a learned skill asks GUY to use the thing it is about (the same order as choosing it from an object's menu).
-const SKILL_OBJECT = { workshop: 'workbench', 'workshop.materials': 'woodfactory', 'workshop.furniture': 'workbench', 'workshop.metal': 'metalfactory', restaurant: 'stove',
-  outdoor: 'lawnchair', 'outdoor.soccer': 'soccergoal', 'outdoor.basketball': 'basketballhoop', 'range.pistol': 'blasterrack', 'range.carbine': 'blasterrack', bowling: 'ballrack',
-  stereo: 'table', piano: 'piano', 'piano.advanced': 'piano', ball: 'ball', lighting: 'lamp', guitar: 'guitar', speedreading: 'shelf',
-  drums: 'drums', 'drums.solo': 'drums', 'drums.band': 'drums', easel: 'easel', 'easel.colour': 'easel', 'easel.portrait': 'easel',
-  telescope: 'telescope', 'telescope.dark': 'telescope', 'telescope.care': 'telescope' };
-// Only the skills GUY or GAL has learned are listed, each as just its heading (a skill still being read or on the shelf is not shown).
-function renderSkills() {
-  panel.querySelector('.list').innerHTML = Object.entries(SKILL_INFO).filter(([id]) => skills.has(id)).map(([id, info]) => `
-    <div class="skill known${SKILL_OBJECT[id] ? ' do' : ''}" data-skill="${id}"${SKILL_OBJECT[id] ? ' role="button" tabindex="0" title="Ask GUY to do this"' : ''}>
-      <div class="name">${skills.strength(id) < 1 ? '◔' : '✓'} ${info.name}</div>
-    </div>`).join('');
-}
-renderSkills();
-skills.onChange(renderSkills);
-panel.addEventListener('click', (e) => {
-  const row = e.target.closest('.skill.do'); if (!row) return;
-  const obj = SKILL_OBJECT[row.dataset.skill];
-  if (!brain.obj(obj)) { showToast(`There is no ${obj} in the room.`); return; }
-  showToast(brain.interact(obj).message);
-});
+const skillsMenu = initSkillsMenu({ root: panel, button: document.getElementById('skills-btn'), brain, skills, label, toast: (m) => showToast(m) });
+const renderSkills = () => skillsMenu.render();
+brain.onSkillNote = (msg) => showToast(msg);
 function showToast(msg) {
   toast.textContent = msg;
   toast.classList.add('show');
@@ -246,7 +230,7 @@ document.getElementById('build').textContent = `build ${typeof __BUILD_ID__ === 
 if (params.get('records') === 'all' && world.objects.shelf) ALBUM_CATALOG.forEach((a) => { if (!world.objects.shelf.albums.some((r) => r.def.id === a.id)) world.objects.shelf.addAlbum(a); }); // testing aid
 renderSkills();
 let machinePress = null;
-const togglePanel = () => { panel.hidden = !panel.hidden; if (!panel.hidden) renderSkills(); };      // (opening it refreshes the practice counts, which do not re-draw it as they change)
+const togglePanel = () => skillsMenu.toggle();
 document.getElementById('skills-btn').addEventListener('click', togglePanel);
 addEventListener('keydown', (e) => { if (e.key === 'k' || e.key === 'K') togglePanel(); });
 
@@ -773,7 +757,7 @@ canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 // Screen lock (screenlock.js): off / camera only / on. Locking closes every menu and panel and drops any press in progress.
 const screenLock = initScreenLock({
   persist: !params.has('fresh'), toast: (m) => showToast(m),
-  onLock: () => { closeMenu(); machineUI.close(); hidePlayer(); panel.hidden = true; if (pending) { clearTimeout(pending.timer); pending = null; } drag = null; },
+  onLock: () => { closeMenu(); machineUI.close(); hidePlayer(); skillsMenu.close(); if (pending) { clearTimeout(pending.timer); pending = null; } drag = null; },
 });
 screenLock.onChange(() => { controls.enabled = screenLock.cameraOk() && view !== 'third' && view !== 'first'; });
 window.__screenLock = screenLock;
