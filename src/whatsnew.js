@@ -2,6 +2,7 @@
 // telling the player about is deployed: new rooms, objects, books, things GUY can do. The update notice (src/update.js) lists the
 // entries the running page has not seen yet, and vite.config.js writes the whole list into version.json.
 export const WHATS_NEW = [
+  { id: 'restaurant-wall', items: ['Adding the Restaurant no longer takes a window or picture down without asking. If something is in the way of its door, its card in the Catalog says what and asks: Remove and add, or Not now. If every wall it can use already has a room, it tells you which room is on which wall.'] },
   { id: 'help', items: ['New: Help. Tap ❓ in the top corner (or press H) to see how everything works: the controls, the rooms, books and skills, GAL, talking to GUY, what is new and a change log of the big updates.'] },
   { id: 'square-rooms', items: ['Every room is the same size now, a 10 metre square, so the rooms line up with no overlaps or gaps. Corner rooms have a door into each room beside them: the Bedroom opens into the Workshop and the Studio.', 'New maple bowling pins go where they belong: GUY carries the crate to a lane of the Bowling Alley, clears the old pins and sets up the new ones, one lane for each set he makes.'] },
   { id: 'guitar-hold', items: ['GUY and GAL take the bass off its stand and wear it now, and their hands really close round the neck of a guitar or bass. The strap goes over the shoulder and across the back.'] },

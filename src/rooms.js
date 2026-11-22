@@ -13,7 +13,8 @@ export const ROOM_CATALOG = [
     look: { frame: 0x6b4a2b, door: 0xb5532f, panel: 0xc9683f, floor: 0x8c9096, wall: 0xb4b8bd } },
   // The Restaurant: a kitchen, a cash register and dining tables, with an elevator the customers arrive in. A premium room: listed
   // as locked in the Rooms tab (`premium: true`) until it is unlocked (`setUnlocked`; there is no way to pay yet).
-  { id: 'restaurant', name: 'Restaurant', icon: '🍽️', unlocked: false, premium: true, doorWalls: ['front', 'back', 'right'], elevator: true,
+  // `askToClear`: the Catalog asks before anything comes out of GUY's room for its door (a window, a painting, a chair: rooms.js offerFor).
+  { id: 'restaurant', name: 'Restaurant', icon: '🍽️', unlocked: false, premium: true, doorWalls: ['front', 'back', 'right'], elevator: true, askToClear: true,
     desc: 'A kitchen and dining room. Customers arrive by elevator and GUY cooks and serves.',
     look: { frame: 0x6b4a2b, door: 0x2f6f8f, panel: 0x3d86a8, floor: 0xb98a55, wall: 0xeadbc0 } },
   // The Backyard: an open-air room (grass, a fence, no ceiling) with a goal, a hoop, a lawn chair, a bird bath and a switch for day and night.
@@ -122,15 +123,44 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
   }
 
   // A room with a door on a wall of GUY's room. A corner room with nowhere in a corner ends up here too: no room needs another one.
+  // opts.ask (the Catalog's Add button): a room marked `askToClear` (the Restaurant) is not put where something would have to come out of
+  // the room; the answer is an `offer` instead, which names what is in the way, and the Catalog asks. opts.clear (that offer, accepted):
+  // the door goes on that wall and those things go to the Catalog. With no wall at all, the messages say why (explainNoWall).
   function addOnWall(r, opts) {
-    const spot = opts.at || world.planDoor(opts.walls || (r.doorWalls && r.doorWalls.length ? r.doorWalls : WALL_ORDER));
+    const walls = opts.walls || (r.doorWalls && r.doorWalls.length ? r.doorWalls : WALL_ORDER);
+    let spot = opts.at || null;
+    if (!spot && opts.clear) {
+      spot = walls.includes(opts.clear.wall) ? world.planDoor([opts.clear.wall]) : null;
+      if (spot && spot.displace.some((n) => !(opts.clear.remove || []).includes(n))) return offerFor(r, spot);     // (something else is in the way now: ask again)
+    }
+    if (!spot && !opts.clear) spot = world.planDoor(walls);
+    if (spot && opts.ask && r.askToClear && !opts.at && spot.displace.length) return offerFor(r, spot);
     const hit = spot ? place(r, spot.wall, spot.u) : null;
-    if (!spot || !hit) return { ok: false, messages: ['No clear wall for a door right now. Try moving something.'] };
+    if (!spot || !hit) return { ok: false, messages: explainNoWall(r, walls) };
     changed();
     const messages = [`${r.name} added! There is a new door.`, ...linkNote(opts.at ? [] : linkRooms(), r.id)];
     if (hit.length === 1) messages.push(`Moved the ${label(hit[0])} to make space for the door.`);
     else if (hit.length > 1) messages.push(`Moved ${hit.length} things to make space. Find them in the Catalog.`);
     return { ok: true, wall: spot.wall, u: spot.u, displaced: hit, messages };
+  }
+  const listOf = (names) => (names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`);
+  // Every wall the room could use is taken: by another room, or by something that never moves. Each line is short (the Catalog's toast).
+  function explainNoWall(r, walls) {
+    const out = [`No clear wall for the ${r.name}'s door right now.`], rep = world.doorReport(walls);
+    for (const w of rep) {
+      if (w.room) out.push(`The ${w.wall} wall has the ${w.room}.`);
+      else if (w.fixed.length) out.push(`The ${listOf(w.fixed.slice(0, 2).map(label))} ${w.fixed.length > 1 ? 'are' : 'is'} in the way on the ${w.wall} wall.`);
+    }
+    const rooms = rep.some((w) => w.room), stuck = rep.some((w) => !w.room && w.fixed.length);
+    out.push(rooms && stuck ? 'Remove a room or move those things to make space.' : rooms ? 'Remove one of those rooms to make space.' : 'Try moving something.');
+    return out;
+  }
+  // Something would have to come out of GUY's room (a window, a painting, a chair): say what, and ask before anything is touched.
+  function offerFor(r, spot) {
+    const names = spot.displace.map(label), what = names.length <= 3 ? `the ${listOf(names)}` : `${names.length} things`;
+    return { ok: false, offer: { id: r.id, wall: spot.wall, u: spot.u, remove: [...spot.displace] },
+      messages: [`No wall is free for the ${r.name}'s door.`, `On the ${spot.wall} wall, ${what} ${names.length > 1 ? 'are' : 'is'} in the way.`,
+        `Remove ${names.length > 1 ? 'them' : 'it'} and add the ${r.name}?`] };
   }
 
   // A corner room: a free corner with a room beside it that can have a door (opts.at: the corner and door it had when it was saved).
@@ -145,7 +175,7 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
       spot = plan;
     }
     const hit = spot ? place(r, spot.wall, spot.u, spot) : null;
-    if (!spot || !hit) return { ok: false, messages: ['No clear wall for a door right now. Try moving something.'] };
+    if (!spot || !hit) return { ok: false, messages: [`No clear wall for the ${r.name}'s door right now.`, 'Try moving something.'] };
     changed();
     const messages = [`${r.name} added! There is a new door in the ${world.doors[spot.parent].name}.`, ...linkNote(opts.at ? [] : linkRooms(), r.id)];
     if (hit.length === 1) messages.push(`Moved the ${label(hit[0])} to make space for the door.`);

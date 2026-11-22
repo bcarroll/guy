@@ -2105,7 +2105,7 @@ T.sweepRooms = () => {
     const doorsBefore = Object.keys(w.doors).join(), toastBefore = document.getElementById('toast').textContent;
     const fifth = R().add('qa-fifth');
     ROOM_CATALOG.pop();
-    out.push(result('rooms: a fifth room is refused with a message, and no door is added or moved', !fifth.ok && fifth.messages.length === 1 && /No clear wall/.test(fifth.messages[0]) && Object.keys(w.doors).join() === doorsBefore && !w.doors['qa-fifth'], { fifth, doorsBefore, now: Object.keys(w.doors).join() }));
+    out.push(result('rooms: a fifth room is refused with a message, and no door is added or moved', !fifth.ok && /No clear wall/.test(fifth.messages[0]) && friendly(fifth.messages) && fifth.messages.filter((m) => /wall has the/.test(m)).length === 4 && Object.keys(w.doors).join() === doorsBefore && !w.doors['qa-fifth'], { fifth, doorsBefore, now: Object.keys(w.doors).join() }));
   }
   T.resetRooms(); putBackSince(before); machine().hidden = true;
   out.push(result('rooms: no errors', errors.length === base, { errors: errors.slice(base) }));
@@ -2599,6 +2599,72 @@ T.sweepCorners = () => {
   }
   T.resetRooms(); T.home(); T.removeAll(); putBackSince(before); T.settle(); machine().hidden = true;
   out.push(result('corners: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
+// ---- The Restaurant with no free wall (rooms.js explainNoWall, offerFor; machine.js roomOffer) ----
+// Every wall it can use (front, back, right) taken by a room: the Catalog says which room has which wall, and nothing changes. Only things
+// that can come out of GUY's room in the way (a window, a picture): its card asks first, "Not now" leaves everything as it was, "Remove and
+// add" takes exactly those out and adds it. A clear wall: added at once, no question.
+T.sweepRestaurantWall = () => {
+  const out = [], base = errors.length, w = W(), toast = () => document.getElementById('toast').textContent;
+  const fakes = [];
+  // a panel on a wall of GUY's room: decor, like a window or a picture, as wide as asked
+  const panel = (name, wall, u, hw) => { const g = new THREE.Group(); w.room.add(g); w.decor[name] = { name, label: 'QA panel', decor: true, removable: true, group: g, wall, hw, hh: 0.6, u, v: 1.5, home: { u, v: 1.5 }, rot: 0, hx: 0, hz: 0 }; fakes.push(name); };
+  const card = () => machineCard('Restaurant'), btns = () => [...(card() ? card().querySelectorAll('.act') : [])].map((x) => x.textContent);
+  const press = (label) => { const el = [...card().querySelectorAll('.act')].find((x) => x.textContent === label); if (el) el.click(); step(0.5); return !!el; };
+  const fresh = () => { T.resetRooms(); T.removeAll(); T.settle(); T.home(); unlockRoom('restaurant'); };
+  try {
+    // 1. a clear wall: added straight away, nothing asked
+    fresh(); R().add('workshop', { walls: ['right'] });
+    openTab('rooms');
+    out.push(result('restaurant wall: its card says it asks first if something is in the way', !!card() && /asked first/.test(card().textContent) && btns().join() === 'Add to my home', { text: card() && card().textContent }));
+    press('Add to my home');
+    out.push(result('restaurant wall: with a wall clear it is added at once, with no question', R().isAdded('restaurant') && w.doors.restaurant.wall !== 'right' && /Restaurant added/.test(toast()), { toast: toast() }));
+    // 2. every wall it can use has a room: it says which, and nothing changes
+    fresh();
+    for (const [id, wall] of [['workshop', 'right'], ['backyard', 'front'], ['bowling', 'back']]) R().add(id, { walls: [wall] });
+    const doorsBefore = Object.keys(w.doors).join(), removedBefore = Object.keys(w.removed).length;
+    const full = R().add('restaurant', { ask: true });
+    openTab('rooms'); press('Add to my home');
+    out.push(result('restaurant wall: with the front, back and right walls taken by rooms it says so, wall by wall, and offers nothing',
+      !full.ok && !full.offer && /No clear wall for the Restaurant/.test(full.messages[0]) && ['Workshop', 'Backyard', 'Bowling Alley'].every((n) => full.messages.some((m) => m.includes(n))) && /Remove one of those rooms/.test(full.messages.at(-1))
+      && friendly(full.messages) && /No clear wall for the Restaurant/.test(toast()) && btns().join() === 'Add to my home', { messages: full.messages, toast: toast(), btns: btns() }));
+    out.push(result('restaurant wall: ... and no door is added and nothing is moved', !R().isAdded('restaurant') && Object.keys(w.doors).join() === doorsBefore && Object.keys(w.removed).length === removedBefore, {}));
+    // 3. the two walls it could use have rooms, and the back wall is covered by things that can come out: the window and panels
+    fresh();
+    R().add('workshop', { walls: ['right'] }); R().add('backyard', { walls: ['front'] });
+    T.addObject('window2');
+    panel('qa-a1', 'back', -1.85, 3.15); panel('qa-a2', 'back', -1.85, 3.15); panel('qa-b1', 'back', 4.45, 0.55); panel('qa-b2', 'back', 4.45, 0.55);
+    const ask = R().add('restaurant', { ask: true });
+    out.push(result('restaurant wall: with only a window in the way it does not add the room: it names the window and asks',
+      !ask.ok && !!ask.offer && ask.offer.wall === 'back' && ask.offer.remove.join() === 'window2' && /No wall is free/.test(ask.messages[0]) && /window/i.test(ask.messages[1]) && /\?$/.test(ask.messages.at(-1)) && friendly(ask.messages)
+      && !R().isAdded('restaurant') && !!w.decor.window2, { ask }));
+    openTab('rooms'); press('Add to my home');
+    out.push(result('restaurant wall: the card then asks, with "Remove and add" and "Not now"', btns().join() === 'Remove and add,Not now' && /window/i.test(card().textContent) && !R().isAdded('restaurant'), { btns: btns(), text: card() && card().textContent }));
+    press('Not now');
+    out.push(result('restaurant wall: "Not now" leaves everything as it was', !R().isAdded('restaurant') && !!w.decor.window2 && fakes.every((n) => !!w.decor[n]) && btns().join() === 'Add to my home', { btns: btns() }));
+    press('Add to my home'); press('Remove and add');
+    const door = w.doors.restaurant;
+    out.push(result('restaurant wall: "Remove and add" takes the window out (to the Catalog) and adds the Restaurant on the back wall, the panels left alone',
+      R().isAdded('restaurant') && door.wall === 'back' && !w.decor.window2 && !!w.removed.window2 && fakes.every((n) => !!w.decor[n]) && !doorProblems('restaurant').length && /Restaurant added/.test(toast()) && /Moved the/.test(toast()),
+      { toast: toast(), wall: door && door.wall, problems: door && doorProblems('restaurant') }));
+    // 4. something else is put there between the question and the answer: it asks again, naming that too
+    fresh();
+    R().add('workshop', { walls: ['right'] }); R().add('backyard', { walls: ['front'] });
+    panel('qa-c', 'back', 0, 5.2);
+    const first = R().add('restaurant', { ask: true });
+    panel('qa-d', 'back', 0, 5.2);
+    const again = R().add('restaurant', { clear: first.offer });
+    const last = R().add('restaurant', { clear: again.offer });
+    out.push(result('restaurant wall: if more is in the way by the time the player says yes, it asks again before moving anything, then adds it',
+      !!first.offer && first.offer.remove.join() === 'qa-c' && !again.ok && !!again.offer && again.offer.remove.sort().join() === 'qa-c,qa-d' && last.ok && !w.decor['qa-c'] && !w.decor['qa-d'] && w.doors.restaurant.wall === 'back',
+      { first: first.offer, again: again.offer, last: last.ok }));
+  } finally {
+    for (const n of fakes) { if (w.decor[n]) w.room.remove(w.decor[n].group); delete w.decor[n]; delete w.removed[n]; }
+    T.resetRooms(); T.removeAll(); machine().hidden = true;
+  }
+  out.push(result('restaurant wall: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
 };
 
@@ -6227,7 +6293,8 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.guitarHold = S(T.sweepGuitarHold);
   report.galDanceRoom = S(T.sweepGalDanceRoom);
   report.floorplan = S(T.sweepFloorplan);
-  report.help = S(T.sweepHelp);        // (last, so the others keep their seeds)
+  report.help = S(T.sweepHelp);
+  report.restaurantWall = S(T.sweepRestaurantWall);        // (last, so the others keep their seeds)
   if (seed && T.unseed) T.unseed();
   window.__qaPaused = wasPaused;
   T.lastReport = report;
