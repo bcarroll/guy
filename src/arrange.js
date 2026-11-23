@@ -16,6 +16,13 @@ const WANTS = [['guitar', 'guitar'], ['drums', 'drums'], ['easel', 'easel'], ['t
 // where each can go (the first is the home room; an added room is used only while it is there and its door is not locked). The Workshop is
 // for making things, never for keeping them: an instrument ordered there used to stay there for good.
 const ROOMS = { guitar: ['main'], drums: ['main'], eguitar: ['main'], easel: ['main', 'main', 'backyard'], telescope: ['main', 'main', 'backyard'], piano: ['main'], table: ['main', 'main', 'backyard'] };
+// Where things belong once the room that is for them has been added (and is open to him): the Studio takes the instruments, the Backyard the
+// garden and the sky-watching, the Restaurant its kitchen. They are carried there from his own room or the Workshop, wherever they stand.
+const HOME = {
+  studio: ['drums', 'guitar', 'eguitar', 'piano', 'bench', 'table', 'bass', 'keyboard', 'xylophone', 'bongos', 'mirrorball', 'jukebox'],
+  backyard: ['soccergoal', 'basketballhoop', 'lawnchair', 'birdbath', 'shed', 'mower', 'gnome', 'flamingo', 'easel', 'telescope'],
+};
+const HOME_OF = Object.fromEntries(Object.entries(HOME).flatMap(([room, ids]) => ids.map((id) => [id, room])));
 const CHAIRS = ['builtchair', 'metalchair', 'chair', 'chair2', 'armchair2', 'armchair'];     // in the order he tries them
 const CHAIR_RECIPES = ['builtchair', 'metalchair'];
 // light things he will send away to make space (never something somebody is using, never a heavy or core piece)
@@ -30,6 +37,7 @@ export function installArrange(Brain, H) {
     openRooms() { return ['main', ...Object.keys(this.w.doors).filter((id) => !this.doorLockedFor(id))]; },
     roomPick(id) {
       const ok = this.openRooms();
+      if (HOME_OF[id] && ok.includes(HOME_OF[id])) return HOME_OF[id];       // (its own room, once there is one)
       const rooms = (ROOMS[id] || ['main']).filter((r) => ok.includes(r));
       return rooms.length ? pick(rooms) : 'main';
     },
@@ -62,15 +70,18 @@ export function installArrange(Brain, H) {
       if (spare.length > 3 && cool('tidy')) return { act: 'arrange', key: 'tidy', why: 'puts a spare chair away', add: [], remove: [spare[spare.length - 1].kind] };
       return null;
     },
-    // Things left in the Workshop that belong in another room, with the room each goes to (open to him, with space for it): [{ o, id, label, room, roomName }].
+    // Things that stand in the Workshop or in his own room but belong in another room that has been added (HOME above; or where the Workshop built
+    // them for), with the room each goes to (open to him, with space for it): [{ o, id, label, room, roomName }].
     misplaced() {
       const w = this.w, ok = this.openRooms(), out = [];
       for (const o of Object.values(w.objects)) {
         if (o.hauled || o.stowed || o.removable === false || this.inUse(o.name) || this.otherUses(o.name) || this.skillWants(o.name)) continue;
         const id = o.kind || o.name, here = w.roomIdAt(o.x, o.z);
-        if (here !== 'workshop') continue;                       // (only out of the Workshop: anywhere else, it is where the user wants it)
+        if (here !== 'workshop' && here !== 'main') continue;     // (in a room he was sent to, it is where it belongs or where the user wants it)
         let homes = ROOMS[id], own = false;
-        if (!homes && o.kind && RECIPES[o.kind]) { const s = w.instanceSite(o.kind); if (s && s.room !== 'door' && s.room !== 'workshop') { homes = [s.room]; own = true; } }   // where the Workshop builds it for (its planned spot there)
+        if (HOME_OF[id] && ok.includes(HOME_OF[id])) homes = [HOME_OF[id]];
+        else if (here !== 'workshop' && !(o.kind && RECIPES[o.kind])) continue;     // (in his room, only what has a room of its own now: the rest is where the user wants it)
+        if ((!homes || homes[0] === 'main') && o.kind && RECIPES[o.kind]) { const s = w.instanceSite(o.kind); if (s && s.room !== 'door' && s.room !== 'workshop' && s.room !== 'main') { homes = [s.room]; own = true; } }   // where the Workshop builds it for (its planned spot there)
         if (!homes || homes.includes(here)) continue;
         const room = homes.find((r) => ok.includes(r));
         const where = room && (own ? w.instanceSite(o.kind) : w.roomSpot(room));

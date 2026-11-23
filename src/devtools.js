@@ -6789,6 +6789,25 @@ T.sweepArrange = () => {
       if (bd) w.storeInstance(bd.name);
       delete w.stock.items.bed;
     }
+    // 5d. a room that has been added gets what is for it, from his own room too: the Studio the instruments, the Backyard the telescope, the
+    // Bedroom a bed built for it (all of it standing in his room, wherever it was put)
+    {
+      T.resetRooms(); T.removeAll(); T.settle();
+      { const wasDev = dev.all; dev.all = true; w.addNew('workstation', null); dev.all = wasDev; }
+      for (const id of ['drums', 'guitar', 'telescope']) T.addObject(id);
+      w.stock.items.bed = 1; ops.add('bed', w.roomSpot('main'));
+      const inMain = () => ['drums', 'guitar', 'telescope'].every((id) => w.objects[id] && w.roomIdAt(w.objects[id].x, w.objects[id].z) === 'main');
+      out.push(result('arrange: with no Studio or Backyard added, the drums, guitar and telescope are fine where they are in his room', inMain() && !b.misplaced().some((m) => ['drums', 'guitar', 'telescope'].includes(m.id)), { left: b.misplaced().map((m) => m.id) }));
+      w.rooms.add('studio', { walls: ['back'] }); w.rooms.add('backyard', { walls: ['left'] }); w.rooms.add('bedroom');
+      const want = b.misplaced().map((m) => `${m.id}>${m.room}`).sort().join();
+      out.push(result('arrange: once the Studio, the Backyard and the Bedroom are added he sees the drums, guitar, telescope and bed belong there', ['drums>studio', 'guitar>studio', 'telescope>backyard'].every((x) => want.includes(x)) && /bed>bedroom/.test(want), { want }));
+      const where = () => Object.fromEntries(['drums', 'guitar', 'telescope'].map((id) => [id, w.objects[id] && w.roomIdAt(w.objects[id].x, w.objects[id].z)]));
+      b.queue = []; b.step = null; b.pendingActivity = null; b.wishFails = {}; T.settle();
+      let tm = 0; while (tm < 900 && b.misplaced().length) { b.lastWish = -999; b.wishFails = {}; step(0.5); tm += 0.5; if (tm > 5 && !b.step && !b.queue.length) b.choose(); }
+      out.push(result('arrange: left alone he carries them over by himself, one trip to the workstation after another, and none is left in his room', where().drums === 'studio' && where().guitar === 'studio' && where().telescope === 'backyard' && !b.misplaced().length, { where: where(), left: b.misplaced().map((m) => m.id), tm }));
+      for (const o of Object.values(w.objects)) if (o.kind === 'bed') w.storeInstance(o.name);
+      delete w.stock.items.bed; gone();
+    }
     // 6. nothing to order: no wish, and with no workstation an order is refused in words
     skillsOf().known.clear(); b.lastWish = -999; b.wishFails = {};
     out.push(result('arrange: without the skill he has no wish for the guitar', !b.arrangeWish() || b.arrangeWish().key !== 'guitar'));
