@@ -138,7 +138,7 @@ const toast = document.getElementById('toast');
 let toastTimer = 0;
 const skillsMenu = initSkillsMenu({ root: panel, button: document.getElementById('skills-btn'), brain, skills, label, toast: (m) => showToast(m) });
 // Help (help.js): the ❓ button in the top corner (or H / ?) opens how the game works, what is new and the change log.
-const help = initHelp({ onOpen: () => { skillsMenu.close(); closeMenu(); } });
+const help = initHelp({ onOpen: () => { skillsMenu.close(); closeMenu(); machineUI.close(); } });     // (one panel at a time; machineUI is set up further down, before anything can open help)
 window.__help = help;
 const renderSkills = () => skillsMenu.render();
 brain.onSkillNote = (msg) => showToast(msg);
@@ -196,7 +196,9 @@ const machineUI = initMachine({
   knows: (id) => skills.has(id) || !!(world.gal && world.gal.skills && world.gal.skills.has(id)),       // GUY or GAL
   notify: (msg) => { showToast(msg); renderSkills(); sfx('pop'); },
   remove: (id) => removeById(id),
+  onOpen: () => { skillsMenu.close(); closeMenu(); help.close(); },        // one panel at a time, like Help
 });
+window.__catalog = machineUI;                       // for the QA harness
 world.catalogOps = machineUI.ops;                    // GUY and GAL add and remove things at the workstation through the same code (arrange.js)
 // Where everything was last time: the catalog's additions first, then every piece back in its place (and what the user took
 // out), then the door of any added room (anything standing in its way comes out), then start saving changes as they happen.

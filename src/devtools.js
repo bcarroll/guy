@@ -1197,8 +1197,104 @@ T.sweepMachine = () => {
   const shelfCard = machineCard('Bookshelf');
   out.push(result('machine: the bookshelf cannot be removed', !!shelfCard && !shelfCard.querySelector('.act')));
   openObjects('all'); machine().hidden = true;
+  out.push(...catalogUi(LISTED));
   return out;
 };
+
+// The Catalog as a menu, like Help and the Skills menu: a dialog, search, the show filter, folding sections, keys, a phone's bottom sheet.
+function catalogUi(LISTED) {
+  const out = [], m = machine(), ui = window.__catalog, search = m.querySelector('.search');
+  const titles = () => [...m.querySelectorAll('.card .title')].map((e) => e.textContent);
+  const type = (q) => { search.value = q; search.dispatchEvent(new Event('input')); };
+  const showOnly = (k) => m.querySelector(`.show [data-show=${k}]`).click();
+  if (!ui) return [result('catalog: the page exposes the Catalog to the harness (window.__catalog)', false)];
+  ui.close(); ui.open();
+  out.push(result('catalog: it is a labelled dialog with tabs and a close button you can find, like Help', m.getAttribute('role') === 'dialog' && m.getAttribute('aria-modal') === 'true' && m.getAttribute('aria-label') === 'Catalog'
+    && m.querySelector('[role=tablist]') && m.querySelectorAll('[role=tab]').length === 4 && m.querySelector('.close').getAttribute('aria-label') === 'Close' && m.querySelector('.tab.on').getAttribute('aria-selected') === 'true'));
+  // search: "rug" shows only rugs (every card it shows has the word in it), and the tabs say what they found
+  m.querySelector('[data-tab=objects]').click();
+  type('rug');
+  const rugs = LISTED.filter((d) => /rug/i.test(`${d.name} ${d.desc} ${d.sub || ''}`)).map((d) => d.name).sort();      // (the Striped Runner is found by its heading, Rugs)
+  out.push(result('catalog: search finds every object with the word, and nothing else', rugs.length > 0 && JSON.stringify(titles().sort()) === JSON.stringify(rugs), { want: rugs, got: titles() }));
+  out.push(result('catalog: while searching, the Objects tab says how many it found', (m.querySelector('[data-tab=objects] .n') || {}).textContent === String(rugs.length)));
+  type('armchairs');
+  out.push(result('catalog: a plural finds the singular ("armchairs" finds the Armchair)', titles().includes('Armchair')));
+  type('zzqx nothing');
+  out.push(result('catalog: a search that finds nothing says so', titles().length === 0 && /Nothing here matches/.test(m.querySelector('.body').textContent)));
+  const book = BOOK_CATALOG.find((b) => { type(b.title); return m.querySelector('[data-jump-tab=books]') && !titles().length; });
+  const jump = book && m.querySelector('[data-jump-tab=books]');
+  if (jump) jump.click();
+  out.push(result('catalog: a book searched for on the Objects tab offers a jump to Books, which shows it', !!book && m.querySelector('.tab.on').dataset.tab === 'books' && titles().includes(book.title), { book: book && book.title }));
+  // keys typed in the search box stay there: K (the Skills menu) does not open behind the Catalog
+  const skillsPanel = document.getElementById('skills'), skillsWas = skillsPanel.hidden;
+  search.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', bubbles: true }));
+  out.push(result('catalog: typing in the search box does not work the room\'s keys (K)', skillsPanel.hidden === skillsWas));
+  search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  out.push(result('catalog: Escape in the search box clears the search first and leaves the Catalog open', search.value === '' && !m.hidden));
+  // the show filter: "In the room" shows only what is in the room, "To add" only what can be added or put back
+  m.querySelector('[data-tab=objects]').click(); openObjects('all');
+  showOnly('here');
+  const hereCards = [...m.querySelectorAll('.card')];
+  const inRoomNow = LISTED.filter((d) => !d.built && isPresent(d.id) && (!d.locked || dev.all)).length + LISTED.filter((d) => d.built && isPresent(d.id)).length;
+  out.push(result('catalog: "In the room" shows only what is in the room', hereCards.length === inRoomNow && hereCards.every((c) => c.classList.contains('inroom') || /In the room: [1-9]/.test(c.textContent)), { shown: hereCards.length, inRoomNow }));
+  showOnly('add');
+  const addCards = [...m.querySelectorAll('.card')];
+  out.push(result('catalog: "To add" shows only what can be added or put back, each with its button', addCards.length > 0 && addCards.every((c) => { const b = c.querySelector('.act'); return b && !b.classList.contains('rm'); })));
+  showOnly('all');
+  out.push(result('catalog: Everything shows the whole list again', titles().length === LISTED.length));
+  // folding a section hides its cards (they stay in the page) and is undone by a second tap
+  const fold = m.querySelector('.sec-head'), sec = fold && fold.closest('.sec');
+  if (fold) fold.click();
+  const sec2 = sec && m.querySelector(`.sec[data-sec="${sec.dataset.sec}"]`);
+  const folded = !!sec2 && sec2.classList.contains('closed') && sec2.querySelector('.sec-head').getAttribute('aria-expanded') === 'false' && getComputedStyle(sec2.querySelector('.cards')).display === 'none' && titles().length === LISTED.length;
+  if (sec2) sec2.querySelector('.sec-head').click();
+  const sec3 = sec && m.querySelector(`.sec[data-sec="${sec.dataset.sec}"]`);
+  out.push(result('catalog: a section folds away and opens again', folded && !!sec3 && !sec3.classList.contains('closed')));
+  // tapping a card shows its whole description; tapping its button does not
+  const card = m.querySelector('.card .info');
+  if (card) card.click();
+  out.push(result('catalog: tapping a card shows its whole description', !!card && card.parentElement.classList.contains('open')));
+  // keys: C opens and closes it, / goes to the search box, opening it closes the Skills menu and Help
+  ui.close();
+  document.getElementById('skills-btn').click();
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c' }));
+  out.push(result('catalog: C opens it, and opening it closes the Skills menu', ui.isOpen() && skillsPanel.hidden));
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: '/' }));
+  out.push(result('catalog: / goes to the search box', document.activeElement === search));
+  search.blur();
+  window.__help.open();
+  out.push(result('catalog: opening Help closes the Catalog', !ui.isOpen() && window.__help.isOpen()));
+  window.__help.close();
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'C' }));
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'C' }));
+  out.push(result('catalog: C again closes it', !ui.isOpen() && m.hidden));
+  ui.open('studio');
+  out.push(result('catalog: the Studio Machine has its own title and no tabs or search', /Studio Machine/.test(m.querySelector('header h3').textContent) && m.querySelector('.tabs').hidden && m.querySelector('.tools').hidden));
+  ui.close(); ui.open();
+  out.push(result('catalog: after the Studio Machine the Catalog is whole again', /Catalog/.test(m.querySelector('header h3').textContent) && !m.querySelector('.tabs').hidden && !m.querySelector('.tools').hidden));
+  ui.close();
+  // the layout: a bottom sheet on a phone, a centred panel on a wide screen, and nothing runs off the side (the chips used to)
+  {
+    const frame = document.createElement('iframe'); frame.style.cssText = 'position:fixed;left:0;top:0;border:0;visibility:hidden;height:844px';
+    document.body.appendChild(frame);
+    const d = frame.contentDocument, bad = [];
+    d.head.innerHTML = [...document.querySelectorAll('style')].map((x) => `<style>${x.textContent}</style>`).join('');
+    ui.open(); d.body.innerHTML = m.outerHTML; ui.close();
+    d.getElementById('machine').hidden = false;
+    for (const wide of [320, 390, 700, 701, 1024, 1440]) {
+      frame.style.width = `${wide}px`;
+      const panel = d.querySelector('#machine .panel').getBoundingClientRect();
+      const sheet = wide <= 700;
+      if (sheet && (Math.round(panel.bottom) !== 844 || Math.round(panel.width) !== wide)) bad.push(`${wide}: not a bottom sheet`);
+      if (!sheet && (panel.left < 8 || panel.right > wide - 8 || panel.width > 880)) bad.push(`${wide}: not a centred panel`);
+      for (const sel of ['.panel', '.tools', '.body']) { const el = d.querySelector(`#machine ${sel}`); if (el.scrollWidth > el.clientWidth + 1) bad.push(`${wide}: ${sel} runs off the side`); }
+      for (const el of d.querySelectorAll('#machine .card')) { const r = el.getBoundingClientRect(); if (r.right > panel.right + 1) { bad.push(`${wide}: a card runs off the side`); break; } }
+    }
+    frame.remove();
+    out.push(result('catalog: a bottom sheet on a phone, a centred panel on a wider screen, and nothing runs off the side', !bad.length, { bad: bad.slice(0, 6) }));
+  }
+  return out;
+}
 
 // ---- visual checkpoints -----------------------------------------------------------------------------------------
 // Freeze GUY in a pose and put the camera somewhere useful. Take a screenshot afterwards (wait ~2 s: the pane renders lazily).
@@ -4450,7 +4546,7 @@ T.sweepPaintings = () => {
     // 4. the Catalog: a thumbnail of each picture, Take down for the hung ones, Hang it for the stored ones
     openObjects('all');
     const head = [...machine().querySelectorAll('h4')].find((h) => /GUY's paintings/.test(h.textContent));
-    const cards = head ? (() => { const c = []; for (let n = head.nextElementSibling; n && n.tagName !== 'H4'; n = n.nextElementSibling) if (n.classList.contains('card')) c.push(n); return c; })() : [];
+    const cards = head ? [...head.closest('.sec').querySelectorAll('.card')] : [];          // (each section's cards are in its own box under its heading)
     const thumbs = cards.filter((c) => c.querySelector('img.thumb') && /^data:image\//.test(c.querySelector('img.thumb').getAttribute('src'))).length;
     out.push(result('paintings: the Catalog lists every painting with a thumbnail of the picture', !!head && cards.length === P.items.length && thumbs === P.items.length, { cards: cards.length, items: P.items.length, thumbs }));
     const takeBtn = cards.map((c) => [...c.querySelectorAll('.act.rm')].find((x) => /Take down/.test(x.textContent))).find(Boolean);
