@@ -2,6 +2,12 @@
 
 The big changes to GUY's room, newest first. The game shows the same list under Help > Change log (src/changelog.js); keep the two in step.
 
+## 2026-11-23
+
+### Changed
+
+- The Learning Workstation and the Build a Bot Machine are kept after a reload, in whatever room they were moved to, and GUY uses the Workstation there.
+
 ## 2026-11-22
 
 ### Added

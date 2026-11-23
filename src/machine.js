@@ -165,13 +165,16 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
     return 'available';
   };
 
+  // What the user added from the Catalog, to be put back on the next visit. A premium (`locked`) object they added with the unlock on is
+  // kept too: the Learning Workstation and the Build a Bot Machine used to vanish at every reload (and every deploy refreshes the page),
+  // so adding it again put it back in GUY's room, wherever it had been moved to.
+  const extras = () => ({ objects: OBJECT_CATALOG.filter((d) => (d.free || d.locked) && inRoom(d.id)).map((d) => d.id),
+    books: shelf() ? shelf().books.filter((r) => !r.def.start).map((r) => r.def.id) : [],
+    albums: shelf() ? shelf().albums.map((r) => r.def.id) : [],
+    forgotten: shelf() ? BOOK_CATALOG.filter((b) => b.start && !shelf().books.some((r) => r.def.id === b.id)).map((b) => b.id) : [] });   // starting books he forgot
   const save = () => {
     if (!persist) return;
-    const extras = { objects: OBJECT_CATALOG.filter((d) => d.free && inRoom(d.id)).map((d) => d.id),
-      books: shelf() ? shelf().books.filter((r) => !r.def.start).map((r) => r.def.id) : [],
-      albums: shelf() ? shelf().albums.map((r) => r.def.id) : [],
-      forgotten: shelf() ? BOOK_CATALOG.filter((b) => b.start && !shelf().books.some((r) => r.def.id === b.id)).map((b) => b.id) : [] };   // starting books he forgot
-    try { localStorage.setItem(KEY, JSON.stringify(extras)); } catch { /* no storage */ }
+    try { localStorage.setItem(KEY, JSON.stringify(extras())); } catch { /* no storage */ }
   };
   const addBookDef = (def) => {
     if (!shelf() || shelf().books.some((r) => r.def.id === def.id)) return false;
@@ -186,12 +189,15 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
     return true;
   };
   // things the user added in an earlier visit
-  function restoreExtras() {
-    if (!persist) return;
-    let extras;
-    try { extras = JSON.parse(localStorage.getItem(KEY)); } catch { extras = null; }
+  // (`data`: a saved set to put back instead of the stored one; the QA harness uses it, since ?fresh never reads or writes storage)
+  function restoreExtras(data = null) {
+    let extras = data;
+    if (!extras) {
+      if (!persist) return;
+      try { extras = JSON.parse(localStorage.getItem(KEY)); } catch { extras = null; }
+    }
     if (!extras) return;
-    for (const id of extras.objects || []) world.addNew(id, null);
+    for (const id of extras.objects || []) { const d = OBJECT_CATALOG.find((x) => x.id === id); if (!d || !d.locked || dev.all) world.addNew(id, null); }      // (a premium one only while premium is unlocked)
     for (const id of extras.forgotten || []) { const rec = shelf() && shelf().books.find((r) => r.def.id === id); if (rec) shelf().removeBook(rec); }
     for (const id of extras.books || []) { const def = BOOK_CATALOG.find((b) => b.id === id); if (def) addBookDef(def); }
     for (const id of extras.albums || []) { const def = ALBUM_CATALOG.find((a) => a.id === id); if (def && (!def.premium || dev.all)) addAlbumDef(def); }
@@ -609,5 +615,5 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
     if (e.key === '/' && !root.hidden && !scope) { e.preventDefault(); search.focus(); }
   });
 
-  return { open, close, refresh: render, save, restoreExtras, ops, isOpen: () => !root.hidden };
+  return { open, close, refresh: render, save, extras, restoreExtras, ops, isOpen: () => !root.hidden };
 }

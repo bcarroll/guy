@@ -6682,7 +6682,7 @@ T.sweepWorkstation = () => {
     const card0 = [...document.querySelectorAll('#machine .card')].find((c) => /Learning Workstation/.test(c.textContent));
     out.push(result('workstation: listed in the Catalog as a locked premium object (no Add button)', !!card0 && !card0.querySelector('.act') && /Locked/.test(card0.textContent) && !T.addObject('workstation')));
     dev.all = true; w.addNew('workstation', null); dev.all = wasDev;
-    const m = w.objects.workstation;
+    let m = w.objects.workstation;
     out.push(result('workstation: with the premium unlock it is added and fits in the room', !!m && w.fits(m, m.x, m.z)));
     if (!m) throw new Error('no workstation');
     // 2. what is on the shelf, and what GUY knows
@@ -6728,6 +6728,18 @@ T.sweepWorkstation = () => {
     const t4b = runUntil(() => !!w.objects.plant, 90);
     out.push(result('workstation: in the Workshop, an order (add a plant) is still carried out there', ro.ok && !!w.objects.plant, { msg: ro.message, t: t4b, label: label() }));
     if (w.objects.plant) { w.removeObject('plant'); b.objectRemoved('plant'); }
+    // 4c. a reload keeps it where it was moved to: it used to vanish (premium objects were not saved with the Catalog's additions), so
+    // the user added it again and it stood in GUY's room, and he only ever used it there
+    { const cat = window.__catalog, saved = JSON.parse(JSON.stringify(cat.extras())), lay = JSON.parse(JSON.stringify(w.layout.snapshot()));
+      const visit = (unlocked) => { ws.close(); b.queue = []; b.step = null; gone(); const was = dev.all; dev.all = unlocked; cat.restoreExtras(saved); dev.all = was; w.layout.apply(JSON.parse(JSON.stringify(lay))); m = w.objects.workstation; };
+      visit(true);
+      out.push(result('workstation: saved with what the user added, it comes back after a reload in the Workshop, where it was moved to', saved.objects.includes('workstation') && !!m && b.roomOfObj('workstation') === 'workshop', { saved: saved.objects, at: m && b.roomOfObj('workstation') }));
+      T.home(); const r4c = m ? b.interact('workstation') : { ok: false }, t4c = runUntil(() => ws.isOpen(), 90), sp = m && m.screenPoint(), gp = G().root.position;
+      out.push(result('workstation: after the reload GUY walks to it in the Workshop and the panel opens', r4c.ok && ws.isOpen() && !!sp && Math.hypot(sp.x - gp.x, sp.z - gp.z) < 1.6 && w.roomIdAt(gp.x, gp.z) === 'workshop', { msg: r4c.message, t: t4c, label: label() }));
+      visit(false);
+      out.push(result('workstation: with premium locked it does not come back on a reload', !m));
+      visit(true);
+      if (!m) throw new Error('no workstation after the reload'); }
     along(w.doorPoint('workshop', 1.4)); along(home0); w.dropObject(m); b.queue = []; b.step = null; T.home(); T.settle();
     // 5. the other robot: the book is still there for her, and she can use the workstation too
     ws.close(); out.push(result('workstation: the panel closes', !ws.isOpen()));
