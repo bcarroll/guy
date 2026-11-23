@@ -13,7 +13,7 @@ export const DRUM_STYLE_BY_TRACK = {
   rock: 'rock', hiphop: 'boombap', twostep: 'train', pop: 'disco', jazz: 'swing', slowblues: 'soft', party: 'disco',
 };
 // every style drumStep knows (the QA sweep plays each one)
-export const DRUM_STYLES = ['rock', 'soft', 'march', 'boombap', 'train', 'disco', 'swing', 'solo', 'reggae', 'funk', 'paradiddle', 'solo2', 'solo3'];
+export const DRUM_STYLES = ['rock', 'soft', 'march', 'boombap', 'train', 'disco', 'swing', 'solo', 'reggae', 'funk', 'paradiddle', 'halftime', 'bossa', 'solo2', 'solo3'];
 export const PAD_SIDE = { snare: 'C', hat: 'L', crash: 'L', tom1: 'L', tom2: 'R', floor: 'R', ride: 'R' };
 
 // what is played on eighth-note `n` (8 per bar) in a style
@@ -83,6 +83,14 @@ function baseStep(style, n) {
     const pad = onToms ? ['tom1', 'tom1', 'tom2', 'tom2', 'tom1', 'tom1', 'tom2', 'floor'][i] : 'snare';
     hits.push({ k: pad, h: onToms ? handFor(pad) : sticking, v: (i === 0 || i === 4) ? 0.85 : 0.55 });
     if (i === 0 || i === 4) hits.push({ k: 'kick', h: 'F', v: 0.8 });
+  } else if (style === 'halftime') {                             // half-time ballad: the backbeat moves to beat 3, ride on the quarters, a lazy extra kick every other bar
+    if (i % 2 === 0) hits.push({ k: 'ride', h: 'R', v: i === 0 ? 0.6 : 0.45 });
+    if (i === 0 || (i === 5 && bar % 2)) hits.push({ k: 'kick', h: 'F', v: i === 0 ? 0.9 : 0.6 });
+    if (i === 4) hits.push({ k: 'snare', h: 'L', v: 0.9 });
+  } else if (style === 'bossa') {                                // bossa nova: soft ride eighths, kick on 1 and the and of 2 (and 3 and its and), rim clicks on a two-bar clave
+    hits.push({ k: 'ride', h: 'R', v: i % 2 ? 0.3 : 0.45 });
+    if (i === 0 || i === 3 || i === 4 || i === 7) hits.push({ k: 'kick', h: 'F', v: i % 4 === 0 ? 0.7 : 0.5 });
+    if ((bar % 2 === 0 ? [0, 3, 6] : [2, 4]).includes(i)) hits.push({ k: 'snare', h: 'L', v: 0.45 });
   } else if (style === 'solo3') {                                // drums.solo ch3: crossovers, flams, and a rapid-fire roll to finish
     const phase = bar % 8;
     if (phase < 2) {                                             // crossover: the right hand reaches over to the floor tom while the left keeps the hat

@@ -122,6 +122,7 @@ A book's first reading teaches its skill. Later chapters are **learned by practi
 | | | `guitar.ch3` Colourful Chords (8) | soul, gospel and ballad progressions with 7th and sus chords (`needs` on `PROGRESSIONS`) |
 | drums | drums, jamdrums | `drums.ch2` Grooves (3) | reggae and funk styles in the `drums` activity |
 | | | `drums.ch3` Rudiments (8) | paradiddle style (snare, drifting to the toms) |
+| | | `drums.ch4` Slow & Latin (13) | halftime (snare only on beat 3, ride quarters) and bossa (ride eighths, two-bar rim-click clave) styles |
 | drums.solo | drumsolo | `drums.solo.ch2` Showing Off (3) | `solo2`: tom cascade, snare roll, big finish (60% of solos once learned) |
 | drums.band | jamdrums | `drums.band.ch2` Fills (3) | a fill (toms, crash) every fourth bar when drumming along |
 | | | `drums.band.ch3` Verse & Chorus (8) | verse and chorus: ride cymbal and a crash on the chorus bars |

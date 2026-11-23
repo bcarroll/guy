@@ -184,6 +184,7 @@ export const CHAPTERS = {
   drums: [
     { id: 'drums.ch2', title: 'Chapter 2: Grooves', after: 3, unlocks: ['Reggae one-drop and funk grooves'] },
     { id: 'drums.ch3', title: 'Chapter 3: Rudiments', after: 8, unlocks: ['Paradiddles round the snare and toms'] },
+    { id: 'drums.ch4', title: 'Chapter 4: Slow & Latin', after: 13, unlocks: ['A half-time ballad groove and a bossa nova'] },
   ],
   'drums.solo': [
     { id: 'drums.solo.ch2', title: 'Chapter 2: Showing Off', after: 3, unlocks: ['Longer solos: tom cascades, rolls and a big finish'] },

@@ -7,6 +7,7 @@ The big changes to GUY's room, newest first. The game shows the same list under 
 ### Added
 
 - Help: the ❓ button (or H) explains how the game works, what you can do, what is new and this change log.
+- Drumming for Robots has a Chapter 4, Slow & Latin: a half-time ballad groove and a bossa nova, learned by practising at the kit.
 
 ### Changed
 
