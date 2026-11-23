@@ -16,6 +16,7 @@ The big changes to GUY's room, newest first. The game shows the same list under 
 - New bowling pins are carried to a lane and set up there by hand.
 - GAL dances in the room the stereo is in, not always in GUY's room.
 - GUY and GAL wear the bass with its strap over the shoulder, and their hands close round the neck of a guitar or bass.
+- GUY and GAL keep the same voice through a conversation: no more robot voice from one and natural voice from the other; once the natural voices have downloaded they wait for them instead of speaking robot.
 
 ## 2026-11-21
 
