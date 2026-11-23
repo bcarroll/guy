@@ -16,7 +16,7 @@ const kv = (rows) => `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).j
 
 // One line for each room in the Catalog's Rooms tab.
 export const ROOM_NOTES = {
-  workshop: 'The Wood Factory and the Metal Factory, a workbench and a toolbox. GUY builds what the house needs here (stools, chairs, bookshelves, tables, guitars), and the Build a Bot machine (Machines in the Catalog, Workshop only) prints GAL and then stays to print other things.',
+  workshop: 'The Wood Factory and the Metal Factory, a workbench and a toolbox. GUY builds what the house needs here (stools, chairs, bookshelves, tables, guitars); lock him in and he builds toys and decorations too. The Build a Bot machine (Machines in the Catalog, Workshop only) prints GAL and then stays to print other things.',
   restaurant: 'Premium. A kitchen, a cash register and dining tables. Customers arrive by elevator; GUY and GAL take orders, cook, serve and take payment.',
   backyard: 'Outdoors, with a lawn, a soccer goal, a basketball hoop, a lawn chair, a bird bath and a shed. Flip the sky switch for day or night. GUY mows the lawn.',
   range: 'Three lanes with holographic targets. Each robot takes her own blaster from the rack, starts a round at the controller and checks the scoreboard.',

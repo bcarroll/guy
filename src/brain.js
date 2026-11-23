@@ -2573,7 +2573,7 @@ export class Brain {
     if (!name) {
       const entries = Object.entries(weights)
         .filter(([k]) => this.available(k))
-        .filter(([k]) => k !== this.last && !(k === 'rearrange' && this.time - this.lastRearrange < 180))
+        .filter(([k]) => k !== this.last && !(k === 'rearrange' && this.time - this.lastRearrange < 180) && !(k === 'build' && this.yieldsBuild()))
         .map(([k, v]) => [k, (tags[k] || []).some((t) => lastTags.includes(t)) ? v * 0.1 : v]);
       let r = Math.random() * entries.reduce((s, [, v]) => s + v, 0);
       for (const [k, v] of entries) { if ((r -= v) <= 0) { name = k; break; } }

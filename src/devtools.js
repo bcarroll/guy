@@ -6372,6 +6372,72 @@ T.sweepShutIn = () => {
   return out;
 };
 
+// ---- Shut in the Workshop with nothing the house needs: GUY (and GAL) build anyway (workbrain.js freeBuild / freeRecipe) ----------
+// (Brett, Nov 23: locked in the Workshop they stood about: "There is nothing the house needs right now, so GUY has nothing to build.")
+T.sweepShutBuild = () => {
+  const out = [], base = errors.length, w = W(), b = B();
+  const at = (br) => w.roomIdAt(br.g.root.position.x, br.g.root.position.z);
+  const mid = (id) => { const q = w.doors[id].shell.bounds; return { x: (q.minX + q.maxX) / 2, z: (q.minZ + q.maxZ) / 2 }; };
+  const put = (br, id, dx = 0, dz = 0) => { const p = id === 'main' ? { x: 0, z: 2 } : mid(id); br.unlock(false); br.skip(true); br.queue = []; br.step = null; br.pendingActivity = null; br.last = 'wander'; br.stayRoom = null; br.using = new Set(); br.forceRecipe = null; br.forceLine = null; br.g.root.position.set(p.x + dx, 0, p.z + dz); };
+  const builtKinds = () => Object.values(w.objects).filter((o) => o.kind && RECIPES_DEF[o.kind]).map((o) => o.kind).concat(Object.entries(w.stock.items).flatMap(([k, n]) => (RECIPES_DEF[k] ? Array(n).fill(k) : [])));
+  galReset(); needSetup('right', ['workshop'], { metal: true });
+  // 1. not shut in, nothing needed: the owner's rule stands (nothing is built), and the message says how to set him to work
+  put(b, 'main');
+  const m1 = b.workRefusal('woodfactory');
+  out.push(result('shut build: with nothing needed and the Workshop open he builds nothing, and tapping a factory says to lock him in to have him build', !wants(b).length && b.pickRecipe() === null && !b.available('build') && /Lock him in the Workshop/.test(m1 || ''), { wants: wants(b), m1 }));
+  // 2. shut in the Workshop with nothing needed: he builds, and tapping a factory is not refused
+  put(b, 'workshop', -1, 1); R().setDoorLocked('workshop', true);
+  const free = !!(b.freeBuild && b.freeBuild()), picked = b.pickRecipe(), tap = b.workRefusal('woodfactory');
+  out.push(result('shut build: shut in the Workshop with nothing needed he still has something to build (and a tap on the factory is not refused)', b.stuckIn() === 'workshop' && free && !wants(b).length && !!picked && b.available('build') && tap === null, { stuck: b.stuckIn(), free, picked, tap }));
+  out.push(result('shut build: first something of use he has never made (the foot stool, with only the basic book), before any toy', picked === 'footstool' && (b.freeRecipe ? b.freeRecipe(() => true) : null) === 'footstool', { picked }));
+  // left alone for a while: he builds one thing after another, all of it stays in the Workshop (the way out is locked), nobody leaves
+  const e2 = errors.length, msgs = [], onB = b.onBuilt; b.onBuilt = (m) => { msgs.push(m); if (onB) onB(m); };
+  let t = 0, outside = 0;
+  while (t < 900 && builtKinds().length < 3) { step(0.5); t += 0.5; if (at(b) === 'main') outside++; }
+  b.onBuilt = onB;
+  const kinds = builtKinds();
+  out.push(result('shut build: left shut in, he builds one thing after another (three within 15 minutes), each a different one, starting with the foot stool', kinds.length >= 3 && kinds.includes('footstool') && new Set(kinds).size === kinds.length && msgs.length >= 3, { t, kinds, msgs }));
+  out.push(result('shut build: what he makes stays in the Workshop, and he never comes out through the locked door', outside === 0 && Object.values(w.objects).filter((o) => o.kind && RECIPES_DEF[o.kind]).every((o) => w.roomIdAt(o.x, o.z) === 'workshop') && w.doors.workshop.open < 0.01 && errors.length === e2, { outside, open: w.doors.workshop.open, errs: errors.slice(e2, e2 + 1) }));
+  out.push(result('shut build: after the foot stool come the toys he has never made (decorations: the easter eggs, no ingredients needed)', kinds.filter((k) => k !== 'footstool').every((k) => !!RECIPES_DEF[k].egg), { kinds }));
+  // 3. what is chosen: never a piece for a room that is not there; a second of a toy only once every one has been made; then nothing, and a message that says so
+  T.learn(['workshop.materials', 'workshop.furniture', 'workshop.metal']);
+  const roomless = Object.keys(RECIPES_DEF).filter((id) => (RECIPES_DEF[id].to && !w.doors[RECIPES_DEF[id].to]) || (RECIPES_DEF[id].eggRoom && !w.doors[RECIPES_DEF[id].eggRoom]));
+  const seen = new Set(); for (let i = 0; i < 200; i++) seen.add((b.freeRecipe ? b.freeRecipe(() => true) : null));
+  out.push(result('shut build: never a piece for a room that has not been added (a bed with no Bedroom, a table with no Restaurant)', roomless.length > 0 && roomless.every((id) => !seen.has(id)), { roomless, seen: [...seen] }));
+  const eggs = Object.keys(RECIPES_DEF).filter((id) => RECIPES_DEF[id].egg && !RECIPES_DEF[id].eggRoom);
+  const usable = Object.keys(RECIPES_DEF).filter((id) => !RECIPES_DEF[id].egg && !roomless.includes(id));
+  for (const id of usable) w.stock.items[RECIPES_DEF[id].object] = RECIPES_DEF[id].cap + 1;           // (every useful thing made, as many as he makes)
+  for (const id of eggs) if (!builtKinds().includes(id)) w.stock.items[id] = 1;                        // (and every toy once)
+  const again = new Set(); for (let i = 0; i < 100; i++) again.add((b.freeRecipe ? b.freeRecipe(() => true) : null));
+  out.push(result('shut build: with everything made once, he makes a second of a toy (never a third, never more furniture)', [...again].every((id) => eggs.includes(id)) && again.size > 1, { again: [...again] }));
+  for (const id of eggs) w.stock.items[id] = 2 - Object.values(w.objects).filter((o) => o.kind === id).length;
+  const none = b.pickRecipe(), m3 = b.cannotBuild();
+  out.push(result('shut build: with two of every toy and all the furniture made there is nothing left, and the message says he has made everything he knows how to make', none === null && !b.available('build') && /made everything/.test(m3), { none, m3 }));
+  for (const k of Object.keys(w.stock.items)) delete w.stock.items[k];
+  T.forget(); T.learn([]);
+  out.push(result('shut build: without the basic Workshop book he builds nothing, and the message names the book', b.pickRecipe() === null && /Workshop Basics/.test(b.cannotBuild()), { m: b.cannotBuild() }));
+  R().setDoorLocked('workshop', false);
+  // 4. GUY and GAL shut in together: both build, never the same new thing at once
+  needSetup('right', ['workshop'], { metal: true });
+  const gal = w.gal.g && w.gal.g.loaded && galBuild().ok ? w.gal.brain : null;
+  if (gal) {
+    gal.skills.learn('workshop');
+    put(b, 'workshop', -1.5, 1); put(gal, 'workshop', 1.5, 1.6);
+    R().setDoorLocked('workshop', true);
+    const by = { GUY: 0, GAL: 0 }, oB = b.onBuilt, oG = gal.onBuilt;
+    b.onBuilt = (m) => { by.GUY++; if (oB) oB(m); }; gal.onBuilt = (m) => { by.GAL++; if (oG) oG(m); };
+    let t4 = 0, same = 0;
+    while (t4 < 1200 && !(by.GUY >= 2 && by.GAL >= 2)) { step(0.5); t4 += 0.5; const bl = w.building || []; if (bl.length === 2 && bl[0].recipe === bl[1].recipe) same++; }
+    b.onBuilt = oB; gal.onBuilt = oG;
+    const k4 = builtKinds();
+    out.push(result('shut build: GUY and GAL shut in the Workshop together both build (two things each within 20 minutes), never the same new thing at the same time', by.GUY >= 2 && by.GAL >= 2 && same === 0 && new Set(k4).size === k4.length, { t4, by, same, kinds: k4 }));
+    R().setDoorLocked('workshop', false);
+  }
+  galReset(); machine().hidden = true; document.getElementById('menu').hidden = true;
+  out.push(result('shut build: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 // ---- The Library: the bookshelves carried into it, its dust and cobwebs (librarybrain.js, library.js, room.js libraryShelfSpot) ----------
 T.sweepLibrary = () => {
   const out = [], base = errors.length, w = W(), b = B();
@@ -6553,6 +6619,7 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.help = S(T.sweepHelp);
   report.restaurantWall = S(T.sweepRestaurantWall);
   report.shutIn = S(T.sweepShutIn);        // (last, so the others keep their seeds)
+  report.shutBuild = S(T.sweepShutBuild);        // (after shutIn, so the others keep their seeds)
   if (seed && T.unseed) T.unseed();
   window.__qaPaused = wasPaused;
   T.lastReport = report;
