@@ -63,9 +63,9 @@ export class GalBrain extends Brain {
   // the next thing GUY asked her to do, as an activity name
   nextOrder() {
     while (this.orders.length) {
-      if (this.stuckIn()) return null;                                       // shut in a locked room: she cannot go anywhere for him
       const o = this.orders[0];
       if (o.kind === 'read') {
+        if (this.stuckIn()) return null;                                     // shut in by a locked door: she cannot go to the shelf for him
         if (this.busyElsewhere(['shelf'])) return null;                    // GUY is at the bookshelf: she waits her turn (and does something else meanwhile)
         const on = this.obj('shelf') && this.obj('shelf').books.find((b) => b.def.id === o.book);
         if (!on || !this.wantsBook(on)) { this.orders.shift(); continue; }          // already learned, or the book is not on the shelf any more
@@ -73,6 +73,7 @@ export class GalBrain extends Brain {
         return 'galread';
       }
       const gp = this.leader.g.root.position, gr = this.w.roomIdAt(gp.x, gp.z);
+      if (this.stuckIn() && !this.canReach(gr)) return null;                                  // shut in, and he is not in any of the rooms she can get to
       if (gr !== 'main' && gr !== 'door' && this.doorLockedFor(gr)) return null;              // GUY is behind a locked door: she waits out here
       return 'findguy';
     }

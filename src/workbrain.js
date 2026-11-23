@@ -55,14 +55,31 @@ export function installWorkshop(Brain, POSES, H) {
     lockHere() { const o = this.lock && this.obj(this.lock.name); return !!o && this.w.roomIdAt(o.x, o.z) === ID; },
 
     // ------------------------------------------------------------------ going in and out through the door
-    // The door of room `id` is locked (and it has no other door he can get in by) and he is not already in there (or in the doorway): he cannot
-    // go in. (He can always come out.)
+    // He cannot get into room `id`: every way there is through a locked door (its own, or one on the way to it), and he is not already in there
+    // (or in a doorway).
     doorLockedFor(id) {
       const d = this.w.doors[id];
-      if (!d || !(d.locked || d.closing)) return false;                // (a room the user is taking away: nobody goes in)
+      if (!d) return false;
       const here = this.w.roomIdAt(this.g.root.position.x, this.g.root.position.z);
       if (here === id || here === 'door') return false;
-      return !!d.closing || !this.route(this.hereId(), id);
+      return !!d.closing || !this.roomsInReach(true).has(id);          // (a room the user is taking away: nobody goes in)
+    },
+    // Every room he can walk to from where he is, through doors that are not locked (the room he is in is one of them). `opening`: not through a
+    // room that the user is taking away either.
+    roomsInReach(opening = false) {
+      const w = this.w, p = this.g.root.position, seen = new Set([this.roomAt(p.x, p.z)]), doors = w.allDoors().filter((d) => !d.locked);
+      for (const r of seen) for (const d of doors) {
+        const a = d.link ? d.room : d.id, to = a === r ? d.parent : d.parent === r ? a : null;
+        if (to && (to === 'main' || (w.doors[to] && !(opening && w.doors[to].closing)))) seen.add(to);
+      }
+      return seen;
+    },
+    canReach(room) { return this.roomsInReach().has(room); },
+    // Why he cannot go into room `id` (for a message): it names the door that is locked, which may be one on the way there.
+    lockedMessage(id) {
+      if (this.stuckIn()) return this.shutInMessage(this.stuckIn());
+      const shut = this.roomChain(id).reverse().find((r) => this.w.doors[r].locked) || id;
+      return `The ${this.w.doors[shut].name} door is locked. Unlock it first (long-press the door).`;
     },
     // This very door is locked (or its room is going) and he is on this side of it.
     gateShut(id) {
@@ -71,8 +88,6 @@ export function installWorkshop(Brain, POSES, H) {
       const room = d.link ? d.room : d.id, here = this.w.roomIdAt(this.g.root.position.x, this.g.root.position.z);
       return !!(d.locked || (this.w.doors[room] && this.w.doors[room].closing)) && here !== room && here !== 'door';
     },
-    // The doors out of room `id`: its own, and for a corner room (or a room beside one) the doors between the two.
-    exitsOf(id) { const d = this.w.doors[id]; return d ? [d, ...Object.values(this.w.links).filter((l) => l.room === id || l.to === id)] : []; },
     // The room a door opens into: his own ('main'), or the room beside a corner room.
     parentOf(id) { const d = this.w.gateOf(id); return d && d.parent ? d.parent : 'main'; },
     // The way from room `here` to room `where`: the doors to go through, [{ id, dir: 'in' | 'out' }], the shortest walk through doors that are not
@@ -109,15 +124,18 @@ export function installWorkshop(Brain, POSES, H) {
       while (!outOnly && a.length && b.length && a[a.length - 1] === b[b.length - 1]) { a.pop(); b.pop(); }          // (the rooms they share are not left)
       return [...a.flatMap((r) => this.doorOut(r)), ...b.reverse().flatMap((r) => this.doorIn(r))];
     },
-    // The added room he is shut in: he is in it and every door out of it is locked (a locked door works both ways). He can only do what can
-    // be done in there, until somebody unlocks a door. null when he is not shut in.
+    // The added room he is in while he is shut in: a locked door works both ways, and no unlocked one leads back to his own room. He still goes
+    // through the doors that are not locked (from a locked Workshop into the Library and the Bedroom beside it: roomsInReach), and does what can
+    // be done in those rooms, until somebody unlocks a door. null when he is not shut in.
     stuckIn() {
       const here = this.w.roomIdAt(this.g.root.position.x, this.g.root.position.z);
-      if (here === 'main' || here === 'door') return null;
-      const exits = this.exitsOf(here), open = exits.filter((d) => !d.locked);
-      return exits.length && (!open.length || (open.every((d) => d.link) && !this.route(here, 'main'))) ? here : null;       // (a link that only leads to another shut room is no way out)
+      return here === 'main' || here === 'door' || !this.w.doors[here] || this.canReach('main') ? null : here;
     },
-    shutInMessage(room) { return `${this.isGal ? 'GAL' : 'GUY'} is shut in the ${this.w.doors[room].name}: the door is locked. Unlock it (long-press the door) to let ${this.isGal ? 'her' : 'him'} out.`; },
+    shutInMessage(room) {
+      const w = this.w, reach = this.roomsInReach(), rest = [...reach].filter((r) => r !== room && w.doors[r]);
+      const shut = w.allDoors().filter((d) => d.locked && reach.has(d.link ? d.room : d.id) !== reach.has(d.parent)), out = shut.find((d) => !d.link) || shut[0];
+      return `${this.who()} is shut in the ${w.doors[room].name}${rest.length ? ` (and the ${rest.map((r) => w.doors[r].name).join(' and the ')})` : ''}: the ${out && out.id !== room ? `${out.name} ` : ''}door is locked. Unlock it (long-press the door) to let ${this.isGal ? 'her' : 'him'} out.`;
+    },
     doorIn(id) {
       const w = this.w, out = this.doorStand(id), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false);
       // (the locked doors are kept out of every choice, but one can be locked while he is on his way: he gives up there, never walks into it)
@@ -317,7 +335,7 @@ export function installWorkshop(Brain, POSES, H) {
       const room = p.room, b = room === 'main' || room === 'door' ? WALK : w.doors[room] && w.doors[room].shell.bounds;
       if (!b) return null;
       if (room !== 'main' && room !== 'door' && this.doorLockedFor(room)) return null;                      // a locked room: it is put together where it stands, not carried in
-      if (this.stuckIn() && room !== this.stuckIn()) return null;                                           // shut in the Workshop: it is put together here, not carried out
+      if (this.stuckIn() && !this.canReach(room)) return null;                                              // shut in the Workshop, with no open door on the way there: it is put together here, not carried out
       return { room, pref: p };
     },
     // out of the Workshop with it, through the other room's door if it goes there, put it together where it is wanted, and back out
@@ -342,14 +360,15 @@ export function installWorkshop(Brain, POSES, H) {
         this.play('idle', 0.6)];
     },
     // the flat-pack becomes the real thing: it grows into place (and is counted in storage if there is no room for it)
-    setUp(id) {
-      const r = RECIPES[id];
+    // (`site` null: he cannot get to where it belongs after all: it is put together where he stands, never in a room he is not in)
+    setUp(id, site) {
+      const r = RECIPES[id], p = this.g.root.position;
       this.setCarry(null); this.flatKind = null;
       this.endBuild();
-      const name = this.w.addInstance(r.object, null, null, true);
+      const name = this.w.addInstance(r.object, null, null, true, site ? null : { x: p.x, z: p.z });
       if (name) { const o = this.w.objects[name]; (this.popping ||= []).push({ o, t: 0 }); sfx('chime'); }
       else { const items = this.w.stock.items; items[r.object] = Math.min(STORAGE_CAP, (items[r.object] || 0) + 1); sfx('chime'); }
-      if (this.onBuilt) this.onBuilt(name ? `${this.who()} built a ${r.name} and put it where it is needed!` : `${this.who()} built a ${r.name}! There is no room for it, so it is in storage.`);
+      if (this.onBuilt) this.onBuilt(name ? `${this.who()} built a ${r.name}${site ? ' and put it where it is needed!' : '! It stays here until the way to its room is open.'}` : `${this.who()} built a ${r.name}! There is no room for it, so it is in storage.`);
     },
     // ------------------------------------------------------------------ carried home: built things left standing in the Workshop
     // A piece built for another room can end up in the Workshop: he was cut short with it flat-packed in his arms (workCleanup sets it down
@@ -359,7 +378,7 @@ export function installWorkshop(Brain, POSES, H) {
     homeSpot(o) {
       const w = this.w, s = o && o.kind && RECIPES[o.kind] && w.instanceSite(o.kind);
       if (!s || s.room === 'workshop' || s.room === 'door') return null;
-      if (s.room !== 'main' && (!w.doors[s.room] || this.doorLockedFor(s.room) || w.doors[s.room].closing)) return null;
+      if (s.room === 'main' ? this.stuckIn() : (!w.doors[s.room] || this.doorLockedFor(s.room) || w.doors[s.room].closing)) return null;
       const keep = o.rot;
       if (s.rot !== undefined) o.rot = s.rot;
       const at = w.fits(o, s.x, s.z) && w.ownStandClear(o, s.x, s.z) && !w.onSomeonesStand(o, s.x, s.z) ? { x: s.x, z: s.z } : w.findSpot(o, s, null);
@@ -384,7 +403,7 @@ export function installWorkshop(Brain, POSES, H) {
     },
     // Called from choose(): 'carryhome' when something built for another room stands in the Workshop (a chore, not chosen by weight).
     homeMoveNext() {
-      if (this.lock || this.stuckIn() || this.held || this.carry || this.hauling) return null;
+      if (this.lock || this.held || this.carry || this.hauling) return null;          // (shut in, he still carries home what belongs in a room he can get to)
       if (this.time - (this.homeTried || -999) < 30) return null;          // (it did not work a moment ago: not straight away again)
       return this.homeMoves().length ? 'carryhome' : null;
     },

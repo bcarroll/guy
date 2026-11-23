@@ -115,8 +115,8 @@ export function installSkillRun(Brain) {
       const helper = (...rooms) => this.freeHelper(...rooms);
       const orderable = (n) => { const ops = this.ops(), st = ops && this.obj('workstation') && ops.status(n); return st === 'removed' || st === 'available'; };
       if (U.room && !w.doors[U.room]) return is('no', `Add the ${ROOM_NAMES[U.room]} first`);
+      if (shut && !this.canReach(U.room) && !(U.use && U.use.some((n) => this.canReach(this.roomOfObj(n))))) return is('no', 'He is shut in');
       if (U.room && this.doorLockedFor(U.room)) return is('no', 'The door is locked');
-      if (shut && U.room !== shut && !(U.use && U.use.some((n) => this.roomOfObj(n) === shut))) return is('no', 'He is shut in');
       const piece = U.stereo ? 'table' : U.piece, o = U.use ? this.obj(U.use.find((n) => this.obj(n))) : piece ? this.skillPiece(piece, here) : null;
       const thing = THING[U.use ? U.use[0] : piece];
       if ((U.use || piece) && !o) return piece && orderable(piece) ? is('help', helper(this.roomOfObj('workstation')) ? 'GAL orders one' : 'He orders one') : is('no', `Add ${a(thing)} first`);
@@ -152,8 +152,8 @@ export function installSkillRun(Brain) {
       if (on && on.id === id && !on.fixed && !on.started) return yes(on.by === 'gal' ? 'GAL is already on it.' : 'GUY is already on it.');
       const here = this.roomHere(), shut = this.stuckIn();
       if (U.room && !w.doors[U.room]) return no(`There is no ${ROOM_NAMES[U.room]}. Add it from the Catalog.`);
-      if (shut && !U.use && U.room !== shut) return no(this.shutInMessage(shut));
-      if (U.room && this.doorLockedFor(U.room)) return no(`The ${w.doors[U.room].name} door is locked. Unlock it first (long-press the door).`);
+      if (shut && !U.use && !this.canReach(U.room)) return no(this.shutInMessage(shut));
+      if (U.room && this.doorLockedFor(U.room)) return no(this.lockedMessage(U.room));
       if (U.use) return this.useFixed(U, here);
       const run = { id, room: here, does: U.does, piece: null, acts: U.acts, act: null, here: !!U.here, needMusic: false, started: false, by: null, t0: this.time, blaster: U.blaster };
 
@@ -180,7 +180,7 @@ export function installSkillRun(Brain) {
         run.piece = o.name;
         const at = this.roomOfObj(o.name);
         if (at !== here) {
-          if (at !== 'main' && this.doorLockedFor(at)) return no(`The ${w.doors[at].name} door is locked. Unlock it first (long-press the door).`);
+          if (at !== 'main' && this.doorLockedFor(at)) return no(this.lockedMessage(at));
           if (!this.canBring(o, here)) { run.room = at; run.went = true; }                     // (no space for it here: he goes to it)
           else {
             const g = this.handsFull(o) ? null : this.freeHelper(at, here);
@@ -254,7 +254,7 @@ export function installSkillRun(Brain) {
     beginMusic(run) {
       if (!this.obj('table')) return { ok: false, message: 'There is no stereo in the house. Add one from the Catalog.' };
       const at = this.roomOfObj('table');
-      if (at !== 'main' && this.doorLockedFor(at)) return { ok: false, message: `The ${this.w.doors[at].name} door is locked. Unlock it first (long-press the door).` };
+      if (at !== 'main' && this.doorLockedFor(at)) return { ok: false, message: this.lockedMessage(at) };
       this.beginRun(run);
       if (at === run.room && DANCES.includes(run.acts(this)[0])) return this.startSkill() ? { ok: true, message: `GUY is ${run.does}.` } : this.refuseRun(run);       // (the dance switches it on itself)
       run.needMusic = true;

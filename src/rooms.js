@@ -323,6 +323,25 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
     changed();
     return true;
   }
+  // What locking or unlocking a door means for the robots, as they are now (the page's toast): who is shut in by it, and with which rooms; who
+  // stays out; who still has another way in.
+  function lockNote(id) {
+    const d = world.gateOf(id);
+    if (!d) return '';
+    if (!d.locked) return `The ${d.name} door is unlocked.`;
+    const list = (a) => (a.length > 1 ? `${a.slice(0, -1).join(', ')} and ${a.at(-1)}` : a[0]);
+    const room = d.link ? d.room : d.id, shut = [], out = [], other = [], rooms = new Set();
+    for (const b of robots()) {
+      const reach = b.roomsInReach();
+      if (!reach.has('main') && reach.has(room) !== reach.has(d.parent)) { shut.push(robotName(b)); for (const r of reach) if (world.doors[r]) rooms.add(r); }
+      else (reach.has(room) ? other : out).push(robotName(b));
+    }
+    const parts = [];
+    if (shut.length) parts.push(`${list(shut)} ${shut.length > 1 ? 'are' : 'is'} shut in${rooms.size > 1 ? `, but can still use the ${list([...rooms].map((r) => world.doors[r].name))}` : ''}`);
+    if (d.link ? other.length + out.length : other.length) parts.push(`${list(d.link ? [...other, ...out] : other)} will ${d.link ? 'not go through it' : 'use another door'}`);
+    if (!d.link && out.length) parts.push(`${list(out)} will stay out`);
+    return `The ${d.name} door is locked${parts.length ? `: ${parts.join('; ')}` : ''}.`;
+  }
   function setUnlocked(id, value) {
     state[id] = { ...(state[id] || {}), id, unlocked: value };
     changed();
@@ -331,7 +350,7 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
   return {
     catalog: ROOM_CATALOG, def, add, remove: removeRoom, tick,
     corners: (id) => (added(id) ? family(id).slice(1).map((i) => world.doors[i].name) : []),     // the rooms that would go with it
-    isClosing: (id) => !!closing[id], restore, restoreFrom, snapshot, reset, setUnlocked, setDoorLocked,
+    isClosing: (id) => !!closing[id], restore, restoreFrom, snapshot, reset, setUnlocked, setDoorLocked, lockNote,
     linkRooms, isAdded: added, isUnlocked: unlocked, isDoorLocked: (id) => (world.links[id] ? world.isDoorLocked(id) : added(id) && !!(state[id] && state[id].doorLocked)),
     // a catalog entry is listed when it has no room, or its room is added and unlocked
     isLive: (roomId) => !roomId || (added(roomId) && unlocked(roomId)),

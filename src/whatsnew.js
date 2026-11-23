@@ -2,6 +2,7 @@
 // telling the player about is deployed: new rooms, objects, books, things GUY can do. The update notice (src/update.js) lists the
 // entries the running page has not seen yet, and vite.config.js writes the whole list into version.json.
 export const WHATS_NEW = [
+  { id: 'shut-in-rooms', items: ['Lock the Workshop with GUY and GAL inside and they carry on: they still use the rooms beside it whose doors are open, build the furniture for the Library and the Bedroom and carry it in.', 'The message when you lock a door now says who is shut in, with which rooms, and who stays out.'] },
   { id: 'drums-ch4', items: ['Drumming for Robots has a fourth chapter, Slow & Latin: after more practice at the kit, GUY and GAL play a laid-back half-time ballad groove and a bossa nova.'] },
   { id: 'steady-voices', items: ['GUY and GAL no longer switch between the natural voice and the robot voice in the middle of a conversation. Once the natural voices are on your device, they wait a moment for them to load instead of using the robot voice.'] },
   { id: 'restaurant-wall', items: ['Adding the Restaurant no longer takes a window or picture down without asking. If something is in the way of its door, its card in the Catalog says what and asks: Remove and add, or Not now. If every wall it can use already has a room, it tells you which room is on which wall.'] },

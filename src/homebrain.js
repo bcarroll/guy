@@ -27,7 +27,7 @@ export function installHome(Brain, POSES, H) {
     // the room's door is not locked on him, and he is not shut in some other room
     homeRoomOpen(o) {
       const r = this.w.roomIdAt(o.x, o.z);
-      if (r === 'main') return true;
+      if (r === 'main') return !this.stuckIn();
       if (r === 'door' || !this.w.doors[r]) return false;
       return !this.doorLockedFor(r);
     },

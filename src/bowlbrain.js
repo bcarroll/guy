@@ -164,7 +164,7 @@ export function installBowl(Brain, POSES, H) {
       for (const o of Object.values(w.objects)) {
         if (o.kind !== 'bowlingpins' || o.stowed || o.hauled || o.packed || this.otherUses(o.name)) continue;
         const r = this.roomOfObj(o.name);
-        if (r !== 'main' && this.doorLockedFor(r)) continue;
+        if (r === 'main' ? this.stuckIn() : this.doorLockedFor(r)) continue;
         const p = w.bowl.crateSpot(this.pinLaneFor());
         return { o, pins: true, spot: { x: p.x, z: p.z, room: ID } };
       }

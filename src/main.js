@@ -707,7 +707,7 @@ menu.addEventListener('click', (e) => {
     if (act === 'lock') {
       const now = !world.isDoorLocked(t.door.id);
       rooms.setDoorLocked(t.door.id, now);
-      showToast(now ? `The ${t.door.name} door is locked: GUY and GAL will ${t.door.link ? 'not go through it' : 'stay out'}.` : `The ${t.door.name} door is unlocked.`);
+      showToast(rooms.lockNote(t.door.id));
     }
     closeMenu();
     return;

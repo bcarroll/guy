@@ -39,6 +39,8 @@ const ACT_OBJ = {
 };
 // what an activity needs to have in the same room as its main object (else it cannot be done, or is done without it)
 const TOGETHER = { jam: ['table'], jampiano: ['table'], jamsit: ['table'], jamguitar: ['table'], jamdrums: ['table'] };
+// what he does when he is shut in by a locked door (in the rooms he can still get to): the jobs that keep to one room
+const SHUT_ACTS = (act) => [WORK_ACTS, YARD_ACTS, RANGE_ACTS, BOWL_ACTS, STUDIO_ACTS, REST_JOBS].some((l) => l.includes(act)) || act === 'rwait' || act === 'libclean' || !!HOME_ACTS[act];
 const FREE_ACTS = ['wander', 'lookaround', 'sway', 'akimbo', 'ponder', 'wave'];           // done wherever he happens to be
 const OWN_ROOM_ACTS = ['leave', 'stuck', 'visit', 'dropball', 'hangpaint', 'moveshelf', 'carryhome', 'skillwait', 'bringpiece'];      // (they plan their own way: dropping a ball where he stands, hanging a painting on whichever wall)
 import { sfx, drag as sfxDrag } from './sfx.js';
@@ -1156,7 +1158,7 @@ export class Brain {
           const cb = door.shell.bounds, direct = (p) => ({ ...this.walk(p.x, p.z), direct: true });
           const look = [];
           for (let i = 0; i < 3; i++) look.push(direct({ x: rand(cb.minX + 1.2, cb.maxX - 1.2), z: rand(cb.minZ + 1.2, cb.maxZ - 1.2) }), this.play('idle', rand(1.5, 3)));
-          return [`having a look in the ${door.name}`, ...this.tripSteps(this.hereId(), id), ...look, ...this.tripSteps(id, 'main', true)];
+          return [`having a look in the ${door.name}`, ...this.tripSteps(this.hereId(), id), ...look, ...(this.stuckIn() ? [] : this.tripSteps(id, 'main', true))];
         }
         const out = this.doorStand(id), inn = w.doorPoint(id, -1.0), face = w.doorYaw(id, false), b = door.shell.bounds;
         const direct = (p, yaw = null) => ({ ...this.walk(p.x, p.z, yaw), direct: true });
@@ -1173,11 +1175,13 @@ export class Brain {
       },
       // he is in an added room: straight back out through the door and shut it behind him
       // shut in an added room (its door is locked, and so is any other way out): wander about in there until somebody unlocks it
+      // (and into the rooms beside it whose doors are open)
       stuck: () => {
         const w = this.w, id = this.stuckIn(), d = id && w.doors[id];
         if (!d) return ['collecting himself', this.play('idle', 0.5)];
-        const b = d.shell.bounds, direct = (q) => ({ ...this.walk(q.x, q.z), direct: true });
-        return [`shut in the ${d.name} (the door is locked)`, direct({ x: rand(b.minX + 1.2, b.maxX - 1.2), z: rand(b.minZ + 1.2, b.maxZ - 1.2) }), this.play('idle', rand(2, 4))];
+        const reach = [...this.roomsInReach()].filter((r) => w.doors[r]), to = reach.length > 1 ? pick(reach) : id;
+        const b = w.doors[to].shell.bounds, direct = (q) => ({ ...this.walk(q.x, q.z), direct: true });
+        return [`shut in the ${d.name} (the door is locked)`, ...(to === id ? [] : this.tripSteps(id, to)), direct({ x: rand(b.minX + 1.2, b.maxX - 1.2), z: rand(b.minZ + 1.2, b.maxZ - 1.2) }), this.play('idle', rand(2, 4))];
       },
       leave: () => {
         if (this.stuckIn()) return ['shut in (the door is locked)', this.play('idle', 0.5)];
@@ -2216,7 +2220,7 @@ export class Brain {
   // Why `act` cannot be done now, in a few words (for the message when an order is refused); null when it is not clear.
   whyNot(act) {
     const shut = this.stuckIn();
-    if (shut) return `he is shut in the ${this.w.doors[shut].name}`;
+    if (shut && !(HOME_ACTS[act] || (SHUT_ACTS(act) && this.canReach(this.roomForAct(act))))) return `he is shut in the ${this.w.doors[shut].name}`;
     const skill = this.skillNeeds(act).find((k) => !this.skills.has(k));
     if (skill) return `he has not learned "${skill}" yet (read its book)`;
     if (this.busyElsewhere(this.exclusiveFor(act))) return 'the other robot is using it';
@@ -2268,9 +2272,9 @@ export class Brain {
   available(act) {
     // an activity that needs two things (playing along with the stereo) needs them in the same room
     if (TOGETHER[act] && !this.skillToMusic(act) && !TOGETHER[act].every((n) => this.sameRoom(n, ACT_OBJ[act]))) return false;
-    // shut in a room by a locked door: only what can be done in that room
+    // shut in by a locked door: only what can be done in the rooms he can still get to
     const shut = this.stuckIn();
-    if (shut) return shut === 'workshop' ? WORK_ACTS.includes(act) && this.availableIn(act) : shut === 'backyard' ? YARD_ACTS.includes(act) && this.availableIn(act) : shut === 'range' ? RANGE_ACTS.includes(act) && this.availableIn(act) : shut === 'bowling' ? BOWL_ACTS.includes(act) && this.availableIn(act) : shut === 'studio' ? STUDIO_ACTS.includes(act) && this.availableIn(act) : shut === 'restaurant' ? (REST_JOBS.includes(act) || act === 'rwait') && this.availableIn(act) : false;
+    if (shut) return SHUT_ACTS(act) && this.availableIn(act) && this.canReach(this.roomForAct(act));
     return this.availableIn(act);
   }
   availableIn(act) {
@@ -2408,12 +2412,13 @@ export class Brain {
     const d = this.w.doors[id];
     if (!d) return { ok: false, message: "There isn't a door like that." };
     const inside = !this.inMain();
-    if (inside && this.stuckIn()) return { ok: false, message: this.shutInMessage(this.stuckIn()) };
-    if (!inside && this.doorLockedFor(id)) return { ok: false, message: `The ${d.name} door is locked. Unlock it first (long-press the door).` };
+    const shut = inside && this.stuckIn(), next = shut && id !== this.hereId() && this.canReach(id);          // (shut in, but there is an open way from where he is to the room asked for)
+    if (shut && !next) return { ok: false, message: this.shutInMessage(shut) };
+    if (!inside && this.doorLockedFor(id)) return { ok: false, message: this.lockedMessage(id) };
     this.unlock(false);
     this.skip();
     this.visitId = id;
-    const through = inside && (link ? this.adjoining(this.hereId(), id) : this.parentOf(id) === this.hereId());            // a corner room, asked for while he is in the room beside it: straight in
+    const through = next || (inside && (link ? this.adjoining(this.hereId(), id) : this.parentOf(id) === this.hereId()));            // a corner room, asked for while he is in the room beside it: straight in
     this.pendingActivity = inside && !through ? 'leave' : 'visit';
     return { ok: true, message: inside && !through ? 'GUY is coming back.' : `GUY is going into the ${d.name}.` };
   }
@@ -2465,6 +2470,7 @@ export class Brain {
   // Is this robot working with `name` right now? Then the other robot must not move it, put it away or take it out of the room.
   inUse(name) {
     if (this.using && this.using.has(name)) return true;
+    if (this.pendingActivity && this.pendingHome === name) return true;       // (told to use it and about to: the other robot used to take it in that instant)
     if (this.homeMove && this.homeMove.name === name) return true;       // (carrying it out of the Workshop to its room)
     if (this.skillWants(name)) return true;                              // (he has asked for it in the Skills menu: it is on its way to him)
     if (this.chairClaim === name) return true;
@@ -2588,7 +2594,17 @@ export class Brain {
     if (ACT_OBJ[name] || HOME_ACTS[name]) this.stayRoom = where;                      // (done at an object in that room: he stays there afterwards)
     else if (!FREE_ACTS.includes(name)) this.stayRoom = null;
     let label, steps;
-    try { [label, ...steps] = acts[name](); } finally { this.actRoom = null; }
+    // (shut in, and the job is in another of the rooms he can get to: through the doors to it first, and the job is planned once he is there)
+    const shutTrip = !!this.stuckIn() && where !== here && !OWN_ROOM_ACTS.includes(name) && this.canReach(where);
+    try {
+      if (shutTrip) {
+        [label, ...steps] = [`going into the ${this.w.doors[where].name}`, ...this.tripSteps(here, where), { type: 'plan', fn: () => {
+          if (this.hereId() !== where) return [];
+          this.actRoom = where;
+          try { const [l, ...s] = this.activities()[name](); this.ui(this.lock ? `🔒 ${l}` : l); return s; } finally { this.actRoom = null; }
+        } }];
+      } else [label, ...steps] = acts[name]();
+    } finally { this.actRoom = null; }
     // a practice session of an instrument: after enough of them the next chapter of its book is learned (skills.js CHAPTERS)
     for (const c of this.skills.practice(name)) { this.ui(`learned ${c.title.toLowerCase()}`); if (this.onChapter) this.onChapter(c); }
     if (!this.stuckIn() && where !== here && !OWN_ROOM_ACTS.includes(name)) {
@@ -2645,8 +2661,8 @@ export class Brain {
   interact(name) {
     const k = (id) => this.skills.has(id);
     const there = this.obj(name), rm = there && this.w.roomIdAt(there.x, there.z);
-    if (rm && rm !== 'main' && rm !== 'door' && this.doorLockedFor(rm)) return { ok: false, message: `The ${this.w.doors[rm].name} door is locked. Unlock it first (long-press the door).` };
-    if (this.stuckIn() && rm !== this.stuckIn()) return { ok: false, message: this.shutInMessage(this.stuckIn()) };        // shut in: only what is in the room with him
+    if (this.stuckIn() && !this.canReach(rm)) return { ok: false, message: this.shutInMessage(this.stuckIn()) };        // shut in: only what is in the rooms he can get to
+    if (rm && rm !== 'main' && rm !== 'door' && this.doorLockedFor(rm)) return { ok: false, message: this.lockedMessage(rm) };
     // told to mow with no clear lawn: say so (he used to say "On it!", open the shed, find no room and quietly give up)
     if ((name === 'mower' || name === 'shed') && this.w.yard && this.w.yard.STORE.some((it) => it.key !== 'mower' && this.otherUses(it.key))) return { ok: false, message: 'The other robot is using something on the lawn. Wait until it is done.' };
     if ((name === 'mower' || name === 'shed') && this.obj('mower') && this.obj('shed') && this.yardOpen() && !this.mowCoverage({ tidied: true }) && !this.mowRoute({ pushable: true, tidied: true })) return { ok: false, message: 'There is no clear stretch of lawn for the mower. GUY puts the yard things away in the shed and shifts light things (plants) himself, but not the shed: move it, or anything else heavy, away from the lawn and leave a little room behind the mower for GUY.' };
@@ -2719,7 +2735,7 @@ export class Brain {
   requestShed(mode, key = null) {
     const y = this.w.yard, shed = this.obj('shed');
     if (!shed || !y) return { ok: false, message: 'There is no shed.' };
-    if (this.stuckIn() && this.stuckIn() !== 'backyard') return { ok: false, message: this.shutInMessage(this.stuckIn()) };
+    if (this.stuckIn() && !this.canReach('backyard')) return { ok: false, message: this.shutInMessage(this.stuckIn()) };
     if (!this.yardOpen()) return { ok: false, message: 'The Backyard door is locked. Unlock it first (long-press the door).' };
     const items = y.items(), keys = (key ? items.filter((i) => i.key === key) : items).filter((i) => (mode === 'out') === i.stowed).map((i) => i.key);
     if (!keys.length) return { ok: false, message: mode === 'out' ? 'There is nothing in the shed to take out.' : 'Everything is already in the shed.' };
@@ -2877,7 +2893,7 @@ export class Brain {
           // then walks to it (he used to head straight for it: into the wall, and along that into the corner nearest to it).
           const here = this.roomAt(root.position.x, root.position.z), there = this.roomAt(s.x, s.z);
           if (here !== there && !s.direct && !s.push && !s.frameRoom) {
-            if (s.viaDoor || this.stuckIn()) { this.queue.length = 0; this.step = null; this.ui('could not get there'); return; }      // (he has been through the doors and still is not in there, or cannot get out: not for walking at)
+            if (s.viaDoor || (this.stuckIn() && !this.canReach(there))) { this.queue.length = 0; this.step = null; this.ui('could not get there'); return; }      // (he has been through the doors and still is not in there, or cannot get out: not for walking at)
             this.queue.unshift(...this.tripSteps(here, there), { ...s, viaDoor: true, path: undefined });
             this.step = null;
             return;

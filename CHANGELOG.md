@@ -17,6 +17,7 @@ The big changes to GUY's room, newest first. The game shows the same list under 
 - GAL dances in the room the stereo is in, not always in GUY's room.
 - GUY and GAL wear the bass with its strap over the shoulder, and their hands close round the neck of a guitar or bass.
 - GUY and GAL keep the same voice through a conversation: no more robot voice from one and natural voice from the other; once the natural voices have downloaded they wait for them instead of speaking robot.
+- Locked in the Workshop, GUY and GAL go on using the rooms beside it whose doors are open, and furnish them; the message says who is shut in.
 
 ## 2026-11-21
 

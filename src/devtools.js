@@ -2531,8 +2531,8 @@ T.sweepCorners = () => {
   { let t = 0; while (t < 120 && b.hereId() !== 'library') { step(0.25); t += 0.25; } }
   step(2);
   R().setDoorLocked('workshop', true);
-  out.push(result('corners: with only the Workshop door locked he is not shut in the Library (the way to the Workshop is open)', b.stuckIn() === null, { stuck: b.stuckIn() }));
-  b.skip(); b.pendingActivity = 'leave';
+  out.push(result('corners: with only the Workshop door locked he cannot get home from the Library, but the way to the Workshop is open', b.stuckIn() === 'library' && b.canReach('workshop') && !b.canReach('main'), { stuck: b.stuckIn(), reach: [...b.roomsInReach()] }));
+  b.skip(); b.visitRoom('workshop');
   { let t = 0; while (t < 200 && b.hereId() !== 'workshop') { step(0.25); t += 0.25; } step(3); }
   out.push(result('corners: he comes out of the Library into the Workshop and is shut in there', b.stuckIn() === 'workshop', { stuck: b.stuckIn(), here: b.hereId() }));
   R().setDoorLocked('workshop', false);
@@ -3232,9 +3232,10 @@ T.sweepDoorLock = () => {
     t7 = 0; inside = false; while (t7 < 90 && !inside) { step(0.25); t7 += 0.25; inside = !!inAdded(g.pos); }
     R().setDoorLocked('workshop', true);
     const only = b.stuckIn();
-    b.exitsOf = () => [dw(), { locked: false }];                  // (rooms have the one door today: pretend this one has a second, unlocked, door)
+    const all0 = w.allDoors;
+    w.allDoors = () => [...all0(), { id: 'second', link: true, room: 'workshop', parent: 'main', locked: false }];     // (pretend this room has a second, unlocked, door)
     const withSecond = b.stuckIn();
-    delete b.exitsOf;
+    w.allDoors = all0;
     out.push(result('doorlock: he is shut in only while every door out of the room is locked (an unlocked second door lets him out)', inside && only === 'workshop' && withSecond === null, { inside, only, withSecond }));
     R().setDoorLocked('workshop', false);
     t8 = 0; while (t8 < 120 && !b.inMain()) { step(0.25); t8 += 0.25; }
@@ -6143,6 +6144,97 @@ T.sweepHome = () => {
   return out;
 };
 
+// ---- Shut in by a locked door: the rooms whose doors are still open are still his (workbrain.js roomsInReach, rooms.js lockNote) ----------
+// The Workshop door was locked with both robots in there: the message said they would "stay out", they stayed in the one room, and never
+// carried anything into the Library and the Bedroom on either side of it, whose doors were open.
+T.sweepShutIn = () => {
+  const out = [], base = errors.length, w = W(), b = B(), g = G();
+  const FURN = ['workshop', 'workshop.materials', 'workshop.furniture'], USES = ['makebed', 'homesit', 'wardrobe', 'browse', 'study', 'spinglobe'];
+  galReset(); needSetup('right', FURN);
+  R().add('library'); R().add('bedroom');
+  const mid = (id) => { const q = w.doors[id].shell.bounds; return { x: (q.minX + q.maxX) / 2, z: (q.minZ + q.maxZ) / 2 }; };
+  const put = (br, id, dx = 0, dz = 0) => { const p = id === 'main' ? { x: 0, z: 2 } : mid(id); br.unlock(false); br.skip(true); br.queue = []; br.step = null; br.pendingActivity = null; br.last = 'wander'; br.stayRoom = null; br.using = new Set(); br.g.root.position.set(p.x + dx, 0, p.z + dz); };
+  const at = (br) => w.roomIdAt(br.g.root.position.x, br.g.root.position.z);
+  const gal = w.gal.g && w.gal.g.loaded && galBuild().ok ? w.gal.brain : null;
+  const lockByMenu = (id) => { window.__guyOpenDoorMenu(id); [...document.getElementById('menu').querySelectorAll('[data-act]')].find((x) => x.dataset.act === 'lock').click(); return document.getElementById('toast').textContent; };
+  // 1. what the message says: outside they stay out; inside they are shut in (and it says which rooms they have)
+  put(b, 'main'); if (gal) put(gal, 'main', 1.4);
+  const n1 = lockByMenu('workshop');
+  out.push(result('shut in: locked with nobody in there, the message says they will stay out (and nobody is shut in)', /will stay out/.test(n1) && !/shut in/.test(n1), { n1 }));
+  const rl = b.visitRoom('library');
+  out.push(result('shut in: from outside, the rooms behind the locked Workshop are out of reach too, and it says that the Workshop door is the one that is locked', b.doorLockedFor('library') && b.doorLockedFor('bedroom') && !rl.ok && /Workshop door is locked/.test(rl.message), { rl }));
+  R().setDoorLocked('workshop', false);
+  put(b, 'workshop', -1, 1);
+  if (gal) {
+    const n2 = lockByMenu('workshop');
+    out.push(result('shut in: locked with only GUY in there, the message says GUY is shut in and GAL will stay out', /GUY is shut in/.test(n2) && /GAL will stay out/.test(n2), { n2 }));
+    R().setDoorLocked('workshop', false);
+    put(gal, 'workshop', 1.2, 1.6);
+  }
+  const n3 = lockByMenu('workshop');
+  out.push(result('shut in: locked with them in there, the message does not say they will stay out: they are shut in, and can still use the Library and the Bedroom', !/stay out/.test(n3) && (gal ? /GUY and GAL are shut in/ : /GUY is shut in/).test(n3) && /Library/.test(n3) && /Bedroom/.test(n3), { n3 }));
+  const refuse = b.interact('armchair'), refuse2 = b.visitRoom('workshop');
+  out.push(result('shut in: what is outside is refused, with a message that says so', b.stuckIn() === 'workshop' && !b.canReach('main') && !refuse.ok && /shut in/.test(refuse.message) && !refuse2.ok && /shut in/.test(refuse2.message), { refuse, refuse2 }));
+  // 2. left alone they build the furniture and carry it into the two rooms beside them (what stood in the Workshop already goes there too)
+  { const p = mid('workshop'); w.addInstance('bedside', null, null, true, { x: p.x + 1, z: p.z - 2.5 }); }
+  const first = kindIn(w, 'bedside')[0], started = first && w.roomIdAt(first.x, first.z);
+  const all = () => HOME_RECIPES.every((k) => kindIn(w, k, HOME_ROOM[k]).length === (k === 'libshelf' ? 2 : 1));
+  let t = 0, outside = 0;
+  const been = new Set(), did = new Set(), galDid = new Set(), galBeen = new Set();
+  while (t < 2400 && !(all() && been.has('library') && been.has('bedroom') && [...did].some((a) => USES.includes(a)))) {
+    step(0.5); t += 0.5;
+    been.add(at(b)); did.add(b.last); if (at(b) === 'main') outside++;
+    if (gal) { galBeen.add(at(gal)); galDid.add(gal.last); if (at(gal) === 'main') outside++; }
+  }
+  const where = Object.fromEntries(HOME_RECIPES.map((k) => [k, kindIn(w, k).map((o) => w.roomIdAt(o.x, o.z))]));
+  out.push(result('shut in the Workshop with the doors of the Library and the Bedroom open, GUY builds their furniture and carries every piece into its room (one that stood in the Workshop too)', started === 'workshop' && all(), { t, started, where, did: [...did], been: [...been] }));
+  out.push(result('shut in: nobody ever came out through the locked door', outside === 0 && w.doors.workshop.open < 0.01, { outside, open: w.doors.workshop.open }));
+  out.push(result('shut in: GUY goes in and out of both rooms and uses what is in there', ['workshop', 'library', 'bedroom'].every((r) => been.has(r)) && [...did].some((a) => USES.includes(a)), { been: [...been], did: [...did] }));
+  if (gal) out.push(result('shut in: GAL goes into the rooms beside the Workshop too, instead of standing about in it', galBeen.has('library') || galBeen.has('bedroom'), { been: [...galBeen], did: [...galDid] }));
+  // 3. told to: use something in another of those rooms, or go in there
+  if (gal) put(gal, 'bedroom', 2.5, 2.5);
+  put(b, 'workshop', -1, 1);
+  const desk = kindIn(w, 'libdesk')[0], r3 = desk ? b.interact(desk.name) : { ok: false };
+  let used = false;
+  t = 0; while (t < 120 && !used) { step(0.25); t += 0.25; used = b.last === 'study' && at(b) === 'library' && !!b.step && b.step.type === 'play' && !!b.step.fx && (b.step.fx.needs || []).includes(desk && desk.name); }
+  out.push(result('shut in: told to use the desk in the Library from the Workshop, he goes in there and does', r3.ok && used, { r3, used, last: b.last, here: b.hereId() }));
+  put(b, 'library');
+  const r4 = b.visitRoom('bedroom'), seen = new Set();
+  t = 0; while (t < 120 && b.hereId() !== 'bedroom') { step(0.25); t += 0.25; seen.add(at(b)); }
+  out.push(result('shut in: in the Library, told to go into the Bedroom, he goes there without leaving by the locked door', r4.ok && b.hereId() === 'bedroom' && seen.has('workshop') && !seen.has('main'), { r4, here: b.hereId(), seen: [...seen] }));
+  // 4. a job in the Workshop, chosen when he is in the Library: straight into the Workshop for it, never at its locked door
+  if (gal) put(gal, 'bedroom', 2.5, 2.5);
+  put(b, 'library'); b.choose('tidytools');
+  let tidied = false;
+  t = 0; while (t < 90 && !tidied) { step(0.25); t += 0.25; tidied = at(b) === 'workshop' && !!b.step && ((b.step.fx && b.step.fx.needs) || []).includes('toolbox'); }
+  out.push(result('shut in: from the Library he goes back into the Workshop for a job there', tidied, { here: b.hereId(), last: b.last }));
+  // 5. their doors locked as well, with a piece in his arms: it is put together where he is, never by magic in the Library; unlocked, it goes home
+  if (gal) put(gal, 'workshop', 2.5, 3);
+  put(b, 'workshop', -1, 1);
+  const globe = kindIn(w, 'globe')[0];
+  if (globe) { w.removeObject(globe.name); delete w.removed[globe.name]; }
+  b.forceRecipe = 'globe'; b.choose('build');
+  t = 0; while (t < 90 && !b.carry) { step(0.1); t += 0.1; }
+  const carried = !!b.carry;
+  for (const id of ['library', 'bedroom']) R().setDoorLocked(id, true);
+  t = 0; while (t < 60 && !kindIn(w, 'globe').length) { step(0.25); t += 0.25; }
+  const g5 = kindIn(w, 'globe')[0], at5 = g5 && w.roomIdAt(g5.x, g5.z);
+  out.push(result('shut in: the Library locked while he carries the globe to it, it is put together in the room he is in, never in the Library', carried && at5 === 'workshop' && at(b) === 'workshop', { carried, at5, here: at(b) }));
+  out.push(result('shut in: with all three doors locked he is shut in the one room', b.stuckIn() === 'workshop' && b.roomsInReach().size === 1 && b.homeMoves().length === 0, { reach: [...b.roomsInReach()] }));
+  R().setDoorLocked('library', false);
+  const home5 = () => !!g5 && w.roomIdAt(g5.x, g5.z) === 'library' && !g5.packed;
+  t = 0; while (t < 400 && !home5()) { step(0.5); t += 0.5; }
+  out.push(result('shut in: the Library unlocked again (the Workshop not), the globe is carried in there', home5(), { at: g5 && w.roomIdAt(g5.x, g5.z) }));
+  // 6. unlocked, he comes home
+  for (const id of ['workshop', 'bedroom']) R().setDoorLocked(id, false);
+  put(b, 'library'); b.pendingActivity = 'leave';
+  t = 0; while (t < 200 && !b.inMain()) { step(0.25); t += 0.25; }
+  out.push(result('shut in: unlocked, he comes home', b.inMain() && b.stuckIn() === null, { here: b.hereId() }));
+  galReset(); machine().hidden = true; document.getElementById('menu').hidden = true;
+  out.push(result('shut in: no errors', errors.length === base, { errors: errors.slice(base) }));
+  return out;
+};
+
 // ---- The Library: the bookshelves carried into it, its dust and cobwebs (librarybrain.js, library.js, room.js libraryShelfSpot) ----------
 T.sweepLibrary = () => {
   const out = [], base = errors.length, w = W(), b = B();
@@ -6322,7 +6414,8 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.galDanceRoom = S(T.sweepGalDanceRoom);
   report.floorplan = S(T.sweepFloorplan);
   report.help = S(T.sweepHelp);
-  report.restaurantWall = S(T.sweepRestaurantWall);        // (last, so the others keep their seeds)
+  report.restaurantWall = S(T.sweepRestaurantWall);
+  report.shutIn = S(T.sweepShutIn);        // (last, so the others keep their seeds)
   if (seed && T.unseed) T.unseed();
   window.__qaPaused = wasPaused;
   T.lastReport = report;
