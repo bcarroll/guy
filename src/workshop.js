@@ -13,7 +13,11 @@
 export const STORAGE_CAP = 99;
 
 // the object that makes each line
-export const FACTORY = { wood: 'woodfactory', metal: 'metalfactory' };
+// (the Build a Bot machine is the third: once GAL has been printed it stays in the Workshop and prints things from other materials: line 'bot')
+export const FACTORY = { wood: 'woodfactory', metal: 'metalfactory', bot: 'botprinter' };
+
+// What the Build a Bot machine prints from, for each recipe of line 'bot' (`material`: one or several; several are a combination)
+export const MATERIALS = { rubber: { name: 'rubber', color: 0xff9a3c }, glass: { name: 'glass', color: 0x9fe8ff }, plastic: { name: 'plastic', color: 0xff5fd0 }, metal: { name: 'metal', color: 0xffe08a } };
 
 // `cap`: how many of a thing GUY will have made at most (standing in a room or in storage). He builds up to it and then stops
 // making that one, so the Workshop does not fill with things nobody needs; take one away (the user can delete it) and he may make another.
@@ -55,6 +59,17 @@ export const RECIPES = {
   // The Automatic Pinsetter: an easter egg for the Bowling Alley. In no book: GUY builds it once the Metal Factory stands anywhere in the house
   // and the alley has been added (`eggWhere: 'house'`; it ends up in the alley, `eggRoom`).
   pinsetter: { name: 'Automatic Pinsetter', icon: '🤖', skill: 'workshop', line: 'metal', run: 6.0, object: 'pinsetter', cap: 1, serves: 'egg.pinsetter', egg: ['metalfactory'], eggWhere: 'house', eggRoom: 'bowling', to: 'bowling' },
+  // Printed by the Build a Bot machine (line 'bot'): only while it stands in the Workshop (canBuild, needs.js). In no book (the basic Workshop
+  // skill is enough). The first four are single-material surprises; the last four are COMBINATIONS: they need other things GUY built
+  // (some of them printed here, some from the factories) to be standing in his room, and are printed from several materials.
+  fishtank: { name: 'Fish Tank', icon: '🐠', skill: 'workshop', line: 'bot', material: 'glass', run: 4.4, object: 'fishtank', cap: 1, serves: 'egg.fishtank', egg: ['coffeetable'] },
+  rubberchicken: { name: 'Rubber Chicken', icon: '🐔', skill: 'workshop', line: 'bot', material: 'rubber', run: 3.2, object: 'rubberchicken', cap: 1, serves: 'egg.rubberchicken', egg: ['nightstand'] },
+  flamingo: { name: 'Plastic Flamingo', icon: '🦩', skill: 'workshop', line: 'bot', material: 'plastic', run: 3.4, object: 'flamingo', cap: 1, serves: 'egg.flamingo', egg: ['plant'] },
+  neonsign: { name: 'Neon Sign', icon: '💡', skill: 'workshop', line: 'bot', material: ['glass', 'plastic'], run: 4.6, object: 'neonsign', cap: 1, serves: 'egg.neonsign', egg: ['lamp', 'drums'] },
+  aquarium: { name: 'Giant Aquarium', icon: '🐟', skill: 'workshop', line: 'bot', material: ['glass', 'rubber'], run: 6.0, object: 'aquarium', cap: 1, serves: 'egg.aquarium', egg: ['fishtank', 'rubberduck'] },
+  jukebox: { name: 'Jukebox', icon: '🎶', skill: 'workshop', line: 'bot', material: ['glass', 'plastic', 'metal'], run: 6.4, object: 'jukebox', cap: 1, serves: 'egg.jukebox', egg: ['table', 'mirrorball'] },
+  plasmaglobe: { name: 'Plasma Globe', icon: '⚡', skill: 'workshop', line: 'bot', material: ['glass', 'metal'], run: 5.2, object: 'plasmaglobe', cap: 1, serves: 'egg.plasmaglobe', egg: ['crystalball', 'lavalamp'] },
+  robopet: { name: 'Robo Pet', icon: '🐕', skill: 'workshop', line: 'bot', material: ['plastic', 'rubber', 'metal'], run: 6.6, object: 'robopet', cap: 1, serves: 'egg.robopet', egg: ['petrock', 'rubberchicken'] },
 };
 // older saves may hold these: they are still shown and can be put back, but nothing builds them any more
 export const LEGACY_KINDS = ['woodshelves'];
@@ -62,3 +77,4 @@ export const LEGACY_KINDS = ['woodshelves'];
 export const skillsOf = (r) => (Array.isArray(r.skill) ? r.skill : [r.skill]);
 // the factories a recipe runs, in the order they run
 export const factoriesOf = (r) => (r.line === 'both' ? [FACTORY.metal, FACTORY.wood] : [FACTORY[r.line]]);
+export const materialsOf = (r) => (r.material ? (Array.isArray(r.material) ? r.material : [r.material]) : []);

@@ -1,9 +1,11 @@
-// The Build a Bot machine: a 3D printer under a glass hood. GUY presses its button, a print head sweeps over the bed while a glowing
-// outline of a robot grows, and then the machine folds itself away into GAL (src/gal.js). It can only be used once.
+// The Build a Bot machine: a 3D printer under a glass hood (open at the front, so a hand can reach the bed). GUY presses its button, a print
+// head sweeps over the bed while a glowing outline grows. The first time it prints GAL (src/gal.js); the machine stays, in the Workshop,
+// and prints other things from rubber, glass, plastic and metal (the recipes with line 'bot' in src/workshop.js): `run(secs, materials)`,
+// then `showMade(kind)` puts the finished thing on the bed and `clearMade()` takes it off.
 // Built with the same makeObject helper as the rest of the room; its front (the button panel) is local +z.
 import * as THREE from 'three';
 
-export function makeBotBuilders({ makeObject, box, mat }) {
+export function makeBotBuilders({ makeObject, box, mat, productModel = null }) {
   const V = (x, y, z) => new THREE.Vector3(x, y, z);
   const addAt = (o) => { o.at = (x, y, z) => { o.group.updateWorldMatrix(true, false); return o.group.localToWorld(V(x, y, z)); }; return o; };
   const onUpdate = (o, fn) => { const base = o.update; o.update = function (dt) { base.call(this, dt); fn(dt); }; };
@@ -17,7 +19,7 @@ export function makeBotBuilders({ makeObject, box, mat }) {
       box(1.42, 0.03, 1.22, steel, 0, 0.56, 0, g);
       for (const [px, pz] of [[-0.66, -0.56], [0.66, -0.56], [-0.66, 0.56], [0.66, 0.56]]) box(0.06, 1.4, 0.06, steel, px, 1.27, pz, g);     // posts
       box(1.4, 0.08, 1.2, steel, 0, 2.0 - 0.04, 0, g);                               // the top
-      for (const sz of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(1.26, 1.36, 0.02), glass); p.position.set(0, 1.27, sz * 0.58); g.add(p); }
+      { const p = new THREE.Mesh(new THREE.BoxGeometry(1.26, 1.36, 0.02), glass); p.position.set(0, 1.27, -0.58); g.add(p); }      // (the back only: the front is open)
       for (const sx of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.02, 1.36, 1.12), glass); p.position.set(sx * 0.68, 1.27, 0); g.add(p); }
       box(1.3, 0.06, 0.06, steel, 0, 1.85, -0.5, g);                                 // gantry rail along the back
       box(0.36, 0.28, 0.3, mat(0x1f2a36), -0.5, 0.4, 0.62, g);                       // the control panel on the front
@@ -43,9 +45,24 @@ export function makeBotBuilders({ makeObject, box, mat }) {
     o.light = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), new THREE.MeshBasicMaterial({ color: 0x33ff66 }));
     o.light.position.set(-0.5, 0.52, 0.78); o.group.add(o.light);
 
-    o.running = 0; o.total = 1; o.progress = 0; o.used = false; o.t = 0;
-    // start printing: `secs` seconds until the outline is complete
-    o.run = (secs) => { o.running = secs; o.total = secs; o.progress = 0; o.ghost.visible = true; beam.visible = true; };
+    // what it has made, waiting on the bed (at the front, where a hand reaches it)
+    o.tray = new THREE.Group();
+    o.tray.position.set(0, 0.6, 0.3); o.tray.scale.setScalar(1.6);
+    o.group.add(o.tray);
+    const clear = () => { while (o.tray.children.length) { const c = o.tray.children[0]; o.tray.remove(c); if (c.geometry) c.geometry.dispose(); } };
+    o.showMade = (kind) => { clear(); if (kind && productModel) productModel(o.tray, kind); };
+    o.clearMade = clear;
+
+    o.running = 0; o.total = 1; o.progress = 0; o.t = 0; o.pressed = 0; o.colors = null;
+    // start printing: `secs` seconds until it is done. No `materials`: it prints a robot (the glowing outline of GAL grows); with them it prints
+    // a thing from those materials (the beam and the head take their colours, one after the other for a combination)
+    o.run = (secs, materials = null) => {
+      o.running = secs; o.total = secs; o.progress = 0; beam.visible = true;
+      o.colors = materials && materials.length ? materials.map((m) => m.color) : null;
+      o.ghost.visible = !o.colors;
+    };
+    o.press = () => { o.pressed = 0.4; };
+    o.endRun = () => { o.running = 0; o.ghost.visible = false; beam.visible = false; o.head.position.set(0, 1.78, -0.5); o.light.material.color.set(0x33ff66); };
     onUpdate(o, (dt) => {
       o.t += dt;
       if (o.running > 0) {
@@ -55,12 +72,13 @@ export function makeBotBuilders({ makeObject, box, mat }) {
         o.head.position.z = -0.5 + 0.5 * (0.5 + 0.5 * Math.sin(o.t * 1.7)) + 0.35 * Math.sin(o.t * 3.1) * 0.3;
         o.head.position.y = 0.75 + (1.78 - 0.75) * (1 - o.progress);
         beam.scale.y = 0.2; beam.position.y = -0.2;
-        o.ghost.scale.set(1, Math.max(0.02, o.progress), 1);
+        if (o.colors) { const c = o.colors[Math.min(o.colors.length - 1, Math.floor(o.progress * o.colors.length))]; beam.material.color.set(c); hb.material.color.set(c); } else o.ghost.scale.set(1, Math.max(0.02, o.progress), 1);
         o.light.material.color.set(Math.floor(o.t * 6) % 2 ? 0xffaa22 : 0x331100);
-        if (o.running === 0) { beam.visible = false; o.head.position.set(0, 1.78, -0.5); o.light.material.color.set(0x33ff66); }
+        if (o.running === 0) { beam.visible = false; hb.material.color.set(0xff8a3d); o.head.position.set(0, 1.78, -0.5); o.light.material.color.set(0x33ff66); }
       }
     });
     o.buttonPoint = () => o.at(-0.5, 0.52, 0.8);                                      // GUY's finger on the panel
+    o.trayPoint = () => o.at(0, 0.72, 0.36);                                          // what it made, on the front of the bed
     return addAt(o);
   };
   // The Learning Workstation: a desk with a big screen. GUY taps the screen and a panel lists the books on the shelf; pressing Learn on one

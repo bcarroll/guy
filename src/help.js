@@ -16,7 +16,7 @@ const kv = (rows) => `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).j
 
 // One line for each room in the Catalog's Rooms tab.
 export const ROOM_NOTES = {
-  workshop: 'The Wood Factory and the Metal Factory, a workbench and a toolbox. GUY builds what the house needs here (stools, chairs, bookshelves, tables, guitars); lock him in and he builds toys and decorations too. The Build a Bot machine prints GAL.',
+  workshop: 'The Wood Factory and the Metal Factory, a workbench and a toolbox. GUY builds what the house needs here (stools, chairs, bookshelves, tables, guitars); lock him in and he builds toys and decorations too. The Build a Bot machine (Machines in the Catalog, Workshop only) prints GAL and then stays to print other things.',
   restaurant: 'Premium. A kitchen, a cash register and dining tables. Customers arrive by elevator; GUY and GAL take orders, cook, serve and take payment.',
   backyard: 'Outdoors, with a lawn, a soccer goal, a basketball hoop, a lawn chair, a bird bath and a shed. Flip the sky switch for day or night. GUY mows the lawn.',
   range: 'Three lanes with holographic targets. Each robot takes her own blaster from the rack, starts a round at the controller and checks the scoreboard.',
@@ -93,7 +93,7 @@ export function helpHtml(tab) {
       SKILL_GROUPS.map(([name, ids]) => `<h4>${esc(name)}</h4>${ul(ids.filter((id) => SKILL_INFO[id]).map((id) => esc(SKILL_INFO[id].name)))}`).join(''),
     ].join('');
     case 'gal': return [
-      p('GAL (Genetically Alternate Layout) is the second robot. Add the Build a Bot machine from the Catalog and GUY prints her; the machine folds itself into GAL and is gone.'),
+      p('GAL (Genetically Alternate Layout) is the second robot. Add the Build a Bot machine from the Catalog (it lives in the Workshop and can never leave it) and GUY prints her. The machine stays: it keeps printing things from rubber, glass, plastic and metal.'),
       ul([
         'She has her own mind and her own skills, and learns from the same books.',
         'She plays with GUY: jamming, defence at the hoop, goalkeeper at the goal, lanes at the Range.',
