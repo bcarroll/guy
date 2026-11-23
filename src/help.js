@@ -49,7 +49,7 @@ export function helpHtml(tab) {
       `<ol>${[
         'Tap anywhere once to turn the sound on (the red speaker in the corner shows it is off).',
         'Drag empty space to look around. Scroll or pinch to zoom.',
-        'Tap the Catalog machine on the wall to add objects, books, records and rooms.',
+        'Tap the Catalog machine on the wall (or press C) to add objects, books, records and rooms. Search it, or pick a category.',
         'Put books on the shelf. GUY reads them and learns new skills.',
         'Open 📚 Skills (or press K) and tap a skill to have GUY do it now.',
         'Talk to him with 💬 Talk or by holding 🎤.',
@@ -80,7 +80,7 @@ export function helpHtml(tab) {
         ['🔊 (top corner)', 'Turn the sound on, or mute it.'],
       ]),
       '<h4>Keys</h4>',
-      kv([['K', 'Skills'], ['H or ?', 'This help'], ['F', 'Switch between the static view and the chosen one'], ['Space', 'Next activity'], ['M', 'Mute'], ['Esc', 'Close a panel or menu']]),
+      kv([['K', 'Skills'], ['C', 'Catalog (/ searches it)'], ['H or ?', 'This help'], ['F', 'Switch between the static view and the chosen one'], ['Space', 'Next activity'], ['M', 'Mute'], ['Esc', 'Close a panel or menu']]),
     ].join('');
     case 'rooms': return [
       p('GUY\'s room is home. Add more rooms from the Catalog\'s Rooms tab: each one gets a door on a wall of his room, and every room is the same 10 m square, so they line up with no gaps; a corner room has a door into each room beside it. Remove a room there too; everything in it goes back to the Catalog.'),

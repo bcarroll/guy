@@ -6,11 +6,13 @@ The big changes to GUY's room, newest first. The game shows the same list under 
 
 ### Added
 
+- Catalog search: one box looks through objects, books, records and rooms; a filter for what is in the room or can be added; C opens it.
 - Help: the ❓ button (or H) explains how the game works, what you can do, what is new and this change log.
 - Drumming for Robots has a Chapter 4, Slow & Latin: a half-time ballad groove and a bossa nova, learned by practising at the kit.
 
 ### Changed
 
+- The Catalog looks and works like Help and the Skills menu: a grid of cards in sections that fold away, a Built by GUY category, and a bottom sheet on a phone.
 - Skills menu: GAL really brings what GUY asked for, and he plays it when it comes.
 - Every room is the same 10 m square, so the house lines up with no overlaps or gaps; a corner room has a door into each room beside it.
 - New bowling pins are carried to a lane and set up there by hand.

@@ -65,7 +65,15 @@ machine check of this list; this file adds the expectations a human or Claude ne
 Decor is tested by `T.sweepDecor` (Remove through the Catalog button, "Put back", wall limits), not by interaction.
 
 Catalog Objects tab: filter chips (All + one per category) with in-room counts, one section per category (Music, Hobbies,
-Furniture, Decor & lighting, Games), a Remove button on every in-room item except the shelf, "Put back" for removed ones.
+Workshop, Built by GUY, Restaurant, Backyard, Robots, Furniture, Decor & lighting, Games), a Remove button on every in-room item except the
+shelf, "Put back" for removed ones. Built by GUY lists what GUY made (in the room / in storage); the ones never made are folded under
+"N more GUY can build". Sub-headings (Plants, Wall art ...) only in a section of 8 or more.
+The Catalog as a menu (`src/machine.js`, markup and styles in `index.html`, `window.__catalog`): a dialog like Help (✕, Escape, C opens and
+closes it, opening it closes the Skills menu and Help); a search box (/ focuses it) that looks through every tab, each tab showing how many
+it found, "chairs" finding "chair", keys typed there never reaching the room; a show filter (Everything / In the room or On the shelf /
+To add); sections that fold away (cards stay in the page; remembered unless `?fresh`, key `guy.catalog.closed.v1`); tap a card for its whole
+description; an empty search offers a jump to the tab that has it; a bottom sheet at 700 px and narrower. The Studio Machine is the same
+panel with its own title and no tabs or search.
 `cat` for each object is in `OBJECT_CATALOG` (`src/machine.js`); tested by `T.sweepMachine`.
 
 Catalog rules: removed objects show "Put back"; the shelf can never be removed; the machine itself is fixed to the
