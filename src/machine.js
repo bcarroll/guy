@@ -468,7 +468,7 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
         // the Restaurant asks first when something is in the way of its door: "Remove and add" or "Not now" (rooms.js offerFor)
         out.push({ sec: 'add', kinds: ['add'], hay, html: () => card({ ...base, label: 'Remove and add', action: act(() => acceptRoomOffer(r)), note: roomOffer.text, extra: { action: act(() => declineRoomOffer()), label: 'Not now' } }) });
       } else {
-        const note = r.corner ? 'Goes in a free corner beside another room when there is one, otherwise gets a door on a wall. Anything in the way goes back to the Catalog.' : r.askToClear ? 'Puts a door on a wall. If something is in the way, you are asked first.' : 'Puts a door on a wall. Anything in the way goes back to the Catalog.';
+        const note = r.corner ? 'Goes in a free corner beside another room when there is one, otherwise gets a door on a wall. Anything in the way goes back to the Catalog.' : r.askToClear ? 'Puts a door on a wall. If something is in the way, you are asked first. With no wall left it goes in a free corner beside another room.' : 'Puts a door on a wall. Anything in the way goes back to the Catalog.';
         out.push({ sec: 'add', kinds: ['add'], hay, html: () => card({ ...base, label: 'Add to my home', action: act(() => addRoom(r)), note }) });
       }
     }

@@ -14,7 +14,7 @@ export const ROOM_CATALOG = [
   // The Restaurant: a kitchen, a cash register and dining tables, with an elevator the customers arrive in. A premium room: listed
   // as locked in the Rooms tab (`premium: true`) until it is unlocked (`setUnlocked`; there is no way to pay yet).
   // `askToClear`: the Catalog asks before anything comes out of GUY's room for its door (a window, a painting, a chair: rooms.js offerFor).
-  { id: 'restaurant', name: 'Restaurant', icon: '🍽️', unlocked: false, premium: true, doorWalls: ['front', 'back', 'right'], elevator: true, askToClear: true,
+  { id: 'restaurant', name: 'Restaurant', icon: '🍽️', unlocked: false, premium: true, doorWalls: ['front', 'back', 'right'], elevator: true, askToClear: true, cornerFallback: true, corners: ['right-front', 'right-back', 'left-front', 'left-back'],
     desc: 'A kitchen and dining room. Customers arrive by elevator and GUY cooks and serves.',
     look: { frame: 0x6b4a2b, door: 0x2f6f8f, panel: 0x3d86a8, floor: 0xb98a55, wall: 0xeadbc0 } },
   // The Backyard: an open-air room (grass, a fence, no ceiling) with a goal, a hoop, a lawn chair, a bird bath and a switch for day and night.
@@ -119,6 +119,8 @@ export function initRooms({ world, remove, persist, refit, robots = () => [] }) 
     if (!unlocked(id)) return { ok: false, messages: ['That room is not ready yet.'] };
     if (added(id)) return { ok: false, already: true, messages: [`The ${r.name} is already part of your home.`] };
     if (r.corner && !(opts.at && !opts.at.corner)) return addCorner(r, opts);       // (a corner room saved on a wall of GUY's room comes back there)
+    // a room that prefers a wall of GUY's room (the Restaurant) but takes a free corner when no wall is left (`cornerFallback`)
+    if (r.cornerFallback && !opts.walls && !opts.clear && (opts.at ? opts.at.corner : !world.planDoor(r.doorWalls && r.doorWalls.length ? r.doorWalls : WALL_ORDER))) return addCorner(r, opts);
     return addOnWall(r, opts);
   }
 

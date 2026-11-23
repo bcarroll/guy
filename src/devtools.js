@@ -2722,6 +2722,13 @@ T.sweepRestaurantWall = () => {
     // 2. every wall it can use has a room: it says which, and nothing changes
     fresh();
     for (const [id, wall] of [['workshop', 'right'], ['backyard', 'front'], ['bowling', 'back']]) R().add(id, { walls: [wall] });
+    // (a free corner beside a room would take it instead: fill the corners the three rooms touch, then none is left)
+    const walls3 = Object.keys(w.doors).join();
+    const cornersBefore = R().add('library').ok && R().add('bedroom').ok;
+    const restInCorner = (() => { const a = R().add('restaurant', { ask: true }); const d = w.doors.restaurant; const res = { ok: a.ok, parent: d && d.parent, wall: d && d.wall, corner: a.corner }; if (a.ok) { R().reset('restaurant'); unlockRoom('restaurant'); } T.settle(); return res; })();
+    out.push(result('restaurant wall: with every wall taken and a free corner beside a room it goes in that corner, through a door in the room beside it (customers still come by the elevator)', cornersBefore && restInCorner.ok && !!restInCorner.corner && restInCorner.parent !== 'main' && /:/.test(restInCorner.wall), { walls3, restInCorner }));
+    const rdef = R().def('restaurant'), cornersKept = rdef.corners;
+    rdef.corners = [];                                                   // (no free corner left: as if the four were taken)
     const doorsBefore = Object.keys(w.doors).join(), removedBefore = Object.keys(w.removed).length;
     const full = R().add('restaurant', { ask: true });
     openTab('rooms'); press('Add to my home');
@@ -2729,6 +2736,7 @@ T.sweepRestaurantWall = () => {
       !full.ok && !full.offer && /No clear wall for the Restaurant/.test(full.messages[0]) && ['Workshop', 'Backyard', 'Bowling Alley'].every((n) => full.messages.some((m) => m.includes(n))) && /Remove one of those rooms/.test(full.messages.at(-1))
       && friendly(full.messages) && /No clear wall for the Restaurant/.test(toast()) && btns().join() === 'Add to my home', { messages: full.messages, toast: toast(), btns: btns() }));
     out.push(result('restaurant wall: ... and no door is added and nothing is moved', !R().isAdded('restaurant') && Object.keys(w.doors).join() === doorsBefore && Object.keys(w.removed).length === removedBefore, {}));
+    rdef.corners = cornersKept;
     // 3. the two walls it could use have rooms, and the back wall is covered by things that can come out: the window and panels
     fresh();
     R().add('workshop', { walls: ['right'] }); R().add('backyard', { walls: ['front'] });

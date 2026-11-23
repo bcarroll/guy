@@ -2095,7 +2095,7 @@ export function buildRoom(scene) {
       }
       if (def.elevator) {                                       // a room with an elevator (the Restaurant): a cabin against the far wall
         const b = shell.bounds, sgn = WALL[wall].rotY === Math.PI ? -1 : 1;
-        const ew = wall === 'right' || wall === 'left', N = ew ? b.maxX - b.minX : b.maxZ - b.minZ, Lw = ew ? b.maxZ - b.minZ : b.maxX - b.minX;
+        const N = shell.N, Lw = shell.L;                          // (the room is square: its depth and its width along the door wall, whichever wall the door is in)
         const lat = -Lw / 2 + 1.3;
         const cabin = rest.buildElevator();
         cabin.position.set(sgn * lat, 0, -N + 0.02);
