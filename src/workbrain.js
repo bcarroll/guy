@@ -520,10 +520,16 @@ export function installWorkshop(Brain, POSES, H) {
     cannotBuild() {
       const w = this.w, line = this.buildLine();
       if (!w.objects.woodfactory && !w.objects.metalfactory) return 'GUY needs a Wood Factory or a Metal Factory first.';
-      if (!wants(this).length) return 'There is nothing the house needs right now, so GUY has nothing to build.';
-      if (line === 'wood') return 'GUY needs a book, and the Wood Factory, to build what the house needs.';
-      if (line === 'metal') return 'GUY needs a book, and the Metal Factory, to build what the house needs.';
-      return 'GUY needs a book and the right factory in the Workshop to build what the house needs.';
+      const who = this.who(), she = this.isGal ? 'she' : 'he';
+      if (this.freeBuild()) {                                                  // shut in the Workshop: he builds anything he can, so only books or room stop him
+        if (!this.skills.has('workshop')) return `${who} needs the book "Workshop Basics" on the shelf to build anything.`;
+        if (line) return `${who} has made everything ${she} can make at the ${line === 'wood' ? 'Wood' : 'Metal'} Factory. Try the other factory, or add a workshop book to the shelf.`;
+        return `${who} has made everything ${she} knows how to make. Add another workshop book to the shelf for more.`;
+      }
+      if (!wants(this).length) return `There is nothing the house needs right now, so ${who} has nothing to build. Lock ${this.isGal ? 'her' : 'him'} in the Workshop to have ${this.isGal ? 'her' : 'him'} build whatever ${she} can.`;
+      if (line === 'wood') return `${who} needs a book, and the Wood Factory, to build what the house needs.`;
+      if (line === 'metal') return `${who} needs a book, and the Metal Factory, to build what the house needs.`;
+      return `${who} needs a book and the right factory in the Workshop to build what the house needs.`;
     },
     // the factory he was pointed at, or is locked on ('wood' | 'metal'), or null for any
     buildLine() { return this.forceLine || (this.lock && { woodfactory: 'wood', metalfactory: 'metal' }[this.lock.name]) || null; },
@@ -533,16 +539,44 @@ export function installWorkshop(Brain, POSES, H) {
       const set = (r.serves === 'seat' || r.serves === 'diners') && ((r.line === 'wood' && this.has('workshop.furniture.ch3')) || (r.line === 'metal' && this.has('workshop.metal.ch3')));
       return r.cap + (set ? 1 : 0);
     },
-    canBuild(id) {
+    // `extra`: how many more than the usual cap (a toy made again while he is shut in the Workshop)
+    canBuild(id, extra = 0) {
       const r = RECIPES[id], w = this.w, st = w.stock;
       if (!r || !w.instanceKinds().includes(r.object)) return false;
       if (!skillsOf(r).every((k) => this.skills.has(k))) return false;
       if ((st.items[r.object] || 0) >= STORAGE_CAP) return false;
       const made = (st.items[r.object] || 0) + Object.values(w.objects).filter((o) => o.kind === r.object).length;
-      if (made >= this.capOf(r)) return false;                                       // enough of these
+      if (made >= this.capOf(r) + extra) return false;                                // enough of these
       return factoriesOf(r).every((f) => !!this.obj(f));
     },
-    // which recipe he builds now: one he was told to, or the first thing the house needs that he can make (null if nothing)
+    // how many of a recipe there are: standing anywhere, in storage, and being made right now (by either robot)
+    madeOf(id) {
+      const r = RECIPES[id], w = this.w;
+      return (w.stock.items[r.object] || 0) + Object.values(w.objects).filter((o) => o.kind === r.object).length + (w.building || []).filter((b) => b.recipe === id).length;
+    },
+    // Shut in the Workshop (or in a room that still opens into it): the user's way of setting him to work there. Then he builds even when the
+    // house needs nothing, rather than standing about (Brett, Nov 23: "GUY and GAL locked in the Workshop are still not building anything").
+    freeBuild() { return !!this.stuckIn() && this.canReach(ID) && !!this.w.doors[ID]; },
+    // What he builds when the house needs nothing and he is shut in the Workshop, best first:
+    //   1. something he has never made that is of use somewhere (a foot stool, a chair; not a bed with no Bedroom to put it in)
+    //   2. a decoration or toy he has never made (the easter eggs: no ingredients needed this way)
+    //   3. a second of a toy (the fewest made first), so there is always something while there are toys he knows how to make
+    // Ones that need a factory the other robot is busy with come last. null if there is nothing at all.
+    freeRecipe(fits) {
+      const w = this.w, all = Object.keys(RECIPES).filter((id) => fits(id) && (!RECIPES[id].to || !!w.doors[RECIPES[id].to]) && (!RECIPES[id].eggRoom || !!w.doors[RECIPES[id].eggRoom]));
+      const busy = new Set((w.building || []).filter((b) => b.by !== this && RECIPES[b.recipe]).flatMap((b) => factoriesOf(RECIPES[b.recipe])));
+      const free = (ids) => { const ok = ids.filter((id) => !factoriesOf(RECIPES[id]).some((f) => busy.has(f))); return ok.length ? ok : ids; };
+      const never = all.filter((id) => this.madeOf(id) === 0 && this.canBuild(id));
+      const useful = never.filter((id) => !RECIPES[id].egg), toys = never.filter((id) => RECIPES[id].egg);
+      if (useful.length) return pick(free(useful));
+      if (toys.length) return pick(free(toys));
+      const again = all.filter((id) => RECIPES[id].egg && this.canBuild(id, 1));
+      if (!again.length) return null;
+      const least = Math.min(...again.map((id) => this.madeOf(id)));
+      return pick(free(again.filter((id) => this.madeOf(id) === least)));
+    },
+    // which recipe he builds now: one he was told to, or the first thing the house needs that he can make; shut in the Workshop with nothing
+    // needed, something he can make anyway (freeRecipe). null if nothing.
     pickRecipe() {
       if (this.forceRecipe) { if (this.canBuild(this.forceRecipe)) return this.forceRecipe; this.forceRecipe = null; }
       const line = this.buildLine(), fits = (id) => !line || RECIPES[id].line === line || RECIPES[id].line === 'both';
@@ -550,7 +584,7 @@ export function installWorkshop(Brain, POSES, H) {
         const options = Object.keys(RECIPES).filter((id) => RECIPES[id].serves === want.serves && fits(id) && this.canBuild(id));
         if (options.length) return pick(options);
       }
-      return null;
+      return this.freeBuild() ? this.freeRecipe(fits) : null;
     },
     // what the house needs that GAL could build but he cannot (so he can ask her), as a recipe id
     recipeForHelper(other) {
@@ -563,7 +597,14 @@ export function installWorkshop(Brain, POSES, H) {
     },
     beginBuild(id) { (this.w.building ||= []).push({ by: this, recipe: id }); },
     dropBuilding() { if (this.w.building) this.w.building = this.w.building.filter((b) => b.by !== this); },
-    endBuild() { this.dropBuilding(); this.forceRecipe = null; this.forceLine = null; },
+    endBuild() { this.dropBuilding(); this.forceRecipe = null; this.forceLine = null; this.w.lastBuilder = this; },
+    // Shut in the Workshop together, they take turns at building: the one who finished the last piece leaves the next to the other, who
+    // can (the Workshop is one robot at a time, and GUY, always first to choose, took every turn and GAL stood about). Only when he picks
+    // for himself: told to build, he still does.
+    yieldsBuild() {
+      const o = this.other;
+      return this.w.lastBuilder === this && !!o && !!o.g && this.freeBuild() && o.freeBuild() && !(o.galBlocks && o.galBlocks('build')) && !!o.pickRecipe();
+    },
     // the factory (or both, one after the other) makes it, then it goes where it is wanted
     buildSteps(id) {
       const fs = factoriesOf(RECIPES[id]);

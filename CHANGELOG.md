@@ -7,6 +7,7 @@ The big changes to GUY's room, newest first. The game shows the same list under 
 ### Changed
 
 - The Learning Workstation and the Build a Bot Machine are kept after a reload, in whatever room they were moved to, and GUY uses the Workstation there.
+- Locked in the Workshop, GUY and GAL build even when the house needs nothing: things they have never made first, then toys and decorations, taking turns.
 
 ## 2026-11-22
 
