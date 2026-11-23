@@ -593,7 +593,7 @@ function interactLabel(name) {
     case 'toolbox': return '🧰 Tidy the Tools';
     case 'woodfactory': return '🏭 Build Something Wooden';
     case 'metalfactory': return '🏭 Build Something Metal';
-    case 'botprinter': return '🤖 Build GAL';
+    case 'botprinter': return w.gal && w.gal.exists() ? '🤖 Print Something' : '🤖 Build GAL';
     case 'workstation': return '🖥️ Use Workstation';
     case 'plant': case 'flowerplant': case 'tree': return '🌱 Tend Plant';
     case 'soccergoal': return '⚽ Take Shots';

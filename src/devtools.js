@@ -52,6 +52,8 @@ export const MANIFEST = {
     drums: { skills: ['drums'] }, easel: { skills: ['easel'] }, telescope: { skills: ['telescope'] },
     // the easter eggs (last, so the objects before them are placed as they always were)
     mirrorball: { room: 'workshop', built: true }, trophy: { room: 'workshop', built: true }, lavalamp: { room: 'workshop', built: true }, crystalball: { room: 'workshop', built: true }, rubberduck: { room: 'workshop', built: true }, gnome: { room: 'workshop', built: true }, toyrocket: { room: 'workshop', built: true }, arcade: { room: 'workshop', built: true }, piggybank: { room: 'workshop', built: true }, grandfatherclock: { room: 'workshop', built: true }, bubblemachine: { room: 'workshop', built: true }, snowglobe: { room: 'workshop', built: true }, petrock: { room: 'workshop', built: true },
+    // printed by the Build a Bot machine (line 'bot'): they need it standing in the Workshop; the last four are combinations
+    fishtank: { room: 'workshop', built: true }, rubberchicken: { room: 'workshop', built: true }, flamingo: { room: 'workshop', built: true }, neonsign: { room: 'workshop', built: true }, aquarium: { room: 'workshop', built: true }, jukebox: { room: 'workshop', built: true }, plasmaglobe: { room: 'workshop', built: true }, robopet: { room: 'workshop', built: true },
     // decor (world.decor): no interaction; tested by sweepDecor (remove / put back through the Catalog, wall limits)
     rug: { decor: true }, picture: { decor: true, wall: 'back' }, window: { decor: true, wall: 'left' }, window2: { decor: true, wall: 'back', startsOut: true },
     art_mountains: { decor: true, wall: 'left', startsOut: true }, art_abstract: { decor: true, wall: 'back', startsOut: true }, art_moon: { decor: true, wall: 'left', startsOut: true },
@@ -61,7 +63,7 @@ export const MANIFEST = {
     // the Workshop (a room added from the Rooms tab: T.addObject adds it first) and what GUY builds there (counted in storage, added one at a time)
     workbench: { room: 'workshop', skills: ['workshop'] }, toolbox: { room: 'workshop', skills: ['workshop'] },
     woodfactory: { room: 'workshop', skills: ['workshop.materials'] }, metalfactory: { room: 'workshop', skills: ['workshop.metal'] },
-    botprinter: { skills: [] },       // the Build a Bot machine (premium, one use): tested by sweepGal
+    botprinter: { room: 'workshop', premium: true, skills: [] },       // the Build a Bot machine (premium, a Workshop object that never leaves it; prints GAL, then other things): tested by sweepGal
     workstation: { skills: [] },      // the Learning Workstation (premium): tested by sweepWorkstation
     footstool: { room: 'workshop', built: true }, woodshelves: { room: 'workshop', built: true }, builtchair: { room: 'workshop', built: true }, metalchair: { room: 'workshop', built: true }, bookshelf2: { room: 'workshop', built: true }, eguitar: { room: 'workshop', built: true },
     bowlingpins: { room: 'workshop', built: true, alsoRoom: 'bowling' }, bowlingball: { room: 'workshop', built: true, alsoRoom: 'bowling' }, pinsetter: { room: 'workshop', built: true, alsoRoom: 'bowling' },      // (the Bowling Alley's equipment: it goes in the alley, so that has to be there; the pinsetter is an easter egg)
@@ -3658,6 +3660,7 @@ T.sweepNeeds = () => {
     for (const [id, r] of Object.entries(RECIPES_DEF)) {
       if (!r.egg || r.eggRoom) continue;                                   // (the Automatic Pinsetter lives in the Bowling Alley: sweepBowl)
       needSetup('right', ['workshop'], { metal: true, chair: false });
+      if (r.line === 'bot') T.addObject('botprinter');                       // (what the Build a Bot machine prints is wanted only while it stands in the Workshop)
       for (const k of r.egg.slice(0, -1)) T.addObject(k);
       const partial = eggs().includes(r.serves);
       T.addObject(r.egg[r.egg.length - 1]);
@@ -3665,8 +3668,9 @@ T.sweepNeeds = () => {
     }
     out.push(result('needs: eggs: every egg is wanted only once all of its ingredients are in the room', !bad.length, { bad }));
     // an egg of the wooden line and one that needs both lines are built end to end
-    for (const id of ['rubberduck', 'snowglobe']) {
+    for (const id of ['rubberduck', 'snowglobe', 'fishtank', 'aquarium', 'robopet']) {
       needSetup('right', ['workshop'], { metal: true });
+      if (RECIPES_DEF[id].line === 'bot') T.addObject('botprinter');
       for (const k of RECIPES_DEF[id].egg) T.addObject(k);
       const e = errors.length;
       b.pickRecipe = () => id; const t = buildToEnd(b, 1500); delete b.pickRecipe;
@@ -3692,15 +3696,23 @@ const galReset = () => {
   if (shelf) for (const rec of [...shelf.books]) if (!rec.def.start) shelf.removeBook(rec);        // the books the last test put on the shelf
   T.home(); T.settle();
 };
-// build her through the real machine: add it (the harness unlocks premium), GUY uses it
+// build her through the real machine: add it to the Workshop (the harness unlocks premium and adds the room), GUY goes in and uses it. The tests
+// that only need her get the house as it was before (no Workshop, no machine, both robots in GUY's room); the ones that already have a Workshop
+// keep it, with the machine in it.
 const galBuild = () => {
   const w = W(), b = B();
-  const was = dev.all; dev.all = true;
-  w.addNew('botprinter', null);
-  dev.all = was;
+  const hadShop = !!w.doors.workshop;
+  T.addObject('botprinter');
   b.queue = []; b.step = null; b.choose('buildbot');
-  let t = 0; while (t < 80 && !(w.gal.exists() && !w.gal.emerge)) { step(0.5); t += 0.5; }
-  return { ok: w.gal.exists() && !w.gal.emerge, t };
+  let t = 0; while (t < 150 && !(w.gal.exists() && !w.gal.emerge)) { step(0.5); t += 0.5; }
+  const ok = w.gal.exists() && !w.gal.emerge;
+  if (ok && !hadShop) {
+    for (const r of [G().root, w.gal.g.root]) r.position.set(r === G().root ? 0 : 0.5, 0, r === G().root ? 2 : -0.5);
+    for (const br of [b, w.gal.brain]) { br.queue = []; br.step = null; br.stayRoom = null; }
+    R().reset('workshop'); delete w.removed.botprinter; w.stock.items = {};
+    T.settle();
+  }
+  return { ok, t };
 };
 T.galBuild = () => galBuild(); T.galReset = () => galReset();         // (the pictures use them: GAL playing the guitar)
 T.sweepGal = () => {
@@ -3708,17 +3720,32 @@ T.sweepGal = () => {
   if (!gal.g || !gal.g.loaded) return [result('gal: her model is loaded (wait a moment after the page opens)', false)];
   galReset();
   try {
-  // 1. the machine is a premium thing: locked in the Catalog until unlocked, then added like anything else
+  // 1. the machine is a premium Workshop thing: listed (under Machines) once the Workshop is there, locked until unlocked, then added like anything else
   openObjects('all');
+  out.push(result('gal: the machine is not listed at all until the Workshop has been added', !machineCard('Build a Bot Machine')));
+  machine().hidden = true;
+  unlockRoom('workshop'); R().add('workshop', { walls: ['right'] }); openObjects('all');
   const card0 = machineCard('Build a Bot Machine');
-  out.push(result('gal: the Build a Bot machine is listed in the Catalog as locked (no Add button)', !!card0 && !card0.querySelector('.act') && /Locked/.test(card0.textContent) && !T.addObject('botprinter')));
+  out.push(result('gal: with the Workshop added the Build a Bot machine is listed in the Catalog as locked (no Add button)', !!card0 && !card0.querySelector('.act') && /Locked/.test(card0.textContent) && !w.objects.botprinter));
   machine().hidden = true;
   dev.all = true; openObjects('all');
   const card1 = machineCard('Build a Bot Machine');
   out.push(result('gal: with premium unlocked it can be added, and it stands on free floor', !!card1 && !!card1.querySelector('.act')));
   card1.querySelector('.act').click(); machine().hidden = true; dev.all = false;
   const m = w.objects.botprinter;
-  out.push(result('gal: the machine stands in the room, clear of everything', !!m && w.fits(m, m.x, m.z)));
+  out.push(result('gal: the machine stands in the Workshop, clear of everything', !!m && w.fits(m, m.x, m.z) && w.roomIdAt(m.x, m.z) === 'workshop'));
+  // it never leaves the Workshop: not by being dragged, not by being put anywhere else
+  {
+    const home = { x: m.x, z: m.z }, to = [{ x: 0, z: 0 }, { x: 0, z: 3 }, { x: -2, z: -3 }];
+    const nowhere = to.every((p) => !w.fits(m, p.x, p.z));
+    const sh = w.doors.workshop.shell.bounds;
+    const inside = w.fits(m, (sh.minX + sh.maxX) / 2, (sh.minZ + sh.maxZ) / 2) || w.findSpot(m, { x: (sh.minX + sh.maxX) / 2, z: (sh.minZ + sh.maxZ) / 2 }, null);
+    m.set(home.x, home.z);
+    // dragged right across the doorway into GUY's room it stops at the wall
+    for (let i = 0; i < 80; i++) w.dragTo(m, 0, 0, () => true);
+    out.push(result('gal: the machine can be moved about inside the Workshop but never out of it (not into his own room, not through the door)', nowhere && !!inside && w.roomIdAt(m.x, m.z) === 'workshop' && w.wallOk(m, m.x, m.z) && !w.canTransit(m, 0, 0), { nowhere, room: w.roomIdAt(m.x, m.z) }));
+    m.set(home.x, home.z);
+  }
   // the long-press menu: its button makes GUY use it (it used to say he could not do anything with it)
   window.__guyOpenMenu('botprinter');
   const menu = document.getElementById('menu'), useBtn = [...menu.querySelectorAll('[data-act]')].find((x) => !x.hidden && /Build GAL|Use/.test(x.textContent));
@@ -3727,22 +3754,36 @@ T.sweepGal = () => {
   menu.hidden = true;
   out.push(result('gal: long-pressing the machine and choosing its button sends GUY to build her (not the old refusal)', !!useBtn && b.pendingActivity === 'buildbot', { btn: useBtn && useBtn.textContent, pending: b.pendingActivity }));
   b.pendingActivity = null;
-  // 2. GUY uses it and it folds itself into GAL
+  // 2. GUY goes in, uses it, and she steps out in front of it: the machine stays
   b.queue = []; b.step = null; b.choose('buildbot');
   const seen = [], s0 = sfxNow();
-  let t = 0, sawRun = false, scaleMin = 1;
-  while (t < 80 && !(gal.exists() && !gal.emerge)) {
+  let t = 0, sawRun = false, scaleMin = 1, ghostMax = 0;
+  while (t < 150 && !(gal.exists() && !gal.emerge)) {
     step(0.25); t += 0.25;
     if (m.running > 0) sawRun = true;
-    if (gal.exists() && gal.emerge) scaleMin = Math.min(scaleMin, m.group.scale.y);
+    if (gal.exists() && gal.emerge) { scaleMin = Math.min(scaleMin, m.group.scale.y); ghostMax = Math.max(ghostMax, m.ghost.visible ? 1 : 0); }
     if (seen[seen.length - 1] !== label()) seen.push(label().slice(0, 30));
   }
   const s1 = sfxNow();
-  out.push(result('gal: GUY goes to the machine, presses the button, it prints and then folds itself into GAL (the machine shrinks away)', gal.exists() && !gal.emerge && sawRun && scaleMin < 0.3 && !w.objects.botprinter && seen[0] === 'building GAL', { seen, sawRun, scaleMin, t }));
-  out.push(result('gal: the machine is used up: it is not in the Catalog to put back, and its card says GAL is here', !w.removed.botprinter && (() => { dev.all = true; openObjects('all'); const c = machineCard('Build a Bot Machine'); const ok = !!c && !c.querySelector('.act') && /GAL is here/.test(c.textContent); dev.all = false; machine().hidden = true; return ok; })()));
+  const gp = gal.g.root.position, front = m.at(0, 0, 1.3);
+  out.push(result('gal: GUY goes to the machine, presses the button, it prints and she steps out in front of it (the machine is still there, whole, in the Workshop)', gal.exists() && !gal.emerge && sawRun && scaleMin > 0.99 && w.objects.botprinter === m && w.roomIdAt(m.x, m.z) === 'workshop' && !m.ghost.visible && seen[0] === 'building GAL' && Math.hypot(gp.x - front.x, gp.z - front.z) < 1.5, { seen, sawRun, scaleMin, t, gal: [gp.x, gp.z] }));
+  out.push(result('gal: the machine is not used up: its Catalog card says it is in the room', !w.removed.botprinter && (() => { dev.all = true; openObjects('all'); const c = machineCard('Build a Bot Machine'); const ok = !!c && /inroom/.test(c.className) && !/Locked|GAL is here|Used/.test(c.textContent); dev.all = false; machine().hidden = true; return ok; })()));
+  out.push(result('gal: once she is here its button says it prints other things, and long-pressing it sends GUY to build, not to make another GAL', (() => { window.__guyOpenMenu('botprinter'); const mm = document.getElementById('menu'), btn = [...mm.querySelectorAll('[data-act]')].find((x) => !x.hidden && /Print Something/.test(x.textContent)); mm.hidden = true; return !!btn && b.lockActs('botprinter').every((a) => a !== 'buildbot') && !b.available('buildbot'); })()));
   out.push(result('gal: building her makes its sounds (machine, chime)', heard(s0, s1, 'machine') > 0 && heard(s0, s1, 'chime') > 0));
   let gb = gal.brain; const gr = gal.g.root;
   out.push(result('gal: she starts with no skills, stands on the floor at full size, and is an obstacle for GUY (and he for her)', gb.skills.known.size === 0 && Math.abs(gr.scale.y - 1) < 0.01 && T.feetOf(gal.g) < 0.06 && w.obstacles.filter((o) => o.char).length === 2 && b.selfOb !== gb.selfOb));
+  // 2b. the machine stays and prints other things (RECIPES with line 'bot'): only while it stands in the Workshop
+  {
+    const e2 = errors.length;
+    T.learn(['workshop']); T.addObject('coffeetable');
+    const wantTank = wants(b).filter((x) => /^egg\./.test(x.serves)).map((x) => x.serves);
+    const tp = buildToEnd(b, 1500), ft = kindIn(w, 'fishtank', 'main')[0];
+    out.push(result('gal: with the machine in the Workshop a coffee table makes GUY print a Fish Tank (glass): it is carried into his room, put together, it moves, and the machine is still there', wantTank.length === 1 && wantTank[0] === 'egg.fishtank' && tp > 0 && !!ft && !!ft.group.userData.tick && w.objects.botprinter === m && !m.tray.children.length && !m.ghost.visible && errors.length === e2, { wantTank, tp, ft: !!ft, errs: errors.slice(e2, e2 + 1) }));
+    w.removeObject('botprinter'); b.objectRemoved('botprinter'); T.addObject('nightstand');
+    out.push(result('gal: take the machine away and what it prints is not wanted and cannot be built (a nightstand would have meant a Rubber Chicken)', !wants(b).some((x) => x.serves === 'egg.rubberchicken') && !b.canBuild('rubberchicken') && b.pickRecipe() === null));
+    T.addObject('botprinter');
+    out.push(result('gal: put the machine back in the Workshop and the Rubber Chicken is wanted again', wants(b).some((x) => x.serves === 'egg.rubberchicken') && b.canBuild('rubberchicken') && w.roomIdAt(w.objects.botprinter.x, w.objects.botprinter.z) === 'workshop'));
+  }
   // 3. a long stretch of free time: both do their own things, apart from each other, with no errors
   let t3 = 0, close = 0, bothAt = {}, galActs = new Set(), guyActs = new Set(), e3 = errors.length;
   const shared = ['piano', 'drums', 'guitar', 'easel', 'telescope'];
@@ -3973,8 +4014,8 @@ T.sweepGal = () => {
   try { localStorage.removeItem('guy.gal.v1'); } catch { /* no storage */ }
   // 9. things taken away while he builds her
   galReset();
-  { w.addNew('botprinter', null); b.queue = []; b.step = null; b.choose('buildbot'); runUntil(() => b.pose === 'idle' && b.step && b.step.fx && b.step.fx.needs && b.step.t > 1, 60); w.removeObject('botprinter'); b.objectRemoved('botprinter'); b.skip(); T.settle(); delete w.removed.botprinter; }
-  out.push(result('gal: take the machine away while he is using it and nothing is built, nothing is left half done, and he carries on', !gal.exists() && b.carry === null && b.inMain() && errors.length === base));
+  { T.addObject('botprinter'); b.queue = []; b.step = null; b.choose('buildbot'); runUntil(() => b.pose === 'idle' && b.step && b.step.fx && b.step.fx.needs && b.step.t > 1, 90); w.removeObject('botprinter'); b.objectRemoved('botprinter'); b.skip(); T.settle(); delete w.removed.botprinter; }
+  out.push(result('gal: take the machine away while he is using it and nothing is built, nothing is left half done, and he carries on', !gal.exists() && b.carry === null && (b.inMain() || b.inWorkshop()) && !(w.building || []).length && errors.length === base));
   } catch (e) { out.push(result('gal: the sweep threw: ' + e.message, false, { stack: String(e.stack).slice(0, 400) })); }
   w.restaurant.paused = false; w.restaurant.headless = false;
   galReset();

@@ -18,7 +18,8 @@ export function makeWorkshopBuilders({ makeObject, box, mat }) {
 
   // A small model of something a factory has made, standing at the origin of `g` (the factory's tray). `kind` is what the recipe makes
   // ('hardware' is the metal part of an electric guitar, made at the Metal Factory before the Wood Factory makes the body).
-  const EGG_KINDS = ['crystalball', 'rubberduck', 'gnome', 'toyrocket', 'arcade', 'piggybank', 'grandfatherclock', 'bubblemachine', 'snowglobe', 'petrock'];
+  const EGG_KINDS = ['crystalball', 'rubberduck', 'gnome', 'toyrocket', 'arcade', 'piggybank', 'grandfatherclock', 'bubblemachine', 'snowglobe', 'petrock',
+    'fishtank', 'rubberchicken', 'flamingo', 'neonsign', 'aquarium', 'jukebox', 'plasmaglobe', 'robopet'];     // (and the things the Build a Bot machine prints)
   const productModel = (g, kind) => {
     const light = mat(WOOD_LIGHT), wd = mat(WOOD);
     if (kind === 'hardware') {
@@ -225,5 +226,5 @@ export function makeWorkshopBuilders({ makeObject, box, mat }) {
     }, 7, 55);
   };
 
-  return { workbench, toolbox, woodfactory, metalfactory };
+  return { workbench, toolbox, woodfactory, metalfactory, productModel };
 }

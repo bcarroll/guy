@@ -216,17 +216,22 @@ export class Gal {
     return true;
   }
 
-  // GUY has used the Build a Bot machine: it folds itself into GAL (the machine goes for good)
+  // GUY has used the Build a Bot machine: it prints her, and she steps out in front of it. The machine stays in the Workshop (it prints other
+  // things from now on: workshop.js, line 'bot').
   build(machine) {
     if (this.present || !machine) return false;
-    const x = machine.x, z = machine.z;
-    if (!this.spawn(x, z, { emerging: true })) return false;
+    // in front of it, where its button is (not inside it); at its side or behind it if the front is against a wall or something stands there
+    const free = (q) => this.w.roomIdAt(q.x, q.z) === 'workshop' && !this.w.obstacles.some((o) => o.active !== false && !o.char && o !== machine.obstacle && q.x + 0.3 > o.x0 && q.x - 0.3 < o.x1 && q.z + 0.3 > o.z0 && q.z - 0.3 < o.z1);
+    const spots = [[0, 1.3], [1.2, 0.6], [-1.2, 0.6], [0, -1.2]].map(([dx, dz]) => machine.at(dx, 0, dz));
+    const p = spots.find(free) || spots[0];
+    if (!this.spawn(p.x, p.z, { emerging: true })) return false;
+    this.g.root.rotation.y = machine.group.rotation.y;                        // (facing out, the way its front does)
     this.emerge.machine = machine;
     sfx('chime');
     return true;
   }
 
-  // put her back after a reload (not the machine)
+  // put her back after a reload (the machine is restored with the rest of the room: layout.js)
   restore() {
     if (!this.opts.persist) return Promise.resolve(false);
     let saved = null;
@@ -239,7 +244,7 @@ export class Gal {
     try { localStorage.setItem(KEY, JSON.stringify({ present: this.present })); } catch { /* no storage */ }
   }
 
-  // test aid: take her away again (the machine does not come back)
+  // test aid: take her away again
   remove() {
     if (!this.present) return;
     if (this.brain && this.brain.held) this.brain.returnBook();                // a book in her hands goes back on the shelf
@@ -268,21 +273,21 @@ export class Gal {
     this.updateDuo(dt);
   }
 
-  // being printed: the machine shrinks into her while she grows to full height
+  // being printed: she grows to full height in front of the machine, whose outline of her fades as she does
   updateEmerge(dt) {
     const e = this.emerge, g = this.g, root = g.root, m = e.machine;
     e.t += dt;
     const k = Math.min(1, e.t / e.dur), s = k * k * (3 - 2 * k);
     root.scale.setScalar(0.25 + 0.75 * s);
-    if (m && m.group) { m.group.scale.set(1 - 0.9 * s, 1 - 0.95 * s, 1 - 0.9 * s); m.obstacle.active = k < 0.6; }
+    if (m && m.ghost) { m.ghost.visible = true; m.ghost.scale.set(1, 1, 1); m.ghost.children.forEach((c) => { c.material.opacity = 0.35 * (1 - s); }); }
     g.clearTargets(); basePose(g, e.t); POSES.idle(g, e.t); g.apply(dt);
     if (k >= 1) {
       root.scale.setScalar(1);
-      if (m && this.w.objects.botprinter === m) { this.w.removeObject('botprinter'); delete this.w.removed.botprinter; m.group.scale.setScalar(1); }
+      if (m && m.endRun) { m.endRun(); m.ghost.children.forEach((c) => { c.material.opacity = 0.35; }); }
       this.emerge = null;
       this.brain.pendingActivity = 'wave';
       this.say('GAL is here');
-      if (this.opts.onBuilt) this.opts.onBuilt('GAL is here! The machine folded itself into her.');
+      if (this.opts.onBuilt) this.opts.onBuilt('GAL is here! The Build a Bot machine stays in the Workshop: it can print other things now.');
     }
   }
 
@@ -391,7 +396,7 @@ export function installGalGuy(Brain) {
     galActivities() {
       const w = this.w;
       return {
-        // use the Build a Bot machine: press the button, watch it print, and it folds itself into GAL
+        // use the Build a Bot machine (the first time): press the button, watch it print GAL, and she steps out in front of it
         buildbot: () => {
           const m = () => this.obj('botprinter');
           if (!m() || (w.gal && w.gal.exists())) return ['nothing to build with', this.play('idle', 0.5)];            // (asked for, but the machine has gone or GAL is already here)
@@ -435,7 +440,7 @@ export function installGalGuy(Brain) {
       };
     },
     galBlocks(act) {
-      if (act === 'buildbot') return !(this.obj('botprinter') && this.w.gal && !this.w.gal.exists() && this.w.gal.g && this.w.gal.g.loaded && this.w.gal.ready);
+      if (act === 'buildbot') return !(this.obj('botprinter') && !this.doorLockedFor('workshop') && this.w.gal && !this.w.gal.exists() && this.w.gal.g && this.w.gal.g.loaded && this.w.gal.ready);
       if (act === 'bandjam') return !(this.w.gal && this.w.gal.planDuo());
       if (act === 'orderbuild') { const g = this.w.gal; return !(g && g.exists() && g.canInvite() && !g.brain.forceRecipe && this.recipeForHelper(g.brain)); }
       if (act === 'bandplay') return !(this.w.gal && this.w.gal.duo);

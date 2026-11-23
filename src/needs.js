@@ -12,7 +12,10 @@
 // serves; `supply` counts what already exists or is on its way (built and waiting in the Workshop, or in storage), so nothing is built twice.
 import { RECIPES } from './workshop.js';
 
-const kindsServing = (serves) => Object.values(RECIPES).filter((r) => r.serves === serves).map((r) => r.object);
+// the Build a Bot machine, if it stands in the Workshop (it never leaves it); what it prints is only wanted, and only built, while it does
+export const botMachine = (w) => { const m = w.objects.botprinter; return m && w.roomIdAt(m.x, m.z) === 'workshop' ? m : null; };
+
+const kindsServing =(serves) => Object.values(RECIPES).filter((r) => r.serves === serves).map((r) => r.object);
 
 // built things of these kinds: in the room (anywhere), in storage, and being built right now
 export function supply(w, serves, room = null) {
@@ -68,6 +71,7 @@ export function wants(b) {
   const inHouse = (k) => Object.values(w.objects).some((o) => o.name === k || o.kind === k);
   for (const r of Object.values(RECIPES)) {
     if (!r.egg || (r.eggRoom && !w.doors[r.eggRoom])) continue;
+    if (r.line === 'bot' && !botMachine(w)) continue;                  // (the Build a Bot machine prints these, and only from the Workshop)
     if (r.egg.every(r.eggWhere === 'house' ? inHouse : inMain) && supply(w, r.serves) === 0) out.push({ serves: r.serves, n: 1, why: 'a surprise' });
   }
   return out;

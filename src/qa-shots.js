@@ -195,22 +195,34 @@ export function install(T, h) {
       return { data: capture() };
     });
     // the easter eggs, each up close (they are built only when their ingredients stand in the room: the QA adds them directly)
-    for (const [kind, ingredients] of [['mirrorball', []], ['trophy', []], ['lavalamp', []], ['crystalball', []], ['rubberduck', []], ['gnome', []], ['toyrocket', []], ['arcade', []], ['piggybank', []], ['grandfatherclock', []], ['bubblemachine', []], ['snowglobe', []], ['petrock', []]]) {
+    for (const [kind, ingredients] of [['mirrorball', []], ['trophy', []], ['lavalamp', []], ['crystalball', []], ['rubberduck', []], ['gnome', []], ['toyrocket', []], ['arcade', []], ['piggybank', []], ['grandfatherclock', []], ['bubblemachine', []], ['snowglobe', []], ['petrock', []],
+      ['fishtank', []], ['rubberchicken', []], ['flamingo', []], ['neonsign', []], ['aquarium', []], ['jukebox', []], ['plasmaglobe', []], ['robopet', []]]) {      // (the last eight are printed by the Build a Bot machine)
       add(`egg-${kind}`, 'rooms', async () => {
         await clean(43);
         for (const id of ingredients) T.addObject(id);
         const o = window.brain.w.addInstance(kind, null, null, true); const ob = window.brain.w.objects[o];
         if (!ob) return { ok: false, why: `${kind} did not fit in the room` };
         T.freeze(); window.guy.root.position.set(0, 0, 3); window.guy.root.visible = false;
+        window.__qaClock = 2.0;                                              // (the things the Build a Bot machine prints hold their animation still for the picture)
         ob.group.userData.tick && ob.group.userData.tick(0.4);
         T.frameAt(ob.x, ob.z, ob.yaw, 'front', 2.4, 0.9);
         await settleFrames(3);
-        return { data: capture() };
+        const data = capture(); delete window.__qaClock;
+        return { data };
       });
     }
     add('room-workshop', 'rooms', async () => {
       await clean(42);
       for (const id of ['workbench', 'toolbox', 'woodfactory', 'metalfactory']) T.addObject(id);
+      T.freeze(); T.frameRoom('workshop'); await settleFrames(3);
+      return { data: capture() };
+    });
+    add('room-workshop-machine', 'rooms', async () => {                    // the Build a Bot machine in the Workshop (it never leaves that room), with a thing it printed on its bed
+      await clean(42);
+      for (const id of ['workbench', 'toolbox', 'woodfactory', 'metalfactory', 'botprinter']) T.addObject(id);
+      const m = window.brain.w.objects.botprinter;
+      if (!m) return { ok: false, why: 'the machine did not fit in the Workshop' };
+      m.showMade('fishtank');
       T.freeze(); T.frameRoom('workshop'); await settleFrames(3);
       return { data: capture() };
     });

@@ -2434,7 +2434,7 @@ export class Brain {
       ball: ['dribble', 'toss', 'ball'], guitar: ['guitar', 'riff', 'jamguitar'], drums: ['bang', 'drums', 'drumsolo', 'jamdrums'],
       easel: ['scribble', 'paint', 'mixpaint', 'portrait'], telescope: ['peek', 'stargaze', 'darkstargaze', 'scopecare'],
       stove: REST_ACTS, kitchencounter: REST_ACTS, register: REST_ACTS, diningtable: REST_ACTS, diningtable2: REST_ACTS,
-      workbench: ['build'], toolbox: ['tidytools'], woodfactory: ['build'], metalfactory: ['build'],
+      workbench: ['build'], toolbox: ['tidytools'], woodfactory: ['build'], metalfactory: ['build'], botprinter: this.w.gal && this.w.gal.exists() ? ['build'] : ['buildbot'],
       bass: ['playbass'], keyboard: ['playkeys'], xylophone: ['playxylo'], bongos: ['playbongos'],
       soccergoal: ['goalshot', 'soccertoss'], basketballhoop: ['hoopshoot', 'hoopdribble'], lawnchair: ['yardsit'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], shed: ['mow'], mower: ['mow'],
       blasterrack: ['rangeshoot'], rangecontroller: ['rangeshoot'], scoreboard: ['rangehang', 'rangeshoot'], ballrack: ['bowl'], bowlscore: ['bowl', 'bowlwatch'],
@@ -2681,7 +2681,7 @@ export class Brain {
       easel: ['scribble', 'paint', 'mixpaint', 'portrait'],
       telescope: ['peek', 'stargaze', 'darkstargaze', 'scopecare'],
       workbench: ['build'], toolbox: ['tidytools'], woodfactory: ['build'], metalfactory: ['build'],
-      botprinter: ['buildbot'], workstation: ['learn'],
+      botprinter: this.w.gal && this.w.gal.exists() ? ['build'] : ['buildbot'], workstation: ['learn'],         // (once GAL is printed the machine stays: it prints other things)
       soccergoal: ['goalshot', 'soccertoss'], basketballhoop: ['hoopshoot', 'hoopdribble'], lawnchair: ['yardsit'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], shed: ['mow'], mower: ['mow'],
       blasterrack: ['rangeshoot'], rangecontroller: ['rangeshoot'], scoreboard: ['rangehang', 'rangeshoot'], ballrack: ['bowl'], bowlscore: ['bowl', 'bowlwatch'],
       recordwall: ['studiodj'], djbooth: ['studiodj', 'studioshow', 'studioparty'], studiomachine: ['studiowatch'],
@@ -2690,10 +2690,9 @@ export class Brain {
     if (this.obj(name) && this.obj(name).guitar && !this.obj(name).bass) this.wantGuitar = name;
     if (name === 'botprinter') {
       const g = this.w.gal;
-      if (g && g.exists()) return { ok: false, message: 'GAL is already here: the machine can only be used once.' };
-      if (!g || !g.g || !g.g.loaded) return { ok: false, message: 'GAL is still getting ready. Try again in a moment.' };
+      if (!g || (!g.exists() && (!g.g || !g.g.loaded))) return { ok: false, message: 'GAL is still getting ready. Try again in a moment.' };      // (before she is printed it prints her; after that, other things)
     }
-    this.forceLine = { woodfactory: 'wood', metalfactory: 'metal' }[name] || null;          // a factory he is pointed at builds something of its own line
+    this.forceLine = { woodfactory: 'wood', metalfactory: 'metal', botprinter: this.w.gal && this.w.gal.exists() ? 'bot' : null }[name] || null;          // a factory he is pointed at builds something of its own line
     const wmsg = this.workRefusal(name) || this.restRefusal(name);
     if (wmsg) { this.forceLine = null; return { ok: false, message: wmsg }; }
     // told to use the goal or the hoop before reading that sport's book: say so (otherwise all he would do is poke the ball about with his foot)

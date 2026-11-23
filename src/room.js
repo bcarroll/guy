@@ -101,6 +101,9 @@ export function buildRoom(scene) {
       // the bookshelves are where GUY learns and keeps his records: they stay in his own room, or the Library once there is one (the robots
       // carry them in there, flat-packed: librarybrain.js); never anywhere else
       get mainOnly() { return this.name === 'shelf' || this.kind === 'bookshelf2'; },
+      // the Build a Bot machine never leaves the Workshop (the things it prints are only made while it stands there): it can be moved about in
+      // that room, and never out of it, through the door or by dragging
+      get roomOnly() { return this.name === 'botprinter' ? 'workshop' : null; },
       set(nx, nz) {
         group.position.set(nx, 0, nz);
         Object.assign(ob, { x0: nx - this.w / 2, x1: nx + this.w / 2, z0: nz - this.d / 2, z1: nz + this.d / 2 });
@@ -1152,6 +1155,9 @@ export function buildRoom(scene) {
     // left of the workbench (placed exactly: the far wall is busy, and findSpot keeps a new thing a metre from the walls and its neighbours)
     woodfactory: (N, L) => ({ n: N * 0.25, lat: L / 2 - 0.7, face: 'minusLat' }),
     metalfactory: (N, L) => ({ n: N - 0.98, lat: -(L / 2 - 1.05), face: 'door', exact: true }),
+    // the Build a Bot machine: against the wall opposite the Wood Factory, facing into the room (it needs a metre and a half in front of it:
+    // GUY at its button, and GAL stepping out of it)
+    botprinter: (N, L) => ({ n: N * 0.32, lat: -(L / 2 - 0.9), face: 'plusLat', exact: true }),
   };
   const shopSpot = (id) => (w) => {
     if (!w.doors.workshop) return null;
@@ -1271,6 +1277,91 @@ export function buildRoom(scene) {
     box(0.1, 0.012, 0.01, mat(0x333333), 0, 0.1, 0.15, g);
     g.userData.tick = () => { const t = performance.now() / 900; eyes.forEach((e) => { e.children[0].position.x = Math.sin(t) * 0.012; e.children[0].position.y = Math.cos(t * 0.7) * 0.01; }); };
   });
+  // ---- Printed by the Build a Bot machine (src/botobjects.js; recipes with line 'bot' in workshop.js). Same rules as the easter eggs above: a slow
+  // idle animation in `group.userData.tick`. The last four are combinations of other things.
+  // (the animations of these run off one clock, which the QA pictures can hold still: window.__qaClock)
+  const nowS = () => (typeof window !== 'undefined' && window.__qaClock !== undefined ? window.__qaClock : performance.now() / 1000);
+  const clearGlass = (c = 0xcfeaff, op = 0.28) => new THREE.MeshStandardMaterial({ color: c, transparent: true, opacity: op, roughness: 0.05, metalness: 0.1, depthWrite: false });
+  const buildFishTank = (name, x = 0, z = 0) => makeObject(name, x, z, 0.8, 0.45, 0.9, 'light', (g) => {
+    const dark = mat(0x3a2a1c);
+    box(0.8, 0.4, 0.45, dark, 0, 0.2, 0, g);
+    const tank = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.4, 0.36), clearGlass()); tank.position.set(0, 0.6, 0); g.add(tank);
+    box(0.7, 0.28, 0.34, mat(0x2f9fd9, { transparent: true, opacity: 0.35 }), 0, 0.54, 0, g);
+    box(0.74, 0.02, 0.38, dark, 0, 0.81, 0, g);
+    at(cone(0.05, 0.12, 0x2f8f4a), -0.25, 0.46, -0.08, g); at(cone(0.04, 0.09, 0x2f8f4a), -0.19, 0.44, 0.05, g);
+    const fish = [0xff8a1f, 0xffd23f].map((c) => { const f = new THREE.Group(); at(sph(0.04, c), 0, 0, 0, f).scale.set(1.5, 1, 0.6); at(cone(0.03, 0.05, c, 4), -0.07, 0, 0, f).rotation.z = Math.PI / 2; g.add(f); return f; });
+    const bub = [0, 1, 2].map(() => at(sph(0.012, 0xffffff, { transparent: true, opacity: 0.6 }), 0.28, 0.5, 0.05, g));
+    g.userData.tick = () => { const t = nowS(); fish.forEach((f, i) => { const u = Math.sin(t * (0.6 + i * 0.25) + i * 2); f.position.set(u * 0.26, 0.56 + i * 0.07 + Math.sin(t * 1.3 + i) * 0.02, (i - 0.5) * 0.1); f.rotation.y = Math.cos(t * (0.6 + i * 0.25) + i * 2) > 0 ? 0 : Math.PI; }); bub.forEach((b, i) => { const k = (t * 0.4 + i * 0.33) % 1; b.position.y = 0.42 + k * 0.34; b.visible = k < 0.95; }); };
+  });
+  const buildRubberChicken = (name, x = 0, z = 0) => makeObject(name, x, z, 0.34, 0.34, 0.55, 'light', (g) => {
+    const ck = new THREE.Group(); g.add(ck);
+    at(sph(0.15, 0xffe14a), 0, 0.2, 0, ck).scale.set(1.1, 0.9, 0.9); at(sph(0.09, 0xffe14a), 0.1, 0.38, 0, ck);
+    at(cone(0.03, 0.09, 0xff8a1f), 0.2, 0.37, 0, ck).rotation.z = -Math.PI / 2; at(sph(0.025, 0xe0332b), 0.1, 0.48, 0, ck).scale.set(0.8, 1.4, 0.5);
+    at(sph(0.014, 0x111111), 0.15, 0.4, 0.06, ck); at(sph(0.014, 0x111111), 0.15, 0.4, -0.06, ck);
+    for (const sz of [-0.04, 0.04]) { at(cyl(0.012, 0.012, 0.1, 0xff8a1f), 0, 0.05, sz, ck); box(0.07, 0.015, 0.03, mat(0xff8a1f), 0.02, 0.01, sz, ck); }
+    g.userData.tick = () => { const t = nowS() * 1.43; ck.rotation.z = Math.sin(t) * 0.07; ck.rotation.x = Math.sin(t * 0.8 + 1) * 0.05; };
+  });
+  const buildFlamingo = (name, x = 0, z = 0) => makeObject(name, x, z, 0.32, 0.32, 1.0, 'light', (g) => {
+    const fl = new THREE.Group(); g.add(fl);
+    at(cyl(0.008, 0.008, 0.55, 0xff7aa8), 0, 0.28, 0, fl); at(sph(0.14, 0xff7aa8), 0, 0.64, 0, fl).scale.set(1.2, 0.9, 0.8);
+    at(cyl(0.018, 0.018, 0.36, 0xff7aa8), 0.1, 0.84, 0, fl).rotation.z = -0.35;
+    at(sph(0.045, 0xff7aa8), 0.18, 1.0, 0, fl); at(cone(0.02, 0.09, 0x222222), 0.25, 0.98, 0, fl).rotation.z = -Math.PI / 2 - 0.4;
+    at(cyl(0.008, 0.008, 0.3, 0xff7aa8), -0.04, 0.46, 0, fl).rotation.z = 0.5; box(0.2, 0.02, 0.1, mat(0xff7aa8), 0, 0.01, 0, g);
+    at(sph(0.012, 0x111111), 0.2, 1.02, 0.03, fl);
+    g.userData.tick = () => { fl.rotation.z = Math.sin(nowS() / 1.2) * 0.04; };
+  });
+  const buildNeonSign = (name, x = 0, z = 0) => makeObject(name, x, z, 0.9, 0.2, 1.3, 'light', (g) => {
+    const dark = mat(0x23262d);
+    for (const sx of [-0.4, 0.4]) box(0.05, 1.2, 0.05, dark, sx, 0.6, 0, g);
+    box(0.9, 0.05, 0.18, dark, 0, 0.03, 0, g);
+    box(0.84, 0.55, 0.03, dark, 0, 0.95, -0.02, g);
+    const tubes = [];
+    const tube = (w, h, px, py) => { const t = box(w, h, 0.03, mat(0xff2a8a, { emissive: 0xff2a8a, emissiveIntensity: 1.2 }), px, py, 0.01, g); tubes.push(t); return t; };
+    tube(0.7, 0.03, 0, 1.15); tube(0.7, 0.03, 0, 0.75); tube(0.03, 0.4, -0.35, 0.95); tube(0.03, 0.4, 0.35, 0.95); tube(0.4, 0.03, 0, 0.95);
+    const cols = [0xff2a8a, 0x2af0ff, 0x7bff3a, 0xffd23f];
+    g.userData.tick = () => { const t = nowS(), c = cols[Math.floor(t / 1.4) % cols.length]; tubes.forEach((m, i) => { const on = Math.sin(t * 9 + i * 7) > -0.92; m.material.color.setHex(on ? c : 0x331122); m.material.emissive.setHex(on ? c : 0x000000); }); };
+  });
+  const buildAquarium = (name, x = 0, z = 0) => makeObject(name, x, z, 1.35, 0.55, 1.15, 'heavy', (g) => {
+    const dark = mat(0x2a2f3a);
+    box(1.35, 0.5, 0.55, dark, 0, 0.25, 0, g); box(1.37, 0.04, 0.57, mat(0x555d6b, { metalness: 0.5 }), 0, 0.52, 0, g);
+    const tank = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.55, 0.45), clearGlass(0xcfeaff, 0.25)); tank.position.set(0, 0.82, 0); g.add(tank);
+    box(1.22, 0.4, 0.42, mat(0x2f9fd9, { transparent: true, opacity: 0.35 }), 0, 0.74, 0, g);
+    box(1.27, 0.03, 0.47, dark, 0, 1.11, 0, g);
+    for (const [px, c] of [[-0.45, 0xff5a4f], [0.4, 0xb057ff], [0.1, 0x2fcf6f]]) at(cone(0.07, 0.22, c, 6), px, 0.66, -0.1, g);
+    const fish = [0xff8a1f, 0xffd23f, 0x35f2a0, 0xff5fd0].map((c) => { const f = new THREE.Group(); at(sph(0.05, c), 0, 0, 0, f).scale.set(1.5, 1, 0.6); at(cone(0.035, 0.06, c, 4), -0.09, 0, 0, f).rotation.z = Math.PI / 2; g.add(f); return f; });
+    const duck = new THREE.Group(); at(sph(0.06, 0xffd23f), 0, 0, 0, duck).scale.set(1.2, 0.8, 0.9); at(sph(0.035, 0xffd23f), 0.05, 0.05, 0, duck); at(cone(0.012, 0.03, 0xff8a1f), 0.09, 0.05, 0, duck).rotation.z = -Math.PI / 2; g.add(duck);
+    g.userData.tick = () => { const t = nowS(); fish.forEach((f, i) => { const sp = 0.4 + i * 0.17, u = Math.sin(t * sp + i * 1.7); f.position.set(u * 0.5, 0.6 + i * 0.1 + Math.sin(t * 1.1 + i) * 0.02, ((i % 2) - 0.5) * 0.14); f.rotation.y = Math.cos(t * sp + i * 1.7) > 0 ? 0 : Math.PI; }); duck.position.set(Math.sin(t * 0.3) * 0.4, 0.95 + Math.sin(t * 1.5) * 0.008, 0.05); duck.rotation.z = Math.sin(t * 1.2) * 0.06; };
+  });
+  const buildJukebox = (name, x = 0, z = 0) => makeObject(name, x, z, 0.75, 0.5, 1.35, 'heavy', (g) => {
+    const wd = mat(0x7a3b1d), chrome = mat(0xd5dbe3, { metalness: 0.8, roughness: 0.25 });
+    box(0.75, 0.9, 0.5, wd, 0, 0.45, 0, g);
+    at(cyl(0.375, 0.375, 0.5, 0x7a3b1d, {}, 24), 0, 0.9, 0, g).rotation.x = Math.PI / 2;                // the arched top (its lower half is inside the cabinet)
+    box(0.5, 0.36, 0.02, mat(0x241a14), 0, 1.0, 0.255, g);
+    const bars = [0, 1, 2, 3, 4].map((i) => box(0.07, 0.28, 0.02, mat(0xff2a8a, { emissive: 0xff2a8a, emissiveIntensity: 1 }), -0.2 + i * 0.1, 1.0, 0.266, g));
+    box(0.7, 0.04, 0.02, chrome, 0, 0.8, 0.262, g); box(0.5, 0.3, 0.02, mat(0x14100d), 0, 0.5, 0.255, g);
+    for (let i = 0; i < 6; i++) box(0.46, 0.012, 0.02, chrome, 0, 0.38 + i * 0.045, 0.267, g);
+    box(0.15, 0.08, 0.03, chrome, 0, 0.68, 0.27, g);
+    const cols = [0xff2a8a, 0x2af0ff, 0x7bff3a, 0xffd23f];
+    g.userData.tick = () => { const t = nowS(); bars.forEach((b, i) => { const c = cols[Math.floor(t * 1.5 + i) % cols.length]; b.material.color.setHex(c); b.material.emissive.setHex(c); b.scale.y = 0.6 + 0.4 * Math.abs(Math.sin(t * 4 + i * 1.3)); }); };
+  });
+  const buildPlasmaGlobe = (name, x = 0, z = 0) => makeObject(name, x, z, 0.42, 0.42, 0.85, 'light', (g) => {
+    at(cyl(0.17, 0.2, 0.2, 0x25252d, { metalness: 0.5 }), 0, 0.1, 0, g); at(cyl(0.2, 0.2, 0.03, 0x8a8f9a, { metalness: 0.7 }), 0, 0.21, 0, g);
+    at(sph(0.2, 0x2a1050, { transparent: true, opacity: 0.45, roughness: 0.05 }), 0, 0.47, 0, g);
+    at(sph(0.04, 0xffd0ff, glow(0xff7aff, 1.4)), 0, 0.47, 0, g);
+    const arcs = [0, 1, 2, 3, 4].map(() => { const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(5 * 3), 3)); const l = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xd08cff })); l.frustumCulled = false; g.add(l); return l; });
+    g.userData.tick = () => { const t = nowS(); arcs.forEach((l, i) => { const a = i * 1.26 + t * 0.6 + Math.sin(t * 3 + i) * 0.3, e = (Math.floor(t * 9 + i) * 0.7) % 1, p = l.geometry.attributes.position; for (let k = 0; k < 5; k++) { const u = k / 4, r = 0.17 * u, j = (k && k < 4) ? (Math.sin((t * 20 + k * 3 + i * 5)) * 0.025) : 0; p.setXYZ(k, Math.cos(a + e * u) * r + j, 0.47 + Math.sin(a * 1.7) * 0.1 * u + j, Math.sin(a + e * u) * r + j); } p.needsUpdate = true; }); };
+  });
+  const buildRoboPet = (name, x = 0, z = 0) => makeObject(name, x, z, 0.5, 0.3, 0.5, 'light', (g) => {
+    const shell = mat(0xdfe5ec, { metalness: 0.3, roughness: 0.4 }), dark = mat(0x343b46), rub = mat(0x222222);
+    box(0.42, 0.16, 0.2, shell, 0, 0.28, 0, g);
+    for (const [sx, sz] of [[-0.15, -0.07], [0.15, -0.07], [-0.15, 0.07], [0.15, 0.07]]) { box(0.05, 0.16, 0.05, dark, sx, 0.13, sz, g); box(0.07, 0.03, 0.07, rub, sx, 0.015, sz, g); }
+    const head = new THREE.Group(); head.position.set(0.24, 0.38, 0); g.add(head);
+    box(0.17, 0.15, 0.16, shell, 0.02, 0, 0, head); box(0.07, 0.06, 0.12, dark, 0.13, -0.03, 0, head);
+    const eyes = [-0.05, 0.05].map((sz) => at(sph(0.022, 0x35f2ff, glow(0x35f2ff, 1.2)), 0.1, 0.03, sz, head));
+    at(cyl(0.005, 0.005, 0.1, 0x8a8f98), 0, 0.12, 0, head); at(sph(0.015, 0xff3b3b, glow(0xff3b3b, 1.2)), 0, 0.18, 0, head);
+    const tail = new THREE.Group(); tail.position.set(-0.22, 0.34, 0); g.add(tail); at(cyl(0.01, 0.01, 0.14, 0x343b46), -0.03, 0.04, 0, tail).rotation.z = 0.8;
+    g.userData.tick = () => { const t = nowS(); head.rotation.z = Math.sin(t * 0.9) * 0.12; head.rotation.y = Math.sin(t * 0.5) * 0.35; tail.rotation.y = Math.sin(t * 8) * 0.5; eyes.forEach((e) => { e.scale.y = Math.sin(t * 1.3) > 0.97 ? 0.1 : 1; }); };
+  });
   // A bookshelf GUY or GAL built is a clone of the skill bookshelf: the same shelf (looks, size, weight) holding the books and records
   // that did not fit on the others, and used the same way (read from it, long-press for its book and record lists).
   const buildBookshelf2 = (name, x = 0, z = 0) => {
@@ -1319,6 +1410,15 @@ export function buildRoom(scene) {
     bubblemachine: { build: buildBubbleMachine, pref: { x: 0.2, z: 4.1 } },
     snowglobe: { build: buildSnowGlobe, pref: { x: 4.1, z: 1.4 } },
     petrock: { build: buildPetRock, pref: { x: 2.8, z: 4.0 } },
+    // printed by the Build a Bot machine
+    fishtank: { build: buildFishTank, pref: { x: -3.9, z: 3.1 } },
+    rubberchicken: { build: buildRubberChicken, pref: { x: -3.0, z: -4.0 } },
+    flamingo: { build: buildFlamingo, pref: { x: -4.0, z: -2.6 } },
+    neonsign: { build: buildNeonSign, pref: { x: 0.2, z: -4.0 } },
+    aquarium: { build: buildAquarium, pref: { x: -2.2, z: 4.0 } },
+    jukebox: { build: buildJukebox, pref: { x: 3.9, z: 2.6 } },
+    plasmaglobe: { build: buildPlasmaGlobe, pref: { x: 4.0, z: -2.6 } },
+    robopet: { build: buildRoboPet, pref: { x: 2.0, z: 3.6 } },
     bookshelf2: { build: buildBookshelf2, pref: (w) => (w.doors.library && w.libraryShelfSpot ? w.libraryShelfSpot(null) : null) || { x: 4.1, z: -2.2 } },     // (into the Library once there is one)
     // the foot stool stands in front of a window whose top is out of reach (the owner's rule: built where it is needed), right by the wall
     footstool: { build: buildFootStool, pref: () => {
@@ -1387,7 +1487,7 @@ export function buildRoom(scene) {
 
   // ---- Restaurant furniture (src/restobjects.js), placed the same way in the Restaurant's own frame
   const rest = makeRestaurantBuilders({ makeObject, box, mat });
-  const bots = makeBotBuilders({ makeObject, box, mat });
+  const bots = makeBotBuilders({ makeObject, box, mat, productModel: work.productModel });
   const REST_LAYOUT = {
     stove: (N, L) => ({ n: N - 0.5, lat: L / 2 - 0.8, face: 'door' }),
     kitchencounter: (N, L) => ({ n: N - 0.5, lat: L / 2 - 2.5, face: 'door' }),
@@ -1418,7 +1518,7 @@ export function buildRoom(scene) {
     return { x: p.x, z: p.z, rot: w.rotFacing(f * ax.toDoor.x, f * ax.toDoor.z) };       // (the player stands at its +z, so that is the stage side: he faces the audience at the door)
   };
   const NEW_OBJECTS = {            // object id -> [builder, preferred spot (or a function of the world that works it out)]
-    botprinter: [bots.botprinter, { x: -3.5, z: 3.5 }],
+    botprinter: [bots.botprinter, shopSpot('botprinter')],
     workstation: [bots.workstation, { x: -3.6, z: -0.6 }],
     stove: [rest.stove, restSpot('stove')],
     kitchencounter: [rest.kitchencounter, restSpot('kitchencounter')],
@@ -1454,11 +1554,14 @@ export function buildRoom(scene) {
 
   // Where a bookshelf may stand: GUY's room, or the Library.
   const shelfRoomOk = (x0, x1, z0, z1) => [MAIN_BOUNDS, ...(doors.library ? [doors.library.shell.bounds] : [])].some((b) => x0 >= b.minX && x1 <= b.maxX && z0 >= b.minZ && z1 <= b.maxZ);
+  // a thing with a `roomOnly` stays wholly inside that room (and there is nowhere for it if the room is not there)
+  const onlyRoomOk = (obj, x0, x1, z0, z1) => { if (!obj.roomOnly) return true; const d = doors[obj.roomOnly], b = d && d.shell.bounds; return !!b && x0 >= b.minX && x1 <= b.maxX && z0 >= b.minZ && z1 <= b.maxZ; };
   // Footprint (w x d, centred at x,z) inside the room and clear of every other object?
   const fits = (obj, x, z, w = obj.w, d = obj.d) => {
     const x0 = x - w / 2, x1 = x + w / 2, z0 = z - d / 2, z1 = z + d / 2;
     if (!roomBoundsList().some((b) => x0 >= b.minX && x1 <= b.maxX && z0 >= b.minZ && z1 <= b.maxZ)) return false;      // wholly inside one room
     if (obj.mainOnly && !shelfRoomOk(x0, x1, z0, z1)) return false;      // (the bookshelves never leave his own room, or the Library)
+    if (!onlyRoomOk(obj, x0, x1, z0, z1)) return false;                  // (the Build a Bot machine never leaves the Workshop)
     if (doorBlocks(x0, x1, z0, z1)) return false;                       // the strips either side of a door stay clear
     // furniture taller than the lower edge of a window or picture must not be pushed into it
     for (const dc of Object.values(decor)) {
@@ -1487,6 +1590,7 @@ export function buildRoom(scene) {
   const wallOk = (obj, x, z, w = obj.w, d = obj.d) => {
     const x0 = x - w / 2, x1 = x + w / 2, z0 = z - d / 2, z1 = z + d / 2;
     if (obj.mainOnly && !shelfRoomOk(x0, x1, z0, z1)) return false;
+    if (!onlyRoomOk(obj, x0, x1, z0, z1)) return false;
     const inRoom = roomBoundsList().some((b) => x0 >= b.minX && x1 <= b.maxX && z0 >= b.minZ && z1 <= b.maxZ);
     if (!inRoom) {
       // straddling the wall line of a door: through the doorway only

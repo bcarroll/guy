@@ -10,8 +10,8 @@
 import * as THREE from 'three';
 import { Q } from './guy.js';
 import { sfx } from './sfx.js';
-import { RECIPES, STORAGE_CAP, factoriesOf, skillsOf } from './workshop.js';
-import { wants } from './needs.js';
+import { RECIPES, STORAGE_CAP, MATERIALS, factoriesOf, skillsOf, materialsOf } from './workshop.js';
+import { wants, botMachine } from './needs.js';
 import { ROOM, WALK } from './room.js';
 import { makePin } from './bowlobjects.js';
 
@@ -192,6 +192,7 @@ export function installWorkshop(Brain, POSES, H) {
     factorySteps(id, fid, last = true) {
       const r = RECIPES[id], f = () => this.obj(fid), rt = r.run, made = last ? id : 'hardware';
       const wood = fid === 'woodfactory', metal = fid === 'metalfactory', tray = () => f().trayPoint();
+      const bot = fid === 'botprinter', mats = bot ? materialsOf(r).map((m) => MATERIALS[m]) : null;      // (the Build a Bot machine: what it prints from)
       let lastWipe = -9;
       // the wood chapters of Wood & Metal Basics look at the piece, then sand it; the metal one knocks on it twice to hear that it is sound
       const check = [
@@ -200,11 +201,12 @@ export function installWorkshop(Brain, POSES, H) {
         ...(wood && this.has('workshop.materials.ch3') ? [this.play('reach', 4.2, { needs: [fid], target: () => { const p = tray(); if (this.time - lastWipe > 0.5) { sfx('wipe'); lastWipe = this.time; } return p.clone().add(V(Math.sin(this.time * 4) * 0.12, 0, Math.cos(this.time * 4) * 0.05)); } })] : []),
         ...(metal && this.has('workshop.metal.ch2') ? [0, 1].map(() => this.play('reach', 1.0, { needs: [fid], at: [0.45, () => sfx('knock')], target: tray })) : []),
       ];
-      return [this.stand(fid, 0.78, () => f().buttonPoint()),
+      return [this.stand(fid, bot ? 0.95 : 0.78, () => f().buttonPoint()),
         // workshop ch3 "Safety First": a look round before the machine is started
         ...(this.has('workshop.ch3') ? [this.play('lookaround', 2.4)] : []),
-        this.play('reach', 1.6, { needs: [fid], at: [0.7, () => { if (this.carry === 'bars') this.setCarry(null); f().press(); f().run(rt); sfx('click'); sfx('machine'); }], target: () => f().buttonPoint() }),
+        this.play('reach', 1.6, { needs: [fid], at: [0.7, () => { if (this.carry === 'bars') this.setCarry(null); f().press(); f().run(rt, mats); sfx('click'); sfx('machine'); }], target: () => f().buttonPoint() }),
         this.play('idle', rt + 0.2, { needs: [fid], at: [Math.max(0.2, rt - 0.4), () => { f().showMade(made); sfx('thud', 0.5); }] }),
+        ...(bot ? [this.play('reach', 1.4, { needs: [fid], target: tray })] : []),             // (a look at what it printed, on the bed)
         ...check,
         this.play('reach', 1.8, { needs: [fid], at: [0.9, () => {
           f().clearMade(); sfx('bookgrab');
@@ -510,23 +512,24 @@ export function installWorkshop(Brain, POSES, H) {
     // Why he cannot do what the user asked with a Workshop object (a kind message), or null if he can.
     workRefusal(name) {
       const k = (id) => this.skills.has(id);
-      const need = { workbench: 'workshop', toolbox: 'workshop', woodfactory: 'workshop', metalfactory: 'workshop.metal' }[name];
-      if (!need) return null;
+      const need = { workbench: 'workshop', toolbox: 'workshop', woodfactory: 'workshop', metalfactory: 'workshop.metal', botprinter: 'workshop' }[name];
+      if (!need || (name === 'botprinter' && !(this.w.gal && this.w.gal.exists()))) return null;          // (before GAL is printed the machine builds her: no book needed)
       if (!k(need)) return `GUY doesn't know how to use that yet. Add the book "${need === 'workshop' ? 'Workshop Basics' : 'Metal Fabrication for Robots'}" to the shelf and he'll read it.`;
-      if (['workbench', 'woodfactory', 'metalfactory'].includes(name) && !this.pickRecipe()) return this.cannotBuild();
+      if (['workbench', 'woodfactory', 'metalfactory', 'botprinter'].includes(name) && !this.pickRecipe()) return this.cannotBuild();
       return null;
     },
     // why he does not build anything now (a kind message): nothing is needed, or he lacks a book or a factory
     cannotBuild() {
       const w = this.w, line = this.buildLine();
-      if (!w.objects.woodfactory && !w.objects.metalfactory) return 'GUY needs a Wood Factory or a Metal Factory first.';
+      if (line === 'bot') return botMachine(w) ? 'The Build a Bot machine has nothing to print right now: its surprises are made from things that stand in the room together (a fish tank wants a coffee table, a jukebox a stereo and a mirror ball ...).' : 'The Build a Bot machine has to stand in the Workshop to print anything.';
+      if (!w.objects.woodfactory && !w.objects.metalfactory && !botMachine(w)) return 'GUY needs a Wood Factory or a Metal Factory first.';
       if (!wants(this).length) return 'There is nothing the house needs right now, so GUY has nothing to build.';
       if (line === 'wood') return 'GUY needs a book, and the Wood Factory, to build what the house needs.';
       if (line === 'metal') return 'GUY needs a book, and the Metal Factory, to build what the house needs.';
       return 'GUY needs a book and the right factory in the Workshop to build what the house needs.';
     },
     // the factory he was pointed at, or is locked on ('wood' | 'metal'), or null for any
-    buildLine() { return this.forceLine || (this.lock && { woodfactory: 'wood', metalfactory: 'metal' }[this.lock.name]) || null; },
+    buildLine() { return this.forceLine || (this.lock && { woodfactory: 'wood', metalfactory: 'metal', botprinter: 'bot' }[this.lock.name]) || null; },
     // can he build this recipe right now: the book(s), the factory it needs, and room for one more of it
     // how many of a thing he will have made at most: one more of the furniture of a kind once he has read its "Matching Sets" chapter
     capOf(r) {
@@ -540,6 +543,7 @@ export function installWorkshop(Brain, POSES, H) {
       if ((st.items[r.object] || 0) >= STORAGE_CAP) return false;
       const made = (st.items[r.object] || 0) + Object.values(w.objects).filter((o) => o.kind === r.object).length;
       if (made >= this.capOf(r)) return false;                                       // enough of these
+      if (r.line === 'bot' && !botMachine(w)) return false;                          // (printed only by the Build a Bot machine, standing in the Workshop)
       return factoriesOf(r).every((f) => !!this.obj(f));
     },
     // which recipe he builds now: one he was told to, or the first thing the house needs that he can make (null if nothing)
@@ -621,7 +625,7 @@ export function installWorkshop(Brain, POSES, H) {
       this.dropBuilding();
       if (this.hauling) { const o = this.hauling.o; if (o.fold) o.fold(0); o.hauled = false; o.obstacle.active = true; o.hauledYaw = undefined; const p = this.g.root.position; o.set(p.x + Math.sin(this.g.root.rotation.y) * 0.6, p.z + Math.cos(this.g.root.rotation.y) * 0.6); o.group.position.y = 0; this.hauling = null; this.haulT0 = undefined; }
       if (this.onStool) { const f = this.onStool; this.g.root.position.set(f.from.x, 0, f.from.z); this.onStool = null; }
-      for (const id of ['woodfactory', 'metalfactory']) { const f = this.obj(id); if (f && f.tray.children.length) f.clearMade(); }
+      for (const id of ['woodfactory', 'metalfactory', 'botprinter']) { const f = this.obj(id); if (f && f.tray && f.tray.children.length) f.clearMade(); }
     },
 
     // carried things sit in his hand; the spoon follows the right hand while he stirs

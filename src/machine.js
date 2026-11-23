@@ -26,7 +26,7 @@ export const OBJECT_CATEGORIES = [
 ];
 
 // The order of the sub-headings inside a category that uses them (Decor & lighting has a lot of things in it).
-export const DECOR_SUBS = ['Sports', 'Garden', 'Premium', 'Plants', 'Wall art', 'Windows', 'Rugs', 'Lighting', 'Small furniture', 'Workbench & storage', 'Woodwork', 'Metalwork', 'Kitchen', 'Dining'];
+export const DECOR_SUBS = ['Sports', 'Garden', 'Premium', 'Plants', 'Wall art', 'Windows', 'Rugs', 'Lighting', 'Small furniture', 'Workbench & storage', 'Woodwork', 'Metalwork', 'Machines', 'Kitchen', 'Dining'];
 
 export const OBJECT_CATALOG = [
   { id: 'piano', cat: 'music', name: 'Upright Piano', icon: '🎹', desc: 'Scales, tunes and jam sessions. Heavy: only you can move it.', core: true },
@@ -92,6 +92,15 @@ export const OBJECT_CATALOG = [
   { id: 'readingchair', cat: 'built', name: 'Reading Chair (built by GUY)', icon: '🛋️', desc: 'A green armchair for the Library. GUY sits in it for a rest.', built: true, room: 'workshop' },
   { id: 'libdesk', cat: 'built', name: 'Reading Desk (built by GUY)', icon: '🪔', desc: 'A writing desk for the Library with a green banker lamp and an open book. GUY switches the lamp on and reads a few pages. Heavy: only you can move it.', built: true, room: 'workshop' },
   { id: 'globe', cat: 'built', name: 'Globe (built by GUY)', icon: '🌐', desc: 'A globe on a wooden stand for the Library. GUY gives it a spin and looks for places.', built: true, room: 'workshop' },
+  // Printed by the Build a Bot machine (only while it stands in the Workshop): see RECIPES, line 'bot', in src/workshop.js
+  { id: 'fishtank', cat: 'built', name: 'Fish Tank (printed by GUY)', icon: '🐠', desc: 'A glass tank with two fish and a trail of bubbles.', built: true, room: 'workshop' },
+  { id: 'rubberchicken', cat: 'built', name: 'Rubber Chicken (printed by GUY)', icon: '🐔', desc: 'A rubber chicken that wobbles about.', built: true, room: 'workshop' },
+  { id: 'flamingo', cat: 'built', name: 'Plastic Flamingo (printed by GUY)', icon: '🦩', desc: 'A pink plastic flamingo on one leg, swaying a little.', built: true, room: 'workshop' },
+  { id: 'neonsign', cat: 'built', name: 'Neon Sign (printed by GUY)', icon: '💡', desc: 'A buzzing neon sign that flickers through its colours.', built: true, room: 'workshop' },
+  { id: 'aquarium', cat: 'built', name: 'Giant Aquarium (printed by GUY)', icon: '🐟', desc: 'A big aquarium with four fish, coral and a rubber duck on the water. Heavy: only you can move it.', built: true, room: 'workshop' },
+  { id: 'jukebox', cat: 'built', name: 'Jukebox (printed by GUY)', icon: '🎶', desc: 'A glowing jukebox whose lights dance. Heavy: only you can move it.', built: true, room: 'workshop' },
+  { id: 'plasmaglobe', cat: 'built', name: 'Plasma Globe (printed by GUY)', icon: '⚡', desc: 'A plasma globe with crackling arcs of light.', built: true, room: 'workshop' },
+  { id: 'robopet', cat: 'built', name: 'Robo Pet (printed by GUY)', icon: '🐕', desc: 'A little robot dog that wags its tail and tilts its head.', built: true, room: 'workshop' },
   { id: 'pinsetter', cat: 'built', name: 'Automatic Pinsetter (built by GUY)', icon: '🤖', desc: 'Three pinsetters over the ends of the lanes: sweeps the fallen pins away and sets all ten again. Heavy: only you can move it.', built: true, room: 'workshop' },
   // The Restaurant (a room added from the Rooms tab). Customers arrive by its elevator. See src/restobjects.js and src/customers.js.
   { id: 'stove', cat: 'restaurant', sub: 'Kitchen', name: 'Stove', icon: '🍲', desc: 'A big stove with a pot. GUY cooks the orders here. Heavy: only you can move it. Comes with the book "Restaurant Basics".', free: true, room: 'restaurant', book: 'restaurant' },
@@ -108,8 +117,9 @@ export const OBJECT_CATALOG = [
   { id: 'skyswitch', cat: 'backyard', sub: 'Garden', name: 'Sun & Moon Switch', icon: '🌗', desc: 'A post with a lever that switches the yard between its artificial sun and its artificial moon. GUY and GAL use it too, and you can ask GUY to flip it (long-press it).', free: true, room: 'backyard' },
   { id: 'shed', cat: 'backyard', sub: 'Premium', name: 'Garden Shed', icon: '🛖', desc: 'A little wooden shed that works like the skill bookshelf: the yard\'s things (goal, hoop, balls, chair, bird bath, mower) are kept in it. GUY puts them all away before mowing and takes out what he needs. Long-press it for what is inside. Heavy: only you can move it. Unlocks the push lawn mower.', free: true, locked: true, room: 'backyard' },
   { id: 'mower', cat: 'backyard', sub: 'Premium', name: 'Push Lawn Mower', icon: '🚜', desc: 'GUY gets the shed open and pushes the mower round the lawn, leaving stripes. Listed once the shed is in the yard.', free: true, locked: true, room: 'backyard', needsObject: 'shed' },
-  // Build a Bot: a super premium one-use printer. GUY uses it and it folds itself into GAL (src/gal.js).
-  { id: 'botprinter', cat: 'robots', name: 'Build a Bot Machine', icon: '🤖', desc: 'A 3D printer that can be used once: it prints a second robot, GAL, and folds itself away into her. Heavy: only you can move it.', locked: true },
+  // Build a Bot: a super premium 3D printer for the Workshop (it never leaves that room). GUY uses it to print a second robot, GAL (src/gal.js);
+  // it stays, and prints other things from rubber, glass, plastic and metal (the recipes with line 'bot' in src/workshop.js).
+  { id: 'botprinter', cat: 'workshop', sub: 'Machines', name: 'Build a Bot Machine', icon: '🤖', desc: 'A 3D printer for the Workshop (it can never leave that room). It prints a second robot, GAL, and then stays to print surprises from rubber, glass, plastic and metal, some of them combinations of other things in the house. Heavy: only you can move it, and only inside the Workshop.', free: true, locked: true, room: 'workshop' },
   // Learning Workstation: premium. GUY taps the screen and a panel lists the books on the shelf; Learn teaches him at once, no reading. The book stays on the shelf.
   { id: 'workstation', cat: 'robots', name: 'Learning Workstation', icon: '🖥️', desc: 'A desk and screen that lists every book on the shelf. Press Learn and GUY knows what is in it at once, with no reading. The book stays on the shelf so GAL can read it too. Heavy: only you can move it.', locked: true },
   // The Studio's instruments (src/instruments.js): listed only while the Studio is added. GUY and GAL play them on the stage.
@@ -137,7 +147,6 @@ export function initMachine({ world, guy, persist, notify, remove, rooms, painti
   const stored = (id) => (world.stock && world.stock.items && world.stock.items[id]) || 0;            // built things waiting in storage
   const objectStatus = (d) => {
     if (d.built) return 'built';
-    if (d.id === 'botprinter' && world.gal && world.gal.exists()) return 'used';       // it was used up making GAL
     if (d.locked && !dev.all) return 'locked';
     if (d.ball) return world.ballGone ? 'removed' : 'inroom';
     if (inRoom(d.id)) return 'inroom';

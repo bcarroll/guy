@@ -13,6 +13,7 @@ The big changes to GUY's room, newest first. The game shows the same list under 
 ### Added
 
 - Catalog search: one box looks through objects, books, records and rooms; a filter for what is in the room or can be added; C opens it.
+- The Build a Bot machine is a Workshop object (Catalog > Workshop > Machines) and cannot leave that room; it stays after GAL is printed and prints new things from rubber, glass, plastic and metal.
 - Help: the ❓ button (or H) explains how the game works, what you can do, what is new and this change log.
 - Drumming for Robots has a Chapter 4, Slow & Latin: a half-time ballad groove and a bossa nova, learned by practising at the kit.
 
