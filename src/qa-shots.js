@@ -398,6 +398,22 @@ export function install(T, h) {
       T.frameRoom('restaurant'); await settleFrames(3);
       return { data: capture() };
     });
+    add('room-restaurant-corner', 'rooms', async () => {            // every wall of GUY's room taken: the Restaurant in a corner, behind a door in the Backyard's fence
+      await clean(62);
+      const w = window.brain.w;
+      for (const [id, wall] of [['studio', 'back'], ['backyard', 'left'], ['workshop', 'right'], ['bowling', 'front']]) w.rooms.add(id, { walls: [wall] });
+      T.prep('takeorder');
+      const r = w.restaurant;
+      r.headless = false; r.paused = true; r.clear();
+      const cs = [r.stage('waiting', 'aj'), r.stage('ordered', 'peasantgirl')].filter(Boolean);
+      T.freeze();
+      for (let i = 0; i < 600 && !cs.every((c) => c.fig && c.fig.ok); i++) { for (const c of cs) r.draw(c, 1 / 30); await sleep(20); }
+      for (let i = 0; i < 70; i++) { for (const c of cs) c.fig.update(c, 1 / 30); window.scene.updateMatrixWorld(true); }
+      const d = w.doors.restaurant;
+      if (!d || !d.parent || d.parent === 'main') throw new Error(`the Restaurant is not in a corner: ${d && d.wall}`);
+      T.frameRoom('restaurant'); await settleFrames(3);
+      return { data: capture() };
+    });
     add('room-paintings', 'rooms', async () => {
       await clean(44);
       T.addObject('easel');
