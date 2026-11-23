@@ -414,6 +414,20 @@ export function install(T, h) {
       T.frameRoom('restaurant'); await settleFrames(3);
       return { data: capture() };
     });
+    for (const [pid, seed, hint] of [['range', 63, 'the Shooting Range'], ['bowling', 64, 'the Bowling Alley'], ['studio', 65, 'the Studio'], ['backyard', 66, 'the Backyard']]) {
+      add(`room-${pid}-corner`, 'rooms', async () => {                // every wall of GUY's room taken: ${hint} in a corner, behind a door in the room beside it
+        await clean(seed);
+        const w = window.brain.w, others = ['workshop', 'backyard', 'range', 'bowling', 'studio'].filter((o) => o !== pid);
+        others.forEach((o, i) => w.rooms.add(o, { walls: [['back', 'left', 'right', 'front'][i]] }));
+        w.rooms.add(pid);
+        const d = w.doors[pid];
+        if (!d || !d.parent || d.parent === 'main') throw new Error(`${pid} is not in a corner: ${d && d.wall}`);
+        T.freeze(); window.guy.root.visible = false;
+        T.frameRoom(pid);
+        await settleFrames(3);
+        return { data: capture() };
+      });
+    }
     add('room-paintings', 'rooms', async () => {
       await clean(44);
       T.addObject('easel');

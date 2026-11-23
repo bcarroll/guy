@@ -2199,7 +2199,7 @@ T.sweepRooms = () => {
     const mainHalf = { x: ROOM_MAIN.w / 2, z: ROOM_MAIN.d / 2 };
     const inCorner = bs.filter((b) => (b.minX > mainHalf.x - 1e-6 || b.maxX < -mainHalf.x + 1e-6) && (b.minZ > mainHalf.z - 1e-6 || b.maxZ < -mainHalf.z + 1e-6)).map((b) => b.id);
     out.push(result('rooms: four rooms never overlap and none is built in a corner area (a corner room is only there when it is added: see sweepCorners)', !overlap.length && !inCorner.length, { overlap, inCorner }));
-    ROOM_CATALOG.push({ ...ROOM_CATALOG[0], id: 'qa-fifth', name: 'QA Fifth' });
+    ROOM_CATALOG.push({ ...ROOM_CATALOG[0], id: 'qa-fifth', name: 'QA Fifth', cornerFallback: false });       // (a room with no corner to fall back on)
     const doorsBefore = Object.keys(w.doors).join(), toastBefore = document.getElementById('toast').textContent;
     const fifth = R().add('qa-fifth');
     ROOM_CATALOG.pop();
@@ -2694,6 +2694,20 @@ T.sweepCorners = () => {
     out.push(result('corners: he gets to it across the lawn and through the gate (main, Backyard, Library)', tr.ok && tr.seen.join() === ['main', 'backyard', 'library'].join(), tr));
     R().reset('library');
     out.push(result('corners: taking that room away puts the fence back whole', !w.doors.library && yard.shell.sides[side].visible === true));
+  }
+  // 13. every room that takes a wall also takes a free corner when no wall is left (Workshop, Backyard, Range, Bowling Alley, Studio, Restaurant)
+  {
+    const pool = ['workshop', 'backyard', 'range', 'bowling', 'studio'];
+    for (const id of [...pool, 'restaurant']) {
+      T.resetRooms(); T.home(); unlockRoom('restaurant');
+      const others = pool.filter((p) => p !== id).slice(0, id === 'restaurant' ? 3 : 4), wallsFor = id === 'restaurant' ? ['right', 'front', 'back'] : ['right', 'front', 'back', 'left'];
+      others.forEach((o, i) => R().add(o, { walls: [wallsFor[i]] }));
+      const res = R().add(id), d = w.doors[id];
+      const problems = d ? doorProblems(id) : ['no door'];
+      const tr = d ? walkTo(id) : { ok: false };
+      out.push(result(`corners: ${id}: with every wall taken it goes in a free corner, through a door in the room beside it, nothing overlaps, and he walks there`,
+        res.ok && !!d && d.parent !== 'main' && !!res.corner && !problems.length && !overlaps().length && tr.ok && tr.seen.includes(id), { res, problems, overlaps: overlaps(), tr }));
+    }
   }
   T.resetRooms(); T.home(); T.removeAll(); putBackSince(before); T.settle(); machine().hidden = true;
   out.push(result('corners: no errors', errors.length === base, { errors: errors.slice(base) }));

@@ -1927,42 +1927,34 @@ export function buildRoom(scene) {
     g.add(ceil);
     return sides;
   };
-  // A corner room: its footprint is the `cell` it stands in, and its door is in the side wall of a room beside it (`wall`, a key of
-  // WALL such as 'workshop:b'). Laid out like any other room, with its door wall facing the room it opens from.
-  const buildCornerShell = (def, wall, cell) => {
-    const W = WALL[wall], n = W.n, ew = Math.abs(n.x) > 0.5;
-    const N = ew ? cell.maxX - cell.minX : cell.maxZ - cell.minZ, L = ew ? cell.maxZ - cell.minZ : cell.maxX - cell.minX;
-    const mid = { x: (cell.minX + cell.maxX) / 2, z: (cell.minZ + cell.maxZ) / 2 };
-    const c = W.uv({ x: mid.x, y: 0, z: mid.z }).u;                      // where along the wall the middle of the room is
-    const g = new THREE.Group();
-    g.position.copy(W.at(c, 0));
-    g.rotation.y = W.rotY;
-    const sides = buildRoomBox(def, g, L, N);
-    return { group: g, bounds: { ...cell }, N, L, sides, range: null, corner: true };
-  };
-
   // The room behind a door: a floor and three walls (the main room's own wall closes the fourth side) that open to the sky like
   // the main room. It sits just outside the door wall, exactly as long as it. `bounds` is its footprint on the floor.
   // Every added room is the same square as GUY's room, whatever it is and whichever wall its door is in (ROOM).
   const buildShell = (def, wall, cell = null) => {
     const W = WALL[wall];
-    if (cell) return buildCornerShell(def, wall, cell);
-    const N = ROOM.w, L = ROOM.d, c = 0;                                     // away from the door wall, and along it (the middle of the room is the middle of the wall)
+    let N = ROOM.w, L = ROOM.d, c = 0, bounds0;                              // away from the door wall, and along it (the middle of the room is the middle of the wall)
+    if (cell) {                                                              // a corner room: it stands in its cell, its door wall facing the room it opens from
+      const ew = Math.abs(W.n.x) > 0.5;
+      N = ew ? cell.maxX - cell.minX : cell.maxZ - cell.minZ; L = ew ? cell.maxZ - cell.minZ : cell.maxX - cell.minX;
+      c = W.uv({ x: (cell.minX + cell.maxX) / 2, y: 0, z: (cell.minZ + cell.maxZ) / 2 }).u;
+      bounds0 = { ...cell };
+    } else {
+      bounds0 = wall === 'right' ? { minX: ROOM.w / 2, maxX: ROOM.w / 2 + N, minZ: c - L / 2, maxZ: c + L / 2 }
+        : wall === 'left' ? { minX: -ROOM.w / 2 - N, maxX: -ROOM.w / 2, minZ: c - L / 2, maxZ: c + L / 2 }
+        : wall === 'front' ? { minX: c - L / 2, maxX: c + L / 2, minZ: ROOM.d / 2, maxZ: ROOM.d / 2 + N }
+          : { minX: c - L / 2, maxX: c + L / 2, minZ: -ROOM.d / 2 - N, maxZ: -ROOM.d / 2 };
+    }
     const g = new THREE.Group();
     g.position.copy(W.at(c, 0));
     g.rotation.y = W.rotY;
-    const bounds0 = wall === 'right' ? { minX: ROOM.w / 2, maxX: ROOM.w / 2 + N, minZ: c - L / 2, maxZ: c + L / 2 }
-      : wall === 'left' ? { minX: -ROOM.w / 2 - N, maxX: -ROOM.w / 2, minZ: c - L / 2, maxZ: c + L / 2 }
-      : wall === 'front' ? { minX: c - L / 2, maxX: c + L / 2, minZ: ROOM.d / 2, maxZ: ROOM.d / 2 + N }
-        : { minX: c - L / 2, maxX: c + L / 2, minZ: -ROOM.d / 2 - N, maxZ: -ROOM.d / 2 };
     if (def.outdoor) {                         // open air: a lawn, a fence, the sun and moon lamps; no walls or ceiling (src/yardobjects.js)
       const yard = buildYardShell(g, L, N, ROOM.h);
       // (its side fences take a gate into a corner room beside it, like the side walls of an indoor room)
-      return { group: g, bounds: bounds0, N, L, outdoor: true, yard, sides: yard.sides, fence: yard, linkable: true };
+      return { group: g, bounds: bounds0, N, L, outdoor: true, yard, sides: yard.sides, fence: yard, linkable: !cell, ...(cell ? { corner: true } : {}) };
     }
     const sides = buildRoomBox(def, g, L, N);
     // the Shooting Range: its lanes, screens, bullseyes and enemies go in the room (src/rangeobjects.js); the screens are attached in addDoor
-    return { group: g, bounds: bounds0, N, L, sides, range: def.shootingRange ? buildRangeShell(g, L, N) : null, bowl: def.bowlingAlley ? buildBowlShell(g, L, N) : null, studio: def.studio ? buildStudioShell(g, L, N) : null, linkable: !def.bowlingAlley && !def.elevator };          // (the Range's side walls take a corner room's door, clear of its fixtures)
+    return { group: g, bounds: bounds0, N, L, sides, range: def.shootingRange ? buildRangeShell(g, L, N) : null, bowl: def.bowlingAlley ? buildBowlShell(g, L, N) : null, studio: def.studio ? buildStudioShell(g, L, N) : null, linkable: !def.bowlingAlley && !def.elevator && !cell, ...(cell ? { corner: true } : {}) };          // (the Range's side walls take a corner room's door, clear of its fixtures)
   };
 
   // The three walls of an added room as places to hang things: `<id>:far` (facing the door) and `<id>:a`, `<id>:b` (the sides).
