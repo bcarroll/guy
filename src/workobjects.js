@@ -77,6 +77,13 @@ export function makeWorkshopBuilders({ makeObject, box, mat }) {
       const s = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8), mat(0x3f78b5)); s.position.set(0, 0.2, 0); g.add(s);
     } else if (kind === 'readingchair') {
       box(0.2, 0.12, 0.18, mat(0x2f6b4f), 0, 0.08, 0, g); box(0.2, 0.14, 0.04, mat(0x2f6b4f), 0, 0.2, -0.07, g);
+    } else if (kind === 'garagebench') {
+      box(0.34, 0.02, 0.14, wd, 0, 0.2, 0, g); for (const sx of [-0.15, 0.15]) box(0.02, 0.19, 0.12, light, sx, 0.095, 0, g);
+      box(0.06, 0.03, 0.03, mat(0x4a4f57), 0.12, 0.23, 0.07, g);
+    } else if (kind === 'toolchest') {
+      box(0.2, 0.2, 0.12, mat(0xb8322a), 0, 0.1, 0, g); box(0.21, 0.02, 0.13, light, 0, 0.21, 0, g);
+    } else if (kind === 'tyrerack') {
+      box(0.2, 0.02, 0.12, mat(0x8a8f98), 0, 0.02, 0, g); box(0.16, 0.12, 0.04, mat(0x1d1d20), 0, 0.09, 0.02, g);
     } else {                                                                     // a chair
       box(0.22, 0.025, 0.22, light, 0, 0.2, 0, g);
       for (const sx of [-0.09, 0.09]) for (const sz of [-0.09, 0.09]) box(0.03, 0.19, 0.03, wd, sx, 0.095, sz, g);

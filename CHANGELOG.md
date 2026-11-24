@@ -2,6 +2,12 @@
 
 The big changes to GUY's room, newest first. The game shows the same list under Help > Change log (src/changelog.js); keep the two in step.
 
+## 2026-11-24
+
+### Added
+
+- The Garage has things GUY and GAL build for it: a wooden Garage Workbench (GUY tinkers at its vise), a Metal Tool Chest (GUY sorts the spanners) and a Tyre Rack.
+
 ## 2026-11-23
 
 ### Changed

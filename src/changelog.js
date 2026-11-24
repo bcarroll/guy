@@ -3,6 +3,8 @@
 // WHATS_NEW (src/whatsnew.js) is the player-facing note for each deploy; this is the longer record by date. Add a line here
 // whenever a room, character, major feature or control is added, changed or taken away, and the same line to CHANGELOG.md.
 export const CHANGELOG = [
+  { date: '2026-11-24',
+    added: ['The Garage has things GUY and GAL build for it: a wooden Garage Workbench (GUY tinkers at its vise), a Metal Tool Chest (GUY sorts the spanners) and a Tyre Rack.'] },
   { date: '2026-11-23',
     changed: ['The Learning Workstation and the Build a Bot Machine are kept after a reload, in whatever room they were moved to, and GUY uses the Workstation there.', 'Locked in the Workshop, GUY and GAL build even when the house needs nothing: things they have never made first, then toys and decorations, taking turns.'] },
   { date: '2026-11-22',

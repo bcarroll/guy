@@ -72,6 +72,8 @@ export const MANIFEST = {
     bed: { room: 'workshop', built: true, alsoRoom: 'bedroom' }, wardrobe: { room: 'workshop', built: true, alsoRoom: 'bedroom' }, bedside: { room: 'workshop', built: true, alsoRoom: 'bedroom' },
     libshelf: { room: 'workshop', built: true, alsoRoom: 'library' }, readingchair: { room: 'workshop', built: true, alsoRoom: 'library' },
     libdesk: { room: 'workshop', built: true, alsoRoom: 'library' }, globe: { room: 'workshop', built: true, alsoRoom: 'library' },
+    // the Garage (a corner room): a workbench to tinker at, a tool chest, and a tyre rack
+    garagebench: { room: 'workshop', built: true, alsoRoom: 'garage' }, toolchest: { room: 'workshop', built: true, alsoRoom: 'garage' }, tyrerack: { room: 'workshop', built: true, alsoRoom: 'garage' },
     diningtable3: { room: 'workshop', built: true, alsoRoom: 'restaurant' }, diningtable4: { room: 'workshop', built: true, alsoRoom: 'restaurant' },       // (they go in the Restaurant, so it has to be there)
     // the Restaurant (another added room): the kitchen and the dining room
     stove: { room: 'restaurant', skills: ['restaurant'] }, kitchencounter: { room: 'restaurant', skills: ['restaurant'] }, register: { room: 'restaurant', skills: ['restaurant'] },
@@ -133,6 +135,9 @@ export const MANIFEST = {
     study: { objects: ['libdesk'], room: 'library', max: 120, touches: ['libdesk'] },
     playrecord: { objects: ['recordplayer'], room: 'bedroom', max: 160, touches: ['recordplayer'] },
     spinglobe: { objects: ['globe'], room: 'library', max: 120, touches: ['globe'] },
+    // the Garage (homebrain.js): the workbench's vise and file, and the tool chest's drawer
+    tinker: { objects: ['garagebench'], room: 'garage', max: 140, touches: ['garagebench'] },
+    toolsort: { objects: ['toolchest'], room: 'garage', max: 120, touches: ['toolchest'] },
     // the Library (librarybrain.js): its dust and cobwebs wiped away; the bookshelf carried in from his room (the skill shelf: it is always there)
     libclean: { room: 'library', max: 150, touches: [] },
     moveshelf: { objects: ['shelf'], room: 'library', max: 200, touches: ['shelf'] },
@@ -233,6 +238,8 @@ export const MANIFEST = {
     { id: 'study-page', on: 'libdesk', activity: 'study', pose: 'reach', t: 1.4, view: 'front', expect: 'standing at the reading desk, the green banker lamp lit, fingertips on the open book turning a page over; no hand through the desk' },
     { id: 'playrecord-arm', on: 'recordplayer', inRoom: 'bedroom', activity: 'playrecord', pose: 'reach', t: 1.2, view: 'side', expect: 'standing at the record player, one hand taking hold of the tonearm at the head shell, the other arm down; the record on the platter (red label, a pale stripe) and the cabinet with its two dark slots', },
     { id: 'spinglobe-hand', on: 'globe', activity: 'spinglobe', pose: 'reach', t: 0.7, view: 'front', expect: 'standing at the globe, the flat of his hand on the front of the globe, sweeping it round; the globe on its tripod, tilted in its brass ring' },
+    { id: 'tinker-vise', on: 'garagebench', activity: 'tinker', pose: 'reach', t: 1.2, view: 'front', room: 'garage', expect: 'standing at the workbench, one hand on the steel vise at the right-hand end of the bench, turning its handle; the pegboard with its tools behind the bench' },
+    { id: 'toolsort-drawer', on: 'toolchest', activity: 'toolsort', pose: 'reach', t: 2.0, view: 'front', room: 'garage', expect: 'the top drawer of the red tool chest pulled out, one hand reaching in among the spanners and the screwdriver' },
     { id: 'libclean-floor', inRoom: 'library', dist: 3.4, activity: 'libclean', pose: 'reach', t: 2.0, view: 'side', expect: 'squatting with both feet flat on the floor, leaning out over his knees, one hand down at a grey patch of dust on the Library floor (not floating, not kneeling through the floor)' },
     { id: 'carryhome-setup', inRoom: 'bedroom', activity: 'carryhome', pose: 'reach', t: 2.2, view: 'side', expect: 'crouched in the Bedroom beside the bed he carried out of the Workshop as it grows back into place, head to the far wall; the flat pack gone from his hands' },
     { id: 'moveshelf-setup', inRoom: 'library', activity: 'moveshelf', pose: 'reach', t: 2.2, view: 'side', expect: 'crouched beside a side wall of the Library where the bookshelf he carried in is growing back into place, its books on it; the flat pack gone from his hands' },
