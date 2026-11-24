@@ -202,5 +202,49 @@ export function makeHomeBuilders({ makeObject, box, mat }) {
     return addAt(o);
   };
 
-  return { bed, wardrobe, bedside, libshelf, libdesk, globe };
+  // ------------------------------------------------------------------------------------------------ record player
+  // A wooden cabinet with a turntable on top: a platter with a record on it, and a tonearm that swings onto it. Its front is local +z. Playing
+  // (`setPlaying`): the arm comes round onto the record and the platter turns up to speed; stopped, the arm lifts back and the platter slows.
+  const recordplayer = (name, x = 0, z = 0) => {
+    const wood = mat(WOOD), dark = mat(WOOD_DARK), black = mat(0x15161a, { roughness: 0.5 }), chrome = mat(STEEL, { roughness: 0.3, metalness: 0.7 });
+    const C = { x: -0.05, z: 0.05 }, P = { x: 0.29, z: -0.06 }, ARM = 0.34, DECK = 0.73, REST = -0.3, ON = -0.9, END = -1.02;
+    let platter = null, arm = null, led = null;
+    const o = makeObject(name, x, z, 0.8, 0.5, 0.9, 'light', (g) => {
+      box(0.8, 0.65, 0.5, wood, 0, 0.325, 0, g);                                     // the cabinet
+      box(0.74, 0.02, 0.012, dark, 0, 0.42, 0.253, g);                              // (a shelf of records behind the front: two dark slots)
+      box(0.74, 0.02, 0.012, dark, 0, 0.24, 0.253, g);
+      box(0.8, 0.04, 0.5, dark, 0, 0.67, 0, g);                                    // the top
+      box(0.72, 0.04, 0.42, mat(0x2a2d33, { roughness: 0.5 }), 0, 0.71, 0, g);     // the deck
+      platter = new THREE.Group(); platter.position.set(C.x, DECK + 0.005, C.z); g.add(platter);
+      const cyl = (r, h, m, y) => { const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 40), m); c.position.y = y; c.castShadow = true; platter.add(c); return c; };
+      cyl(0.17, 0.02, chrome, 0.0); cyl(0.155, 0.008, black, 0.014); cyl(0.05, 0.01, mat(0xd0312d, { roughness: 0.5 }), 0.018);
+      const mark = box(0.02, 0.012, 0.1, mat(0xf0e6d2), 0, 0.02, -0.1, platter);        // (a pale stripe on the record: you can see it turn)
+      void mark;
+      const spindle = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.04, 8), chrome); spindle.position.set(C.x, DECK + 0.03, C.z); g.add(spindle);
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.045, 0.04, 20), chrome); base.position.set(P.x, DECK + 0.02, P.z); g.add(base);
+      arm = new THREE.Group(); arm.position.set(P.x, DECK + 0.07, P.z); g.add(arm);
+      box(0.012, 0.012, ARM, chrome, 0, 0, ARM / 2, arm);                           // the arm (along its local +z)
+      box(0.03, 0.014, 0.05, black, 0, -0.004, ARM + 0.01, arm);                    // the head shell
+      box(0.024, 0.024, 0.06, chrome, 0, 0, -0.04, arm);                            // the counterweight
+      led = box(0.016, 0.016, 0.016, mat(0x333333), 0.33, 0.71 + 0.025, 0.2, g);
+    });
+    o.kind = 'recordplayer';
+    o.playing = false; o.spin = 0; o.armA = REST; o.armTo = REST; o.groove = 0;
+    o.setPlaying = (on) => { o.playing = on; o.armTo = on ? ON : REST; led.material.color.set(on ? 0x22ff66 : 0x333333); };
+    o.armPoint = () => o.at(P.x + Math.sin(o.armA) * (ARM + 0.01), DECK + 0.1, P.z + Math.cos(o.armA) * (ARM + 0.01));
+    o.armRestPoint = () => o.at(P.x + Math.sin(REST) * (ARM + 0.01), DECK + 0.1, P.z + Math.cos(REST) * (ARM + 0.01));
+    o.armOnPoint = () => o.at(P.x + Math.sin(ON) * (ARM + 0.01), DECK + 0.1, P.z + Math.cos(ON) * (ARM + 0.01));
+    onUpdate(o, (dt) => {
+      o.spin = ease(o.spin, o.playing ? 3.5 : 0, dt, o.playing ? 2.5 : 0.8);                  // (rad/s: a record turns at 33 rpm; a little faster to be seen)
+      platter.rotation.y += o.spin * dt;
+      if (o.playing && Math.abs(o.armA - ON) < 0.03) o.landed = true;
+      if (o.playing && o.landed) { o.groove = Math.min(1, o.groove + dt / 90); o.armTo = ON + (END - ON) * o.groove; }       // (it works its way in over the record)
+      if (!o.playing) { o.groove = 0; o.landed = false; }
+      o.armA = ease(o.armA, o.armTo, dt, 3);
+      arm.rotation.y = o.armA;
+    });
+    return addAt(o);
+  };
+
+  return { bed, wardrobe, bedside, libshelf, libdesk, globe, recordplayer };
 }

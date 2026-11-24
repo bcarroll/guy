@@ -42,7 +42,7 @@ const TOGETHER = { jam: ['table'], jampiano: ['table'], jamsit: ['table'], jamgu
 // what he does when he is shut in by a locked door (in the rooms he can still get to): the jobs that keep to one room
 const SHUT_ACTS = (act) => [WORK_ACTS, YARD_ACTS, RANGE_ACTS, BOWL_ACTS, STUDIO_ACTS, REST_JOBS].some((l) => l.includes(act)) || act === 'rwait' || act === 'libclean' || !!HOME_ACTS[act];
 const FREE_ACTS = ['wander', 'lookaround', 'sway', 'akimbo', 'ponder', 'wave'];           // done wherever he happens to be
-const OWN_ROOM_ACTS = ['leave', 'stuck', 'visit', 'dropball', 'hangpaint', 'moveshelf', 'carryhome', 'skillwait', 'bringpiece'];      // (they plan their own way: dropping a ball where he stands, hanging a painting on whichever wall)
+const OWN_ROOM_ACTS = ['leave', 'stuck', 'visit', 'dropball', 'hangpaint', 'moveshelf', 'carryhome', 'carrygear', 'skillwait', 'bringpiece'];      // (they plan their own way: dropping a ball where he stands, hanging a painting on whichever wall)
 import { sfx, drag as sfxDrag } from './sfx.js';
 import { findBooks, learnBooks } from './learn.js';
 import { nextRiff, keepRiff, riffAt, STEPS as RIFF_STEPS } from './riffs.js';
@@ -2282,6 +2282,7 @@ export class Brain {
     if (act === 'arrange') return !!this.obj('workstation') && !!this.arrangePlan;                // (only when he wants something, or somebody asks: arrange.js)
     if (HOME_ACTS[act]) return this.homeAvailable(act) && !(this.galBlocks && this.galBlocks(act));       // the Bedroom and the Library: their furniture, built for them
     if (act === 'moveshelf' || act === 'libclean') return this.libAvailable(act);           // the Library: its shelves carried in, its dust (librarybrain.js)
+    if (act === 'carrygear') return this.gearMoves().length > 0;               // something stands in his room that belongs in a room that has been added (arrange.js)
     if (act === 'carryhome') return this.homeMoves().length > 0;                 // something built for another room is standing in the Workshop (workbrain.js)
     if (act === 'learn') return !!this.obj('workstation');                      // the Learning Workstation (only when somebody asks: it has no weight; from another room he walks back to it first)
     if (BOWL_ACTS.includes(act)) return this.bowlOpen();                  // the Bowling Alley: the door is open (a beginner can bowl too)
@@ -2505,7 +2506,7 @@ export class Brain {
       wander: 3, sit: 0.7, sitguitar: 1.1, slouch: 0.5, dancemoves: 1.5, ballroom: 1.5, piano: 1, sitpiano: 1.2, plink: 1.4, dance: 1.8, jam: 0.9, jampiano: 0.5, jamsit: 0.9, lamp: 1.2, mood: 1.1,
       read: 1.8 + unread * 1.8, lookaround: 0.8, sway: 0.7, akimbo: 0.5, ponder: 0.6, wave: 0.7, ball: 2, dribble: 1.1, toss: 1.1, rearrange: 0.7, guitar: 1.6, riff: 1.0, plant: 0.6, jamguitar: 1.5, visit: 0.4,
       takeorder: 40, cook: 35, serve: 45, takepay: 50,
-      build: 2.0, tidytools: 0.4, makebed: 0.6, homesit: 0.8, wardrobe: 0.5, browse: 0.8, study: 0.7, spinglobe: 0.6, libclean: 1.0,
+      build: 2.0, tidytools: 0.4, makebed: 0.6, homesit: 0.8, wardrobe: 0.5, browse: 0.8, study: 0.7, spinglobe: 0.6, playrecord: 0.9, libclean: 1.0,
       bang: 1.3, drums: 1.6, drumsolo: 1.2, jamdrums: 1.5, scribble: 1.3, paint: 1.6, mixpaint: 1.3, portrait: 1.4,
       peek: 1.3, stargaze: 1.6, darkstargaze: 1.3, scopecare: 0.6, dust: 0.9, dusttop: 1.0,
       yardsit: 0.9, birdbath: 0.7, skyswitch: 0.6, mow: 0.5, yardpoke: 1.1, goalshot: 1.4, soccertoss: 0.8, hoopshoot: 1.4, hoopdribble: 0.9,
@@ -2522,7 +2523,7 @@ export class Brain {
       dance: ['stereo'], dancemoves: ['stereo'], ballroom: ['stereo'], lamp: ['fidget'], mood: ['fidget'], plant: ['fidget'], rearrange: ['fidget'], plink: ['piano'], carryhome: ['chore'],
       ball: ['ball'], dribble: ['ball'], toss: ['ball'], guitar: ['guitar'], riff: ['guitar'], jamguitar: ['guitar', 'stereo'],
       bang: ['drums'], drums: ['drums'], drumsolo: ['drums'], jamdrums: ['drums', 'stereo'],
-      sit: ['rest'], homesit: ['rest'], makebed: ['fidget'], wardrobe: ['fidget'], browse: ['fidget'], study: ['rest'], spinglobe: ['fidget'], libclean: ['chore'], sitguitar: ['guitar'], slouch: ['drums', 'rest'],
+      sit: ['rest'], homesit: ['rest'], makebed: ['fidget'], wardrobe: ['fidget'], browse: ['fidget'], study: ['rest'], spinglobe: ['fidget'], playrecord: ['stereo'], libclean: ['chore'], sitguitar: ['guitar'], slouch: ['drums', 'rest'],
       scribble: ['paint'], paint: ['paint'], mixpaint: ['paint'], portrait: ['paint'],
       peek: ['scope'], stargaze: ['scope'], darkstargaze: ['scope'], scopecare: ['scope', 'fidget'], dust: ['fidget'], dusttop: ['fidget'],
       rangeshoot: ['range'], rangehang: ['range'], rangefool: ['range'], bowl: ['range'], bowlwatch: ['range'], studiodj: ['stereo'], playbass: ['studiomusic'], playkeys: ['studiomusic'], playxylo: ['studiomusic'], playbongos: ['studiomusic'], studioshow: ['stereo'], studioparty: ['stereo'], studiowatch: ['fidget'], yardsit: ['rest'], birdbath: ['fidget'], skyswitch: ['fidget'], mow: ['chore'], yardpoke: ['yardball'], goalshot: ['yardball'], soccertoss: ['yardball'], hoopshoot: ['yardball'], hoopdribble: ['yardball'],
@@ -2531,6 +2532,7 @@ export class Brain {
     const lastTags = [this.last, this.prev].flatMap((n) => tags[n] || []);
     this.restCleanup();                                      // cut short in the Restaurant: the dish goes back, the order waits again
     this.shelfCleanup();                                     // cut short carrying a bookshelf to the Library: it is put together again (before workCleanup drops the flat pack)
+    this.recordCleanup();                                    // cut short while a record was playing on the record player: the arm lifts, the music stops
     this.homeCleanup();                                      // cut short carrying a built thing out of the Workshop to its room: the same
     this.pinCleanup();                                       // cut short putting new pins on a lane of the Bowling Alley
     this.workCleanup();                                      // cut short in the Workshop: what he carries goes back in the stock
@@ -2568,6 +2570,7 @@ export class Brain {
     }
     if (!name && this.restStays()) name = this.restNext();             // customers about: he stays and looks after them
     if (!name && !this.restStays()) name = this.homeMoveNext();        // something built for another room left in the Workshop: he carries it there (workbrain.js)
+    if (!name && !this.restStays()) name = this.gearMoveNext();       // an instrument (or the telescope ...) in his room while its own room has been added: he carries it there (arrange.js)
     if (!name && !this.restStays()) name = this.arrangeNext();         // something he wants is missing: he orders it at the workstation (arrange.js)
     if (!name && !this.restStays()) name = this.shelfMoveNext();       // a bookshelf still in his room while there is a Library: he carries it in (librarybrain.js)
     if (!name) {

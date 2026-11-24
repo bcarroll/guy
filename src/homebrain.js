@@ -15,10 +15,10 @@ import { sfx } from './sfx.js';
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
 // activity -> the kinds of object it is done at
-export const HOME_ACTS = { makebed: ['bed'], homesit: ['bed', 'readingchair'], wardrobe: ['wardrobe', 'bedside'], browse: ['libshelf'], study: ['libdesk'], spinglobe: ['globe'] };
-export const HOME_KINDS = ['bed', 'readingchair', 'wardrobe', 'bedside', 'libshelf', 'libdesk', 'globe'];
+export const HOME_ACTS = { makebed: ['bed'], homesit: ['bed', 'readingchair'], wardrobe: ['wardrobe', 'bedside'], browse: ['libshelf'], study: ['libdesk'], spinglobe: ['globe'], playrecord: ['recordplayer'] };
+export const HOME_KINDS = ['bed', 'readingchair', 'wardrobe', 'bedside', 'libshelf', 'libdesk', 'globe', 'recordplayer'];
 // the activities the menu offers on an object (by kind)
-export const HOME_KIND_ACTS = { bed: ['makebed', 'homesit'], readingchair: ['homesit'], wardrobe: ['wardrobe'], bedside: ['wardrobe'], libshelf: ['browse'], libdesk: ['study'], globe: ['spinglobe'] };
+export const HOME_KIND_ACTS = { bed: ['makebed', 'homesit'], readingchair: ['homesit'], wardrobe: ['wardrobe'], bedside: ['wardrobe'], libshelf: ['browse'], libdesk: ['study'], globe: ['spinglobe'], recordplayer: ['playrecord'] };
 
 export function installHome(Brain, POSES, H) {
   const { rand, pick } = H;
@@ -45,8 +45,16 @@ export function installHome(Brain, POSES, H) {
       if (wanted) return wanted;
       return all.find((o) => o.name !== (this.lastHome || {})[act]) || all[0];
     },
+    // The record he put on is lifted off and the music stops (called when the activity ends, and from choose() when it was cut short).
+    recordCleanup() {
+      const n = this.recordOn; this.recordOn = null;
+      if (!n) return;
+      const p = this.obj(n);
+      if (p) p.setPlaying(false);
+      if (this.music && !this.userMusic) this.musicOff();
+    },
     // is there something to do that is not just standing about (called from available())
-    homeAvailable(act) { return !!this.homeObj(act); },
+    homeAvailable(act) { return (act !== 'playrecord' || !this.music) && !!this.homeObj(act); },          // (a record goes on only when nothing else is playing)
 
     homeActivities() {
       const stand = (o, front, target, sides) => this.stand(o.name, front, target, sides);
@@ -122,6 +130,21 @@ export function installHome(Brain, POSES, H) {
             this.play('reach', 1.2, { needs: [n], at: [0.75, () => { gl().spin(7); sfx('whoosh'); }], target: () => { if (!t0.v) t0.v = this.time; const k = Math.min(1, Math.max(0, (this.time - t0.v - 0.45) / 0.4)); return gl().sidePoint(-1 + 2 * k); } }),
             this.play('ponder', rand(3, 4.5), { needs: [n] }),
             this.play('reach', 1.4, { needs: [n], at: [0.6, () => { gl().spin(0); sfx('click', 0.4); }], target: () => gl().sidePoint(0.3) }),
+            this.play('idle', 0.6, { needs: [n] })];
+        },
+        // the record player: a record on, the arm lowered by hand onto it, a listen, and the arm lifted off again
+        playrecord: () => {
+          const o = this.homeObj('playrecord');
+          if (!o) return ['no record player to use', this.play('idle', 0.5)];
+          const n = o.name, rp = () => this.obj(n), songs = this.trackList().filter((t) => t.id !== 'default'), song = songs.length ? pick(songs) : { id: 'default', title: 'a record' };
+          (this.lastHome ||= {}).playrecord = n;
+          const off = () => this.recordCleanup();
+          return [`putting ${song.id === 'default' ? 'a record' : `"${song.title}"`} on the record player`,
+            stand(o, 0.5, () => rp().armRestPoint(), [0, 1, 3]),
+            this.play('reach', 1.5, { needs: [n], at: [0.5, () => sfx('bookgrab')], target: () => rp().armRestPoint() }),
+            this.play('reach', 1.4, { needs: [n], at: [0.8, () => { if (!this.music) this.musicOn(song.id); this.recordOn = n; rp().setPlaying(true); sfx('click'); }], target: () => rp().armOnPoint() }),
+            this.play('idle', rand(14, 22), { needs: [n], onEnd: off }),
+            this.play('reach', 1.4, { needs: [n], at: [0.7, off], target: () => rp().armPoint() }),
             this.play('idle', 0.6, { needs: [n] })];
         },
       };

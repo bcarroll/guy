@@ -388,18 +388,18 @@ export function installWorkshop(Brain, POSES, H) {
       if (!at || w.roomIdAt(at.x, at.z) !== s.room) return null;
       return { x: at.x, z: at.z, rot: s.rot, room: s.room };
     },
-    // The built things in the Workshop that belong in another room he can get to, with where each goes: [{ o, spot }].
+    // The built things in the Workshop (or left in his own room) that belong in another room he can get to, with where each goes: [{ o, spot }].
     homeMoves() {
       const w = this.w;
       const pins = this.pinMove();
       if (pins) return [pins];
-      if (!w.doors.workshop || this.doorLockedFor('workshop')) return [];
-      const out = [];
+      const out = [], shop = !!w.doors.workshop && !this.doorLockedFor('workshop');       // (what stands in the Workshop is fetched only while it is open)
+
       for (const o of Object.values(w.objects)) {
         if (!o.kind || !RECIPES[o.kind] || o.packed || o.hauled || o.stowed || o.removable === false) continue;
-        if (RECIPES[o.kind].whole || w.roomIdAt(o.x, o.z) !== 'workshop' || this.otherUses(o.name)) continue;          // (the other robot is using it, or carrying it already)
+        if (RECIPES[o.kind].whole || !['workshop', 'main'].includes(w.roomIdAt(o.x, o.z)) || (w.roomIdAt(o.x, o.z) === 'workshop' && !shop) || this.otherUses(o.name)) continue;          // (the other robot is using it, or carrying it already)
         const spot = this.homeSpot(o);
-        if (spot) out.push({ o, spot });
+        if (spot && spot.room !== w.roomIdAt(o.x, o.z)) out.push({ o, spot });
       }
       return out.sort((a, b) => (a.o.name < b.o.name ? -1 : 1));
     },
@@ -472,10 +472,10 @@ export function installWorkshop(Brain, POSES, H) {
         (this.popping ||= []).push({ o, t: 0 });
         this.homeMove = null;
         sfx('thud', 0.5); sfx('chime');
-        if (this.onBuilt) this.onBuilt(`${this.who()} carried the ${r.name} out of the Workshop to ${roomName}.`);
+        if (this.onBuilt) this.onBuilt(`${this.who()} carried the ${r.name} to ${roomName}.`);
       };
       return [`carrying the ${r.name.toLowerCase()} to ${roomName}`,
-        { type: 'plan', fn: () => this.tripSteps(this.hereId(), 'workshop') },
+        { type: 'plan', fn: () => this.tripSteps(this.hereId(), this.roomOfObj(n)) },
         this.stand(n, 0.7, at),
         this.play('reach', 1.4, { needs: [n], at: [0.5, () => { this.homeMove = { name: n, from }; }], target: at }),
         // it comes apart: it goes flat, and the flat pack is in his arms

@@ -48,6 +48,7 @@ export const MANIFEST = {
   objects: {
     piano: { skills: ['piano'] }, bench: { skills: ['piano'] }, table: { skills: ['stereo'] }, shelf: { skills: [], fixed: true },
     lamp: { skills: ['lighting'] }, armchair: { skills: [] }, armchair2: { skills: [] }, chair: { skills: [] }, chair2: { skills: [] }, plant: { skills: [] }, ball: { skills: ['ball'] }, guitar: { skills: ['guitar'] },
+    recordplayer: { room: 'bedroom' },
     bass: { room: 'studio' }, keyboard: { room: 'studio' }, xylophone: { room: 'studio' }, bongos: { room: 'studio' },
     drums: { skills: ['drums'] }, easel: { skills: ['easel'] }, telescope: { skills: ['telescope'] },
     // the easter eggs (last, so the objects before them are placed as they always were)
@@ -130,11 +131,13 @@ export const MANIFEST = {
     wardrobe: { objects: ['wardrobe', 'bedside'], room: 'bedroom', max: 120, touches: ['wardrobe', 'bedside'] },
     browse: { objects: ['libshelf'], room: 'library', max: 120, touches: ['libshelf'] },
     study: { objects: ['libdesk'], room: 'library', max: 120, touches: ['libdesk'] },
+    playrecord: { objects: ['recordplayer'], room: 'bedroom', max: 160, touches: ['recordplayer'] },
     spinglobe: { objects: ['globe'], room: 'library', max: 120, touches: ['globe'] },
     // the Library (librarybrain.js): its dust and cobwebs wiped away; the bookshelf carried in from his room (the skill shelf: it is always there)
     libclean: { room: 'library', max: 150, touches: [] },
     moveshelf: { objects: ['shelf'], room: 'library', max: 200, touches: ['shelf'] },
     // a thing built for another room left standing in the Workshop (`strand`: moved there first): carried flat to its own room (workbrain.js)
+    carrygear: { objects: ['guitar'], room: 'studio', max: 200, touches: ['guitar'] },      // an instrument in his room while the Studio has been added: carried there by hand (arrange.js gearMoves)
     carryhome: { objects: ['bed'], room: 'workshop', strand: ['bed'], max: 200, touches: ['bed'] },
     // the Restaurant: `customer` is the state of a customer set up before it starts (customers.js stage()); the rest as for the Workshop
     takeorder: { objects: ['stove', 'kitchencounter', 'register', 'diningtable'], skills: ['restaurant'], room: 'restaurant', customer: 'waiting', touches: ['diningtable'] },
@@ -228,6 +231,7 @@ export const MANIFEST = {
     { id: 'wardrobe-reach', activity: 'wardrobe', pose: 'reach', t: 2.0, view: 'front', expect: 'both wardrobe doors swung open, one hand reaching in among the hanging clothes (or the bedside drawer pulled out with his hand in it)' },
     { id: 'browse-shelf', activity: 'browse', pose: 'reach', t: 1.8, view: 'front', expect: 'standing at the library shelf, one hand touching the spines of the books on a shelf, no hand through the shelf' },
     { id: 'study-page', on: 'libdesk', activity: 'study', pose: 'reach', t: 1.4, view: 'front', expect: 'standing at the reading desk, the green banker lamp lit, fingertips on the open book turning a page over; no hand through the desk' },
+    { id: 'playrecord-arm', on: 'recordplayer', inRoom: 'bedroom', activity: 'playrecord', pose: 'reach', t: 1.2, view: 'side', expect: 'standing at the record player, one hand taking hold of the tonearm at the head shell, the other arm down; the record on the platter (red label, a pale stripe) and the cabinet with its two dark slots', },
     { id: 'spinglobe-hand', on: 'globe', activity: 'spinglobe', pose: 'reach', t: 0.7, view: 'front', expect: 'standing at the globe, the flat of his hand on the front of the globe, sweeping it round; the globe on its tripod, tilted in its brass ring' },
     { id: 'libclean-floor', inRoom: 'library', dist: 3.4, activity: 'libclean', pose: 'reach', t: 2.0, view: 'side', expect: 'squatting with both feet flat on the floor, leaning out over his knees, one hand down at a grey patch of dust on the Library floor (not floating, not kneeling through the floor)' },
     { id: 'carryhome-setup', inRoom: 'bedroom', activity: 'carryhome', pose: 'reach', t: 2.2, view: 'side', expect: 'crouched in the Bedroom beside the bed he carried out of the Workshop as it grows back into place, head to the far wall; the flat pack gone from his hands' },
@@ -456,6 +460,7 @@ T.addAlbum = (id) => { // premium records are locked in the UI: the harness adds
 };
 T.learn = (ids) => ids.forEach((id) => skillsOf().learn(id));
 // Leave a built thing of `kind` standing in the Workshop (as when he is cut short carrying it to its room): returns its name, or null.
+T.noGear = true;        // the chore of carrying things to their rooms (arrange.js gearMoveNext) stays off in the sweeps, or it moves what they set up; the arrange sweep turns it on
 T.strand = (kind) => {
   const w = W(), o = Object.values(w.objects).find((x) => x.kind === kind);
   if (!o || !w.doors.workshop) return null;
@@ -6789,24 +6794,27 @@ T.sweepArrange = () => {
       if (bd) w.storeInstance(bd.name);
       delete w.stock.items.bed;
     }
-    // 5d. a room that has been added gets what is for it, from his own room too: the Studio the instruments, the Backyard the telescope, the
-    // Bedroom a bed built for it (all of it standing in his room, wherever it was put)
+    // 5d. a room that has been added gets what is for it, carried there by hand (no workstation needed): the Studio the instruments, the Backyard
+    // the telescope, the Bedroom a bed built for it, all of it standing in his room. The piano (heavy) and the stereo stay where they are.
     {
-      T.resetRooms(); T.removeAll(); T.settle();
-      { const wasDev = dev.all; dev.all = true; w.addNew('workstation', null); dev.all = wasDev; }
-      for (const id of ['drums', 'guitar', 'telescope']) T.addObject(id);
+      T.resetRooms(); T.removeAll(); T.settle(); T.home(); gone();
+      for (const id of ['drums', 'guitar', 'telescope', 'piano', 'table']) T.addObject(id);
       w.stock.items.bed = 1; ops.add('bed', w.roomSpot('main'));
-      const inMain = () => ['drums', 'guitar', 'telescope'].every((id) => w.objects[id] && w.roomIdAt(w.objects[id].x, w.objects[id].z) === 'main');
-      out.push(result('arrange: with no Studio or Backyard added, the drums, guitar and telescope are fine where they are in his room', inMain() && !b.misplaced().some((m) => ['drums', 'guitar', 'telescope'].includes(m.id)), { left: b.misplaced().map((m) => m.id) }));
+      const at = (id) => { const o = Object.values(w.objects).find((x) => (x.kind || x.name) === id); return o && w.roomIdAt(o.x, o.z); };
+      out.push(result('arrange: with no Studio or Backyard added, the drums, guitar and telescope are fine where they are in his room', ['drums', 'guitar', 'telescope'].every((id) => at(id) === 'main') && !b.gearMoves().length, { gear: b.gearMoves().map((m) => m.o.name) }));
       w.rooms.add('studio', { walls: ['back'] }); w.rooms.add('backyard', { walls: ['left'] }); w.rooms.add('bedroom');
-      const want = b.misplaced().map((m) => `${m.id}>${m.room}`).sort().join();
-      out.push(result('arrange: once the Studio, the Backyard and the Bedroom are added he sees the drums, guitar, telescope and bed belong there', ['drums>studio', 'guitar>studio', 'telescope>backyard'].every((x) => want.includes(x)) && /bed>bedroom/.test(want), { want }));
-      const where = () => Object.fromEntries(['drums', 'guitar', 'telescope'].map((id) => [id, w.objects[id] && w.roomIdAt(w.objects[id].x, w.objects[id].z)]));
-      b.queue = []; b.step = null; b.pendingActivity = null; b.wishFails = {}; T.settle();
-      let tm = 0; while (tm < 900 && b.misplaced().length) { b.lastWish = -999; b.wishFails = {}; step(0.5); tm += 0.5; if (tm > 5 && !b.step && !b.queue.length) b.choose(); }
-      out.push(result('arrange: left alone he carries them over by himself, one trip to the workstation after another, and none is left in his room', where().drums === 'studio' && where().guitar === 'studio' && where().telescope === 'backyard' && !b.misplaced().length, { where: where(), left: b.misplaced().map((m) => m.id), tm }));
+      const want = b.gearMoves().map((m) => `${m.o.name}>${m.room}`).sort().join();
+      out.push(result('arrange: once the Studio and the Backyard are added he sees the drums, guitar and telescope belong there (and the piano, folded up; not the stereo)', ['drums>studio', 'guitar>studio', 'telescope>backyard', 'piano>studio'].every((x) => want.includes(x)) && !/table/.test(want), { want }));
+      b.queue = []; b.step = null; b.pendingActivity = null; b.gearTried = -999; b.homeTried = -999; T.settle();
+      let tm = 0; const sawHaul = new Set(); T.noGear = false;
+      while (tm < 1500 && (b.gearMoves().length || b.homeMoves().length || b.step || b.queue.length)) { step(0.5); tm += 0.5; if (b.hauling) sawHaul.add(b.hauling.o.name); if (!b.step && !b.queue.length) { b.gearTried = -999; b.homeTried = -999; b.choose(); } }
+      const bed = Object.values(w.objects).find((o) => o.kind === 'bed');
+      out.push(result('arrange: left alone he carries the drums and the guitar to the Studio and the telescope to the Backyard by hand, one after another', at('drums') === 'studio' && at('guitar') === 'studio' && at('telescope') === 'backyard' && at('piano') === 'studio' && !b.gearMoves().length, { piano: at('piano'), drums: at('drums'), guitar: at('guitar'), telescope: at('telescope'), left: b.gearMoves().map((m) => m.o.name), tm }));
+      out.push(result('arrange: the bed built for the Bedroom that stood in his room is carried there too, and the stereo stays in his room', !!bed && w.roomIdAt(bed.x, bed.z) === 'bedroom' && at('table') === 'main', { bed: bed && w.roomIdAt(bed.x, bed.z), piano: at('piano'), table: at('table') }));
+      out.push(result('arrange: the light ones were carried whole in his hands (the guitar, the telescope)', sawHaul.has('guitar') && sawHaul.has('telescope'), { saw: [...sawHaul] }));
+      T.noGear = true;
       for (const o of Object.values(w.objects)) if (o.kind === 'bed') w.storeInstance(o.name);
-      delete w.stock.items.bed; gone();
+      delete w.stock.items.bed;
     }
     // 6. nothing to order: no wish, and with no workstation an order is refused in words
     skillsOf().known.clear(); b.lastWish = -999; b.wishFails = {};

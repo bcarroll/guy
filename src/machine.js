@@ -127,6 +127,7 @@ export const OBJECT_CATALOG = [
   { id: 'keyboard', cat: 'music', name: 'Electric Keyboard', icon: '🎹', desc: 'Two octaves on an X stand, with a synth sound.', free: true, room: 'studio' },
   { id: 'xylophone', cat: 'music', name: 'Xylophone', icon: '🎶', desc: 'Twelve coloured bars played with mallets.', free: true, room: 'studio' },
   { id: 'bongos', cat: 'music', name: 'Bongos', icon: '🪘', desc: 'A pair of bongo drums, slapped by hand.', free: true, room: 'studio' },
+  { id: 'recordplayer', cat: 'music', name: 'Record Player', icon: '🎶', desc: 'A wooden cabinet with a turntable. GUY and GAL put a record on and listen in the Bedroom.', free: true, room: 'bedroom' },
   { id: 'drums', cat: 'music', name: 'Drum Kit', icon: '🥁', desc: 'Kick, snare, hi-hat and cymbals on a stool. Comes with the book "Drumming for Robots".', free: true, book: 'drumming' },
   { id: 'easel', cat: 'hobbies', name: 'Painting Easel', icon: '🎨', desc: 'A canvas that really gets painted. Comes with the book "Painting for Robots".', free: true, book: 'painting' },
   { id: 'telescope', cat: 'hobbies', name: 'Telescope', icon: '🔭', desc: 'On a tripod by the window. Comes with the book "Stargazing for Robots".', free: true, book: 'stars' },

@@ -340,6 +340,7 @@ export function installSkillRun(Brain) {
         },
         // carry a thing from the room it is in to another (GAL for GUY, or GUY for himself)
         bringpiece: () => this.bringSteps(),
+        carrygear: () => this.gearSteps(),
         // put the stereo on for somebody (the music is switched off again when the skill is over)
         musicon: () => {
           if (!this.obj('table')) return ['no stereo', this.play('idle', 0.5)];

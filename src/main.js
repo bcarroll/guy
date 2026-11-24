@@ -608,6 +608,7 @@ function interactLabel(name) {
       if (brain.obj(name) && brain.obj(name).kind === 'libshelf') return '📚 Browse the Shelves';
       if (brain.obj(name) && brain.obj(name).kind === 'libdesk') return '🪔 Read at the Desk';
       if (brain.obj(name) && brain.obj(name).kind === 'globe') return '🌐 Spin the Globe';
+      if (brain.obj(name) && brain.obj(name).kind === 'recordplayer') return '🎶 Play a Record';
       return brain.obj(name) && brain.obj(name).heldBooks ? '📖 Read a Book' : brain.obj(name) && brain.obj(name).guitar && !brain.obj(name).bass ? '🎸 Play Guitar' : brain.obj(name) && brain.obj(name).kind === 'footstool' ? '🪜 Stand on It to Clean' : brain.obj(name) && brain.obj(name).sit ? '🪑 Sit Down' : '▶ Use';
   }
 }

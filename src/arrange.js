@@ -19,7 +19,7 @@ const ROOMS = { guitar: ['main'], drums: ['main'], eguitar: ['main'], easel: ['m
 // Where things belong once the room that is for them has been added (and is open to him): the Studio takes the instruments, the Backyard the
 // garden and the sky-watching, the Restaurant its kitchen. They are carried there from his own room or the Workshop, wherever they stand.
 const HOME = {
-  studio: ['drums', 'guitar', 'eguitar', 'piano', 'bench', 'table', 'bass', 'keyboard', 'xylophone', 'bongos', 'mirrorball', 'jukebox'],
+  studio: ['drums', 'guitar', 'eguitar', 'piano', 'bench', 'bass', 'keyboard', 'xylophone', 'bongos', 'mirrorball', 'jukebox'],
   backyard: ['soccergoal', 'basketballhoop', 'lawnchair', 'birdbath', 'shed', 'mower', 'gnome', 'flamingo', 'easel', 'telescope'],
 };
 const HOME_OF = Object.fromEntries(Object.entries(HOME).flatMap(([room, ids]) => ids.map((id) => [id, room])));
@@ -70,18 +70,16 @@ export function installArrange(Brain, H) {
       if (spare.length > 3 && cool('tidy')) return { act: 'arrange', key: 'tidy', why: 'puts a spare chair away', add: [], remove: [spare[spare.length - 1].kind] };
       return null;
     },
-    // Things that stand in the Workshop or in his own room but belong in another room that has been added (HOME above; or where the Workshop built
-    // them for), with the room each goes to (open to him, with space for it): [{ o, id, label, room, roomName }].
+    // Things left in the Workshop that belong in another room, with the room each goes to (open to him, with space for it): [{ o, id, label, room, roomName }].
     misplaced() {
       const w = this.w, ok = this.openRooms(), out = [];
       for (const o of Object.values(w.objects)) {
         if (o.hauled || o.stowed || o.removable === false || this.inUse(o.name) || this.otherUses(o.name) || this.skillWants(o.name)) continue;
         const id = o.kind || o.name, here = w.roomIdAt(o.x, o.z);
-        if (here !== 'workshop' && here !== 'main') continue;     // (in a room he was sent to, it is where it belongs or where the user wants it)
+        if (here !== 'workshop') continue;                       // (only out of the Workshop: in his own room the robots carry things to their rooms: gearMoves)
         let homes = ROOMS[id], own = false;
         if (HOME_OF[id] && ok.includes(HOME_OF[id])) homes = [HOME_OF[id]];
-        else if (here !== 'workshop' && !(o.kind && RECIPES[o.kind])) continue;     // (in his room, only what has a room of its own now: the rest is where the user wants it)
-        if ((!homes || homes[0] === 'main') && o.kind && RECIPES[o.kind]) { const s = w.instanceSite(o.kind); if (s && s.room !== 'door' && s.room !== 'workshop' && s.room !== 'main') { homes = [s.room]; own = true; } }   // where the Workshop builds it for (its planned spot there)
+        if (!homes && o.kind && RECIPES[o.kind]) { const s = w.instanceSite(o.kind); if (s && s.room !== 'door' && s.room !== 'workshop') { homes = [s.room]; own = true; } }   // where the Workshop builds it for (its planned spot there)
         if (!homes || homes.includes(here)) continue;
         const room = homes.find((r) => ok.includes(r));
         const where = room && (own ? w.instanceSite(o.kind) : w.roomSpot(room));
@@ -90,6 +88,37 @@ export function installArrange(Brain, H) {
         out.push({ o, id, label: (def && def.name.replace(/ \(built by GUY\)$/, '')) || id, room, own, roomName: room === 'main' ? 'his own room' : `the ${room}` });
       }
       return out;
+    },
+    // ---- carrying things to the room that is for them ----
+    // What stands in his own room (or in the Workshop) and belongs in a room that has been added and is open (HOME): the Studio's instruments, the
+    // Backyard's telescope and garden things. Light things go whole, in both hands; anything bigger (the drum kit, the piano) is folded up and goes
+    // flat (skillrun.js bringSteps). The stereo stays in his own room (the Studio has its record decks). [{ o, room, label }].
+    gearMoves() {
+      const w = this.w, ok = this.openRooms(), out = [];
+      for (const o of Object.values(w.objects)) {
+        const room = HOME_OF[o.kind || o.name], here = w.roomIdAt(o.x, o.z);
+        if (!room || !ok.includes(room) || (here !== 'main' && here !== 'workshop')) continue;
+        if (o.packed || o.hauled || o.stowed || o.hung || o.mainOnly || o.removable === false || this.inUse(o.name) || this.otherUses(o.name) || this.skillWants(o.name) || this.handsFull(o)) continue;
+        if (this.other && this.other.bringJob && this.other.bringJob.name === o.name) continue;
+        if (!(room === 'main' || !this.doorLockedFor(room)) || !this.bringSpot(o, room, null)) continue;
+        const def = this.ops() && this.ops().byId ? this.ops().byId(o.kind || o.name) : null;
+        out.push({ o, room, label: ((def && def.name) || o.name).replace(/ \(built by GUY\)$/, '').toLowerCase() });
+      }
+      return out.sort((a, b) => (a.o.name < b.o.name ? -1 : 1));
+    },
+    // Called from choose(): 'carrygear' when something is waiting to go to its room (a chore, not chosen by weight).
+    gearMoveNext() {
+      if (this.lock || this.stuckIn() || this.held || this.carry || this.hauling) return null;
+      if (typeof window !== 'undefined' && window.guyTest && window.guyTest.noGear) return null;      // (the QA harness keeps it off, so the sweeps' furniture stays where they put it: only the sweeps of this chore turn it on)
+      if (this.time - (this.gearTried || -999) < 30) return null;               // (it did not work a moment ago: not straight away again)
+      return this.gearMoves().length ? 'carrygear' : null;
+    },
+    gearSteps() {
+      const m = this.gearMoves()[0];
+      this.gearTried = this.time;
+      if (!m) return ['nothing to carry', this.play('idle', 0.5)];
+      this.bringJob = { name: m.o.name, room: m.room, thing: m.label, for: this };
+      return this.bringSteps();
     },
     // Used by choose(): returns the activity to do now ('arrange' | 'build') or null. Sets up what that activity does.
     arrangeNext() {

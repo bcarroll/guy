@@ -1460,6 +1460,7 @@ export function buildRoom(scene) {
     readingchair: ['library', (N, L) => ({ n: N * 0.55, lat: 0, face: 'door' })],             // (an armchair faces its local -z: so it faces the shelves)
     libdesk: ['library', (N) => ({ n: N - 0.45, lat: 0, face: 'door' })],                       // against the far wall, between the two shelves
     globe: ['library', (N, L) => ({ n: N * 0.42, lat: L * 0.25, face: 'door' })],               // out in the room, beside the reading chair
+    recordplayer: ['bedroom', (N, L) => ({ n: N - 0.4, lat: -L * 0.12, face: 'door' })],        // against the far wall, between the wardrobe and the bed
   };
   const homeSpot = (id) => (w) => {
     const [room, f] = HOME_LAYOUT[id];
@@ -1543,6 +1544,7 @@ export function buildRoom(scene) {
     tree: [buildTree, { x: 4.3, z: -3.0 }],
     coffeetable: [buildCoffeeTable, { x: 3.2, z: 1.9 }],
     nightstand: [buildNightstand, { x: 4.4, z: 4.3 }],
+    recordplayer: [(x = 0, z = 0) => homeB.recordplayer('recordplayer', x, z), homeSpot('recordplayer')],
     bass: [instB.bass, studioSpot('bass')], keyboard: [instB.keyboard, studioSpot('keyboard')], xylophone: [instB.xylophone, studioSpot('xylophone')], bongos: [instB.bongos, studioSpot('bongos')],
     guitar: [buildGuitar, { x: 1.5, z: -1.5 }],
     drums: [buildDrums, { x: 1.4, z: -2.2 }],
