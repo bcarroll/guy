@@ -331,12 +331,12 @@ export function install(T, h) {
     }
     // The furnished corner rooms: what the bots build for them (a bed, a wardrobe and a bedside table; two bookshelves, a reading chair, a
     // reading desk with its lamp lit and a globe), and in the Library the skill shelf they carried in, its dust and cobwebs cleaned away
-    for (const [id, kinds] of [['bedroom', ['bed', 'wardrobe', 'bedside']], ['library', ['libshelf', 'libshelf', 'readingchair', 'libdesk', 'globe']]]) {
+    for (const [id, kinds] of [['bedroom', ['bed', 'wardrobe', 'bedside']], ['library', ['libshelf', 'libshelf', 'readingchair', 'libdesk', 'globe']], ['garage', ['garagebench', 'toolchest', 'tyrerack']]]) {
       add(`room-corner-${id}-furnished`, 'rooms', async () => {
-        await clean(id === 'library' ? 48 : 49);
+        await clean({ library: 48, garage: 50 }[id] || 49);
         const w = window.brain.w;
         w.rooms.add('workshop', { walls: ['right'] });
-        w.rooms.add('library'); w.rooms.add('bedroom');
+        if (id === 'garage') w.rooms.add('garage'); else { w.rooms.add('library'); w.rooms.add('bedroom'); }   // (the Garage on its own: its built things are what is in the picture)
         for (const k of kinds) w.addInstance(k, null, null, true);
         if (id === 'library') {
           const spot = w.libraryShelfSpot(w.objects.shelf);

@@ -92,6 +92,10 @@ export const OBJECT_CATALOG = [
   { id: 'readingchair', cat: 'built', name: 'Reading Chair (built by GUY)', icon: '🛋️', desc: 'A green armchair for the Library. GUY sits in it for a rest.', built: true, room: 'workshop' },
   { id: 'libdesk', cat: 'built', name: 'Reading Desk (built by GUY)', icon: '🪔', desc: 'A writing desk for the Library with a green banker lamp and an open book. GUY switches the lamp on and reads a few pages. Heavy: only you can move it.', built: true, room: 'workshop' },
   { id: 'globe', cat: 'built', name: 'Globe (built by GUY)', icon: '🌐', desc: 'A globe on a wooden stand for the Library. GUY gives it a spin and looks for places.', built: true, room: 'workshop' },
+  // Built for the Garage (a corner room): a workbench to tinker at, a metal tool chest and a tyre rack
+  { id: 'garagebench', cat: 'built', name: 'Garage Workbench (built by GUY)', icon: '🔧', desc: 'A wooden workbench with a steel vise and a pegboard of tools, for the Garage. GUY tinkers at it. Heavy: only you can move it.', built: true, room: 'workshop' },
+  { id: 'toolchest', cat: 'built', name: 'Metal Tool Chest (built by GUY)', icon: '🧰', desc: 'A red steel tool chest for the Garage. GUY opens the top drawer and sorts the spanners. Heavy: only you can move it.', built: true, room: 'workshop' },
+  { id: 'tyrerack', cat: 'built', name: 'Tyre Rack (built by GUY)', icon: '🛞', desc: 'A steel rack with four tyres stacked on it, for the Garage. GUY checks the tyres on it.', built: true, room: 'workshop' },
   // Printed by the Build a Bot machine (only while it stands in the Workshop): see RECIPES, line 'bot', in src/workshop.js
   { id: 'fishtank', cat: 'built', name: 'Fish Tank (printed by GUY)', icon: '🐠', desc: 'A glass tank with two fish and a trail of bubbles.', built: true, room: 'workshop' },
   { id: 'rubberchicken', cat: 'built', name: 'Rubber Chicken (printed by GUY)', icon: '🐔', desc: 'A rubber chicken that wobbles about.', built: true, room: 'workshop' },

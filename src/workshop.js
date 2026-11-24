@@ -42,6 +42,10 @@ export const RECIPES = {
   readingchair: { name: 'Reading Chair', icon: '🛋️', skill: 'workshop.furniture', line: 'wood', run: 4.4, object: 'readingchair', cap: 1, serves: 'home.readchair', to: 'library' },
   libdesk: { name: 'Reading Desk', icon: '🪔', skill: ['workshop.materials', 'workshop.furniture'], line: 'wood', run: 4.8, object: 'libdesk', cap: 1, serves: 'home.desk', to: 'library' },
   globe: { name: 'Globe', icon: '🌐', skill: 'workshop.furniture', line: 'wood', run: 3.6, object: 'globe', cap: 1, serves: 'home.globe', to: 'library' },
+  // Furniture and kit for the Garage (a corner room, added from the Catalog): a workbench to tinker at, a metal tool chest and a tyre rack.
+  garagebench: { name: 'Garage Workbench', icon: '🔧', skill: 'workshop.furniture', line: 'wood', run: 4.6, object: 'garagebench', cap: 1, serves: 'garage.bench', to: 'garage' },
+  toolchest: { name: 'Metal Tool Chest', icon: '🧰', skill: 'workshop.metal', line: 'metal', run: 4.2, object: 'toolchest', cap: 1, serves: 'garage.tools', to: 'garage' },
+  tyrerack: { name: 'Tyre Rack', icon: '🛞', skill: 'workshop.metal', line: 'metal', run: 3.8, object: 'tyrerack', cap: 1, serves: 'garage.tyres', to: 'garage' },
   // Easter eggs: in no book. GUY builds one on his own once everything in `egg` stands in his room (see needs.js), with the basic Workshop book.
   mirrorball: { name: 'Mirror Ball', icon: '🪩', skill: 'workshop', line: 'metal', run: 4.0, object: 'mirrorball', cap: 1, serves: 'egg.mirrorball', egg: ['table', 'drums'] },
   trophy: { name: 'Golden Trophy', icon: '🏆', skill: 'workshop', line: 'metal', run: 4.6, object: 'trophy', cap: 1, serves: 'egg.trophy', egg: ['piano', 'guitar', 'drums'] },

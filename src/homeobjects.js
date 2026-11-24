@@ -246,5 +246,78 @@ export function makeHomeBuilders({ makeObject, box, mat }) {
     return addAt(o);
   };
 
-  return { bed, wardrobe, bedside, libshelf, libdesk, globe, recordplayer };
+  // ------------------------------------------------------------------------------------------------ garage workbench
+  // A long wooden bench with a pegboard on its back, a few tools hung on it, and a steel vise on the front right corner. Its front is local +z.
+  // `workPoint(u)`: a point on the bench top along it (u from -0.6 to 0.6); `vicePoint()`: the vise's handle.
+  const garagebench = (name, x = 0, z = 0) => {
+    const wood = mat(WOOD), dark = mat(WOOD_DARK), steel = mat(STEEL, { metalness: 0.5, roughness: 0.4 }), peg = mat(0xd9c29a);
+    const o = makeObject(name, x, z, 1.6, 0.7, 1.7, 'heavy', (g) => {
+      box(1.6, 0.06, 0.7, wood, 0, 0.9, 0, g);                                    // the top, its top at 0.93 m
+      for (const sx of [-0.74, 0.74]) for (const sz of [-0.3, 0.3]) box(0.08, 0.87, 0.08, dark, sx, 0.435, sz, g);
+      box(1.5, 0.04, 0.6, dark, 0, 0.25, 0, g);                                   // the lower shelf
+      box(1.6, 0.8, 0.03, peg, 0, 1.3, -0.345, g);                                // the pegboard on the back
+      box(0.04, 0.3, 0.02, steel, -0.5, 1.4, -0.33, g); box(0.14, 0.06, 0.02, dark, -0.5, 1.56, -0.33, g);   // a hammer
+      box(0.4, 0.1, 0.01, steel, 0.1, 1.45, -0.335, g); box(0.05, 0.14, 0.02, mat(0xc0392b), 0.1, 1.4, -0.33, g);   // a saw and a red spanner
+      box(0.22, 0.14, 0.2, steel, 0.6, 0.99, 0.2, g);                              // the vise: its body on the top
+      box(0.24, 0.1, 0.05, mat(0x4a4f57, { metalness: 0.6 }), 0.6, 1.04, 0.31, g); // (its front jaw)
+    });
+    o.kind = 'garagebench';
+    const handle = new THREE.Group(); handle.position.set(0.6, 1.04, 0.1); o.group.add(handle);
+    box(0.02, 0.02, 0.26, steel, 0, 0, 0.13, handle);                              // the handle that turns the screw
+    o.workPoint = (u) => o.at(u, 0.96, 0.1);
+    o.vicePoint = () => o.at(0.6, 1.04, 0.1);
+    return addAt(o);
+  };
+
+  // ------------------------------------------------------------------------------------------------ metal tool chest
+  // A red steel chest on a plinth: three drawers in the front and a top drawer that slides out, with spanners and a screwdriver in it.
+  // Its front is local +z. Like the wardrobe, it is opened (`setOpen`), reached into and shut again.
+  const toolchest = (name, x = 0, z = 0) => {
+    const red = mat(0xb8322a, { metalness: 0.4, roughness: 0.45 }), steel = mat(STEEL, { metalness: 0.6, roughness: 0.35 }), dark = mat(0x2a2d33);
+    const o = makeObject(name, x, z, 0.8, 0.5, 0.8, 'heavy', (g) => {
+      box(0.8, 0.66, 0.5, red, 0, 0.43, 0, g);                                    // the body (its top at 0.76 m)
+      box(0.8, 0.04, 0.5, dark, 0, 0.08, 0, g);                                   // the plinth
+      box(0.82, 0.03, 0.52, steel, 0, 0.765, 0, g);                               // the top
+      for (const y of [0.63, 0.46]) box(0.74, 0.14, 0.02, mat(0x9aa0a8, { metalness: 0.6 }), 0, y, 0.255, g);   // two drawers stay shut
+      for (const y of [0.63, 0.46]) box(0.14, 0.02, 0.03, dark, 0, y + 0.02, 0.27, g);                            // their handles
+    });
+    o.kind = 'toolchest';
+    o.drawer = new THREE.Group();
+    box(0.74, 0.14, 0.02, red, 0, 0, 0, o.drawer);                              // the drawer front
+    box(0.7, 0.02, 0.44, dark, 0, -0.07, -0.21, o.drawer);                      // the drawer's floor
+    box(0.12, 0.012, 0.04, steel, -0.2, -0.05, -0.12, o.drawer); box(0.14, 0.012, 0.035, mat(0xe0453b), 0.1, -0.05, -0.15, o.drawer);   // spanners in it
+    box(0.03, 0.012, 0.16, mat(0x2b6cb0), 0.24, -0.05, -0.21, o.drawer);       // a screwdriver
+    box(0.2, 0.03, 0.02, dark, 0, 0.0, 0.02, o.drawer);                         // the long handle
+    o.drawer.position.set(0, 0.5, 0.25);
+    o.group.add(o.drawer);
+    o.open = 0; o.openTo = 0;
+    o.setOpen = (v) => { o.openTo = v ? 1 : 0; };
+    const apply = () => { o.drawer.position.z = 0.25 + o.open * 0.26; };
+    apply();
+    onUpdate(o, (dt) => { if (o.open !== o.openTo) { o.open = ease(o.open, o.openTo, dt, 5); if (Math.abs(o.open - o.openTo) < 0.01) o.open = o.openTo; apply(); } });
+    o.handlePoint = () => o.at(0, 0.5, 0.29);
+    o.insidePoint = () => o.at(0, 0.56, 0.42);
+    return addAt(o);
+  };
+
+  // ------------------------------------------------------------------------------------------------ tyre rack
+  // A steel A-frame with a rod on each side and four tyres stacked on it, lying flat. GUY and GAL check the tyres (tidyup, toybrain.js).
+  const tyrerack = (name, x = 0, z = 0) => {
+    const steel = mat(STEEL, { metalness: 0.6, roughness: 0.4 }), rubber = mat(0x1d1d20, { roughness: 0.9 });
+    const o = makeObject(name, x, z, 1.0, 0.6, 1.3, 'medium', (g) => {
+      for (const sx of [-0.42, 0.42]) {
+        box(0.04, 1.3, 0.04, steel, sx, 0.65, 0.2, g); box(0.04, 1.3, 0.04, steel, sx, 0.65, -0.2, g);   // the uprights, front and back
+        box(0.04, 0.04, 0.44, steel, sx, 0.03, 0, g);                             // the feet
+      }
+      box(0.04, 0.04, 0.44, steel, -0.42, 1.2, 0, g); box(0.04, 0.04, 0.44, steel, 0.42, 1.2, 0, g);   // the top rails
+      for (let i = 0; i < 4; i++) {
+        const t = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.07, 10, 28), rubber);
+        t.rotation.x = Math.PI / 2; t.position.set(0, 0.16 + i * 0.23, 0); t.castShadow = true; g.add(t);
+      }
+    });
+    o.kind = 'tyrerack';
+    return addAt(o);
+  };
+
+  return { bed, wardrobe, bedside, libshelf, libdesk, globe, recordplayer, garagebench, toolchest, tyrerack };
 }

@@ -24,7 +24,7 @@ export const ROOM_NOTES = {
   studio: 'A stage with lights, a glowing dance floor, a DJ booth and a wall of records. Tap the Studio Machine by the door to add instruments. Push a guitar against a wall to hang it.',
   library: 'A corner room. It starts dusty: the robots clean it, carry the bookshelves in, books and all, and build a reading desk.',
   bedroom: 'A corner room the robots furnish with a bed, a wardrobe and a bedside table.',
-  garage: 'An empty corner room for whatever you want to move in.',
+  garage: 'A corner room the robots furnish with a workbench (GUY tinkers at its vise), a metal tool chest and a tyre rack.',
   gameroom: 'An empty corner room for whatever you want to move in.',
 };
 

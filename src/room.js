@@ -1512,6 +1512,9 @@ export function buildRoom(scene) {
     libdesk: ['library', (N) => ({ n: N - 0.45, lat: 0, face: 'door' })],                       // against the far wall, between the two shelves
     globe: ['library', (N, L) => ({ n: N * 0.42, lat: L * 0.25, face: 'door' })],               // out in the room, beside the reading chair
     recordplayer: ['bedroom', (N, L) => ({ n: N - 0.4, lat: -L * 0.12, face: 'door' })],        // against the far wall, between the wardrobe and the bed
+    garagebench: ['garage', (N, L) => ({ n: N - 0.45, lat: -L * 0.18, face: 'door' })],         // along the far wall, its vise at the right-hand end
+    toolchest: ['garage', (N, L) => ({ n: N - 0.4, lat: L * 0.3, face: 'door' })],              // against the far wall, beside the bench
+    tyrerack: ['garage', (N, L) => ({ n: N * 0.45, lat: -L * 0.3, face: 'door' })],             // out in the room, on the left-hand side
   };
   const homeSpot = (id) => (w) => {
     const [room, f] = HOME_LAYOUT[id];
@@ -1534,6 +1537,10 @@ export function buildRoom(scene) {
   } };
   INSTANCE_KINDS.readingchair = { build: (name, x, z) => { const o = buildArmchair(name, x, z, 0x2f6b4f); o.homeSeat = true; return o; }, pref: (w) => homeSpot('readingchair')(w) };
   INSTANCE_KINDS.libdesk = { build: (name, x, z) => homeB.libdesk(name, x, z), pref: (w) => homeSpot('libdesk')(w) };
+  // (the Garage: built for it, and put in its own frame like the rest)
+  INSTANCE_KINDS.garagebench = { build: (name, x, z) => homeB.garagebench(name, x, z), pref: (w) => homeSpot('garagebench')(w) };
+  INSTANCE_KINDS.toolchest = { build: (name, x, z) => homeB.toolchest(name, x, z), pref: (w) => homeSpot('toolchest')(w) };
+  INSTANCE_KINDS.tyrerack = { build: (name, x, z) => homeB.tyrerack(name, x, z), pref: (w) => homeSpot('tyrerack')(w) };
   INSTANCE_KINDS.globe = { build: (name, x, z) => homeB.globe(name, x, z), pref: (w) => homeSpot('globe')(w) };
   // (the restaurant's extra tables are further instance kinds, added below once the restaurant's layout is known)
 

@@ -7,7 +7,7 @@
 //   arcade   play "Robo Blaster" on the Arcade Cabinet: a coin in, his hands on the stick and the fire button, the game on its screen
 //            (src/arcade.js) until it is over. The user watches it on the cabinet or in the big arcade view (main.js).
 //   jukebox  a song on the jukebox, a dance to it, and the music off again
-//   tidyup   look after the furniture: straighten the coffee table, set the nightstand's clock and tidy its drawer, dust the shelves
+//   tidyup   look after the furniture: straighten the coffee table, set the nightstand's clock and tidy its drawer, dust the shelves, press the tyres on the tyre rack
 //
 // Merged into the Bedroom and Library furniture's tables (homebrain.js HOME_ACTS / HOME_KIND_ACTS): the objects are found by KIND (or by
 // name for the coffee table and the nightstand, which have no kind) when the activity is planned, and every step says what it needs, so
@@ -45,6 +45,7 @@ export const TIDY = {
   coffeetable: { thing: 'coffee table', menu: '☕ Tidy the Coffee Table', doing: 'tidying the coffee table' },
   nightstand: { thing: 'nightstand', menu: '🕰️ Set the Clock', doing: 'setting the clock and tidying the nightstand' },
   woodshelves: { thing: 'wooden shelves', menu: '🗄️ Dust the Shelves', doing: 'dusting the wooden shelves' },
+  tyrerack: { thing: 'tyre rack', menu: '🛞 Check the Tyres', doing: 'checking the tyres' },
 };
 export const TOY_ACTS = { toy: Object.keys(TOYS), arcade: ['arcade'], jukebox: ['jukebox'], tidyup: Object.keys(TIDY) };
 export const TOY_KIND_ACTS = { ...Object.fromEntries(Object.keys(TOYS).map((k) => [k, ['toy']])), arcade: ['arcade'], jukebox: ['jukebox'], ...Object.fromEntries(Object.keys(TIDY).map((k) => [k, ['tidyup']])) };
@@ -194,6 +195,7 @@ export function installToys(Brain, POSES, H) {
         coffeetable: (n) => [reach(n, [-0.2, 0.54, 0.08], 1.3, 0.7, () => sfx('bookgrab')), wipe(n, [0.18, 0.47, 0.05], 0.18, 2.8), reach(n, [0.25, 0.53, 0], 1.2, 0.65, () => sfx('plate')), idle(n)],
         nightstand: (n) => [reach(n, [0.12, 0.66, 0.04], 1.6, 0.6, () => sfx('tick')), reach(n, [0, 0.42, 0.24], 1.3, 0.7, () => sfx('lid')), reach(n, [0, 0.45, 0.14], 1.6, 0.8, () => sfx('click')), reach(n, [0, 0.42, 0.24], 1.2, 0.6, () => sfx('lid')), idle(n)],
         woodshelves: (n) => [wipe(n, [0, 1.16, 0.14], 0.28, 2.4), wipe(n, [0, 0.8, 0.14], 0.28, 2.4), wipe(n, [0, 0.44, 0.14], 0.28, 2.4), idle(n)],
+        tyrerack: (n) => [reach(n, [0, 0.85, 0.27], 1.2, 0.6, () => sfx('thud')), reach(n, [0, 0.62, 0.27], 1.2, 0.6, () => sfx('thud')), reach(n, [0, 0.39, 0.27], 1.2, 0.6, () => sfx('thud')), wipe(n, [0, 0.94, 0.1], 0.2, 2.2), idle(n)],
       };
 
       return {

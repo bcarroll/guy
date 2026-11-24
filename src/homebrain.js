@@ -9,6 +9,9 @@
 //   browse    run a hand along the Library's shelves and look at the books
 //   study     at the reading desk: pull the lamp's chain, turn a few pages of the open book, pull it off again
 //   spinglobe give the globe a spin with the flat of his hand, watch it go round, and stop it with a finger
+//   playrecord  put a record on the record player, listen, and lift the arm off again
+//   tinker    at the Garage workbench: turn the vise, file a little along the top, loosen the vise again
+//   toolsort  the Garage's tool chest: open the drawer, reach in for a spanner, sort the things and shut it (the tyre rack has nothing to do)
 import * as THREE from 'three';
 import { sfx } from './sfx.js';
 import { TOY_ACTS, TOY_KIND_ACTS } from './toybrain.js';
@@ -16,10 +19,10 @@ import { TOY_ACTS, TOY_KIND_ACTS } from './toybrain.js';
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
 // activity -> the kinds of object it is done at
-export const HOME_ACTS = { makebed: ['bed'], homesit: ['bed', 'readingchair'], wardrobe: ['wardrobe', 'bedside'], browse: ['libshelf'], study: ['libdesk'], spinglobe: ['globe'], playrecord: ['recordplayer'], ...TOY_ACTS };
-export const HOME_KINDS = ['bed', 'readingchair', 'wardrobe', 'bedside', 'libshelf', 'libdesk', 'globe', 'recordplayer'];
+export const HOME_ACTS = { makebed: ['bed'], homesit: ['bed', 'readingchair'], wardrobe: ['wardrobe', 'bedside'], browse: ['libshelf'], study: ['libdesk'], spinglobe: ['globe'], playrecord: ['recordplayer'], tinker: ['garagebench'], toolsort: ['toolchest'], ...TOY_ACTS };
+export const HOME_KINDS = ['bed', 'readingchair', 'wardrobe', 'bedside', 'libshelf', 'libdesk', 'globe', 'recordplayer', 'garagebench', 'toolchest', 'tyrerack'];
 // the activities the menu offers on an object (by kind)
-export const HOME_KIND_ACTS = { bed: ['makebed', 'homesit'], readingchair: ['homesit'], wardrobe: ['wardrobe'], bedside: ['wardrobe'], libshelf: ['browse'], libdesk: ['study'], globe: ['spinglobe'], recordplayer: ['playrecord'], ...TOY_KIND_ACTS };
+export const HOME_KIND_ACTS = { bed: ['makebed', 'homesit'], readingchair: ['homesit'], wardrobe: ['wardrobe'], bedside: ['wardrobe'], libshelf: ['browse'], libdesk: ['study'], globe: ['spinglobe'], recordplayer: ['playrecord'], garagebench: ['tinker'], toolchest: ['toolsort'], ...TOY_KIND_ACTS };
 // what an object is for these tables: its kind, or its name for the furniture that has none (the coffee table and the nightstand: toybrain.js)
 export const homeKey = (o) => (o ? o.kind || o.name : null);
 // the activities the menu offers on an object (or none)
@@ -154,6 +157,32 @@ export function installHome(Brain, POSES, H) {
             this.play('idle', rand(14, 22), { needs: [n], onEnd: off }),
             this.play('reach', 1.4, { needs: [n], at: [0.7, off], target: () => rp().armPoint() }),
             this.play('idle', 0.6, { needs: [n] })];
+        },
+        // the Garage workbench: the vise handle turned to close the jaws, a file run along the top, and the vise opened again
+        tinker: () => {
+          const o = this.homeObj('tinker');
+          if (!o) return ['no bench to work at', this.play('idle', 0.5)];
+          const n = o.name, bench = () => this.obj(n);
+          (this.lastHome ||= {}).tinker = n;
+          return ['tinkering at the workbench',
+            stand(o, 0.75, () => bench().workPoint(0), [0]),
+            this.play('reach', 1.5, { needs: [n], at: [0.7, () => sfx('click', 0.4)], target: () => bench().vicePoint() }),
+            this.play('reach', 2.6, { needs: [n], at: [0.9, () => sfx('thud', 0.3)], target: () => bench().workPoint(-0.4 + Math.sin(this.time * 6) * 0.2) }),
+            this.play('ponder', rand(2, 3.5), { needs: [n] }),
+            this.play('reach', 1.4, { needs: [n], at: [0.6, () => sfx('click', 0.4)], target: () => bench().vicePoint() }),
+            this.play('idle', 0.5, { needs: [n] })];
+        },
+        // the tool chest: the top drawer opened, a hand in among the spanners and the screwdriver, and the drawer shut again
+        toolsort: () => {
+          const o = this.homeObj('toolsort');
+          if (!o) return ['nothing to open', this.play('idle', 0.5)];
+          const n = o.name, it = () => this.obj(n);
+          (this.lastHome ||= {}).toolsort = n;
+          return ['sorting the tools',
+            stand(o, 0.75, () => it().handlePoint(), [0]),
+            this.play('reach', 1.4, { needs: [n], at: [0.6, () => { it().setOpen(true); sfx('lid'); }], target: () => it().handlePoint() }),
+            this.play('reach', 3.0, { needs: [n], at: [0.6, () => sfx('click')], target: () => it().insidePoint() }),
+            this.play('reach', 1.4, { needs: [n], at: [0.6, () => { it().setOpen(false); sfx('lid'); }], target: () => it().handlePoint() })];
         },
       };
     },

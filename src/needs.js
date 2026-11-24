@@ -7,6 +7,7 @@
 //   bowl.pins / bowl.ball  the Bowling Alley has been added: a set of maple pins for each lane, a wooden ball (the Wood & Metal book, chapters 4 and 5)
 //   home.*   the Bedroom has been added: a bed, a wardrobe and a bedside table; the Library: two bookshelves, a reading chair, a reading
 //            desk (with its lamp) and a globe
+//   garage.*  the Garage has been added: a workbench to tinker at, a metal tool chest for the tools, and a tyre rack
 //   egg.<id> an easter egg (RECIPES with `egg`): wanted, last of all, once every object it lists stands in the main room
 // `wants(brain)` lists what is missing now, most pressing first: [{ serves, n, why }]. A recipe in workshop.js says which want it
 // serves; `supply` counts what already exists or is on its way (built and waiting in the Workshop, or in storage), so nothing is built twice.
@@ -64,6 +65,12 @@ export function wants(b) {
     if (supply(w, 'home.readchair') === 0) out.push({ serves: 'home.readchair', n: 1, why: 'the library has nowhere to sit and read' });
     if (supply(w, 'home.desk') === 0) out.push({ serves: 'home.desk', n: 1, why: 'the library has no desk to read at' });
     if (supply(w, 'home.globe') === 0) out.push({ serves: 'home.globe', n: 1, why: 'the library could do with a globe' });
+  }
+  // the Garage, once it has been added: a workbench, a tool chest and a tyre rack (each built once)
+  if (w.doors.garage) {
+    if (supply(w, 'garage.bench') === 0) out.push({ serves: 'garage.bench', n: 1, why: 'the garage has no workbench' });
+    if (supply(w, 'garage.tools') === 0) out.push({ serves: 'garage.tools', n: 1, why: 'the garage has nowhere to keep the tools' });
+    if (supply(w, 'garage.tyres') === 0) out.push({ serves: 'garage.tyres', n: 1, why: 'the garage could do with a tyre rack' });
   }
   // easter eggs: only when everything the recipe lists is in the room
   const inMain = (k) => Object.values(w.objects).some((o) => (o.name === k || o.kind === k) && w.roomIdAt(o.x, o.z) === 'main');

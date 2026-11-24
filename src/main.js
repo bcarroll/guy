@@ -647,6 +647,8 @@ function interactLabel(name) {
       if (brain.obj(name) && brain.obj(name).kind === 'libdesk') return '🪔 Read at the Desk';
       if (brain.obj(name) && brain.obj(name).kind === 'globe') return '🌐 Spin the Globe';
       if (brain.obj(name) && brain.obj(name).kind === 'recordplayer') return '🎶 Play a Record';
+      if (brain.obj(name) && brain.obj(name).kind === 'garagebench') return '🔧 Tinker at the Bench';
+      if (brain.obj(name) && brain.obj(name).kind === 'toolchest') return '🧰 Sort the Tools';
       if (brain.obj(name) && TOY_MENU[brain.obj(name).kind || name]) return TOY_MENU[brain.obj(name).kind || name];      // the toys, the arcade, the jukebox, the little furniture (toybrain.js)
       if (brain.obj(name) && ['pinsetter', 'bowlingpins', 'bowlingball'].includes(brain.obj(name).kind)) return '🎳 Go Bowling';
       if (brain.obj(name) && (brain.obj(name).seats || /^diningtable/.test(name))) return '📝 Take an Order';           // (the Restaurant's tables)
