@@ -12,7 +12,7 @@ export const setMuted = (m) => { muted = !!m; if (muted) dragOff(); };
 export const isMuted = () => muted;
 
 const last = {};
-const MIN_GAP = { bounce: 40, knock: 60, thud: 60, page: 250, step: 150, tick: 70, brush: 120, wipe: 450, leaf: 220, click: 40, sit: 400, kick: 60, machine: 500, lid: 150, sizzle: 400, plate: 150, ding: 200, splash: 300, swish: 300, motor: 260, rumble: 600, pinhit: 150, strike: 400, gutter: 400, pins: 300 };
+const MIN_GAP = { bounce: 40, knock: 60, thud: 60, page: 250, step: 150, tick: 70, brush: 120, wipe: 450, leaf: 220, click: 40, sit: 400, kick: 60, machine: 500, lid: 150, sizzle: 400, plate: 150, ding: 200, splash: 300, swish: 300, motor: 260, rumble: 600, pinhit: 150, strike: 400, gutter: 400, pins: 300, blip: 55, squeak: 120 };
 
 let noise = null;
 const noiseBuf = (ctx) => {
@@ -128,6 +128,20 @@ const SOUNDS = {
     for (let k = 0; k < 11; k++) { tone(ctx, out, { f0: 600 + Math.random() * 1100, f1: 350 + Math.random() * 200, dur: 0.07, type: 'triangle', gain: 0.07, delay: 0.04 + k * 0.05 + Math.random() * 0.03 }); burst(ctx, out, { dur: 0.05, type: 'bandpass', f: 2000 + Math.random() * 2000, q: 2, gain: 0.07, delay: 0.05 + k * 0.05 }); }
   },
   gutter(ctx, out) { burst(ctx, out, { dur: 0.5, type: 'lowpass', f: 300, f2: 180, gain: 0.12, attack: 0.04 }); tone(ctx, out, { f0: 110, f1: 55, dur: 0.18, gain: 0.14, delay: 0.45 }); },
+  // the Arcade Cabinet's game (Robo Blaster, src/arcade.js): 8-bit square-wave blips, quiet. k: 0 a shot, 1 a meteor hit, 2 a ship lost, 3 game over
+  blip(ctx, out, k = 0) {
+    if (k === 1) { burst(ctx, out, { dur: 0.12, type: 'bandpass', f: 1800, f2: 500, q: 1.2, gain: 0.07 }); tone(ctx, out, { f0: 520, f1: 130, dur: 0.12, type: 'square', gain: 0.04 }); return; }
+    if (k === 2) { tone(ctx, out, { f0: 440, f1: 70, dur: 0.45, type: 'square', gain: 0.05 }); burst(ctx, out, { dur: 0.3, type: 'lowpass', f: 900, f2: 200, gain: 0.07 }); return; }
+    if (k === 3) { [523, 392, 330, 262].forEach((f, i) => tone(ctx, out, { f0: f, f1: f * 0.98, dur: 0.16, type: 'square', gain: 0.045, delay: i * 0.15, attack: 0.004 })); return; }
+    tone(ctx, out, { f0: 1500, f1: 600, dur: 0.08, type: 'square', gain: 0.1, attack: 0.002 });
+  },
+  // a rubber toy squeezed (the duck, k 0; the chicken, k 1, lower and longer, with a honk)
+  squeak(ctx, out, k = 0) {
+    const f = k ? 620 : 1100;
+    tone(ctx, out, { f0: f, f1: f * 1.6, dur: k ? 0.32 : 0.18, type: 'triangle', gain: 0.08, attack: 0.01 });
+    tone(ctx, out, { f0: f * 1.5, f1: f * 1.2, dur: k ? 0.3 : 0.16, type: 'sine', gain: 0.07, attack: 0.01 });
+    burst(ctx, out, { dur: k ? 0.25 : 0.12, type: 'bandpass', f: f * 1.3, q: 4, gain: 0.03 });
+  },
   pins(ctx, out) { for (let k = 0; k < 4; k++) tone(ctx, out, { f0: 520 + Math.random() * 300, f1: 300, dur: 0.06, type: 'triangle', gain: 0.1, delay: k * 0.09 }); burst(ctx, out, { dur: 0.1, type: 'bandpass', f: 1800, q: 1.5, gain: 0.08, delay: 0.02 }); },
 };
 

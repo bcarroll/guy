@@ -23,6 +23,7 @@ import { DISHES } from './restobjects.js';
 import { dev } from './devunlock.js';
 import { invent, judge, GOOD, STEPS as RIFF_STEPS, keepRiff, loadRiffs, nextRiff, riffAt, forgetMemoryRiffs } from './riffs.js';
 import { ALBUM_CATALOG } from './albums.js';
+import { TOYS, TIDY, TOY_KIND_ACTS, TOY_ACTS } from './toybrain.js';
 import { TRACKS, trackSeconds } from './audio.js';
 import { POSES } from './brain.js';
 import { bowlSkill } from './bowlbrain.js';
@@ -59,7 +60,7 @@ export const MANIFEST = {
     rug: { decor: true }, picture: { decor: true, wall: 'back' }, window: { decor: true, wall: 'left' }, window2: { decor: true, wall: 'back', startsOut: true },
     art_mountains: { decor: true, wall: 'left', startsOut: true }, art_abstract: { decor: true, wall: 'back', startsOut: true }, art_moon: { decor: true, wall: 'left', startsOut: true },
     sconce: { decor: true, wall: 'back', startsOut: true }, rug2: { decor: true, startsOut: true }, rug3: { decor: true, startsOut: true },
-    // decor furniture and plants (real objects): the plants are tended, the tables are only furniture
+    // decor furniture and plants (real objects): the plants are tended, the coffee table and the nightstand are tidied (toybrain.js)
     flowerplant: { skills: [] }, tree: { skills: [] }, coffeetable: { skills: [] }, nightstand: { skills: [] },
     // the Workshop (a room added from the Rooms tab: T.addObject adds it first) and what GUY builds there (counted in storage, added one at a time)
     workbench: { room: 'workshop', skills: ['workshop'] }, toolbox: { room: 'workshop', skills: ['workshop'] },
@@ -133,6 +134,12 @@ export const MANIFEST = {
     study: { objects: ['libdesk'], room: 'library', max: 120, touches: ['libdesk'] },
     playrecord: { objects: ['recordplayer'], room: 'bedroom', max: 160, touches: ['recordplayer'] },
     spinglobe: { objects: ['globe'], room: 'library', max: 120, touches: ['globe'] },
+    // the toys and curios (the easter eggs and the Build a Bot prints), the arcade, the jukebox and the little furniture (toybrain.js). `toy` and
+    // `tidyup` are one activity each for many things: sweepInteractAll runs every one of them
+    toy: { objects: ['mirrorball'], room: 'workshop', max: 120, touches: Object.keys(TOYS) },
+    arcade: { objects: ['arcade'], room: 'workshop', max: 160, touches: ['arcade'] },
+    jukebox: { objects: ['jukebox'], room: 'workshop', max: 120, touches: ['jukebox'] },
+    tidyup: { objects: ['coffeetable'], max: 100, touches: Object.keys(TIDY) },
     // the Library (librarybrain.js): its dust and cobwebs wiped away; the bookshelf carried in from his room (the skill shelf: it is always there)
     libclean: { room: 'library', max: 150, touches: [] },
     moveshelf: { objects: ['shelf'], room: 'library', max: 200, touches: ['shelf'] },
@@ -292,6 +299,8 @@ export const MANIFEST = {
     { id: 'studio-bass', activity: 'playbass', pose: 'guitar', t: 5, view: 'front', room: 'studio', objects: ['bass'], expect: 'wearing the electric bass (off its empty stand, which is behind him with the amp), strap over the left shoulder, the strings facing the camera, the neck out to his left and up; the left hand round the neck, the right hand over the pickups' },
     { id: 'studio-bass-side', activity: 'playbass', pose: 'guitar', t: 5, view: 'side', room: 'studio', objects: ['bass'], expect: 'the same from the side: the bass in front of his body with its back to him, not through him; the empty stand and the amp behind him' },
     { id: 'studio-bass-take', activity: 'playbass', pose: 'takeGuitar', t: 0.95, view: 'side', room: 'studio', objects: ['bass'], expect: 'leaning in to the bass on its stand, the right hand closed round its neck (fingers behind it, thumb over the strings) to lift it off; no strap yet' },
+    { id: 'arcade-play', activity: 'arcade', pose: 'arcadeplay', t: 0.6, view: 'side', room: 'workshop', expect: 'standing at the Arcade Cabinet, the left hand round the joystick ball, the right hand over the yellow fire button, head up at the screen' },
+    { id: 'toy-crystalball', activity: 'toy', pose: 'toyhold', t: 2, view: 'side', room: 'workshop', objects: ['crystalball'], expect: 'knees bent, leaning over the crystal ball on its stand with both hands on the glass (not hanging at his sides)' },
     { id: 'guitar-take', activity: 'guitar', pose: 'takeGuitar', t: 0.95, view: 'side', expect: 'leaning in to the guitar on its stand, the right hand closed round its neck to lift it off; no strap yet' },
     { id: 'studio-keys', activity: 'playkeys', pose: 'studioplay', t: 5, view: 'front', room: 'studio', objects: ['keyboard'], expect: 'standing behind the keyboard with both hands on the keys, leaning in a little' },
     { id: 'studio-xylo', activity: 'playxylo', pose: 'studioplay', t: 5, view: 'front', room: 'studio', objects: ['xylophone'], expect: 'standing at the xylophone, a hand on a bar, the other lifted between hits' },
@@ -643,7 +652,7 @@ T.sweepObjects = () => {
       errors: [...(before.errors || []), ...(after.errors || [])], overlaps: { ...before.overlaps, ...after.overlaps },
     }));
   }
-  // the easter eggs have no activity of their own: put them away again, so the sweeps after this one run in the same room as without them
+  // the easter eggs are put away again (they have an activity now, `toy`, but the sweeps after this one run in the same room as before them)
   for (const [n, o] of Object.entries(W().objects)) if (o.kind && RECIPES_DEF[o.kind] && RECIPES_DEF[o.kind].egg) { W().storeInstance(n); B().objectRemoved(n); }
   for (const r of Object.values(RECIPES_DEF)) if (r.egg) delete W().stock.items[r.object];
   return out;
@@ -3348,7 +3357,7 @@ T.sweepDoorLock = () => {
     let t8 = 0, left = 0, doorOpened = 0, workedOrWandered = new Set();
     while (t8 < 240) { step(0.25); t8 += 0.25; if (!inAdded(g.pos)) left++; if (t8 > 3 && dw().open > 0.05) doorOpened++; workedOrWandered.add(b.last); }
     out.push(result('doorlock: locked while he is inside, he is shut in: asked to come out or to do something outside, he says so, and for 240 seconds he stays in with the door shut', inside && !rb.ok && /shut in/i.test(rb.message) && !rread.ok && !rint.ok && /shut in/i.test(rint.message) && left === 0 && doorOpened === 0 && !!inAdded(g.pos), { inside, rb, left, doorOpened, did: [...workedOrWandered] }));
-    out.push(result('doorlock: shut in, he only does what can be done in the room (work, or wandering about), never anything of the main room', [...workedOrWandered].every((a) => WORK_NAMES.includes(a) || ['stuck', 'idle', 'visit'].includes(a)), { did: [...workedOrWandered] }));
+    out.push(result('doorlock: shut in, he only does what can be done in the room (work, playing with a toy he built there, or wandering about), never anything of the main room', [...workedOrWandered].every((a) => WORK_NAMES.includes(a) || ['stuck', 'idle', 'visit'].includes(a) || (Object.keys(TOY_ACTS).includes(a) && left === 0)), { did: [...workedOrWandered] }));
     R().setDoorLocked('workshop', false);
     t8 = 0; while (t8 < 400 && !(b.inMain() && dw().open === 0)) { step(0.25); t8 += 0.25; }
     out.push(result('doorlock: unlocked, he comes out through the door and shuts it', b.inMain() && dw().open === 0 && !dw().locked, { t8, last: b.last, room: w.roomIdAt(g.pos.x, g.pos.z), stuck: b.stuckIn(), open: dw().open, queue: b.queue.length, lock: b.lock && b.lock.name, carry: b.carry, label: label() }));
@@ -4428,7 +4437,13 @@ T.sweepLock = () => {
   out.push(result('lock: tapping the chip lets him go', !b.lock && chip.hidden));
   T.addObject('coffeetable');
   window.__guyOpenMenu('coffeetable');
-  out.push(result('lock: nothing to lock on for something he cannot use (the coffee table has no Lock in)', menu.querySelector('[data-act=lock]').hidden));
+  out.push(result('lock: the coffee table offers Lock in now that he can tidy it', !menu.querySelector('[data-act=lock]').hidden));
+  menu.hidden = true;
+  T.addObject('jukebox'); b.musicOn('default');
+  const jb = Object.entries(W().objects).find(([, o]) => (o.kind || o.name) === 'jukebox');          // a built thing is named jukebox_<n>
+  window.__guyOpenMenu(jb ? jb[0] : 'jukebox');
+  out.push(result('lock: nothing to lock on for something he cannot use just now (the jukebox while music is already playing)', !!jb && menu.querySelector('[data-act=lock]').hidden));
+  b.musicOff();
   menu.hidden = true; T.settle();
   out.push(result('lock: no errors', errors.length === base, { errors: errors.slice(base) }));
   return out;
@@ -6647,12 +6662,126 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.restaurantWall = S(T.sweepRestaurantWall);
   report.shutIn = S(T.sweepShutIn);        // (last, so the others keep their seeds)
   report.shutBuild = S(T.sweepShutBuild);        // (after shutIn, so the others keep their seeds)
+  report.interactAll = S(T.sweepInteractAll);    // (last, so the others keep their seeds)
   if (seed && T.unseed) T.unseed();
   window.__qaPaused = wasPaused;
   T.lastReport = report;
   report.errorsLogged = errors.length;
   return report;
 };
+// ---- Every object has something a robot does with it, and the user can watch GUY play the arcade (toybrain.js, src/arcade.js) ----------------
+// (Brett, Nov 24: "Ensure every object has an interaction of some sort. "GUY cant do anything with that" makes the objects less attractive. The
+// arcade game should allow the user to watch GUY play a game")
+T.sweepInteractAll = () => {
+  const out = [], base = errors.length, w = W(), b = B();
+  const OLD = /can't do anything with that/i, KIT = ['pinsetter', 'bowlingpins', 'bowlingball'];
+  const keyOf = (o) => o.kind || o.name;
+  const menuText = (n) => { window.__guyOpenMenu(n); const mm = document.getElementById('menu'), btn = mm.querySelector('[data-act="interact"]'); const t = btn && !btn.hidden ? btn.textContent.trim() : null; mm.hidden = true; return t; };
+  // 1. the whole Catalog in the house at once, every skill learned: every thing that is not decor gives the menu something to do, and none
+  //    says the robot can't do anything with it. (A few can refuse for a reason of their own, which the message gives: all the books read ...)
+  T.settle(); T.resetRooms(); T.removeAll(); T.forget(); T.home();
+  dev.all = true;
+  for (const r of ROOM_CATALOG) { unlockRoom(r.id); if (!R().isAdded(r.id)) R().add(r.id); }
+  for (const def of OBJECT_CATALOG) {
+    if ((MANIFEST.objects[def.id] || {}).decor || def.decor) continue;
+    if (def.built) w.stock.items[def.id] = (w.stock.items[def.id] || 0) + 1;
+    T.addObject(def.id);
+  }
+  dev.all = false;
+  T.learn(Object.keys(SKILL_INFO));
+  const refused = {}, empty = [], plain = [], here = new Set();
+  for (const [n, o] of Object.entries(w.objects)) {
+    here.add(keyOf(o));
+    const r = b.interact(n);
+    b.skip(); b.pendingActivity = null; b.pendingHome = null;
+    if (!r.ok) refused[n] = r.message;
+    const t = menuText(n);
+    if (!t) empty.push(n); else if (t === '▶ Use') plain.push(n);
+  }
+  const toyKinds = Object.keys(TOY_KIND_ACTS), missing = [...toyKinds, ...KIT].filter((k) => !here.has(k));
+  const toyRefused = Object.entries(refused).filter(([n]) => [...toyKinds, ...KIT].includes(keyOf(w.objects[n])));
+  out.push(result('interact all: the whole Catalog is in the house (every easter egg, every Build a Bot print, the coffee table, the nightstand, the shelves, the bowling kit)', !missing.length, { missing }));
+  out.push(result('interact all: no object answers "GUY can\'t do anything with that"', !Object.values(refused).some((m) => OLD.test(m)), { refused }));
+  out.push(result('interact all: every toy, curio and little piece of furniture, the arcade, the jukebox and the bowling kit can be used (Interact says "On it!")', !toyRefused.length, { toyRefused }));
+  out.push(result('interact all: every object in the room has an Interact button that says what it does (none is a bare "▶ Use")', !empty.length && !plain.length, { empty, plain }));
+  out.push(result('interact all: what is refused is said in words, not as the name of an activity in the code ("(goalshot is not possible just now)")', !Object.values(refused).some((m) => /\(\w+ is not possible/.test(m)), { refused }));
+  // 2. each of them alone in the room, run to the end: the robot really does it (it finishes, no errors, his arms in nothing else) and the thing
+  //    reacts (`poke`: the mirror ball spins faster, the duck squashes, the rocket goes up ...)
+  T.resetRooms(); T.removeAll(); T.forget();
+  const runs = {};
+  for (const k of [...Object.keys(TOYS), 'jukebox', ...Object.keys(TIDY)]) {
+    const act = TIDY[k] ? 'tidyup' : k === 'jukebox' ? 'jukebox' : 'toy';
+    T.removeAll(); T.prep(act);
+    for (const [n, o] of Object.entries(w.objects)) if (o.kind && o.kind !== k && TOY_KIND_ACTS[o.kind]) { w.storeInstance(n); b.objectRemoved(n); }
+    if (!Object.values(w.objects).some((o) => keyOf(o) === k)) { w.stock.items[k] = (w.stock.items[k] || 0) + 1; T.addObject(k); }
+    const o = Object.values(w.objects).find((x) => keyOf(x) === k);
+    if (!o) { runs[k] = { pass: false, why: 'not added' }; continue; }
+    const poked0 = o.group.userData.poked ? o.group.userData.poked().n : 0;
+    let musicOn = false;
+    const r = T.interact(o.name, { max: 160 });
+    if (k === 'jukebox') musicOn = r.labels.some((l) => /jukebox/.test(l));
+    const poked = o.group.userData.poked ? o.group.userData.poked().n - poked0 : null;
+    runs[k] = { pass: r.pass && r.activity === act && (poked === null || poked > 0), activity: r.activity, poked, errors: r.errors, overlaps: r.overlaps, refused: r.refused, musicOn };
+    if (b.music && !b.userMusic) b.musicOff();
+  }
+  const bad = Object.fromEntries(Object.entries(runs).filter(([, v]) => !v.pass));
+  out.push(result(`interact all: each of the ${Object.keys(runs).length} toys and little furniture, alone in the room, is played with or tidied to the end, and reacts`, !Object.keys(bad).length, { bad }));
+  out.push(result('interact all: the jukebox plays a song while he dances, and the music stops when he is done', !!runs.jukebox && runs.jukebox.pass && !b.music, { jukebox: runs.jukebox, music: b.music }));
+  // 3. the arcade: a coin in, his hands on the stick and the fire button, the game on its screen and in the big view in the corner, a score
+  T.removeAll(); T.prep('arcade');
+  for (const [n, o] of Object.entries(w.objects)) if (o.kind && o.kind !== 'arcade' && TOY_KIND_ACTS[o.kind]) { w.storeInstance(n); b.objectRemoved(n); }
+  const cab = Object.values(w.objects).find((o) => o.kind === 'arcade'), game = cab && cab.group.userData.arcade, av = window.__arcadeView;
+  const seen = [];
+  const on = (e) => seen.push({ playing: e.detail.playing, who: e.detail.who });
+  window.addEventListener('guy-arcade', on);
+  let shown = false, chip = false, handGap = 9, buttonGap = 9, lean = 0, fired = 0, t = 0, scoreMid = 0;
+  const ra = cab ? b.interact(cab.name) : { ok: false };
+  if (ra.ok && game) {
+    while (t < 140 && !(seen.length >= 2)) {
+      step(1 / 30); t += 1 / 30;
+      if (game.mode === 'play' && b.pose === 'arcadeplay' && b.step && b.step.t > 0.4) {
+        handGap = Math.min(handGap, G().boneWorld('LeftHand').distanceTo(cab.group.userData.stickTop()));
+        buttonGap = Math.min(buttonGap, G().boneWorld('RightHand').distanceTo(cab.group.userData.buttonTop()));
+        lean = Math.max(lean, Math.abs(game.input.x)); if (game.input.fire) fired++;
+        if (!shown && !av.view.hidden) { shown = true; av.view.querySelector('.aclose').click(); chip = av.view.hidden && !av.chip.hidden; av.chip.click(); }
+        scoreMid = Math.max(scoreMid, game.score);
+      }
+    }
+  }
+  window.removeEventListener('guy-arcade', on);
+  step(6); av.flush();
+  out.push(result('arcade: asked to play, GUY puts a coin in and the game starts on the cabinet with his name on it, and ends (game over, or a good long go) by itself', ra.ok && seen.length >= 2 && seen[0].playing && seen[0].who === 'GUY' && !seen[seen.length - 1].playing && game.mode === 'attract', { ra, seen, mode: game && game.mode, t: +t.toFixed(1) }));
+  out.push(result('arcade: he plays it: the ship moves and fires, he scores, and his hands stay on the stick and the fire button', lean > 0.3 && fired > 5 && scoreMid > 0 && handGap < 0.12 && buttonGap < 0.12, { lean, fired, scoreMid, handGap: +handGap.toFixed(3), buttonGap: +buttonGap.toFixed(3) }));
+  out.push(result('arcade: the user watches: while he plays the game is shown big in a corner panel; ✕ hides it to a "Watch" chip that brings it back; it goes when the game is over', shown && chip && av.view.hidden && av.chip.hidden, { shown, chip, after: { view: av.view.hidden, chip: av.chip.hidden } }));
+  out.push(result('arcade: it beeps (the game\'s 8-bit sounds) and the high score is kept', (sfxCounts.blip || 0) > 0 && game.hi >= game.score, { blips: sfxCounts.blip, hi: game && game.hi }));
+  // called away mid-game: the game is let go of and the view closes
+  T.settle();
+  b.interact(cab.name); t = 0; while (t < 40 && game.mode !== 'play') { step(1 / 30); t += 1 / 30; }
+  const midPlay = game.mode === 'play'; step(2); b.interact('shelf'); step(1); step(2); av.flush();
+  out.push(result('arcade: told to do something else mid-game, he lets go and the game goes back to its attract screen, the view closes', midPlay && game.mode === 'attract' && (av.view.hidden || !av.state().cur), { midPlay, mode: game.mode, view: av.view.hidden }));
+  // 4. GAL can do all this too (her own name on the arcade)
+  if (w.gal && w.gal.g && w.gal.g.loaded) {
+    T.settle();
+    if (!w.gal.exists()) w.gal.spawn(-1.5, 1.2);
+    const gb = w.gal.brain; gb.skills.known.clear(); gb.queue = []; gb.step = null;
+    const gseen = []; const gon = (e) => gseen.push(e.detail.who);
+    window.addEventListener('guy-arcade', gon);
+    b.interact('shelf');
+    const gr = gb.interact(cab.name); t = 0;
+    while (t < 60 && !gseen.length) { step(1 / 30); t += 1 / 30; }
+    window.removeEventListener('guy-arcade', gon);
+    gb.skip(); step(2);
+    T.addObject('coffeetable');
+    const gt = gb.interact('coffeetable'); let gdone = false; t = 0;
+    while (t < 60) { step(0.25); t += 0.25; if (gb.last === 'tidyup') gdone = true; if (gdone && gb.last !== 'tidyup') break; }
+    out.push(result('interact all: GAL plays the arcade too (with her name on the game) and tidies the coffee table', gr.ok && gseen[0] === 'GAL' && gt.ok && gdone && gb.last !== 'tidyup', { gr, gseen, gt, gdone, last: gb.last }));
+    w.gal.remove();
+  }
+  T.removeAll(); T.resetRooms(); T.forget(); step(3);
+  out.push(result('interact all: no errors', errors.length === base, { errors: errors.slice(base, base + 3) }));
+  return out;
+};
+
 // ---- The view dropdown: static / follow / 3rd person / 1st person ----
 T.sweepViews = async () => {
   const frames = (n = 4) => new Promise((r) => { let k = 0; const t0 = performance.now(); const f = () => { if (++k >= n || performance.now() - t0 > 4000) r(); else requestAnimationFrame(f); }; requestAnimationFrame(f); });          // (the camera moves in the render loop, not in sim: wait for real frames)

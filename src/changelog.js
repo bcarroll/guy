@@ -3,6 +3,9 @@
 // WHATS_NEW (src/whatsnew.js) is the player-facing note for each deploy; this is the longer record by date. Add a line here
 // whenever a room, character, major feature or control is added, changed or taken away, and the same line to CHANGELOG.md.
 export const CHANGELOG = [
+  { date: '2026-11-24',
+    added: ['Every toy, curio and small piece of furniture has an interaction for GUY and GAL: the 19 Built by GUY toys and decorations, the jukebox, tidying the coffee table, bedside table and wooden shelves, and bowling with the bowling kit.', 'The Arcade Cabinet has a real game, Robo Blaster. GUY and GAL play it with their hands on the stick and button, and a panel at the top left shows the game while they play (✕ shrinks it to a Watch chip).'],
+    changed: ['The Interact button names what the robot will do, and "can\'t use that just now" messages say why instead of "GUY can\'t do anything with that".'] },
   { date: '2026-11-23',
     changed: ['The Learning Workstation and the Build a Bot Machine are kept after a reload, in whatever room they were moved to, and GUY uses the Workstation there.', 'Locked in the Workshop, GUY and GAL build even when the house needs nothing: things they have never made first, then toys and decorations, taking turns.'] },
   { date: '2026-11-22',

@@ -163,6 +163,17 @@
   #player .tracks .row:hover { background: rgba(255,255,255,.08); }
   #player .tracks .row small { color: #7f8fa6; font-size: 11px; margin-left: 4px; }
   #player .tracks .cur { color: #fff; font-weight: 600; background: rgba(42,157,99,.18); }
+  /* the arcade view: GUY (or GAL) playing Robo Blaster on the Arcade Cabinet, the cabinet's own screen made big (main.js, src/arcade.js) */
+  #arcadeview { position: fixed; left: 12px; top: 104px; z-index: 6; width: min(400px, 72vw); background: rgba(14,16,24,.96); border: 2px solid #2b2f6b; border-radius: 12px;
+                padding: 6px; box-shadow: 0 8px 28px rgba(0,0,0,.5); color: #dfe6f2; font-size: 13px; }
+  #arcadeview[hidden], #arcadechip[hidden] { display: none; }
+  #arcadeview .ahead { display: flex; align-items: center; gap: 6px; padding: 0 2px 6px 6px; }
+  #arcadeview .atitle { flex: 1; font-weight: 600; color: #35f2a0; }
+  #arcadeview .aclose { background: none; border: 0; color: #9aa6b8; font-size: 16px; cursor: pointer; padding: 2px 8px; border-radius: 6px; }
+  #arcadeview .aclose:hover { background: rgba(255,255,255,.1); color: #fff; }
+  #arcadeview canvas { display: block; width: 100%; aspect-ratio: 4 / 3; image-rendering: pixelated; image-rendering: crisp-edges; border-radius: 6px; background: #000; }
+  #arcadechip { position: fixed; left: 12px; top: 104px; z-index: 6; background: rgba(14,16,24,.92); color: #35f2a0; border: 2px solid #2b2f6b; border-radius: 18px;
+                padding: 7px 14px; font-size: 14px; font-weight: 600; cursor: pointer; }
   #toast { position: fixed; top: 18px; left: 50%; transform: translate(-50%, -20px); background: rgba(40,120,70,.95); color: #fff;
            padding: 11px 20px; border-radius: 10px; font-size: 15px; opacity: 0; pointer-events: none; transition: .35s; z-index: 21; }   /* above the Catalog and Help: "Added the ..." is seen */
   #toast.show { opacity: 1; transform: translate(-50%, 0); }
@@ -266,6 +277,8 @@
   <div class="where"></div><div class="list"></div><div class="foot"></div>
 </div>
 <div id="toast"></div>
+<div id="arcadeview" role="region" aria-label="Arcade" hidden><div class="ahead"><span class="atitle">🕹️ GUY is playing Robo Blaster</span><button type="button" class="aclose" title="Hide (the game goes on)" aria-label="Hide the arcade">✕</button></div><div class="ascreen"></div></div>
+<button type="button" id="arcadechip" title="Watch the game" hidden>🕹️ Watch</button>
 <div id="machine" role="dialog" aria-modal="true" aria-label="Catalog" hidden>
   <div class="panel">
     <header><h3>⚙️ Catalog</h3><button type="button" class="close" title="Close (Esc or C)" aria-label="Close">✕</button></header>

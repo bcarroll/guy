@@ -63,6 +63,8 @@ export function helpHtml(tab) {
         ['Scroll or pinch', 'Zoom in and out.'],
         ['Drag furniture or the ball', 'Move it. Push a piece through a doorway to move it to another room.'],
         ['Long-press an object', 'Its menu: Interact, Lock in, Rotate, Remove, and extras such as Hang painting or What\'s in the shed.'],
+        ['Interact', 'Every object does something: the button says what (Play the Arcade, Feed the Fish, Tidy the shelves ...). If GUY can\'t just now, the message says why.'],
+        ['Arcade panel', 'When GUY or GAL plays the Arcade Cabinet, the game shows at the top left. ✕ shrinks it to a Watch chip; tap the chip to watch again.'],
         ['Long-press a door', 'Go into the room, come back, or lock and unlock the door.'],
         ['Long-press the bookshelf', 'Pick a book for GUY to read, or a record (top shelf) to play.'],
       ]),
