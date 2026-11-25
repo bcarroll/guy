@@ -12,6 +12,8 @@
 //   - asks yes/no questions (ask()): one at a time, a 20 s window, answered by voice, the typed box or the Yes and No buttons.
 // Times are game seconds (the clock window.sim() fast-forwards), so the QA harness can test them without waiting.
 
+import { line } from './lines.js';
+
 // What a robot is doing decides how a new command is handled (the "activity classes" of the design)
 export const IDLE_ACTS = ['', 'idle', 'wander', 'lookaround', 'sway', 'akimbo', 'ponder', 'wave', 'stuck'];
 export const STEP_ACTS = ['paint', 'scribble', 'mixpaint', 'portrait', 'putcanvas', 'hangpaint', 'build', 'tidytools', 'mow', 'makebed', 'yardtidy'];
@@ -84,14 +86,14 @@ export const chainLabel = (labels) => labels.map((l) => l[0]).join(', then ');
 export function firstWords(b, cls, label, ok) {
   if (cls === 'quick') {
     const book = b.held && b.held.kind !== 'album';
-    return book ? 'One sec, putting the book back.' : 'One sec.';
+    return line(book ? 'quickBook' : 'quick');
   }
   if (cls === 'step') {
-    if (['paint', 'scribble', 'mixpaint', 'portrait'].includes(b.last)) return `Finishing this stroke first, then I'll ${label}.`;
-    if (b.last === 'mow') return `Let me finish this row, then I'll ${label}.`;
-    if (b.last === 'build') return `Let me finish this piece, then I'll ${label}.`;
-    if (b.last === 'makebed') return `Let me finish the bed, then I'll ${label}.`;
-    return `Let me finish this first, then I'll ${label}.`;
+    if (['paint', 'scribble', 'mixpaint', 'portrait'].includes(b.last)) return line('stepPaint', { label });
+    if (b.last === 'mow') return line('stepMow', { label });
+    if (b.last === 'build') return line('stepBuild', { label });
+    if (b.last === 'makebed') return line('stepBed', { label });
+    return line('step', { label });
   }
   return ok;
 }
@@ -217,13 +219,13 @@ export function createCommands({ speak, perform, fix = (m) => m, whoOf = () => '
   function start(rec, force) {
     remove(rec);
     if (rec.steps) {
-      speak(rec.who, force ? `Okay, I'll stop ${rec.doing}. ${rec.label[1]} now.` : `Done ${rec.doing}. ${rec.label[1]} now.`);
+      speak(rec.who, line(force ? 'stop' : 'done', { doing: rec.doing, Label: rec.label[1] }));
       chain(rec.b, rec.steps, 'quick');
       return true;
     }
     const r = perform(rec.b, rec.it, 'quick');
     if (!r.ok) { speak(rec.who, fix(r.message, rec.who)); return false; }
-    speak(rec.who, force ? `Okay, I'll stop ${rec.doing}. ${rec.label[1]} now.` : `Done ${rec.doing}. ${rec.label[1]} now.`);
+    speak(rec.who, line(force ? 'stop' : 'done', { doing: rec.doing, Label: rec.label[1] }));
     track(rec.b, rec.it, 'quick', rec.label);
     return true;
   }
@@ -275,7 +277,7 @@ export function createCommands({ speak, perform, fix = (m) => m, whoOf = () => '
     ask(rec.who, `I couldn't ${st.label[0]}: ${why}. Should I still ${chainLabel(rest.map((s) => s.label))}?`, {
       rec,
       yes: () => { rec.i++; stepOn(rec, 'idle'); },
-      no: () => { remove(rec); speak(rec.who, "Okay, I'll leave it."); },
+      no: () => { remove(rec); speak(rec.who, line('leaveIt')); },
     });
     return false;
   }
@@ -334,7 +336,7 @@ export function createCommands({ speak, perform, fix = (m) => m, whoOf = () => '
         }
         if (!rec.forced && rec.t >= rec.limit) {                      // the wrap-up limit: stop where he is so the command can start
           rec.forced = true;
-          if (rec.cls === 'step') speak(rec.who, "That'll do for now.");
+          if (rec.cls === 'step') speak(rec.who, line('enough'));
           b.queue = []; b.step = null;                                // (a book in his hands still goes back first: update() sees to that)
           continue;
         }
@@ -359,7 +361,7 @@ export function createCommands({ speak, perform, fix = (m) => m, whoOf = () => '
       }
       if (rec.state === 'waiting') {
         if (!busyJob(b)) { start(rec, false); continue; }
-        if (rec.answer === 'no') { if (rec.t >= 300) { remove(rec); speak(rec.who, `I'll leave ${rec.label[2]} for later.`); } continue; }
+        if (rec.answer === 'no') { if (rec.t >= 300) { remove(rec); speak(rec.who, line('later', { thing: rec.label[2] })); } continue; }
         if (rec.asks === 0 && rec.t >= LIMITS.busy || rec.asks === 1 && rec.t >= LIMITS.busy * 2) {
           if (question || asking.length) continue;                     // one question at a time (this one is asked when that is done)
           rec.asks++;
@@ -371,7 +373,7 @@ export function createCommands({ speak, perform, fix = (m) => m, whoOf = () => '
           });
           continue;
         }
-        if (rec.asks >= 2 && rec.t >= LIMITS.busy * 2 + 20) { remove(rec); speak(rec.who, `I'll leave ${rec.label[2]} for later.`); }
+        if (rec.asks >= 2 && rec.t >= LIMITS.busy * 2 + 20) { remove(rec); speak(rec.who, line('later', { thing: rec.label[2] })); }
       }
     }
   }
@@ -390,7 +392,7 @@ export function createCommands({ speak, perform, fix = (m) => m, whoOf = () => '
       }
       if (!rec.forced && rec.t >= rec.limit) {
         rec.forced = true;
-        if (rec.cls === 'step') speak(rec.who, "That'll do for now.");
+        if (rec.cls === 'step') speak(rec.who, line('enough'));
         b.queue = []; b.step = null;
         return;
       }

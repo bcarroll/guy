@@ -15,6 +15,7 @@ import { Brain, POSES, basePose } from './brain.js';
 import { Skills } from './skills.js';
 import { sfx } from './sfx.js';
 import { RECIPES } from './workshop.js';
+import { line } from './lines.js';
 
 const KEY = 'guy.gal.v1';
 const SKILL_KEYS = { known: 'guy.gal.skills.v1', fade: 'guy.gal.fade.v1' };
@@ -355,8 +356,8 @@ export class Gal {
     this.brain.orders.push({ kind: 'find' });
     this.say(`GUY asks GAL: ${plan.books.length ? 'read ' + plan.books.join(', ') + ' and ' : ''}find me when you are ready to jam (${plan.guyInst} + ${plan.galInst})`);
     this.brain.skip(true);
-    this.talk('guy', `Hey GAL, want to jam? I'll take the ${plan.guyInst}.`);
-    this.talk('gal', plan.books.length ? `Sure! Let me read up on the ${plan.galInst} first.` : `Sounds good! I'll find you.`);
+    this.talk('guy', line('jamAsk', { mine: plan.guyInst }));
+    this.talk('gal', plan.books.length ? line('jamRead', { theirs: plan.galInst }) : line('jamYes'));
     return true;
   }
 
@@ -380,7 +381,7 @@ export class Gal {
       if (g.music && !d.galStarted && l.available(d.galAct) && !l.step?.fx?.dance) {
         d.galStarted = true; l.skip(true); l.pendingActivity = d.galAct;
         this.say(`GAL and GUY jam: ${d.guyInst} + ${d.galInst}`);
-        this.talk('gal', `Joining in on the ${d.galInst}!`);
+        this.talk('gal', line('jamJoin', { theirs: d.galInst }));
       }
       if (l.last === d.galAct) d.galSeen = true;
       if (d.galSeen && l.last !== d.galAct && d.t > 20) this.duo = null;          // she has played her part and moved on
