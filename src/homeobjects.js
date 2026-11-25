@@ -278,25 +278,28 @@ export function makeHomeBuilders({ makeObject, box, mat }) {
       box(0.8, 0.66, 0.5, red, 0, 0.43, 0, g);                                    // the body (its top at 0.76 m)
       box(0.8, 0.04, 0.5, dark, 0, 0.08, 0, g);                                   // the plinth
       box(0.82, 0.03, 0.52, steel, 0, 0.765, 0, g);                               // the top
-      for (const y of [0.63, 0.46]) box(0.74, 0.14, 0.02, mat(0x9aa0a8, { metalness: 0.6 }), 0, y, 0.255, g);   // two drawers stay shut
-      for (const y of [0.63, 0.46]) box(0.14, 0.02, 0.03, dark, 0, y + 0.02, 0.27, g);                            // their handles
+      for (const y of [0.46, 0.29]) box(0.74, 0.14, 0.02, mat(0x9aa0a8, { metalness: 0.6 }), 0, y, 0.255, g);   // two drawers stay shut under the top one
+      for (const y of [0.46, 0.29]) box(0.14, 0.02, 0.03, dark, 0, y + 0.02, 0.27, g);                            // their handles
     });
     o.kind = 'toolchest';
+    const TOP = 0.63;                                                           // the top drawer's height (the one that slides out)
     o.drawer = new THREE.Group();
     box(0.74, 0.14, 0.02, red, 0, 0, 0, o.drawer);                              // the drawer front
     box(0.7, 0.02, 0.44, dark, 0, -0.07, -0.21, o.drawer);                      // the drawer's floor
+    box(0.02, 0.14, 0.44, red, -0.36, 0, -0.21, o.drawer); box(0.02, 0.14, 0.44, red, 0.36, 0, -0.21, o.drawer);   // its sides, so it reads as a tray
     box(0.12, 0.012, 0.04, steel, -0.2, -0.05, -0.12, o.drawer); box(0.14, 0.012, 0.035, mat(0xe0453b), 0.1, -0.05, -0.15, o.drawer);   // spanners in it
     box(0.03, 0.012, 0.16, mat(0x2b6cb0), 0.24, -0.05, -0.21, o.drawer);       // a screwdriver
     box(0.2, 0.03, 0.02, dark, 0, 0.0, 0.02, o.drawer);                         // the long handle
-    o.drawer.position.set(0, 0.5, 0.25);
+    o.drawer.position.set(0, TOP, 0.25);
     o.group.add(o.drawer);
     o.open = 0; o.openTo = 0;
     o.setOpen = (v) => { o.openTo = v ? 1 : 0; };
     const apply = () => { o.drawer.position.z = 0.25 + o.open * 0.26; };
     apply();
     onUpdate(o, (dt) => { if (o.open !== o.openTo) { o.open = ease(o.open, o.openTo, dt, 5); if (Math.abs(o.open - o.openTo) < 0.01) o.open = o.openTo; apply(); } });
-    o.handlePoint = () => o.at(0, 0.5, 0.29);
-    o.insidePoint = () => o.at(0, 0.56, 0.42);
+    // the points follow the drawer as it slides out: the handle on its front, and a place among the spanners (y just above the floor)
+    o.handlePoint = () => o.at(0, TOP, 0.3 + o.open * 0.26);
+    o.insidePoint = () => o.at(0, TOP + 0.03, 0.2 + o.open * 0.26);              // (just in over the lip of the tray, where the hand can reach it from in front)
     return addAt(o);
   };
 
