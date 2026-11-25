@@ -1106,7 +1106,7 @@ export class Brain {
         type: 'plan',
         fn: () => {
           const want = this.forcePlant; this.forcePlant = null;
-          const name = want && this.obj(want) ? want : pick(PLANT_NAMES.filter((n) => this.obj(n)));
+          const name = want && this.obj(want) ? want : pick(PLANT_NAMES.filter((n) => this.obj(n) && !this.lockedAway(n)));
           if (!name) { this.queue.length = 0; return []; }
           return [...this.sideStep(name, name === 'tree' ? 0.75 : 0.62).fn(), this.play('reach', 2.6, { needs: [name], at: [1.3, () => sfx('leaf')], target: () => this.plantLeaf(name) })];
         },
@@ -1251,16 +1251,23 @@ export class Brain {
   electric() { const o = this.obj(this.gname); return !!(o && o.electric); }
   guitars() { return Object.values(this.w.objects).filter((o) => o.guitar && !o.bass); }        // (the Studio's bass is worn the same way, but it is not a guitar: see studiobrain.js)
   guitarTaken(name) { const o = this.other; return !!o && ((o.using && o.using.has(name)) || o.skillWants(name)); }
-  freeGuitar() { const held = this.gtr.held && this.obj(this.gname); return !!(held && !held.bass) || this.guitars().some((g) => !this.guitarTaken(g.name) && this.standOk(g.name)); }      // (one with room to stand in front of it: facing a wall it cannot be taken off its stand)
+  freeGuitar() { const held = this.gtr.held && this.obj(this.gname); return !!(held && !held.bass) || this.guitars().some((g) => !this.guitarTaken(g.name) && this.standOk(g.name) && !this.lockedAway(g.name)); }      // (one with room to stand in front of it: facing a wall it cannot be taken off its stand)
   // choose the guitar for what he is about to play: the one in his hands, the one he was asked for, or one the other robot is not using
   pickGuitar() {
     if (this.gtr.held && this.obj(this.gname) && !this.obj(this.gname).bass) { if (this.using) this.using.add(this.gname); return; }
-    const all = this.guitars(), open = all.filter((g) => !this.guitarTaken(g.name)), reach = open.filter((g) => this.standOk(g.name)), free = reach.length ? reach : open;
-    const want = this.wantGuitar && free.find((g) => g.name === this.wantGuitar);
+    const pick = this.guitarFor();
     this.wantGuitar = null;
-    const pick = want || free.find((g) => g.name === this.gname) || free[0] || all[0];
-    if (pick && pick.name !== this.gname) { this.resetGuitarMesh(); this.gname = pick.name; }
+    if (pick && pick !== this.gname) { this.resetGuitarMesh(); this.gname = pick; }
     if (this.using) this.using.add(this.gname);
+  }
+  // The guitar pickGuitar() takes, with nothing changed: the one he was asked for, else the one he played last, else any he can get to (not
+  // behind a locked door, not in the other robot's hands, with room to stand in front of it).
+  guitarFor() {
+    if (this.gtr.held && this.obj(this.gname) && !this.obj(this.gname).bass) return this.gname;
+    const all = this.guitars(), open = all.filter((g) => !this.guitarTaken(g.name) && !this.lockedAway(g.name)), reach = open.filter((g) => this.standOk(g.name)), free = reach.length ? reach : open;
+    const want = this.wantGuitar && free.find((g) => g.name === this.wantGuitar);
+    const p = want || free.find((g) => g.name === this.gname) || free[0] || all[0];
+    return p ? p.name : null;
   }
   resetGuitarMesh() {
     const o = this.w.removed[this.gname] || this.obj(this.gname);
@@ -2034,7 +2041,7 @@ export class Brain {
     const wanted = this.skillRoom(name);                           // (a dance chosen in the Skills menu: where he is, the stereo may be in another room)
     if (wanted) return wanted;
     if (name === 'putguitar') return this.roomOfObj(this.gname) || 'main';      // (the one he is wearing goes back on its own stand, whatever guitar he was asked for before: he walked out of the Studio with the bass on to put it away in the room of a guitar somebody had pointed at)
-    if (ACT_OBJ[name] === 'guitar') return this.roomOfObj(this.wantGuitar || this.gname) || this.roomOfObj('guitar') || 'main';
+    if (ACT_OBJ[name] === 'guitar') return this.roomOfObj(this.guitarFor() || this.wantGuitar || this.gname) || this.roomOfObj('guitar') || 'main';
     if (ACT_OBJ[name]) return this.roomOfObj(ACT_OBJ[name]) || 'main';
     if (HOME_ACTS[name]) { const o = this.homeObj(name); return o ? this.roomOfObj(o.name) || 'main' : 'main'; }
     if (name === 'libclean') return 'library';
@@ -2226,6 +2233,8 @@ export class Brain {
   whyNot(act) {
     const shut = this.stuckIn();
     if (shut && !(HOME_ACTS[act] || (SHUT_ACTS(act) && this.canReach(this.roomForAct(act))))) return `he is shut in the ${this.w.doors[shut].name}`;
+    const locked = !shut && this.actLockedRoom(act);
+    if (locked) return `the ${this.lockedDoorName(locked)} door is locked`;
     const skill = this.skillNeeds(act).find((k) => !this.skills.has(k));
     if (skill) return `he has not learned "${skill}" yet (read its book)`;
     if (this.busyElsewhere(this.exclusiveFor(act))) return 'the other robot is using it';
@@ -2284,7 +2293,22 @@ export class Brain {
     // shut in by a locked door: only what can be done in the rooms he can still get to
     const shut = this.stuckIn();
     if (shut) return SHUT_ACTS(act) && this.availableIn(act) && this.canReach(this.roomForAct(act));
+    if (this.actLockedRoom(act)) return false;              // its object stands in a room behind a locked door: not something he sets out to do (he used to say so, walk to the door and give up)
     return this.availableIn(act);
+  }
+  // An object he cannot get to: it stands in an added room whose door, or one on the way to it, is locked on him.
+  lockedAway(name) { const r = this.roomOfObj(name); return !!r && r !== 'main' && !!this.w.doors[r] && this.doorLockedFor(r); }
+  // The room an activity happens in, when a locked door keeps him out of it (else null). The guitars are picked among those he can get to
+  // (guitarFor), the plants too; the rooms with their own door checks (the Studio, the yard ...) say so themselves.
+  actLockedRoom(act) {
+    if (FREE_ACTS.includes(act) || OWN_ROOM_ACTS.includes(act)) return null;
+    const r = this.roomForAct(act);
+    return r && r !== 'main' && this.w.doors[r] && this.doorLockedFor(r) ? r : null;
+  }
+  // The name of the locked door that keeps him out of room `id` (its own, or one on the way to it).
+  lockedDoorName(id) {
+    const shut = this.roomChain(id).reverse().find((r) => this.w.doors[r] && this.w.doors[r].locked) || id;
+    return this.w.doors[shut] ? this.w.doors[shut].name : 'room';
   }
   availableIn(act) {
     if (['skillwait', 'bringpiece', 'musicon'].includes(act)) return false;         // (only for a skill chosen in the Skills menu: skillrun.js)
@@ -2327,7 +2351,7 @@ export class Brain {
     if (act === 'stereooff' && !this.music) return false;
     if (['bang', 'drums', 'drumsolo', 'jamdrums'].includes(act) && !this.standOk('drums')) return false;
     if (['scribble', 'paint', 'mixpaint', 'portrait'].includes(act) && !this.standOk('easel')) return false;
-    if (act === 'plant' && !PLANT_NAMES.some((n) => this.obj(n))) return false;
+    if (act === 'plant' && !PLANT_NAMES.some((n) => this.obj(n) && !this.lockedAway(n))) return false;
     if (act === 'dust' && !Object.values(this.w.decor).some((d) => d.wall)) return false;
     if (act === 'dusttop' && !this.stoolJob()) return false;
     if (['stargaze', 'darkstargaze'].includes(act) && this.obj('telescope') && !this.scopeAimPlan('sky')) return false;      // (no room to swing the tube round: not worth starting)

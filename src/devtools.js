@@ -35,7 +35,12 @@ import { install as installCharacters } from './qa-characters.js';
 import { install as installAudio } from './qa-audio.js';
 import { install as installShots } from './qa-shots.js';
 import { counts as sfxCounts } from './sfx.js';
-import { BARKS, NO_BARK, resetBarks } from './barks.js';
+import { BARKS, NO_BARK, resetBarks, barkFor } from './barks.js';
+import { LINES, variants, line, resetLines } from './lines.js';
+// a line said ("guy: ...") is one of the ways line(key, vars) comes out (lines.js: the robots vary what they say)
+const saidAs = (who, key, vars) => variants(key, vars).map((v) => `${who}: ${v}`);
+const isLine = (text, key, vars) => variants(key, vars).includes(text);
+const enoughLine = (l) => variants('enough').some((v) => l.endsWith(v));
 import { WHATS_NEW } from './whatsnew.js';
 import { TABS as HELP_TABS, ROOM_NOTES, helpHtml } from './help.js';
 import { CHANGELOG } from './changelog.js';
@@ -1641,7 +1646,7 @@ T.sweepCommands = () => {
     // 1. idle: he just starts, "Sure thing." (or another short yes)
     reset();
     const r1 = V.run('play the guitar');
-    out.push(result('commands: idle, he answers with a short yes and the command is tracked until it starts', r1.ok && r1.lines.length === 1 && ['Sure thing.', 'On it.', 'Okay!', 'You got it.'].includes(r1.lines[0].text) && C.list.length === 1 && C.list[0].cls === 'idle', { lines: L(r1), list: C.list }));
+    out.push(result('commands: idle, he answers with a short yes and the command is tracked until it starts', r1.ok && r1.lines.length === 1 && LINES.ok.includes(r1.lines[0].text) && C.list.length === 1 && C.list[0].cls === 'idle', { lines: L(r1), list: C.list }));
     const t1 = runUntil(() => started(['guitar']), 15);
     out.push(result('commands: ... and he starts it within a second or so', started(['guitar']) && t1 <= 2, { t: t1, last: b.last }));
     // 2. a quick activity (playing the piano): "One sec.", and he starts the new command within 5 s
@@ -1650,35 +1655,35 @@ T.sweepCommands = () => {
     const playing = ['sitpiano', 'piano'].includes(b.last);
     const r2 = V.run('turn on the lamp');
     const t2 = runUntil(() => started(['lamp', 'mood']), 15);
-    out.push(result('commands: playing the piano, "turn on the lamp": "One sec." and the lamp within 5 s', playing && r2.ok && r2.lines.length === 1 && r2.lines[0].text === 'One sec.' && started(['lamp', 'mood']) && t2 <= LIMITS.quick + 0.5, { playing, lines: L(r2), t: t2, last: b.last }));
+    out.push(result('commands: playing the piano, "turn on the lamp": "One sec." and the lamp within 5 s', playing && r2.ok && r2.lines.length === 1 && isLine(r2.lines[0].text, 'quick') && started(['lamp', 'mood']) && t2 <= LIMITS.quick + 0.5, { playing, lines: L(r2), t: t2, last: b.last }));
     // 2b. the wrap-up limit holds even when the wrap-up would run on (a long step after the command)
     reset(); busyWith('dance', 100);
     const r2b = V.run('turn on the lamp');
     b.step = b.play('idle', 100); b.step.t = 0;                   // (a wrap-up that would take 100 s)
     const t2b = runUntil(() => started(['lamp', 'mood']), 20);
-    out.push(result('commands: a wrap-up never takes longer than its limit: he stops where he is at 5 s and starts the command', r2b.ok && r2b.lines[0].text === 'One sec.' && started(['lamp', 'mood']) && t2b >= LIMITS.quick - 0.5 && t2b <= LIMITS.quick + 1, { lines: L(r2b), t: t2b }));
+    out.push(result('commands: a wrap-up never takes longer than its limit: he stops where he is at 5 s and starts the command', r2b.ok && isLine(r2b.lines[0].text, 'quick') && started(['lamp', 'mood']) && t2b >= LIMITS.quick - 0.5 && t2b <= LIMITS.quick + 1, { lines: L(r2b), t: t2b }));
     // 3. a work step (mowing): he finishes the step he is on ("Let me finish this row, then I'll play the piano.")
     reset(); busyWith('mow', 3); const row = b.step;
     const n3 = V.tts.log.length;
     const r3 = V.run('play the piano');
     const kept = b.step === row;
     const t3 = runUntil(() => started(['sitpiano', 'piano']), 20);
-    out.push(result('commands: mowing, "play the piano": "Let me finish this row, then I\'ll play the piano." and he finishes the step he is on, then plays', r3.ok && r3.lines[0].text === "Let me finish this row, then I'll play the piano." && kept && started(['sitpiano', 'piano']) && t3 >= 2.5 && t3 <= 4.5 && !said(n3).some((l) => /That'll do/.test(l)), { lines: L(r3), kept, t: t3, said: said(n3) }));
+    out.push(result('commands: mowing, "play the piano": "Let me finish this row, then I\'ll play the piano." and he finishes the step he is on, then plays', r3.ok && isLine(r3.lines[0].text, 'stepMow', { label: 'play the piano' }) && kept && started(['sitpiano', 'piano']) && t3 >= 2.5 && t3 <= 4.5 && !said(n3).some(enoughLine), { lines: L(r3), kept, t: t3, said: said(n3) }));
     reset(); busyWith('mow', 100);
     const n3b = V.tts.log.length;
     V.run('play the piano');
     const t3b = runUntil(() => started(['sitpiano', 'piano']), 20);
-    out.push(result('commands: a work step that runs on is cut at 10 s, with "That\'ll do for now."', started(['sitpiano', 'piano']) && t3b >= LIMITS.step - 0.5 && t3b <= LIMITS.step + 1 && said(n3b).includes("guy: That'll do for now."), { t: t3b, said: said(n3b) }));
+    out.push(result('commands: a work step that runs on is cut at 10 s, with "That\'ll do for now."', started(['sitpiano', 'piano']) && t3b >= LIMITS.step - 0.5 && t3b <= LIMITS.step + 1 && said(n3b).some((l) => saidAs('guy', 'enough').includes(l)), { t: t3b, said: said(n3b) }));
     reset(); busyWith('paint', 100);
     const r3c = V.run('play the piano');
-    out.push(result('commands: painting, he says he finishes this stroke first', /^Finishing this stroke first, then I'll play the piano\.$/.test(r3c.lines[0] && r3c.lines[0].text || ''), { lines: L(r3c) }));
+    out.push(result('commands: painting, he says he finishes this stroke first', isLine(r3c.lines[0] && r3c.lines[0].text, 'stepPaint', { label: 'play the piano' }), { lines: L(r3c) }));
     // 4. a busy job and no GAL: it waits, he says how long, and he starts it when the job is over
     reset(); busyWith('cook', 12);
     const n4 = V.tts.log.length;
     const r4 = V.run('play the piano');
     out.push(result('commands: cooking with no GAL: "I\'m cooking and GAL can\'t take it. Give me about half a minute, then I\'ll play the piano." and it waits', r4.ok && r4.lines.length === 1 && r4.lines[0].text === "I'm cooking and GAL can't take it. Give me about half a minute, then I'll play the piano." && !b.pendingActivity && C.list.length === 1 && C.list[0].state === 'waiting', { lines: L(r4), list: C.list }));
     const t4 = runUntil(() => started(['sitpiano', 'piano']), 30);
-    out.push(result('commands: ... when the cooking ends he says "Done cooking. Playing the piano now." and plays', started(['sitpiano', 'piano']) && t4 <= 14 && said(n4).includes('guy: Done cooking. Playing the piano now.'), { t: t4, said: said(n4) }));
+    out.push(result('commands: ... when the cooking ends he says "Done cooking. Playing the piano now." and plays', started(['sitpiano', 'piano']) && t4 <= 14 && said(n4).some((l) => saidAs('guy', 'done', { doing: 'cooking', Label: 'Playing the piano' }).includes(l)), { t: t4, said: said(n4) }));
     reset(); busyWith('cook', 100);
     const r4b = V.run('GUY, play the piano');
     out.push(result('commands: named ("GUY, ...") while cooking: he keeps it himself and does not mention GAL', r4b.ok && r4b.lines[0].text === "I'm cooking. Give me about half a minute, then I'll play the piano.", { lines: L(r4b) }));
@@ -1690,7 +1695,7 @@ T.sweepCommands = () => {
     const asked = said(n5).includes('guy: Still cooking. Should I stop and play the guitar?');
     const r5 = V.run('yes please');
     const t5 = runUntil(() => started(['guitar']), 10);
-    out.push(result('commands: after 30 s he asks "Still cooking. Should I stop and play the guitar?" and "yes" makes him stop and play', asked && r5.ok && r5.lines[0] && r5.lines[0].text === "Okay, I'll stop cooking. Playing the guitar now." && started(['guitar']) && t5 <= 6, { said: said(n5), lines: L(r5), t: t5 }));
+    out.push(result('commands: after 30 s he asks "Still cooking. Should I stop and play the guitar?" and "yes" makes him stop and play', asked && r5.ok && r5.lines[0] && isLine(r5.lines[0].text, 'stop', { doing: 'cooking', Label: 'Playing the guitar' }) && started(['guitar']) && t5 <= 6, { said: said(n5), lines: L(r5), t: t5 }));
     reset(); busyWith('cook', 300);
     const n5b = V.tts.log.length;
     V.run('play the guitar'); runUntil(() => !!C.question, 40);
@@ -1701,7 +1706,7 @@ T.sweepCommands = () => {
     const n5c = V.tts.log.length;
     V.run('play the guitar'); runUntil(() => false, 85);
     const s5c = said(n5c);
-    out.push(result('commands: no answer: he asks once more at 60 s, then leaves it for later with a line (it is not dropped silently)', s5c.filter((l) => /Should I stop/.test(l)).length === 2 && s5c.includes("guy: I'll leave the guitar for later.") && C.list.length === 0, { said: s5c }));
+    out.push(result('commands: no answer: he asks once more at 60 s, then leaves it for later with a line (it is not dropped silently)', s5c.filter((l) => /Should I stop/.test(l)).length === 2 && s5c.some((l) => saidAs('guy', 'later', { thing: 'the guitar' }).includes(l)) && C.list.length === 0, { said: s5c }));
     // 6. the queue: asking again replaces, three at most, "never mind the ..." drops one, "stop" drops them all
     reset(); busyWith('cook', 300);
     V.run('play the guitar'); V.run('play the guitar'); V.run('play the piano'); V.run('turn on the lamp');
@@ -1757,7 +1762,7 @@ T.sweepCommands = () => {
     reset(); gbr.queue = []; gbr.step = null; gbr.pendingActivity = null; gbr.last = 'wander'; gal.audience = null;
     busyWith('cook', 300);
     const r10 = V.run('play the guitar');
-    out.push(result('commands: GUY cooking, GAL free: "GAL will get right on that." and she does it', r10.ok && r10.lines[0].who === 'guy' && r10.lines[0].text === 'GAL will get right on that.' && r10.lines[1] && r10.lines[1].who === 'gal' && !!gbr.pendingActivity && C.waitingFor(b) === 0, { lines: L(r10), pending: gbr.pendingActivity }));
+    out.push(result('commands: GUY cooking, GAL free: "GAL will get right on that." and she does it', r10.ok && r10.lines[0].who === 'guy' && isLine(r10.lines[0].text, 'handoff') && r10.lines[1] && r10.lines[1].who === 'gal' && !!gbr.pendingActivity && C.waitingFor(b) === 0, { lines: L(r10), pending: gbr.pendingActivity }));
     gal.audience = null; gbr.skip(true); gbr.pendingActivity = null; C.clear();
     const r10b = V.run('GUY, play the piano');
     out.push(result('commands: GUY cooking, GAL free, but GUY named: he keeps it ("I\'m cooking. Give me about half a minute, then I\'ll play the piano.")', r10b.ok && r10b.lines.length === 1 && r10b.lines[0].text === "I'm cooking. Give me about half a minute, then I'll play the piano." && !gbr.pendingActivity && C.waitingFor(b) === 1, { lines: L(r10b) }));
@@ -1813,7 +1818,7 @@ T.sweepChains = () => {
   const reset = () => { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; b.using = new Set(); C.clear(); V.tts.stop(); if (b.music) { b.musicOff(); b.albumOnTable = false; } };
   const busyWith = (br, act, sec) => { br.queue = []; br.pendingActivity = null; br.step = br.play('idle', sec); br.step.t = 0; br.last = act; br.using = new Set(br.exclusiveFor(act)); };
   const watch = (br) => { const seen = [], orig = br.choose; br.choose = function (f) { const r = orig.call(this, f); seen.push(this.last); return r; }; return { seen, done: () => { br.choose = orig; } }; };
-  const OKS = /^(Sure thing\.|On it\.|Okay!|You got it\.) /;
+  const OKS = { test: (t) => LINES.ok.some((o) => t.startsWith(o + ' ')) };
   try {
     galReset(); T.settle(); T.resetRooms(); T.removeAll(); T.forget(); T.home(); T.settle();
     T.learn(['piano', 'guitar', 'stereo']); for (const id of ['piano', 'guitar', 'lamp', 'table']) T.addObject(id);
@@ -1838,7 +1843,7 @@ T.sweepChains = () => {
     b.queue.push(b.play('idle', 200));                               // (a piece that would run on for minutes)
     runUntil(() => b.last === 'wave', 60);
     const t2 = b.time - at2;                                         // (game seconds: a test step can be a frame longer than asked)
-    out.push(result('chains: "play the piano and then wave": the piano is wrapped up at 20 s and he waves within the 5 s wrap-up', playing2 && b.last === 'wave' && t2 >= CHAIN_CAP - 0.5 && t2 <= CHAIN_CAP + LIMITS.quick + 0.5 && !said(n2).some((l) => /That'll do/.test(l)), { playing2, t: t2, last: b.last, said: said(n2) }));
+    out.push(result('chains: "play the piano and then wave": the piano is wrapped up at 20 s and he waves within the 5 s wrap-up', playing2 && b.last === 'wave' && t2 >= CHAIN_CAP - 0.5 && t2 <= CHAIN_CAP + LIMITS.quick + 0.5 && !said(n2).some(enoughLine), { playing2, t: t2, last: b.last, said: said(n2) }));
     reset(); T.home(); T.settle();
     V.run('wave and then play the piano');
     runUntil(() => ['sitpiano', 'piano'].includes(b.last) && !b.pendingActivity, 60);
@@ -1868,7 +1873,7 @@ T.sweepChains = () => {
     runUntil(() => !!C.question, 40);
     const q4 = said(n4).includes('guy: Still cooking. Should I stop and put some music on, then dance?');
     const r4y = V.run('yes');
-    out.push(result('chains: ... the 30 s question names both steps, and "yes" stops the cooking and starts the first step', q4 && r4y.lines[0] && r4y.lines[0].text === "Okay, I'll stop cooking. Putting some music on, then dancing now." && b.pendingActivity === 'stereoon' && !!C.chainFor(b), { said: said(n4), lines: L(r4y), pending: b.pendingActivity }));
+    out.push(result('chains: ... the 30 s question names both steps, and "yes" stops the cooking and starts the first step', q4 && r4y.lines[0] && isLine(r4y.lines[0].text, 'stop', { doing: 'cooking', Label: 'Putting some music on, then dancing' }) && b.pendingActivity === 'stereoon' && !!C.chainFor(b), { said: said(n4), lines: L(r4y), pending: b.pendingActivity }));
     // 5. with GAL
     reset();
     const gb = galBuild();
@@ -1878,7 +1883,7 @@ T.sweepChains = () => {
     const greset = () => { gbr.queue = []; gbr.step = null; gbr.pendingActivity = null; gbr.last = 'wander'; gbr.using = new Set(); gal.audience = null; };
     reset(); greset(); busyWith(b, 'cook', 300);
     const r5 = V.run('turn on the stereo and then dance');
-    out.push(result('chains: GUY cooking, GAL free: she takes the whole chain ("GAL will get right on that." then her line)', r5.ok && r5.lines[0].text === 'GAL will get right on that.' && r5.lines[1] && r5.lines[1].who === 'gal' && / I'll put some music on, then dance\.$/.test(r5.lines[1].text) && !!C.chainFor(gbr) && C.waitingFor(b) === 0, { lines: L(r5), chain: C.chainFor(gbr) }));
+    out.push(result('chains: GUY cooking, GAL free: she takes the whole chain ("GAL will get right on that." then her line)', r5.ok && isLine(r5.lines[0].text, 'handoff') && r5.lines[1] && r5.lines[1].who === 'gal' && / I'll put some music on, then dance\.$/.test(r5.lines[1].text) && !!C.chainFor(gbr) && C.waitingFor(b) === 0, { lines: L(r5), chain: C.chainFor(gbr) }));
     runUntil(() => gbr.last === 'stereoon' && !gbr.pendingActivity, 30);
     const r5b = V.run('never mind the dancing');
     out.push(result('chains: ... while she works through it she answers the user herself ("never mind the dancing" reaches her)', r5b.lines[0] && r5b.lines[0].who === 'gal' && r5b.lines[0].text === "Okay, I'll leave the dancing.", { lines: L(r5b), last: gbr.last }));
@@ -1937,13 +1942,13 @@ T.sweepFollowUps = () => {
     out.push(result('follow-ups: ... tapping Yes runs the steps that can be done (he dances), and the buttons go', b.pendingActivity === 'dance' && !C.question && box.hidden, { pending: b.pendingActivity, hidden: box.hidden }));
     reset();
     V.run('play the guitar and then dance'); const r1n = V.run('no');
-    out.push(result('follow-ups: ... "no": "Okay, never mind." and nothing happens', r1n.lines[0] && r1n.lines[0].text === 'Okay, never mind.' && still() && box.hidden, { lines: L(r1n) }));
+    out.push(result('follow-ups: ... "no": "Okay, never mind." and nothing happens', r1n.lines[0] && isLine(r1n.lines[0].text, 'neverMind') && still() && box.hidden, { lines: L(r1n) }));
     reset();
     const n1s = (V.tts.log.length = 0);   // (the log keeps 60 lines: start it empty)
     V.run('play the guitar and then dance');
     const at1 = b.time; runUntil(() => !C.question, 30);
     const t1s = b.time - at1;
-    out.push(result('follow-ups: ... no answer: the question closes after 20 s, the same as no', t1s >= ASK_WINDOW - 0.5 && t1s <= ASK_WINDOW + 0.5 && said(n1s).includes('guy: Okay, never mind.') && !b.pendingActivity, { t: t1s, said: said(n1s) }));
+    out.push(result('follow-ups: ... no answer: the question closes after 20 s, the same as no', t1s >= ASK_WINDOW - 0.5 && t1s <= ASK_WINDOW + 0.5 && said(n1s).some((l) => saidAs('guy', 'neverMind').includes(l)) && !b.pendingActivity, { t: t1s, said: said(n1s) }));
     // 2. part of a sentence not understood
     reset();
     const r2 = V.run('turn on the stereo and then flibber the wotsit');
@@ -1952,7 +1957,7 @@ T.sweepFollowUps = () => {
     out.push(result('follow-ups: ... "yeah" runs the part he understood', r2y.ok && b.pendingActivity === 'stereoon', { lines: L(r2y), pending: b.pendingActivity }));
     reset();
     V.run('turn on the stereo and then flibber the wotsit'); const r2n = V.run('nope');
-    out.push(result('follow-ups: ... "nope": "Okay, say it again."', r2n.lines[0] && r2n.lines[0].text === 'Okay, say it again.' && still(), { lines: L(r2n) }));
+    out.push(result('follow-ups: ... "nope": "Okay, say it again."', r2n.lines[0] && isLine(r2n.lines[0].text, 'sayAgain') && still(), { lines: L(r2n) }));
     // 3. a chain step that fails on the way: he says why and asks about the rest
     reset(); T.learn(['guitar']); T.home(); T.settle();
     const n3 = (V.tts.log.length = 0);   // (the log keeps 60 lines: start it empty)
@@ -1969,7 +1974,7 @@ T.sweepFollowUps = () => {
     W().removeObject('guitar'); b.objectRemoved('guitar');
     runUntil(() => !!C.question, 40);
     const r3n = V.run('no thanks');
-    out.push(result('follow-ups: ... "no thanks": "Okay, I\'ll leave it." and the chain is over', r3n.lines[0] && r3n.lines[0].text === "Okay, I'll leave it." && !C.chainFor(b), { lines: L(r3n) }));
+    out.push(result('follow-ups: ... "no thanks": "Okay, I\'ll leave it." and the chain is over', r3n.lines[0] && isLine(r3n.lines[0].text, 'leaveIt') && !C.chainFor(b), { lines: L(r3n) }));
     T.addObject('guitar'); T.settle();
     // 4. the skill-book offer: not learned yet, and the book is on the shelf
     reset(); T.forget(); T.learn(['piano', 'stereo']); T.addBook('guitar'); T.settle();
@@ -1980,7 +1985,7 @@ T.sweepFollowUps = () => {
     out.push(result('follow-ups: ... "go ahead": a chain, read the book and then play', r4y.ok && b.pendingActivity === 'read' && ch4 && ch4.steps.length === 2 && ch4.steps[1] === 'play the guitar', { lines: L(r4y), chain: ch4, pending: b.pendingActivity }));
     reset();
     V.run('play the guitar'); const r4n = V.run('not now');
-    out.push(result('follow-ups: ... "not now": "Okay."', r4n.lines[0] && r4n.lines[0].text === 'Okay.' && still(), { lines: L(r4n) }));
+    out.push(result('follow-ups: ... "not now": "Okay."', r4n.lines[0] && isLine(r4n.lines[0].text, 'okay') && still(), { lines: L(r4n) }));
     // 5. the queue full: yes drops the oldest and queues the new one
     reset(); busyWith('cook', 300);
     V.run('play the piano'); V.run('turn on the lamp'); V.run('sit down');
@@ -1991,7 +1996,7 @@ T.sweepFollowUps = () => {
     reset(); busyWith('cook', 300);
     V.run('play the piano'); runUntil(() => !!C.question, 40);
     const r6 = V.run('stop');
-    out.push(result('follow-ups: the busy question: "stop" counts as yes ("Okay, I\'ll stop cooking. Playing the piano now.")', r6.lines[0] && r6.lines[0].text === "Okay, I'll stop cooking. Playing the piano now.", { lines: L(r6) }));
+    out.push(result('follow-ups: the busy question: "stop" counts as yes ("Okay, I\'ll stop cooking. Playing the piano now.")', r6.lines[0] && isLine(r6.lines[0].text, 'stop', { doing: 'cooking', Label: 'Playing the piano' }), { lines: L(r6) }));
     // 7. "what?" repeats once; a new command closes the question with its no-answer outcome
     reset();
     V.run('play the guitar and then dance');
@@ -2000,7 +2005,7 @@ T.sweepFollowUps = () => {
     const left = C.question && C.question.until;
     out.push(result('follow-ups: "what?" repeats the question and its 20 s start again', r7.lines[0] && r7.lines[0].text === "I can't play the guitar yet. Should I just dance?" && left >= ASK_WINDOW - 0.01, { lines: L(r7), left }));
     const r7b = V.run('play the piano');
-    out.push(result('follow-ups: a new command instead of an answer closes the question ("Okay, never mind.") and the command runs', r7b.lines[0] && r7b.lines[0].text === 'Okay, never mind.' && !C.question && ['sitpiano', 'piano'].includes(b.pendingActivity), { lines: L(r7b), pending: b.pendingActivity }));
+    out.push(result('follow-ups: a new command instead of an answer closes the question ("Okay, never mind.") and the command runs', r7b.lines[0] && isLine(r7b.lines[0].text, 'neverMind') && !C.question && ['sitpiano', 'piano'].includes(b.pendingActivity), { lines: L(r7b), pending: b.pendingActivity }));
     // 8. one at a time: two questions due at once are asked one after the other
     reset();
     const got = [];
@@ -5968,6 +5973,105 @@ T.sweepGalDanceRoom = () => {
   return out;
 };
 
+// ---- Locked rooms: GUY never sets out to use something that stands behind a locked door (he used to say "Time for some piano.", walk to the
+// door and give up there), and a spoken command for it says which door is locked (brain.js available / actLockedRoom, voice.js).
+T.sweepLockedRooms = () => {
+  const out = [], base = errors.length, w = W(), b = B(), V = window.__voice, C = V.commands;
+  window.__voiceNoAudio = true;
+  const L = (r) => r.lines.map((l) => `${l.who}: ${l.text}`).join(' | ');
+  const reset = () => { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; b.prev = null; b.using = new Set(); C.clear(); V.tts.stop(); };
+  const PIANO = ['piano', 'sitpiano', 'plink', 'jam', 'jampiano', 'jamsit'], DANCE = ['dance', 'dancemoves', 'ballroom', 'stereoon'];
+  let pianoHome = null, tableHome = null;
+  try {
+    galReset(); T.settle(); T.resetRooms(); T.removeAll(); T.forget(); T.home(); T.settle();
+    T.learn(['piano', 'stereo']); for (const id of ['piano', 'table']) T.addObject(id);
+    unlockRoom('studio');
+    const added = R().add('studio');
+    if (!added.ok || !w.studio || !w.objects.piano || !w.objects.table) { out.push(result('locked rooms: the Studio is added, with the piano and the stereo', false, { added: added.ok })); return out; }
+    const pn = w.objects.piano, tb = w.objects.table, bd = w.doors.studio.shell.bounds;
+    pianoHome = { x: pn.x, z: pn.z }; tableHome = { x: tb.x, z: tb.z };
+    b.actRoom = 'studio';
+    const sp = b.openSpotNear((bd.minX + bd.maxX) / 2 - 2, bd.minZ + 1.8, 1.0); pn.set(sp.x, sp.z);
+    for (let i = 0; i < 10; i++) step(1 / 30);
+    const st = b.openSpotNear((bd.minX + bd.maxX) / 2 + 1.5, bd.maxZ - 1.8, 1.0); tb.set(st.x, st.z);
+    b.actRoom = null;
+    for (let i = 0; i < 10; i++) step(1 / 30);
+    T.home(); reset();
+    out.push(result('locked rooms: the piano and the stereo stand in the Studio, GUY in his room', w.roomIdAt(pn.x, pn.z) === 'studio' && w.roomIdAt(tb.x, tb.z) === 'studio' && b.inMain(), { piano: [pn.x, pn.z], table: [tb.x, tb.z] }));
+    // the door open: he can play it (so what follows is the lock, not the room)
+    out.push(result('locked rooms: with the Studio door open the piano in there can be played', b.available('piano') || b.available('sitpiano'), { why: b.whyNot('piano') }));
+    T.lockRoom('studio', true);
+    // 1. what he can do: nothing at the piano or the stereo, and the reason names the door
+    out.push(result('locked rooms: with the Studio door locked, nothing at the piano or the stereo in there is available', ![...PIANO, ...DANCE].some((a) => b.available(a)), { avail: [...PIANO, ...DANCE].filter((a) => b.available(a)) }));
+    out.push(result('locked rooms: ... and the reason is the locked door ("the Studio door is locked")', b.whyNot('sitpiano') === 'the Studio door is locked' && b.whyNot('dance') === 'the Studio door is locked', { piano: b.whyNot('sitpiano'), dance: b.whyNot('dance') }));
+    // 2. left to himself he never picks them, never walks to the locked door, and never says "the door is locked"
+    const ui0 = b.ui, uis = [], picks = [];
+    b.ui = function (m) { uis.push(String(m)); return ui0.call(this, m); };
+    try { for (let i = 0; i < 200; i++) { reset(); T.home(); b.choose(); picks.push(b.last); } } finally { b.ui = ui0; }
+    const bad = picks.filter((a) => PIANO.includes(a) || DANCE.includes(a));
+    out.push(result('locked rooms: in 200 choices GUY never picks the piano or the stereo behind the locked door, and never gives up at it', !bad.length && !uis.some((m) => /door is locked/.test(m)), { bad, locked: uis.filter((m) => /door is locked/.test(m)).slice(0, 3) }));
+    // 3. told to: he says which door is locked, for the piano, for dancing, and in a chain (where he asks about the rest)
+    reset(); T.home();
+    const r1 = V.run('play the piano');
+    out.push(result('locked rooms: "play the piano": he says the Studio door is locked, and does not start', !r1.ok && /Studio door is locked/.test(r1.lines[0] && r1.lines[0].text) && !b.pendingActivity, { lines: L(r1) }));
+    reset();
+    const r2 = V.run('dance');
+    out.push(result('locked rooms: "dance" with the stereo in the locked Studio: "I can\'t dance: the Studio door is locked."', !r2.ok && r2.lines[0] && r2.lines[0].text === "I can't dance: the Studio door is locked." && !b.pendingActivity, { lines: L(r2) }));
+    reset();
+    const r3 = V.run('play the piano and then wave');
+    out.push(result('locked rooms: "play the piano and then wave": "The Studio door is locked, so I can\'t play the piano. Should I just wave?"', r3.lines[0] && r3.lines[0].text === "The Studio door is locked, so I can't play the piano. Should I just wave?" && !!C.question && !b.pendingActivity, { lines: L(r3) }));
+    V.run('no'); reset();
+    // 4. unlocked again: back to normal
+    T.lockRoom('studio', false);
+    out.push(result('locked rooms: unlocked again, the piano and the stereo are available', (b.available('piano') || b.available('sitpiano')) && b.available('stereoon'), { piano: b.whyNot('piano'), stereo: b.whyNot('stereoon') }));
+  } finally {
+    window.__voiceNoAudio = false;
+    if (w.doors.studio) T.lockRoom('studio', false);
+    b.actRoom = null; reset(); T.home();
+    if (pianoHome && w.objects.piano) w.objects.piano.set(pianoHome.x, pianoHome.z);          // (taking the room away deletes what stands in it)
+    if (tableHome && w.objects.table) w.objects.table.set(tableHome.x, tableHome.z);
+    T.settle(); R().reset('studio'); R().setUnlocked('studio', false);
+    galReset();
+  }
+  out.push(result('locked rooms: no errors', errors.length === base, { errors: errors.slice(base, base + 3) }));
+  return out;
+};
+
+// ---- What they say: several ways of saying each of their stock lines and remarks, and never the same one twice running (lines.js, barks.js).
+// The picker uses Math.random once per line, like the old one, so the seeded runs keep their numbers.
+T.sweepLines = () => {
+  const out = [], base = errors.length, b = B(), V = window.__voice, C = V.commands;
+  window.__voiceNoAudio = true;
+  const repeats = (a) => a.filter((x, i) => i > 0 && x === a[i - 1]).length;
+  try {
+    galReset();
+    const thin = Object.entries(LINES).filter(([, l]) => l.length < 3).map(([k]) => k), thinBarks = Object.entries(BARKS).filter(([, l]) => l.length < 3).map(([k]) => k);
+    out.push(result('lines: every stock line has at least three ways of saying it', !thin.length, { thin }));
+    out.push(result('lines: every remark as they start something has at least three ways of saying it', !thinBarks.length, { thinBarks }));
+    resetLines();
+    const q = Array.from({ length: 40 }, () => line('quick'));
+    out.push(result('lines: 40 "One sec." lines in a row: never the same twice running, and most of the ways come up', !repeats(q) && new Set(q).size >= 4, { q: q.slice(0, 8), kinds: new Set(q).size }));
+    const done = Array.from({ length: 12 }, () => line('done', { doing: 'cooking', Label: 'Playing the piano' }));
+    out.push(result('lines: a line with a gap is filled in ("Done cooking. Playing the piano now." and its other ways), never twice running', done.every((d) => variants('done', { doing: 'cooking', Label: 'Playing the piano' }).includes(d) && !/\{/.test(d)) && !repeats(done), { done: done.slice(0, 4) }));
+    const wv = Array.from({ length: 30 }, () => barkFor('wave'));
+    out.push(result('lines: 30 remarks for waving: never the same twice running', !repeats(wv) && new Set(wv).size === BARKS.wave.length, { wv: wv.slice(0, 6) }));
+    const rnd = Math.random, draws = (f) => { let n = 0; Math.random = () => { n++; return rnd(); }; try { f(); } finally { Math.random = rnd; } return n; };
+    const nOld = [draws(() => line('ok')), draws(() => line('galOk')), draws(() => line('huh')), draws(() => barkFor('piano'))], nNew = [draws(() => line('quick')), draws(() => line('done', { doing: 'x', Label: 'Y' })), draws(() => line('huh', {}, { drew: false })), draws(() => barkFor('studiodj'))];
+    out.push(result('lines: a line that used to be picked at random draws one random number, as before, and one that used to be fixed (or a new remark) draws none: the seeded runs keep their numbers', nOld.every((n) => n === 1) && nNew.every((n) => n === 0), { nOld, nNew }));
+    // the real thing: told to wave five times, his yes is different each time
+    resetLines();
+    const yes = [];
+    for (let i = 0; i < 5; i++) { b.unlock(false); b.queue = []; b.step = null; b.pendingActivity = null; b.last = 'wander'; C.clear(); V.tts.stop(); const r = V.run('wave'); yes.push(r.lines[0] && r.lines[0].text); }
+    out.push(result('lines: "wave" five times: a short yes every time, never the same one twice running', yes.every((y) => LINES.ok.includes(y)) && !repeats(yes), { yes }));
+  } finally {
+    window.__voiceNoAudio = false;
+    b.queue = []; b.step = null; b.pendingActivity = null; C.clear(); V.tts.stop(); resetLines();
+    galReset();
+  }
+  out.push(result('lines: no errors', errors.length === base, { errors: errors.slice(base, base + 3) }));
+  return out;
+};
+
 // ---- Taking a guitar or the bass off its stand, wearing it and putting it back: the hand really closes round the neck, and the strap lies on the
 // body (over the left shoulder and across the back), for both robots.
 T.sweepGuitarHold = () => {
@@ -6926,6 +7030,8 @@ T.runAll = ({ seed = 0, upTo = 0 } = {}) => {
   report.split = S(T.sweepSplit);          // (multi-step voice commands: at the end, so the others keep their seeds)
   report.chains = S(T.sweepChains);
   report.followUps = S(T.sweepFollowUps);
+  report.lockedRooms = S(T.sweepLockedRooms);      // (at the end, so the others keep their seeds)
+  report.lines = S(T.sweepLines);
   report.interactAll = S(T.sweepInteractAll);    // (last, so the others keep their seeds)
   if (seed && T.unseed) T.unseed();
   window.__qaPaused = wasPaused;
@@ -7476,7 +7582,7 @@ T.sweepVoice = async () => {
     gbr.skip(true); gbr.pendingActivity = null; b.pendingActivity = null; b.queue = []; b.step = null; b.last = 'wander'; gal.audience = null;
     b.lock = { name: 'ball' };
     const r7 = V.run('play the guitar');
-    out.push(result('voice: GUY busy (locked in on the ball): he says GAL will get right on that, and she answers', r7.ok && r7.lines[0].who === 'guy' && /GAL will get right on that/.test(r7.lines[0].text) && r7.lines[1] && r7.lines[1].who === 'gal' && !!gbr.pendingActivity, { lines: L(r7), pending: gbr.pendingActivity }));
+    out.push(result('voice: GUY busy (locked in on the ball): he says GAL will get right on that, and she answers', r7.ok && r7.lines[0].who === 'guy' && isLine(r7.lines[0].text, 'handoff') && r7.lines[1] && r7.lines[1].who === 'gal' && !!gbr.pendingActivity, { lines: L(r7), pending: gbr.pendingActivity }));
     b.lock = null; gal.audience = null; gbr.pendingActivity = null; gbr.skip(true);
     // 6. refusal comes back in words, from the one who was asked
     b.last = 'wander'; b.queue = []; b.step = null;

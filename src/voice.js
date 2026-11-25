@@ -8,10 +8,10 @@
 // One sentence can hold up to three steps ("turn on the stereo and then dance"): splitSteps() cuts it into pieces, each parsed on its
 // own, and one robot does them in order (a chain, commands.js). A sentence with one piece takes exactly the single-command path.
 import { barkFor, barkReady, barkSpoke } from './barks.js';
+import { line, LINES } from './lines.js';
 import { createCommands, classOf, busyJob, labelOf, firstWords, chainLabel, MAX_STEPS, yesNo as yesNoText } from './commands.js';
-const pick = (a) => a[Math.floor(Math.random() * a.length)];
-export const OK = ['Sure thing.', 'On it.', 'Okay!', 'You got it.'];
-export const GAL_OK = ['On it.', 'Right away.', 'Okay, I will.'];
+export const OK = LINES.ok;
+export const GAL_OK = LINES.galOk;
 const norm = (t) => ' ' + String(t || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
 
 // what a sentence can mean: [regex, intent]; first match wins. 'object' goes through interact(name), 'act' is an activity name.
@@ -159,7 +159,12 @@ export function createVoice({ world, brain, say = () => {}, speaking = null, scr
         return b.interact(it.name);
       }
       case 'act': {
-        if (!b.available(it.act)) return { ok: false, message: b.whyNot && b.whyNot(it.act) === 'the other robot is using it' ? 'The other robot is using that right now.' : 'I cannot do that right now.' };
+        if (!b.available(it.act)) {
+          const why = b.whyNot ? b.whyNot(it.act) : '';
+          if (why === 'the other robot is using it') return { ok: false, message: 'The other robot is using that right now.' };
+          if (/ door is locked$/.test(why)) return { ok: false, message: `I can't ${labelOf(it)[0]}: ${why}.` };        // (the stereo stands in a locked room: say so, not "I cannot do that")
+          return { ok: false, message: 'I cannot do that right now.' };
+        }
         b.unlock(false); b.skip(true); b.pendingActivity = it.act; return { ok: true };
       }
       case 'read': {
@@ -229,14 +234,14 @@ export function createVoice({ world, brain, say = () => {}, speaking = null, scr
   // ---- several steps in one sentence
   function runSteps(sp) {
     const ps = sp.pieces, good = ps.filter((p) => known(p.it)), it = { type: 'chain', steps: ps.map((p) => p.it) };
-    if (!good.length) { speak('guy', pick(['Sorry, I did not catch that.', 'Hmm? Say that again?'])); return res(false, it); }
+    if (!good.length) { speak('guy', line('huh')); return res(false, it); }
     const who0 = ps[0].addr === 'gal' || (!ps[0].addr && audienceOn()) ? (galOk() ? 'gal' : 'guy') : 'guy';
     if (good.length < ps.length) {                                   // part of it not understood: ask about the rest
       const k = ps.findIndex((p) => !known(p.it));
       const where = k === 0 ? 'the first part' : `the part after ${labelOf(ps[k - 1].it, rooms())[2]}`;
       commands.ask(who0, `I didn't catch ${where}. Should I just ${chainLabel(good.map((p) => labelOf(p.it, rooms())))}?`, {
         yes: () => { runGroups(good); },
-        no: () => speak(who0, 'Okay, say it again.'),
+        no: () => speak(who0, line('sayAgain')),
       });
       return res(false, it);
     }
@@ -258,7 +263,7 @@ export function createVoice({ world, brain, say = () => {}, speaking = null, scr
     const prefix = addr ? addr + ' ' : '';
     if (steps.length === 1) return runParsed(addr === 'gal' ? { type: 'gal', inner: steps[0].it } : steps[0].it, prefix + 'x').ok;
     const robotSteps = steps.filter((s) => s.it.type !== 'screen' && s.it.type !== 'doorlock');
-    if (!robotSteps.length) { let ok = true; for (const s of steps) { const r = instant(s.it); if (!r.ok) { speak('guy', fix(r.message, 'guy')); ok = false; break; } } if (ok) speak('guy', pick(OK)); return ok; }
+    if (!robotSteps.length) { let ok = true; for (const s of steps) { const r = instant(s.it); if (!r.ok) { speak('guy', fix(r.message, 'guy')); ok = false; break; } } if (ok) speak('guy', line('ok')); return ok; }
     const first = robotSteps[0].it;
     const explicit = addr === 'gal', named = addr === 'guy', aud = !explicit && !named && audienceOn();
     const here = first.type === 'object' && first.name !== 'sit' && !!brain.obj(first.name) && world.roomIdAt(brain.obj(first.name).x, brain.obj(first.name).z) === world.roomIdAt(brain.g.root.position.x, brain.g.root.position.z);
@@ -271,16 +276,17 @@ export function createVoice({ world, brain, say = () => {}, speaking = null, scr
     let bad = steps.map((s) => dryCheck(b, s.it));
     if (bad.every((m, i) => m || isInst(steps[i].it)) && !viaGal && galFree) {           // GUY can do none of it: GAL might
       const gbad = steps.map((s) => dryCheck(gal().brain, s.it));
-      if (gbad.some((m, i) => !m && !isInst(steps[i].it))) { b = gal().brain; viaGal = true; bad = gbad; if (!aud) speak('guy', 'I cannot do that yet. GAL will get right on that.'); }
+      if (gbad.some((m, i) => !m && !isInst(steps[i].it))) { b = gal().brain; viaGal = true; bad = gbad; if (!aud) speak('guy', line('cantGal')); }
     }
     const who = b === brain ? 'guy' : 'gal';
     const can = steps.filter((s, i) => !bad[i]);
     if (!can.some((s) => !isInst(s.it))) { speak(who, fix(bad.find(Boolean), who)); return false; }        // nothing in it can be done: the first reason, as today
     if (can.length < steps.length) {                                  // some of it cannot be done: say which, and ask about the rest
       const no = steps.filter((s, i) => bad[i]).map((s) => s.label[0]);
-      commands.ask(who, `I can't ${no.join(' or ')} yet. Should I just ${chainLabel(can.map((s) => s.label))}?`, {
+      const door = bad.map((m) => m && String(m).match(/the ([A-Za-z' ]+?) door is locked/i)).find(Boolean);      // a step's room is locked: say that, not "yet"
+      commands.ask(who, door ? `The ${door[1]} door is locked, so I can't ${no.join(' or ')}. Should I just ${chainLabel(can.map((s) => s.label))}?` : `I can't ${no.join(' or ')} yet. Should I just ${chainLabel(can.map((s) => s.label))}?`, {
         yes: () => { if (can.length === 1) runParsed(viaGal ? { type: 'gal', inner: can[0].it } : can[0].it, (viaGal ? 'gal ' : named ? 'guy ' : '') + 'x'); else startChain(b, can, viaGal, explicit, aud, named, true); },
-        no: () => speak(who, 'Okay, never mind.'),
+        no: () => speak(who, line('neverMind')),
       });
       return false;
     }
@@ -299,11 +305,11 @@ export function createVoice({ world, brain, say = () => {}, speaking = null, scr
     if (dropped && dropped.length) speak(who, `Okay, I'll skip ${dropped.map((l) => l[2]).join(' and ')}.`);
     const cls = classOf(b);
     if (viaGal) {
-      if (!aud && !answered) speak('guy', explicit ? 'Okay, GAL will take care of it.' : 'GAL will get right on that.');
-      speak('gal', `${pick(GAL_OK)} I'll ${L}.`);
+      if (!aud && !answered) speak('guy', explicit ? line('handoffAsked') : line('handoff'));
+      speak('gal', `${line('galOk')} I'll ${L}.`);
     } else if (cls === 'step') speak('guy', firstWords(b, cls, L));
     else if (cls === 'quick') speak('guy', `${firstWords(b, cls, L)} Then I'll ${L}.`);
-    else speak('guy', `${pick(OK)} I'll ${L}.`);
+    else speak('guy', `${line('ok')} I'll ${L}.`);
     commands.chain(b, steps, cls);
     if (viaGal) startAudience();
     return true;
@@ -334,8 +340,8 @@ export function createVoice({ world, brain, say = () => {}, speaking = null, scr
     const res = (ok) => ({ ok, intent: it, lines: lines.slice() });
     if (it.type === 'empty') return res(false);
     if (it.type === 'unknown') {
-      if (audienceOn()) { speak('gal', 'Sorry, I did not catch that.'); return res(false); }
-      speak('guy', pick(['Sorry, I did not catch that.', 'Hmm? Say that again?'])); return res(false);
+      if (audienceOn()) { speak('gal', line('huh', {}, { drew: false })); return res(false); }
+      speak('guy', line('huh')); return res(false);
     }
     if (it.type === 'screen') {
       if (!screen) { speak('guy', 'I cannot lock the screen here.'); return res(false); }
@@ -382,8 +388,8 @@ export function createVoice({ world, brain, say = () => {}, speaking = null, scr
       const r = act(gb, req, cls);
       if (!r.ok) { speak('gal', fix(r.message, 'gal')); return res(false); }                  // she was asked, so she answers (with the reason)
       if (chained) skipLine(gb);
-      if (!aud) speak('guy', explicit ? 'Okay, GAL will take care of it.' : 'GAL will get right on that.');
-      startAudience(); speak('gal', pick(GAL_OK)); commands.track(gb, req, cls, label); return res(true);
+      if (!aud) speak('guy', explicit ? line('handoffAsked') : line('handoff'));
+      startAudience(); speak('gal', line('galOk')); commands.track(gb, req, cls, label); return res(true);
     }
     // GUY's job keeps him (cooking, serving...) and GAL cannot take it: it waits for the job, and he says how long
     if (busyJob(brain) && req.type !== 'next') {
@@ -392,19 +398,19 @@ export function createVoice({ world, brain, say = () => {}, speaking = null, scr
     }
     const cls = classOf(brain);
     const r = act(brain, req, cls);
-    if (r.ok) { skipLine(brain); speak('guy', firstWords(brain, cls, label[0], pick(OK))); commands.track(brain, req, cls, label); return res(true); }
+    if (r.ok) { skipLine(brain); speak('guy', firstWords(brain, cls, label[0], line('ok'))); commands.track(brain, req, cls, label); return res(true); }
     // GUY cannot (no skill, no book, locked door...): GAL might be able to
     if (galFree && req.type !== 'visit' && req.type !== 'comeback') {
       const gb = gal().brain, gcls = classOf(gb);
       const r2 = act(gb, req, gcls);
-      if (r2.ok) { speak('guy', 'I cannot do that yet. GAL will get right on that.'); startAudience(); speak('gal', pick(GAL_OK)); commands.track(gb, req, gcls, label); return res(true); }
+      if (r2.ok) { speak('guy', line('cantGal')); startAudience(); speak('gal', line('galOk')); commands.track(gb, req, gcls, label); return res(true); }
     }
     // he has not learned it, and the book that teaches it is on the shelf: he offers to read it first (then does it: a chain)
     const book = req.type === 'object' || req.type === 'act' ? bookFor(brain, req) : null;
     if (book) {
       commands.ask('guy', `I haven't learned ${SKILL_WORDS[book.def.teaches] || 'that'} yet. Should I read ${book.def.title} first?`, {
         yes: () => { const steps = [{ it: { type: 'read', query: book.def.id, book: book.def.id }, label: ['read ' + book.def.title, 'Reading ' + book.def.title, 'the book'] }, { it: req, label }]; startChain(brain, steps, false, false, false, named, true); },
-        no: () => speak('guy', 'Okay.'),
+        no: () => speak('guy', line('okay')),
       });
       return res(false);
     }
