@@ -836,8 +836,43 @@ cmdBox.querySelector('#cmd-chatter').addEventListener('change', (e) => tts.set('
 cmdBox.querySelector('#cmd-chatter').value = tts.settings.chatter;
 const voiceSel = cmdBox.querySelector('#cmd-voice'); voiceSel.value = tts.settings.engine;
 voiceSel.addEventListener('change', (e) => tts.set('engine', e.target.value));
-window.__voice = { bark: voice.bark, run: (t) => voice.run(t), runAlternatives: (a) => voice.runAlternatives(a), parse: voice.parse, tts, audienceOn: voice.audienceOn, commands: voice.commands };
+window.__voice = { bark: voice.bark, run: (t) => voice.run(t), runAlternatives: (a) => voice.runAlternatives(a), parse: voice.parse, split: voice.split, tts, audienceOn: voice.audienceOn, commands: voice.commands };
 window.__commands = voice.commands;           // the queues and the open question (debugging, and the QA harness)
+// A yes/no question from GUY or GAL ("Should I still dance?"): Yes and No buttons show under the subtitle while it is open, besides holding
+// the mic or typing. The mic never opens by itself (that waits for Listen mode).
+{
+  const box = document.getElementById('qbtns'), q = box.querySelector('.q');
+  const subs = document.getElementById('subs');
+  // above whatever sits at the bottom (the buttons wrap to two or three rows on a phone; the typed box), and the subtitle above it
+  const place = () => {
+    if (box.hidden) { box.style.bottom = ''; subs.style.bottom = ''; return; }
+    const tops = ['btns', 'cmdbox'].map((id) => document.getElementById(id)).filter((el) => el && !el.hidden && el.offsetHeight).map((el) => el.getBoundingClientRect().top);
+    const bottom = Math.max(128, ...tops.map((t) => Math.ceil(innerHeight - t + 12)));
+    box.style.bottom = bottom + 'px';
+    subs.style.bottom = (bottom + box.offsetHeight + 10) + 'px';
+  };
+  const show = (d) => {
+    box.hidden = !d;
+    q.textContent = '';
+    if (d) { const b = document.createElement('b'); b.textContent = (d.who === 'gal' ? 'GAL' : 'GUY') + ':'; b.style.color = d.who === 'gal' ? '#ff7ac0' : '#7fd1ff'; q.append(b, document.createTextNode(d.text)); }
+    dedupe();
+  };
+  // the question shows once: in the subtitle while that still shows it, in the box once the subtitle has moved on or gone
+  const dedupe = () => {
+    const asked = voice.commands.question;
+    q.hidden = !!asked && !subs.hidden && subs.textContent.includes(asked.text);
+    box.classList.toggle('bare', q.hidden);
+    place();
+  };
+  new MutationObserver(() => { if (!box.hidden) dedupe(); }).observe(subs, { attributes: true, attributeFilter: ['hidden'], childList: true, characterData: true, subtree: true });
+  addEventListener('resize', place);
+  new MutationObserver(place).observe(document.getElementById('cmdbox'), { attributes: true, attributeFilter: ['hidden'] });
+  window.addEventListener('guy-question', (e) => show(e.detail));
+  const answer = (a) => { tts.caption('you', a === 'yes' ? 'Yes.' : 'No.'); voice.commands.press(a); };
+  box.querySelector('.yes').addEventListener('click', () => answer('yes'));
+  box.querySelector('.no').addEventListener('click', () => answer('no'));
+  show(voice.commands.question);
+}
 
 // The microphone (mic.js): hold 🎤 and talk, let go to send; a quick tap listens until a pause. What was heard goes the same way as
 // the typed box. Hidden in a browser without speech recognition. The music ducks while it listens, and GUY stops talking.
@@ -850,7 +885,7 @@ const micDuck = (on) => {
   else if (!on && micDucked) { if (m.gain.value === 0.18) m.gain.value = 0.5; micDucked = false; }
 };
 const mic = createMic({
-  onPartial: (t) => tts.caption('you', t + '…'),
+  onPartial: (t) => { tts.caption('you', t + '…'); voice.commands.hold(); },       // (talking keeps a question open)
   onFinal: (alts) => { if (alts.length) { tts.caption('you', alts[0].text); voice.runAlternatives(alts); } },
   onState: (st, detail) => {
     micBtn.classList.toggle('listening', st === 'listening');
@@ -865,6 +900,7 @@ micBtn.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   if (mic.listening) { mic.stop(); micDown = 0; return; }       // a second tap: done talking
   tts.stop(); tts.warm().catch(() => {});                      // (GUY stops talking so he is not heard as the user)
+  voice.commands.hold();                                       // (an open question waits while the user talks)
   micDown = performance.now();
   mic.start();
 });

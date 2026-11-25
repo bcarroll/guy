@@ -2742,6 +2742,7 @@ export class Brain {
       const why = (tries || []).map((a) => this.whyNot(a)).filter(Boolean)[0];
       return { ok: false, message: `${this.isGal ? 'GAL' : 'GUY'} can't use ${this.thingName(name)} just now${why ? `: ${why}` : ''}.` };
     }
+    if (this.dryRun) return { ok: true, message: 'On it!' };            // (refusal(): only the checks)
     if (name === 'workstation') this.learnPlan = null;                  // (the panel, not an order)
     if (this.lock && this.lock.name !== name) this.unlock(false);     // told to do something else: the lock is over
     this.skip();                                   // stands up, switches the stereo off, etc. first
@@ -2751,6 +2752,15 @@ export class Brain {
     this.pendingChair = this.obj(name) && this.obj(name).sit && !this.obj(name).homeSeat ? name : null;     // sit on the chair he was pointed at
     this.pendingHome = homeActsOf(this.obj(name)) ? name : null;                   // use the bed, shelf or wardrobe he was pointed at
     return { ok: true, message: 'On it!' };
+  }
+
+  // Why he could not use a thing at all right now (a missing skill or book, a missing thing, a locked door ...), or null: interact()'s
+  // checks with nothing changed. A spoken chain checks every step with it before the first one starts (commands.js, voice.js).
+  // The other robot using it is not counted: that passes, and the step tries again when its turn comes.
+  refusal(name) {
+    const keep = { forceLine: this.forceLine, wantGuitar: this.wantGuitar };
+    this.dryRun = true;
+    try { const r = this.interact(name); return r.ok || / is using that right now/.test(r.message) ? null : r.message; } finally { this.dryRun = false; Object.assign(this, keep); }
   }
 
   // The user picked something from the shed list: GUY takes it out of the shed (mode 'out') or puts it away in it ('away'); no key = all of them.
@@ -2853,6 +2863,8 @@ export class Brain {
     this.skillWatch();                    // (is he really doing the skill that was chosen? skillrun.js)
     if (!this.step) {
       let next = this.queue.shift();
+      const cmds = this.commands || this.w.commands;
+      if (!next && !this.pendingActivity && cmds && cmds.nextFor && cmds.nextFor(this)) next = this.queue.shift();     // a spoken chain's next step comes before choose() picks anything (commands.js)
       if (!next) {
         // an activity the user asked for takes priority, once whatever he is holding has been put away
         const wanted = this.pendingActivity;

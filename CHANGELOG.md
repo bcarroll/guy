@@ -2,6 +2,13 @@
 
 The big changes to GUY's room, newest first. The game shows the same list under Help > Change log (src/changelog.js); keep the two in step.
 
+## 2026-11-25
+
+### Added
+
+- Spoken commands with two or three steps ("turn on the stereo and then dance"): one robot does them in order, each step but the last for about 20 seconds.
+- GUY and GAL ask yes/no questions instead of giving up (a step they can't do, a part they didn't catch, a skill book to read first), with Yes and No buttons under the subtitle.
+
 ## 2026-11-24
 
 ### Added
