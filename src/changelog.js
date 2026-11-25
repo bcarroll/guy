@@ -4,6 +4,7 @@
 // whenever a room, character, major feature or control is added, changed or taken away, and the same line to CHANGELOG.md.
 export const CHANGELOG = [
   { date: '2026-11-25',
+    changed: ['GUY and GAL say their stock lines and remarks several ways and never the same one twice running; the Studio and Bowling Alley activities have remarks too.', 'Nothing behind a locked door is chosen any more (the robots used to announce it and give up at the door); a spoken command for it says which door is locked.'],
     added: ['Spoken commands with two or three steps ("turn on the stereo and then dance"): one robot does them in order, each step but the last for about 20 seconds.', 'GUY and GAL ask yes/no questions instead of giving up (a step they can\'t do, a part they didn\'t catch, a skill book to read first), with Yes and No buttons under the subtitle.'] },
   { date: '2026-11-24',
     added: ['The Garage has things GUY and GAL build for it: a wooden Garage Workbench (GUY tinkers at its vise), a Metal Tool Chest (GUY sorts the spanners) and a Tyre Rack.'] },
