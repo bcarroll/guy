@@ -171,7 +171,7 @@ export function installHome(Brain, POSES, H) {
           const n = o.name, it = () => this.obj(n);
           (this.lastHome ||= {}).toolsort = n;
           return ['sorting the tools',
-            stand(o, 0.75, () => it().handlePoint(), [0]),
+            stand(o, 0.65, () => it().handlePoint(), [0]),
             this.play('reach', 1.4, { needs: [n], at: [0.6, () => { it().setOpen(true); sfx('lid'); }], target: () => it().handlePoint() }),
             this.play('reach', 3.0, { needs: [n], at: [0.6, () => sfx('click')], target: () => it().insidePoint() }),
             this.play('reach', 1.4, { needs: [n], at: [0.6, () => { it().setOpen(false); sfx('lid'); }], target: () => it().handlePoint() })];
