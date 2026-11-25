@@ -83,6 +83,10 @@ export const BARKS = {
   playkeys: ['A tune on the keyboard.', 'Let me try the keyboard.', 'Some keys, please.'],
   playxylo: ['Xylophone time.', 'Ping, ping, ping.', 'A bright little tune.'],
   playbongos: ['Bongo time.', 'Let me drum on the bongos.', 'A little rhythm.'],
+  toy: ['Time to play.', 'I want to play with something.', 'A little fun, I think.', 'Toy time!'],
+  arcade: ['One more game.', 'I can beat my high score.', 'Robo Blaster, here I come.', 'Just one round.'],
+  jukebox: ['Let us have a song.', 'Something from the jukebox.', 'Let me pick a tune.'],
+  tidyup: ['Let me tidy up a little.', 'This could be neater.', 'A quick tidy.'],
 };
 export const NO_BARK = ['yardtidy', 'arrange', 'wander', 'lookaround', 'sway', 'akimbo', 'ponder', 'books', 'putback', 'putguitar', 'dropball', 'lighton', 'putcanvas', 'hangpaint', 'leave', 'stuck', 'rwait',
   'takeorder', 'cook', 'serve', 'takepay',                     // the restaurant jobs already talk to the customers

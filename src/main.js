@@ -9,6 +9,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { buildRoom, ROOM } from './room.js';
 import { Guy } from './guy.js';
 import { Brain } from './brain.js';
+import { TOY_MENU } from './toybrain.js';
 import { initAudio, audio } from './audio.js';
 import { Skills } from './skills.js';
 import { initSkillsMenu } from './skillsmenu.js';
@@ -152,7 +153,37 @@ brain.onLearn = (def) => { showToast(`GUY learned ${def.blurb}!`); sfx('chime');
 brain.onRiff = (msg) => { showToast(msg); sfx('chime'); };
 brain.onChapter = (c) => { showToast(`GUY learned ${c.title.toLowerCase()} by practising!`); sfx('chime'); };
 brain.onBuilt = (msg) => { showToast(msg); machineUI.refresh(); };           // something finished in the Workshop: it is in storage now
-riffConfig.persist = !params.has('fresh');           // ?fresh keeps the riffs he makes up in memory only
+riffConfig.persist = !params.has('fresh');
+// ---- the arcade view: a robot playing Robo Blaster on the Arcade Cabinet (toybrain.js). The game draws on a small canvas that is the cabinet's
+// screen (src/arcade.js); while a game is on, that same canvas is shown big in a corner panel so the user can watch it. ✕ hides it to a
+// "🕹️ Watch" chip (for that game only); the panel goes a few seconds after the game ends, so the final score is seen.
+{
+  const view = document.getElementById('arcadeview'), chip = document.getElementById('arcadechip'), screen = view.querySelector('.ascreen'), title = view.querySelector('.atitle');
+  let cur = null, hidden = false, gone = 0;
+  const show = () => { view.hidden = !cur || hidden; chip.hidden = !cur || !hidden; };
+  const close = () => { clearTimeout(gone); gone = 0; cur = null; screen.textContent = ''; show(); };
+  window.addEventListener('guy-arcade', (e) => {
+    const { playing, who, game } = e.detail || {};
+    if (!game) return;
+    clearTimeout(gone); gone = 0;
+    if (playing) {
+      if (cur !== game) hidden = false;
+      cur = game;
+      if (game.canvas && game.canvas.parentNode !== screen) { screen.textContent = ''; screen.appendChild(game.canvas); }
+      title.textContent = `🕹️ ${who || 'GUY'} is playing Robo Blaster`;
+      show();
+    } else if (game === cur) {
+      title.textContent = `🕹️ ${who || 'GUY'}: ${game.score} points${game.newHi ? ', a new high score!' : ''}`;
+      gone = setTimeout(close, 4000);
+    }
+  });
+  view.querySelector('.aclose').addEventListener('click', () => { hidden = true; show(); });
+  chip.addEventListener('click', () => { hidden = false; show(); });
+  const stale = () => { if (cur && cur.mode === 'attract' && !gone) close(); };
+  setInterval(stale, 1500);      // (a game let go of without a word: never left on screen)
+  window.__arcadeView = { view, chip, state: () => ({ cur, hidden }), flush: () => { if (gone) close(); stale(); } };          // (QA: what the timers would do, now)
+}
+           // ?fresh keeps the riffs he makes up in memory only
 
 // ---- speed: how fast GUY walks and how short his pauses are between interactions (the dropdown beside Follow) ----
 const speedSel = document.getElementById('speed-sel');
@@ -602,6 +633,13 @@ function interactLabel(name) {
     case 'birdbath': return '🐦 Look at the Bird Bath';
     case 'skyswitch': return w.yard && w.yard.isNight() ? '☀️ Switch to Day' : '🌙 Switch to Night';
     case 'shed': case 'mower': return '🚜 Mow the Lawn';
+    case 'stove': return '🍳 Cook';
+    case 'kitchencounter': return '🍽️ Serve the Food';
+    case 'register': return '💵 Take Payment';
+    case 'bass': return '🎸 Play the Bass';
+    case 'keyboard': return '🎹 Play the Keyboard';
+    case 'xylophone': return '🎶 Play the Xylophone';
+    case 'bongos': return '🪘 Play the Bongos';
     default: if (brain.obj(name) && brain.obj(name).kind === 'bed') return '🛏️ Make the Bed or Sit';
       if (brain.obj(name) && brain.obj(name).kind === 'readingchair') return '🛋️ Sit Down';
       if (brain.obj(name) && ['wardrobe', 'bedside'].includes(brain.obj(name).kind)) return brain.obj(name).kind === 'wardrobe' ? '🚪 Sort the Wardrobe' : '🗄️ Tidy the Drawer';
@@ -611,6 +649,9 @@ function interactLabel(name) {
       if (brain.obj(name) && brain.obj(name).kind === 'recordplayer') return '🎶 Play a Record';
       if (brain.obj(name) && brain.obj(name).kind === 'garagebench') return '🔧 Tinker at the Bench';
       if (brain.obj(name) && brain.obj(name).kind === 'toolchest') return '🧰 Sort the Tools';
+      if (brain.obj(name) && TOY_MENU[brain.obj(name).kind || name]) return TOY_MENU[brain.obj(name).kind || name];      // the toys, the arcade, the jukebox, the little furniture (toybrain.js)
+      if (brain.obj(name) && ['pinsetter', 'bowlingpins', 'bowlingball'].includes(brain.obj(name).kind)) return '🎳 Go Bowling';
+      if (brain.obj(name) && (brain.obj(name).seats || /^diningtable/.test(name))) return '📝 Take an Order';           // (the Restaurant's tables)
       return brain.obj(name) && brain.obj(name).heldBooks ? '📖 Read a Book' : brain.obj(name) && brain.obj(name).guitar && !brain.obj(name).bass ? '🎸 Play Guitar' : brain.obj(name) && brain.obj(name).kind === 'footstool' ? '🪜 Stand on It to Clean' : brain.obj(name) && brain.obj(name).sit ? '🪑 Sit Down' : '▶ Use';
   }
 }

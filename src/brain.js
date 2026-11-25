@@ -8,7 +8,8 @@ import { TIMING_SKILLS } from './skills.js';
 import { randomSong, makeJam, plinkSong } from './songs.js';
 import { installHobbies } from './hobbybrain.js';
 import { installWorkshop } from './workbrain.js';
-import { installHome, HOME_ACTS, HOME_KIND_ACTS } from './homebrain.js';
+import { installHome, HOME_ACTS, homeActsOf } from './homebrain.js';
+import { installToys, TOYS, TIDY } from './toybrain.js';
 import { installLibrary } from './librarybrain.js';
 import { installYard, YARD_ACTS } from './yardbrain.js';
 import { installRange, RANGE_ACTS, RANGE_PIECES } from './rangebrain.js';
@@ -40,6 +41,10 @@ const ACT_OBJ = {
 // what an activity needs to have in the same room as its main object (else it cannot be done, or is done without it)
 const TOGETHER = { jam: ['table'], jampiano: ['table'], jamsit: ['table'], jamguitar: ['table'], jamdrums: ['table'] };
 // what he does when he is shut in by a locked door (in the rooms he can still get to): the jobs that keep to one room
+// what the menu's Interact does with a thing found by its kind: the Bedroom, Library and toy things (homebrain.js, toybrain.js), and the Bowling
+// Alley's kit GUY builds (a crate of pins, the wooden ball, the pinsetter): a game at the alley
+const BOWL_KIT = { pinsetter: ['bowl', 'bowlwatch'], bowlingpins: ['bowl', 'bowlwatch'], bowlingball: ['bowl', 'bowlwatch'] };
+const kitActs = (o) => homeActsOf(o) || (o && BOWL_KIT[o.kind]) || null;
 const SHUT_ACTS = (act) => [WORK_ACTS, YARD_ACTS, RANGE_ACTS, BOWL_ACTS, STUDIO_ACTS, REST_JOBS].some((l) => l.includes(act)) || act === 'rwait' || act === 'libclean' || !!HOME_ACTS[act];
 const FREE_ACTS = ['wander', 'lookaround', 'sway', 'akimbo', 'ponder', 'wave'];           // done wherever he happens to be
 const OWN_ROOM_ACTS = ['leave', 'stuck', 'visit', 'dropball', 'hangpaint', 'moveshelf', 'carryhome', 'carrygear', 'skillwait', 'bringpiece'];      // (they plan their own way: dropping a ball where he stands, hanging a painting on whichever wall)
@@ -2257,10 +2262,14 @@ export class Brain {
         if (!this.mowCoverage({ tidied: true }) && !this.mowRoute({ pushable: true, tidied: true })) return 'there is no clear stretch of lawn';
       }
     }
+    if (['goalshot', 'soccertoss'].includes(act) && this.w.yard && !this.yardBall('soccer')) return 'the soccer ball is not out in the yard';
+    if (['hoopshoot', 'hoopdribble'].includes(act) && this.w.yard && !this.yardBall('basketball')) return 'the basketball is not out in the yard';
     if (['guitar', 'riff', 'jamguitar', 'sitguitar'].includes(act) && this.guitars().length && !this.guitars().some((g) => this.standOk(g.name))) return 'there is no room to stand in front of the guitar: move it away from the wall';
     if (act === 'learn' && !this.obj('workstation')) return 'there is no workstation';
-    if (HOME_ACTS[act]) return 'there is nothing here to do that with, or the other robot is using it';
-    return `(${act} is not possible just now)`;
+    if (['peek', 'stargaze', 'darkstargaze'].includes(act) && this.obj('telescope') && !this.scopeAimPlan(act === 'peek' ? 'room' : 'sky')) return 'there is no room to stand at the eyepiece: move the telescope away from the wall and the furniture';
+    if ((act === 'jukebox' || act === 'playrecord') && this.music) return 'the music is already playing';
+    if (HOME_ACTS[act]) return HOME_ACTS[act].some((k) => Object.values(this.w.objects).some((o) => (o.kind || o.name) === k && this.otherUses(o.name))) ? 'the other robot is using it' : 'he can\'t get to it where it is';
+    return null;                     // (no reason that would mean anything to the user: the message just says he can't use it now)
   }
 
   // Activities need their objects (removing one takes the activity away) and the skills he has learned.
@@ -2464,7 +2473,7 @@ export class Brain {
       soccergoal: ['goalshot', 'soccertoss'], basketballhoop: ['hoopshoot', 'hoopdribble'], lawnchair: ['yardsit'], birdbath: ['birdbath'], skyswitch: ['skyswitch'], shed: ['mow'], mower: ['mow'],
       blasterrack: ['rangeshoot'], rangecontroller: ['rangeshoot'], scoreboard: ['rangehang', 'rangeshoot'], ballrack: ['bowl'], bowlscore: ['bowl', 'bowlwatch'],
       recordwall: ['studiodj'], djbooth: ['studiodj', 'studioshow', 'studioparty'], studiomachine: ['studiowatch'],
-    }[name] || (this.obj(name) && this.obj(name).seats ? REST_ACTS : this.obj(name) && this.obj(name).guitar && !this.obj(name).bass ? ['guitar', 'riff', 'jamguitar'] : this.obj(name) && this.obj(name).heldBooks ? ['read'] : this.obj(name) && HOME_KIND_ACTS[this.obj(name).kind] ? HOME_KIND_ACTS[this.obj(name).kind] : this.obj(name) && this.obj(name).sit ? ['read', 'sit', 'sitguitar'] : []);
+    }[name] || (this.obj(name) && this.obj(name).seats ? REST_ACTS : this.obj(name) && this.obj(name).guitar && !this.obj(name).bass ? ['guitar', 'riff', 'jamguitar'] : this.obj(name) && this.obj(name).heldBooks ? ['read'] : kitActs(this.obj(name)) ? kitActs(this.obj(name)) : this.obj(name) && this.obj(name).sit ? ['read', 'sit', 'sitguitar'] : []);
     return list.filter((a) => this.available(a));
   }
 
@@ -2530,7 +2539,7 @@ export class Brain {
       wander: 3, sit: 0.7, sitguitar: 1.1, slouch: 0.5, dancemoves: 1.5, ballroom: 1.5, piano: 1, sitpiano: 1.2, plink: 1.4, dance: 1.8, jam: 0.9, jampiano: 0.5, jamsit: 0.9, lamp: 1.2, mood: 1.1,
       read: 1.8 + unread * 1.8, lookaround: 0.8, sway: 0.7, akimbo: 0.5, ponder: 0.6, wave: 0.7, ball: 2, dribble: 1.1, toss: 1.1, rearrange: 0.7, guitar: 1.6, riff: 1.0, plant: 0.6, jamguitar: 1.5, visit: 0.4,
       takeorder: 40, cook: 35, serve: 45, takepay: 50,
-      build: 2.0, tidytools: 0.4, makebed: 0.6, homesit: 0.8, wardrobe: 0.5, browse: 0.8, study: 0.7, spinglobe: 0.6, playrecord: 0.9, tinker: 0.8, toolsort: 0.5, libclean: 1.0,
+      build: 2.0, tidytools: 0.4, makebed: 0.6, homesit: 0.8, wardrobe: 0.5, browse: 0.8, study: 0.7, spinglobe: 0.6, playrecord: 0.9, tinker: 0.8, toolsort: 0.5, libclean: 1.0, toy: 1.1, arcade: 1.0, jukebox: 0.6, tidyup: 0.5,
       bang: 1.3, drums: 1.6, drumsolo: 1.2, jamdrums: 1.5, scribble: 1.3, paint: 1.6, mixpaint: 1.3, portrait: 1.4,
       peek: 1.3, stargaze: 1.6, darkstargaze: 1.3, scopecare: 0.6, dust: 0.9, dusttop: 1.0,
       yardsit: 0.9, birdbath: 0.7, skyswitch: 0.6, mow: 0.5, yardpoke: 1.1, goalshot: 1.4, soccertoss: 0.8, hoopshoot: 1.4, hoopdribble: 0.9,
@@ -2547,7 +2556,7 @@ export class Brain {
       dance: ['stereo'], dancemoves: ['stereo'], ballroom: ['stereo'], lamp: ['fidget'], mood: ['fidget'], plant: ['fidget'], rearrange: ['fidget'], plink: ['piano'], carryhome: ['chore'],
       ball: ['ball'], dribble: ['ball'], toss: ['ball'], guitar: ['guitar'], riff: ['guitar'], jamguitar: ['guitar', 'stereo'],
       bang: ['drums'], drums: ['drums'], drumsolo: ['drums'], jamdrums: ['drums', 'stereo'],
-      sit: ['rest'], homesit: ['rest'], makebed: ['fidget'], wardrobe: ['fidget'], browse: ['fidget'], study: ['rest'], spinglobe: ['fidget'], playrecord: ['stereo'], tinker: ['fidget'], toolsort: ['fidget'], libclean: ['chore'], sitguitar: ['guitar'], slouch: ['drums', 'rest'],
+      sit: ['rest'], homesit: ['rest'], makebed: ['fidget'], wardrobe: ['fidget'], browse: ['fidget'], study: ['rest'], spinglobe: ['fidget'], playrecord: ['stereo'], tinker: ['fidget'], toolsort: ['fidget'], libclean: ['chore'], toy: ['toy'], arcade: ['toy'], jukebox: ['stereo'], tidyup: ['chore'], sitguitar: ['guitar'], slouch: ['drums', 'rest'],
       scribble: ['paint'], paint: ['paint'], mixpaint: ['paint'], portrait: ['paint'],
       peek: ['scope'], stargaze: ['scope'], darkstargaze: ['scope'], scopecare: ['scope', 'fidget'], dust: ['fidget'], dusttop: ['fidget'],
       rangeshoot: ['range'], rangehang: ['range'], rangefool: ['range'], bowl: ['range'], bowlwatch: ['range'], studiodj: ['stereo'], playbass: ['studiomusic'], playkeys: ['studiomusic'], playxylo: ['studiomusic'], playbongos: ['studiomusic'], studioshow: ['stereo'], studioparty: ['stereo'], studiowatch: ['fidget'], yardsit: ['rest'], birdbath: ['fidget'], skyswitch: ['fidget'], mow: ['chore'], yardpoke: ['yardball'], goalshot: ['yardball'], soccertoss: ['yardball'], hoopshoot: ['yardball'], hoopdribble: ['yardball'],
@@ -2556,6 +2565,7 @@ export class Brain {
     const lastTags = [this.last, this.prev].flatMap((n) => tags[n] || []);
     this.restCleanup();                                      // cut short in the Restaurant: the dish goes back, the order waits again
     this.shelfCleanup();                                     // cut short carrying a bookshelf to the Library: it is put together again (before workCleanup drops the flat pack)
+    this.toyCleanup();                                       // cut short at the arcade: the game is let go of (toybrain.js)
     this.recordCleanup();                                    // cut short while a record was playing on the record player: the arm lifts, the music stops
     this.homeCleanup();                                      // cut short carrying a built thing out of the Workshop to its room: the same
     this.pinCleanup();                                       // cut short putting new pins on a lane of the Bowling Alley
@@ -2588,7 +2598,7 @@ export class Brain {
         name = pick(fresh.length ? fresh : opts);
         if (PLANT_NAMES.includes(L.name)) this.forcePlant = L.name;
         if (this.obj(L.name) && this.obj(L.name).sit) this.activeChair = L.name;
-        if (this.obj(L.name) && HOME_KIND_ACTS[this.obj(L.name).kind]) this.homeWanted = L.name;
+        if (homeActsOf(this.obj(L.name))) this.homeWanted = L.name;
         if (this.obj(L.name) && this.obj(L.name).heldBooks) this.readFrom = L.name;
       }
     }
@@ -2684,6 +2694,16 @@ export class Brain {
     return false;
   }
 
+  // "the mirror ball", "the coffee table" ... for a message about one of the things in the room (what the user calls it, not its name in the code)
+  thingName(name) {
+    const o = this.obj(name), k = o ? o.kind || o.name : name;
+    const t = TOYS[k] || TIDY[k] || { arcade: 'arcade', jukebox: 'jukebox', bowlingpins: 'pins', bowlingball: 'bowling ball', pinsetter: 'pinsetter', soccergoal: 'soccer goal', basketballhoop: 'basketball hoop',
+      woodfactory: 'Wood Factory', metalfactory: 'Metal Factory', botprinter: 'Build a Bot machine', lawnchair: 'lawn chair', birdbath: 'bird bath', skyswitch: 'sky switch', footstool: 'foot stool' }[k];
+    if (typeof t === 'string') return `the ${t}`;
+    if (t) return `the ${t.thing}`;
+    return /^[a-z]{3,10}$/.test(k) && !/score|machine|rack|wall|booth/.test(k) ? `the ${k}` : 'that';        // (the piano, the telescope ...)
+  }
+
   // The user asked GUY to use something right now. Returns { ok, message }.
   interact(name) {
     const k = (id) => this.skills.has(id);
@@ -2713,7 +2733,7 @@ export class Brain {
       blasterrack: ['rangeshoot'], rangecontroller: ['rangeshoot'], scoreboard: ['rangehang', 'rangeshoot'], ballrack: ['bowl'], bowlscore: ['bowl', 'bowlwatch'],
       recordwall: ['studiodj'], djbooth: ['studiodj', 'studioshow', 'studioparty'], studiomachine: ['studiowatch'],
       bass: ['playbass'], keyboard: ['playkeys'], xylophone: ['playxylo'], bongos: ['playbongos'],
-    }[name] || (this.obj(name) && HOME_KIND_ACTS[this.obj(name).kind] ? HOME_KIND_ACTS[this.obj(name).kind] : this.obj(name) && this.obj(name).kind === 'footstool' ? ['dusttop'] : this.obj(name) && this.obj(name).guitar && !this.obj(name).bass ? (k('guitar') ? (this.music ? ['jamguitar'] : ['guitar']) : []) : undefined);
+    }[name] || (kitActs(this.obj(name)) ? kitActs(this.obj(name)) : this.obj(name) && this.obj(name).kind === 'footstool' ? ['dusttop'] : this.obj(name) && this.obj(name).guitar && !this.obj(name).bass ? (k('guitar') ? (this.music ? ['jamguitar'] : ['guitar']) : []) : undefined);
     if (this.obj(name) && this.obj(name).guitar && !this.obj(name).bass) this.wantGuitar = name;
     if (name === 'botprinter') {
       const g = this.w.gal;
@@ -2744,7 +2764,7 @@ export class Brain {
       const busy = (tries || []).some((a) => this.busyElsewhere(this.exclusiveFor(a)));
       if (busy) return { ok: false, message: `${this.isGal ? 'GUY' : 'GAL'} is using that right now. Try again in a moment.` };
       const why = (tries || []).map((a) => this.whyNot(a)).filter(Boolean)[0];
-      return { ok: false, message: `${this.isGal ? 'GAL' : 'GUY'} can't do anything with that right now${why ? `: ${why}` : ''}.` };
+      return { ok: false, message: `${this.isGal ? 'GAL' : 'GUY'} can't use ${this.thingName(name)} just now${why ? `: ${why}` : ''}.` };
     }
     if (this.dryRun) return { ok: true, message: 'On it!' };            // (refusal(): only the checks)
     if (name === 'workstation') this.learnPlan = null;                  // (the panel, not an order)
@@ -2754,7 +2774,7 @@ export class Brain {
     this.pendingActivity = pick(act);
     this.readFrom = this.pendingActivity === 'read' && this.obj(name) && this.obj(name).heldBooks ? name : null;       // at the shelf he was pointed at
     this.pendingChair = this.obj(name) && this.obj(name).sit && !this.obj(name).homeSeat ? name : null;     // sit on the chair he was pointed at
-    this.pendingHome = this.obj(name) && HOME_KIND_ACTS[this.obj(name).kind] ? name : null;                   // use the bed, shelf or wardrobe he was pointed at
+    this.pendingHome = homeActsOf(this.obj(name)) ? name : null;                   // use the bed, shelf or wardrobe he was pointed at
     return { ok: true, message: 'On it!' };
   }
 
@@ -3296,6 +3316,7 @@ export class Brain {
     } else {
       s.q ??= [...s.fx.song.events];
       const start = s.fx.startAt ?? 0.8, f = s.t >= start ? this.tempoToFollow('piano') : null;
+      if (s.t < start && this.keptTime && this.keptTime.inst === 'piano') this.keptTime = null;     // (not playing yet: the last piece's timing is over, not kept)
       if (f) {                                   // a skilled player starts the piece on a downbeat of the tempo she is following and plays it at that tempo
         s.follow0 ??= Math.ceil(f.beat);
         beat = (f.beat - s.follow0) * (f.bl > 0 ? (s.fx.song.bpm * f.bl) / 60 : 1);
@@ -3764,6 +3785,7 @@ function angDiff(a, b) {
 installHobbies(Brain, POSES, { sitLegs, env, smooth, clamp, lerp, rand, pick, makeGrid, cellBlocked, INFLATE });
 installWorkshop(Brain, POSES, { smooth, clamp, lerp, rand, pick });
 installHome(Brain, POSES, { rand, pick });
+installToys(Brain, POSES, { rand, pick, squat });
 installLibrary(Brain);
 installYard(Brain, POSES, { clamp, rand, pick, makeGrid, cellBlocked, INFLATE, findPath });
 installRange(Brain, POSES, { pick });

@@ -12,6 +12,7 @@ import { buildBowlShell, makeBowlBuilders } from './bowlobjects.js';
 import { buildStudioShell, STUDIO } from './studioobjects.js';
 import { makeInstrumentBuilders } from './instruments.js';
 import { makeHomeBuilders } from './homeobjects.js';
+import { makeArcadeGame, W as ARCADE_W, H as ARCADE_H } from './arcade.js';
 
 // Every room is the same square (GUY's own and every added one): the floor plan is a 3 x 3 grid of them, so no room ever sticks out past its
 // neighbour or leaves a gap beside it, and any two rooms that touch share a whole wall.
@@ -1183,13 +1184,25 @@ export function buildRoom(scene) {
     for (const [x2, y, c] of [[-0.25, 0.44, 0xd9534f], [-0.2, 0.44, 0x4a90d9], [0.2, 0.8, 0x6bbf59], [0.3, 0.8, 0xe9c46a]]) box(0.06, 0.2, 0.16, mat(c), x2, y + 0.1, 0.0, g);
   });
   // ---- easter eggs: built only once the right things stand in the room (see EGGS in workshop.js). Each has a slow idle animation (`group.userData.tick(dt)`).
+  // A robot playing with one of these (toybrain.js) calls `group.userData.poke(kind)`: the thing reacts for a moment (spins faster, squeaks,
+  // hops ...). `pokeable(g)` gives the tick a clock of that: `{ k, t }`, the kind of poke and the seconds since it (big when never poked), and
+  // `amp(d)`, 1 at the poke falling to 0 after `d` seconds. It runs on the frame time the room passes in, so the QA fast-forward plays it.
+  const pokeable = (g) => {
+    const p = { k: null, t: 99, n: 0 };
+    g.userData.poke = (k = 'poke') => { p.k = k; p.t = 0; p.n++; };
+    g.userData.poked = () => p;
+    const f = (dt) => { p.t += Math.min(0.25, dt || 0); return p; };
+    f.amp = (d) => (p.t < d ? 1 - p.t / d : 0);
+    return f;
+  };
   const buildMirrorBall = (name, x = 0, z = 0) => makeObject(name, x, z, 0.5, 0.5, 1.7, 'light', (g) => {
     const steel = mat(0x8a8f98, { metalness: 0.6, roughness: 0.4 });
     box(0.36, 0.04, 0.36, steel, 0, 0.02, 0, g);
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.2, 10), steel); pole.position.set(0, 0.64, 0); g.add(pole);
     const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(0.24, 1), new THREE.MeshStandardMaterial({ color: 0xe8eef6, emissive: 0x6d7a8c, emissiveIntensity: 0.6, metalness: 0.25, roughness: 0.15, flatShading: true }));
     ball.position.set(0, 1.45, 0); g.add(ball);
-    g.userData.tick = (dt) => { ball.rotation.y += dt * 0.9; };
+    const pk = pokeable(g);
+    g.userData.tick = (dt) => { pk(dt); ball.rotation.y += (dt || 0) * (0.9 + 7 * pk.amp(6)); ball.material.emissiveIntensity = 0.6 + 0.6 * pk.amp(6); };      // (given a spin: it whirls, and slows down again)
   });
   const buildTrophy = (name, x = 0, z = 0) => makeObject(name, x, z, 0.4, 0.4, 1.05, 'light', (g) => {
     const gold = mat(0xf0c43c, { emissive: 0x7a5a10, emissiveIntensity: 0.7, metalness: 0.25, roughness: 0.3 }), wood = mat(0x7a4a26);
@@ -1197,7 +1210,8 @@ export function buildRoom(scene) {
     const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.3, 12), gold); stem.position.set(0, 0.5, 0); g.add(stem);
     const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.07, 0.26, 16, 1, true), gold); cup.position.set(0, 0.78, 0); g.add(cup);
     const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.09), gold); star.position.set(0, 1.0, 0); g.add(star);
-    g.userData.tick = (dt) => { star.rotation.y += dt * 1.4; star.position.y = 1.0 + Math.sin(performance.now() / 600) * 0.02; };
+    const pk = pokeable(g);
+    g.userData.tick = (dt) => { pk(dt); const a = pk.amp(4); star.rotation.y += (dt || 0) * (1.4 + 5 * a); star.position.y = 1.0 + Math.sin(performance.now() / 600) * 0.02 + 0.05 * a; gold.emissiveIntensity = 0.7 + 0.9 * a; };      // (polished: it gleams)
   });
   const buildLavaLamp = (name, x = 0, z = 0) => makeObject(name, x, z, 0.34, 0.34, 1.0, 'light', (g) => {
     const wood = mat(0x4a2f1b), cap = mat(0x2b2b2b, { metalness: 0.5, roughness: 0.4 });
@@ -1206,7 +1220,9 @@ export function buildRoom(scene) {
     glass.position.set(0, 0.7, 0); g.add(glass);
     const top = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.05, 14), cap); top.position.set(0, 0.92, 0); g.add(top);
     const blobs = [0, 1, 2].map((i) => { const b = new THREE.Mesh(new THREE.SphereGeometry(0.045 + i * 0.008, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffd23f })); g.add(b); return b; });
-    g.userData.tick = (dt) => { const t = performance.now() / 1000; blobs.forEach((b, i) => { b.position.set(Math.sin(t * 0.7 + i * 2) * 0.03, 0.58 + (0.5 + 0.5 * Math.sin(t * 0.5 + i * 2.1)) * 0.24, Math.cos(t * 0.6 + i) * 0.03); }); };
+    const pk = pokeable(g), lit = { on: true };
+    g.userData.light = (on) => { lit.on = on; glass.material.emissiveIntensity = on ? 0.5 : 0.05; blobs.forEach((b) => b.material.color.setHex(on ? 0xffd23f : 0x8a6a2a)); };      // (switched off and on again at its switch)
+    g.userData.tick = (dt) => { pk(dt); const t = performance.now() / 1000, sp = lit.on ? 1 + 2 * pk.amp(5) : 0.15; blobs.forEach((b, i) => { b.position.set(Math.sin(t * 0.7 * sp + i * 2) * 0.03, 0.58 + (0.5 + 0.5 * Math.sin(t * 0.5 * sp + i * 2.1)) * 0.24, Math.cos(t * 0.6 + i) * 0.03); }); };
   });
   // ---- ten more easter eggs (same rules as the three above; see EGGS in workshop.js)
   const sph = (r, c, o = {}) => new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), new THREE.MeshStandardMaterial({ color: c, roughness: 0.5, ...o }));
@@ -1218,19 +1234,22 @@ export function buildRoom(scene) {
     at(cyl(0.16, 0.2, 0.3, 0x3a2a55), 0, 0.15, 0, g); at(cyl(0.2, 0.2, 0.03, 0xe0b02e, glow(0x7a5a10, 0.7)), 0, 0.32, 0, g);
     at(sph(0.2, 0x8a5cff, glow(0x6a3cff, 0.5, 0.7)), 0, 0.55, 0, g);
     const core = at(sph(0.07, 0xffffff, glow(0xd0c0ff, 1.2)), 0, 0.55, 0, g);
-    g.userData.tick = () => { const t = performance.now() / 700; core.scale.setScalar(0.8 + 0.3 * Math.sin(t)); core.position.x = Math.sin(t * 0.6) * 0.05; };
+    const pk = pokeable(g);
+    g.userData.tick = (dt) => { pk(dt); const a = pk.amp(6), t = performance.now() / 700; core.scale.setScalar(0.8 + 0.3 * Math.sin(t) + 0.6 * a); core.position.x = Math.sin(t * (0.6 + 3 * a)) * (0.05 + 0.06 * a); core.material.emissiveIntensity = 1.2 + 1.5 * a; };      // (hands round it: it swirls and glows)
   });
   const buildRubberDuck = (name, x = 0, z = 0) => makeObject(name, x, z, 0.36, 0.36, 0.45, 'light', (g) => {
     const duck = new THREE.Group(); g.add(duck);
     at(sph(0.16, 0xffd23f), 0, 0.17, 0, duck).scale.set(1.15, 0.85, 0.9); at(sph(0.1, 0xffd23f), 0.1, 0.34, 0, duck);
     at(cone(0.035, 0.09, 0xff8a1f), 0.2, 0.33, 0, duck).rotation.z = -Math.PI / 2; at(sph(0.015, 0x111111), 0.15, 0.37, 0.06, duck); at(sph(0.015, 0x111111), 0.15, 0.37, -0.06, duck);
-    g.userData.tick = () => { const t = performance.now() / 900; duck.position.y = Math.sin(t) * 0.02; duck.rotation.z = Math.sin(t * 0.8) * 0.06; };
+    const pk = pokeable(g);
+    g.userData.tick = (dt) => { const P = pk(dt), t = performance.now() / 900, sq = P.t < 0.35 ? Math.sin((P.t / 0.35) * Math.PI) : 0; duck.position.y = Math.sin(t) * 0.02; duck.rotation.z = Math.sin(t * 0.8) * 0.06 + 0.2 * pk.amp(1.5) * Math.sin(P.t * 18); duck.scale.set(1 + 0.15 * sq, 1 - 0.3 * sq, 1 + 0.15 * sq); };      // (squeezed: squashed flat for a moment)
   });
   const buildGnome = (name, x = 0, z = 0) => makeObject(name, x, z, 0.34, 0.34, 0.75, 'light', (g) => {
     const gn = new THREE.Group(); g.add(gn);
     at(cyl(0.12, 0.14, 0.3, 0x2f6fd0), 0, 0.15, 0, gn); at(sph(0.09, 0xf3c9a0), 0, 0.37, 0, gn);
     at(cone(0.1, 0.1, 0xf5f5f5), 0, 0.31, 0.06, gn).rotation.x = Math.PI; at(cone(0.11, 0.3, 0xd9342b), 0, 0.57, 0, gn);
-    g.userData.tick = () => { gn.rotation.z = Math.sin(performance.now() / 1100) * 0.05; };
+    const pk = pokeable(g);
+    g.userData.tick = (dt) => { const P = pk(dt); gn.rotation.z = Math.sin(performance.now() / 1100) * 0.05 + 0.18 * pk.amp(2.5) * Math.sin(P.t * 9); };      // (a pat on the hat: he rocks about)
   });
   const buildToyRocket = (name, x = 0, z = 0) => makeObject(name, x, z, 0.36, 0.36, 0.95, 'light', (g) => {
     const rk = new THREE.Group(); g.add(rk);
@@ -1238,13 +1257,29 @@ export function buildRoom(scene) {
     at(cyl(0.09, 0.09, 0.5, 0xf2f2f2), 0, 0.5, 0, rk); at(cone(0.09, 0.2, 0xd9342b), 0, 0.85, 0, rk);
     for (const a of [0, 1, 2]) { const f = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.18, 0.12), new THREE.MeshStandardMaterial({ color: 0xd9342b })); f.position.set(Math.cos(a * 2.09) * 0.12, 0.34, Math.sin(a * 2.09) * 0.12); f.rotation.y = -a * 2.09; rk.add(f); }
     at(sph(0.05, 0xffd23f, glow(0xff9a1f, 1)), 0, 0.2, 0, rk);
-    g.userData.tick = () => { const t = performance.now() / 1000; rk.position.y = Math.abs(Math.sin(t * 1.5)) * 0.04; rk.rotation.z = Math.sin(t * 30) * 0.006; };
+    const pk = pokeable(g);
+    g.userData.tick = (dt) => { const P = pk(dt), t = performance.now() / 1000, up = P.t < 1.6 ? Math.sin((P.t / 1.6) * Math.PI) : 0; rk.position.y = Math.abs(Math.sin(t * 1.5)) * 0.04 + 0.55 * up; rk.rotation.z = Math.sin(t * 30) * (0.006 + 0.03 * up); };      // (launched: up it goes and down again)
   });
   const buildArcade = (name, x = 0, z = 0) => makeObject(name, x, z, 0.55, 0.5, 1.5, 'medium', (g) => {
     box(0.55, 1.3, 0.45, mat(0x2b2f6b), 0, 0.65, 0, g); box(0.5, 0.06, 0.2, mat(0x1a1c3f), 0, 0.82, 0.24, g);
-    const scr = at(new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.3), new THREE.MeshBasicMaterial({ color: 0x35f2a0 })), 0, 1.08, 0.231, g);
-    at(sph(0.025, 0xff3b3b), -0.1, 0.87, 0.28, g); at(sph(0.02, 0xffd23f), 0.1, 0.86, 0.28, g); box(0.55, 0.14, 0.45, mat(0xe0453b), 0, 1.37, 0, g);
-    g.userData.tick = () => { const t = Math.floor(performance.now() / 350) % 3; scr.material.color.setHex([0x35f2a0, 0x35a0f2, 0xf2d035][t]); };
+    // the screen is a little game (src/arcade.js, "Robo Blaster"): its attract screen cycles through the colours the screen always had; a robot
+    // at the controls (toybrain.js) plays it, and the joystick and the fire button move under his hands
+    const canvas = document.createElement('canvas'); canvas.width = ARCADE_W; canvas.height = ARCADE_H;
+    const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace; tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.LinearFilter;
+    at(new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.3), new THREE.MeshBasicMaterial({ map: tex })), 0, 1.08, 0.231, g);
+    const stick = new THREE.Group(); stick.position.set(-0.1, 0.85, 0.27); g.add(stick);
+    at(cyl(0.008, 0.008, 0.07, 0x222222), 0, 0.035, 0, stick); at(sph(0.025, 0xff3b3b), 0, 0.075, 0, stick);
+    const button = at(sph(0.02, 0xffd23f), 0.1, 0.86, 0.28, g); box(0.55, 0.14, 0.45, mat(0xe0453b), 0, 1.37, 0, g);
+    const game = makeArcadeGame(canvas);
+    game.onSound = (k) => { if (game.quiet) return; if (k === 'shot') sfx('blip', 0); else if (k === 'hit') sfx('blip', 1); else if (k === 'lost') sfx('blip', 2); else if (k === 'over') sfx('blip', 3); };
+    g.userData.arcade = game;
+    g.userData.stickTop = () => stick.localToWorld(new THREE.Vector3(0, 0.075, 0));
+    g.userData.buttonTop = () => button.localToWorld(new THREE.Vector3(0, 0.02, 0));
+    g.userData.tick = (dt) => {
+      if (game.update(dt)) tex.needsUpdate = true;
+      stick.rotation.z += ((game.mode === 'play' ? -game.input.x * 0.45 : 0) - stick.rotation.z) * Math.min(1, (dt || 0) * 14);       // (the stick leans the way the ship goes)
+      button.position.y = 0.86 - (game.mode === 'play' && game.input.fire ? 0.008 : 0);
+    };
   });
   const buildPiggyBank = (name, x = 0, z = 0) => makeObject(name, x, z, 0.36, 0.3, 0.5, 'light', (g) => {
     const pig = at(new THREE.Group(), 0, 0, 0, g);
@@ -1252,30 +1287,35 @@ export function buildRoom(scene) {
     for (const sz of [-0.07, 0.07]) at(cone(0.04, 0.07, 0xf07aa8, 4), 0.1, 0.36, sz, pig);
     for (const sx of [-0.09, 0.09]) for (const sz of [-0.07, 0.07]) at(cyl(0.03, 0.03, 0.08, 0xf07aa8), sx, 0.04, sz, pig);
     const coin = at(cyl(0.05, 0.05, 0.01, 0xffd23f, glow(0x7a5a10, 0.8), 18), 0, 0.5, 0, g); coin.rotation.x = Math.PI / 2;
-    g.userData.tick = () => { const t = (performance.now() / 1400) % 1; coin.position.y = 0.55 - t * 0.2; coin.rotation.z = t * 6; coin.visible = t < 0.9; };
+    const pk = pokeable(g);
+    g.userData.tick = (dt) => { const P = pk(dt), t = (performance.now() / 1400) % 1; coin.position.y = 0.55 - t * 0.2; coin.rotation.z = t * 6; coin.visible = t < 0.9; pig.rotation.z = 0.12 * pk.amp(1.2) * Math.sin(P.t * 20); pig.position.y = 0.04 * pk.amp(1.2); };      // (a coin dropped in: he jiggles)
   });
   const buildGrandfatherClock = (name, x = 0, z = 0) => makeObject(name, x, z, 0.45, 0.32, 1.9, 'heavy', (g) => {
     const wd = mat(0x6b3f1f); box(0.45, 0.25, 0.32, wd, 0, 0.125, 0, g); box(0.34, 1.2, 0.28, wd, 0, 0.85, 0, g); box(0.44, 0.35, 0.32, wd, 0, 1.68, 0, g);
     at(cyl(0.12, 0.12, 0.02, 0xf6f1e0, {}, 24), 0, 1.68, 0.165, g).rotation.x = Math.PI / 2;
     const pend = new THREE.Group(); pend.position.set(0, 1.35, 0.15); g.add(pend); at(cyl(0.008, 0.008, 0.5, 0xc9a227), 0, -0.25, 0, pend); at(cyl(0.05, 0.05, 0.02, 0xe0b02e, glow(0x7a5a10, 0.7), 18), 0, -0.5, 0, pend).rotation.x = Math.PI / 2;
     const hand = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.08, 0.006), new THREE.MeshStandardMaterial({ color: 0x111111 })); hand.geometry.translate(0, 0.04, 0); hand.position.set(0, 1.68, 0.18); g.add(hand);
-    g.userData.tick = () => { const t = performance.now() / 1000; pend.rotation.z = Math.sin(t * Math.PI) * 0.35; hand.rotation.z = -t * 0.5; };
+    const pk = pokeable(g);
+    g.userData.tick = (dt) => { pk(dt); const t = performance.now() / 1000; pend.rotation.z = Math.sin(t * Math.PI) * (0.35 + 0.15 * pk.amp(8)); hand.rotation.z = -t * 0.5; };      // (wound up: a bigger swing)
   });
   const buildBubbleMachine = (name, x = 0, z = 0) => makeObject(name, x, z, 0.4, 0.4, 1.1, 'light', (g) => {
     box(0.4, 0.3, 0.3, mat(0x2fa7d9), 0, 0.15, 0, g); at(cyl(0.1, 0.1, 0.04, 0xdddddd, { metalness: 0.3 }, 20), 0, 0.32, 0.05, g).rotation.x = Math.PI / 2;
     const bub = [0, 1, 2, 3, 4].map((i) => at(sph(0.04 + 0.01 * (i % 3), 0xbfeaff, { transparent: true, opacity: 0.45, roughness: 0.1 }), 0, 0.5, 0.05, g));
-    g.userData.tick = () => { const t = performance.now() / 1000; bub.forEach((b, i) => { const u = (t * 0.35 + i * 0.2) % 1; b.position.set(Math.sin(t + i * 2) * 0.1, 0.38 + u * 0.7, 0.05 + u * 0.03); b.visible = u < 0.95; }); };
+    const pk = pokeable(g);
+    g.userData.tick = (dt) => { pk(dt); const a = pk.amp(6), t = performance.now() / 1000; bub.forEach((b, i) => { const u = (t * (0.35 + 0.6 * a) + i * 0.2) % 1; b.position.set(Math.sin(t + i * 2) * (0.1 + 0.15 * a), 0.38 + u * (0.7 + 0.5 * a), 0.05 + u * (0.03 + 0.3 * a)); b.visible = u < 0.95; }); };      // (switched to full: a stream of bubbles out over the front)
   });
   const buildSnowGlobe = (name, x = 0, z = 0) => makeObject(name, x, z, 0.4, 0.4, 0.8, 'light', (g) => {
     at(cyl(0.18, 0.22, 0.14, 0x7a4a26), 0, 0.07, 0, g); at(sph(0.2, 0xcfeaff, { transparent: true, opacity: 0.35, roughness: 0.05 }), 0, 0.36, 0, g);
     at(cone(0.06, 0.16, 0x2f7d3a), 0, 0.23, 0, g); at(cone(0.04, 0.12, 0x2f7d3a), 0, 0.33, 0, g);
     const fl = Array.from({ length: 12 }, (_, i) => at(sph(0.012, 0xffffff, { emissive: 0xffffff, emissiveIntensity: 0.6 }), 0, 0.4, 0, g));
-    g.userData.tick = () => { const t = performance.now() / 1000; fl.forEach((f, i) => { const u = (t * 0.25 + i * 0.083) % 1; const a = i * 2.4 + t * 0.8; f.position.set(Math.cos(a) * 0.12 * (1 - u * 0.2), 0.52 - u * 0.28, Math.sin(a) * 0.12 * (1 - u * 0.2)); }); };
+    const pk = pokeable(g);
+    g.userData.tick = (dt) => { pk(dt); const k = pk.amp(5), t = performance.now() / 1000; fl.forEach((f, i) => { const u = (t * (0.25 - 0.18 * k) + i * 0.083) % 1; const a = i * 2.4 + t * (0.8 + 6 * k); f.position.set(Math.cos(a) * 0.12 * (1 - u * 0.2), 0.52 - u * 0.28 * (1 - 0.6 * k), Math.sin(a) * 0.12 * (1 - u * 0.2)); }); };      // (shaken: a blizzard that slowly settles)
   });
   const buildPetRock = (name, x = 0, z = 0) => makeObject(name, x, z, 0.36, 0.3, 0.3, 'light', (g) => {
     at(sph(0.15, 0x8c8c94, { roughness: 1 }), 0, 0.13, 0, g).scale.set(1.2, 0.85, 1); const eyes = [-0.05, 0.05].map((sx) => { const e = at(sph(0.035, 0xffffff), sx, 0.2, 0.13, g); const pu = sph(0.015, 0x111111); pu.position.set(0, 0, 0.025); e.add(pu); return e; });
     box(0.1, 0.012, 0.01, mat(0x333333), 0, 0.1, 0.15, g);
-    g.userData.tick = () => { const t = performance.now() / 900; eyes.forEach((e) => { e.children[0].position.x = Math.sin(t) * 0.012; e.children[0].position.y = Math.cos(t * 0.7) * 0.01; }); };
+    const pk = pokeable(g);
+    g.userData.tick = (dt) => { pk(dt); const a = pk.amp(4), t = performance.now() / 900; eyes.forEach((e) => { e.children[0].position.x = Math.sin(t) * 0.012 * (1 - a); e.children[0].position.y = Math.cos(t * 0.7) * 0.01 * (1 - a) + 0.012 * a; }); };      // (patted: it looks up, very pleased)
   });
   // ---- Printed by the Build a Bot machine (src/botobjects.js; recipes with line 'bot' in workshop.js). Same rules as the easter eggs above: a slow
   // idle animation in `group.userData.tick`. The last four are combinations of other things.
@@ -1291,7 +1331,8 @@ export function buildRoom(scene) {
     at(cone(0.05, 0.12, 0x2f8f4a), -0.25, 0.46, -0.08, g); at(cone(0.04, 0.09, 0x2f8f4a), -0.19, 0.44, 0.05, g);
     const fish = [0xff8a1f, 0xffd23f].map((c) => { const f = new THREE.Group(); at(sph(0.04, c), 0, 0, 0, f).scale.set(1.5, 1, 0.6); at(cone(0.03, 0.05, c, 4), -0.07, 0, 0, f).rotation.z = Math.PI / 2; g.add(f); return f; });
     const bub = [0, 1, 2].map(() => at(sph(0.012, 0xffffff, { transparent: true, opacity: 0.6 }), 0.28, 0.5, 0.05, g));
-    g.userData.tick = () => { const t = nowS(); fish.forEach((f, i) => { const u = Math.sin(t * (0.6 + i * 0.25) + i * 2); f.position.set(u * 0.26, 0.56 + i * 0.07 + Math.sin(t * 1.3 + i) * 0.02, (i - 0.5) * 0.1); f.rotation.y = Math.cos(t * (0.6 + i * 0.25) + i * 2) > 0 ? 0 : Math.PI; }); bub.forEach((b, i) => { const k = (t * 0.4 + i * 0.33) % 1; b.position.y = 0.42 + k * 0.34; b.visible = k < 0.95; }); };
+    const pk = pokeable(g), food = [0, 1, 2, 3, 4].map((i) => at(sph(0.008, 0xc8902a), (i - 2) * 0.05, 0.79, 0.02 * (i % 2), g)); food.forEach((f) => { f.visible = false; });
+    g.userData.tick = (dt) => { const P = pk(dt), fed = pk.amp(6); food.forEach((f, i) => { f.visible = fed > 0.05 && P.k === 'feed'; f.position.y = 0.79 - Math.min(0.3, P.t * (0.04 + i * 0.01)); }); const t = nowS(); fish.forEach((f, i) => { const u = Math.sin(t * (0.6 + i * 0.25) + i * 2); f.position.set(u * 0.26 * (1 - 0.6 * fed), 0.56 + i * 0.07 + Math.sin(t * 1.3 + i) * 0.02 + (0.7 - 0.56 - i * 0.07) * fed, (i - 0.5) * 0.1); f.rotation.y = Math.cos(t * (0.6 + i * 0.25) + i * 2) > 0 ? 0 : Math.PI; }); bub.forEach((b, i) => { const k = (t * 0.4 + i * 0.33) % 1; b.position.y = 0.42 + k * 0.34; b.visible = k < 0.95; }); };
   });
   const buildRubberChicken = (name, x = 0, z = 0) => makeObject(name, x, z, 0.34, 0.34, 0.55, 'light', (g) => {
     const ck = new THREE.Group(); g.add(ck);
@@ -1299,7 +1340,8 @@ export function buildRoom(scene) {
     at(cone(0.03, 0.09, 0xff8a1f), 0.2, 0.37, 0, ck).rotation.z = -Math.PI / 2; at(sph(0.025, 0xe0332b), 0.1, 0.48, 0, ck).scale.set(0.8, 1.4, 0.5);
     at(sph(0.014, 0x111111), 0.15, 0.4, 0.06, ck); at(sph(0.014, 0x111111), 0.15, 0.4, -0.06, ck);
     for (const sz of [-0.04, 0.04]) { at(cyl(0.012, 0.012, 0.1, 0xff8a1f), 0, 0.05, sz, ck); box(0.07, 0.015, 0.03, mat(0xff8a1f), 0.02, 0.01, sz, ck); }
-    g.userData.tick = () => { const t = nowS() * 1.43; ck.rotation.z = Math.sin(t) * 0.07; ck.rotation.x = Math.sin(t * 0.8 + 1) * 0.05; };
+    const pk = pokeable(g);
+    g.userData.tick = (dt) => { const P = pk(dt), t = nowS() * 1.43, sq = P.t < 0.35 ? Math.sin((P.t / 0.35) * Math.PI) : 0; ck.rotation.z = Math.sin(t) * 0.07 + 0.25 * pk.amp(1.5) * Math.sin(P.t * 16); ck.rotation.x = Math.sin(t * 0.8 + 1) * 0.05; ck.scale.set(1 + 0.12 * sq, 1 - 0.28 * sq, 1 + 0.12 * sq); };      // (squeezed: a squawk and a flop about)
   });
   const buildFlamingo = (name, x = 0, z = 0) => makeObject(name, x, z, 0.32, 0.32, 1.0, 'light', (g) => {
     const fl = new THREE.Group(); g.add(fl);
@@ -1308,7 +1350,8 @@ export function buildRoom(scene) {
     at(sph(0.045, 0xff7aa8), 0.18, 1.0, 0, fl); at(cone(0.02, 0.09, 0x222222), 0.25, 0.98, 0, fl).rotation.z = -Math.PI / 2 - 0.4;
     at(cyl(0.008, 0.008, 0.3, 0xff7aa8), -0.04, 0.46, 0, fl).rotation.z = 0.5; box(0.2, 0.02, 0.1, mat(0xff7aa8), 0, 0.01, 0, g);
     at(sph(0.012, 0x111111), 0.2, 1.02, 0.03, fl);
-    g.userData.tick = () => { fl.rotation.z = Math.sin(nowS() / 1.2) * 0.04; };
+    const pk = pokeable(g);
+    g.userData.tick = (dt) => { const P = pk(dt); fl.rotation.z = Math.sin(nowS() / 1.2) * 0.04 * (P.t < 6 ? Math.min(1, P.t / 6) : 1) + 0.2 * pk.amp(1.2) * Math.sin(P.t * 10); };      // (straightened: a wobble, then it stands still for a while)
   });
   const buildNeonSign = (name, x = 0, z = 0) => makeObject(name, x, z, 0.9, 0.2, 1.3, 'light', (g) => {
     const dark = mat(0x23262d);
@@ -1319,7 +1362,9 @@ export function buildRoom(scene) {
     const tube = (w, h, px, py) => { const t = box(w, h, 0.03, mat(0xff2a8a, { emissive: 0xff2a8a, emissiveIntensity: 1.2 }), px, py, 0.01, g); tubes.push(t); return t; };
     tube(0.7, 0.03, 0, 1.15); tube(0.7, 0.03, 0, 0.75); tube(0.03, 0.4, -0.35, 0.95); tube(0.03, 0.4, 0.35, 0.95); tube(0.4, 0.03, 0, 0.95);
     const cols = [0xff2a8a, 0x2af0ff, 0x7bff3a, 0xffd23f];
-    g.userData.tick = () => { const t = nowS(), c = cols[Math.floor(t / 1.4) % cols.length]; tubes.forEach((m, i) => { const on = Math.sin(t * 9 + i * 7) > -0.92; m.material.color.setHex(on ? c : 0x331122); m.material.emissive.setHex(on ? c : 0x000000); }); };
+    const pk = pokeable(g), sw = { on: true };
+    g.userData.light = (on) => { sw.on = on; };       // (its switch: a robot flicks it off and on again)
+    g.userData.tick = (dt) => { const P = pk(dt), t = nowS(), c = cols[Math.floor(t / 1.4) % cols.length], warm = sw.on && P.k === 'light' && P.t < 1.2; tubes.forEach((m, i) => { const on = sw.on && (warm ? Math.sin(P.t * 40 + i * 5) > 0.2 - P.t : Math.sin(t * 9 + i * 7) > -0.92); m.material.color.setHex(on ? c : 0x331122); m.material.emissive.setHex(on ? c : 0x000000); }); };
   });
   const buildAquarium = (name, x = 0, z = 0) => makeObject(name, x, z, 1.35, 0.55, 1.15, 'heavy', (g) => {
     const dark = mat(0x2a2f3a);
@@ -1330,7 +1375,8 @@ export function buildRoom(scene) {
     for (const [px, c] of [[-0.45, 0xff5a4f], [0.4, 0xb057ff], [0.1, 0x2fcf6f]]) at(cone(0.07, 0.22, c, 6), px, 0.66, -0.1, g);
     const fish = [0xff8a1f, 0xffd23f, 0x35f2a0, 0xff5fd0].map((c) => { const f = new THREE.Group(); at(sph(0.05, c), 0, 0, 0, f).scale.set(1.5, 1, 0.6); at(cone(0.035, 0.06, c, 4), -0.09, 0, 0, f).rotation.z = Math.PI / 2; g.add(f); return f; });
     const duck = new THREE.Group(); at(sph(0.06, 0xffd23f), 0, 0, 0, duck).scale.set(1.2, 0.8, 0.9); at(sph(0.035, 0xffd23f), 0.05, 0.05, 0, duck); at(cone(0.012, 0.03, 0xff8a1f), 0.09, 0.05, 0, duck).rotation.z = -Math.PI / 2; g.add(duck);
-    g.userData.tick = () => { const t = nowS(); fish.forEach((f, i) => { const sp = 0.4 + i * 0.17, u = Math.sin(t * sp + i * 1.7); f.position.set(u * 0.5, 0.6 + i * 0.1 + Math.sin(t * 1.1 + i) * 0.02, ((i % 2) - 0.5) * 0.14); f.rotation.y = Math.cos(t * sp + i * 1.7) > 0 ? 0 : Math.PI; }); duck.position.set(Math.sin(t * 0.3) * 0.4, 0.95 + Math.sin(t * 1.5) * 0.008, 0.05); duck.rotation.z = Math.sin(t * 1.2) * 0.06; };
+    const pk = pokeable(g), food = [0, 1, 2, 3, 4, 5].map((i) => at(sph(0.01, 0xc8902a), (i - 2.5) * 0.08, 1.06, 0.03 * (i % 2), g)); food.forEach((f) => { f.visible = false; });
+    g.userData.tick = (dt) => { const P = pk(dt), fed = pk.amp(6); food.forEach((f, i) => { f.visible = fed > 0.05 && P.k === 'feed'; f.position.y = 1.06 - Math.min(0.4, P.t * (0.05 + i * 0.01)); }); const t = nowS(); fish.forEach((f, i) => { const sp = 0.4 + i * 0.17, u = Math.sin(t * sp + i * 1.7); f.position.set(u * 0.5 * (1 - 0.5 * fed), 0.6 + i * 0.1 + Math.sin(t * 1.1 + i) * 0.02 + (0.98 - 0.6 - i * 0.1) * fed, ((i % 2) - 0.5) * 0.14); f.rotation.y = Math.cos(t * sp + i * 1.7) > 0 ? 0 : Math.PI; }); duck.position.set(Math.sin(t * 0.3) * 0.4, 0.95 + Math.sin(t * 1.5) * 0.008, 0.05); duck.rotation.z = Math.sin(t * 1.2) * 0.06; };
   });
   const buildJukebox = (name, x = 0, z = 0) => makeObject(name, x, z, 0.75, 0.5, 1.35, 'heavy', (g) => {
     const wd = mat(0x7a3b1d), chrome = mat(0xd5dbe3, { metalness: 0.8, roughness: 0.25 });
@@ -1342,14 +1388,18 @@ export function buildRoom(scene) {
     for (let i = 0; i < 6; i++) box(0.46, 0.012, 0.02, chrome, 0, 0.38 + i * 0.045, 0.267, g);
     box(0.15, 0.08, 0.03, chrome, 0, 0.68, 0.27, g);
     const cols = [0xff2a8a, 0x2af0ff, 0x7bff3a, 0xffd23f];
-    g.userData.tick = () => { const t = nowS(); bars.forEach((b, i) => { const c = cols[Math.floor(t * 1.5 + i) % cols.length]; b.material.color.setHex(c); b.material.emissive.setHex(c); b.scale.y = 0.6 + 0.4 * Math.abs(Math.sin(t * 4 + i * 1.3)); }); };
+    const st = { playing: false };
+    g.userData.setPlaying = (on) => { st.playing = !!on; };       // (a robot put a song on: the lights dance harder while it plays)
+    g.userData.tick = () => { const t = nowS(), sp = st.playing ? 2.4 : 1; bars.forEach((b, i) => { const c = cols[Math.floor(t * 1.5 * sp + i) % cols.length]; b.material.color.setHex(c); b.material.emissive.setHex(c); b.scale.y = (st.playing ? 0.75 : 0.6) + (st.playing ? 0.5 : 0.4) * Math.abs(Math.sin(t * 4 * sp + i * 1.3)); }); };
   });
   const buildPlasmaGlobe = (name, x = 0, z = 0) => makeObject(name, x, z, 0.42, 0.42, 0.85, 'light', (g) => {
     at(cyl(0.17, 0.2, 0.2, 0x25252d, { metalness: 0.5 }), 0, 0.1, 0, g); at(cyl(0.2, 0.2, 0.03, 0x8a8f9a, { metalness: 0.7 }), 0, 0.21, 0, g);
     at(sph(0.2, 0x2a1050, { transparent: true, opacity: 0.45, roughness: 0.05 }), 0, 0.47, 0, g);
     at(sph(0.04, 0xffd0ff, glow(0xff7aff, 1.4)), 0, 0.47, 0, g);
     const arcs = [0, 1, 2, 3, 4].map(() => { const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(5 * 3), 3)); const l = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xd08cff })); l.frustumCulled = false; g.add(l); return l; });
-    g.userData.tick = () => { const t = nowS(); arcs.forEach((l, i) => { const a = i * 1.26 + t * 0.6 + Math.sin(t * 3 + i) * 0.3, e = (Math.floor(t * 9 + i) * 0.7) % 1, p = l.geometry.attributes.position; for (let k = 0; k < 5; k++) { const u = k / 4, r = 0.17 * u, j = (k && k < 4) ? (Math.sin((t * 20 + k * 3 + i * 5)) * 0.025) : 0; p.setXYZ(k, Math.cos(a + e * u) * r + j, 0.47 + Math.sin(a * 1.7) * 0.1 * u + j, Math.sin(a + e * u) * r + j); } p.needsUpdate = true; }); };
+    const pk = pokeable(g);
+    // (a hand on the glass: every arc reaches for the spot at its front top where the hand is, and the arcs burn white)
+    g.userData.tick = (dt) => { pk(dt); const h = pk.amp(4) > 0 ? Math.min(1, pk.amp(4) * 3) : 0, t = nowS(); arcs.forEach((l, i) => { const a = i * 1.26 + t * 0.6 + Math.sin(t * 3 + i) * 0.3, e = (Math.floor(t * 9 + i) * 0.7) % 1, p = l.geometry.attributes.position; for (let k = 0; k < 5; k++) { const u = k / 4, r = 0.17 * u, j = (k && k < 4) ? (Math.sin((t * 20 + k * 3 + i * 5)) * 0.025) : 0; const x = Math.cos(a + e * u) * r + j, y = 0.47 + Math.sin(a * 1.7) * 0.1 * u + j, z = Math.sin(a + e * u) * r + j; p.setXYZ(k, x * (1 - h) + (j * 0.5) * h, y * (1 - h) + (0.47 + 0.12 * u + j) * h, z * (1 - h) + (0.12 * u + j * 0.5) * h); } p.needsUpdate = true; l.material.color.setHex(h > 0.5 ? 0xf6e8ff : 0xd08cff); }); };
   });
   const buildRoboPet = (name, x = 0, z = 0) => makeObject(name, x, z, 0.5, 0.3, 0.5, 'light', (g) => {
     const shell = mat(0xdfe5ec, { metalness: 0.3, roughness: 0.4 }), dark = mat(0x343b46), rub = mat(0x222222);
@@ -1360,7 +1410,8 @@ export function buildRoom(scene) {
     const eyes = [-0.05, 0.05].map((sz) => at(sph(0.022, 0x35f2ff, glow(0x35f2ff, 1.2)), 0.1, 0.03, sz, head));
     at(cyl(0.005, 0.005, 0.1, 0x8a8f98), 0, 0.12, 0, head); at(sph(0.015, 0xff3b3b, glow(0xff3b3b, 1.2)), 0, 0.18, 0, head);
     const tail = new THREE.Group(); tail.position.set(-0.22, 0.34, 0); g.add(tail); at(cyl(0.01, 0.01, 0.14, 0x343b46), -0.03, 0.04, 0, tail).rotation.z = 0.8;
-    g.userData.tick = () => { const t = nowS(); head.rotation.z = Math.sin(t * 0.9) * 0.12; head.rotation.y = Math.sin(t * 0.5) * 0.35; tail.rotation.y = Math.sin(t * 8) * 0.5; eyes.forEach((e) => { e.scale.y = Math.sin(t * 1.3) > 0.97 ? 0.1 : 1; }); };
+    const pk = pokeable(g);
+    g.userData.tick = (dt) => { const P = pk(dt), a = pk.amp(5), t = nowS(), hop = P.t < 0.5 ? Math.sin((P.t / 0.5) * Math.PI) : 0; head.rotation.z = Math.sin(t * 0.9) * 0.12 * (1 - a) + 0.3 * a; head.rotation.y = Math.sin(t * 0.5) * 0.35 * (1 - a); tail.rotation.y = Math.sin(t * (8 + 18 * a)) * 0.5; g.children.forEach((c) => { c.position.y = (c.userData.y0 ??= c.position.y) + 0.06 * hop; }); eyes.forEach((e) => { e.scale.y = a > 0.2 ? 0.45 : Math.sin(t * 1.3) > 0.97 ? 0.1 : 1; }); };      // (patted: a hop, the head tilted, the tail going like mad, happy eyes)
   });
   // A bookshelf GUY or GAL built is a clone of the skill bookshelf: the same shelf (looks, size, weight) holding the books and records
   // that did not fit on the others, and used the same way (read from it, long-press for its book and record lists).

@@ -14,14 +14,19 @@
 //   toolsort  the Garage's tool chest: open the drawer, reach in for a spanner, sort the things and shut it (the tyre rack has nothing to do)
 import * as THREE from 'three';
 import { sfx } from './sfx.js';
+import { TOY_ACTS, TOY_KIND_ACTS } from './toybrain.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
 // activity -> the kinds of object it is done at
-export const HOME_ACTS = { makebed: ['bed'], homesit: ['bed', 'readingchair'], wardrobe: ['wardrobe', 'bedside'], browse: ['libshelf'], study: ['libdesk'], spinglobe: ['globe'], playrecord: ['recordplayer'], tinker: ['garagebench'], toolsort: ['toolchest'] };
+export const HOME_ACTS = { makebed: ['bed'], homesit: ['bed', 'readingchair'], wardrobe: ['wardrobe', 'bedside'], browse: ['libshelf'], study: ['libdesk'], spinglobe: ['globe'], playrecord: ['recordplayer'], tinker: ['garagebench'], toolsort: ['toolchest'], ...TOY_ACTS };
 export const HOME_KINDS = ['bed', 'readingchair', 'wardrobe', 'bedside', 'libshelf', 'libdesk', 'globe', 'recordplayer', 'garagebench', 'toolchest', 'tyrerack'];
 // the activities the menu offers on an object (by kind)
-export const HOME_KIND_ACTS = { bed: ['makebed', 'homesit'], readingchair: ['homesit'], wardrobe: ['wardrobe'], bedside: ['wardrobe'], libshelf: ['browse'], libdesk: ['study'], globe: ['spinglobe'], recordplayer: ['playrecord'], garagebench: ['tinker'], toolchest: ['toolsort'] };
+export const HOME_KIND_ACTS = { bed: ['makebed', 'homesit'], readingchair: ['homesit'], wardrobe: ['wardrobe'], bedside: ['wardrobe'], libshelf: ['browse'], libdesk: ['study'], globe: ['spinglobe'], recordplayer: ['playrecord'], garagebench: ['tinker'], toolchest: ['toolsort'], ...TOY_KIND_ACTS };
+// what an object is for these tables: its kind, or its name for the furniture that has none (the coffee table and the nightstand: toybrain.js)
+export const homeKey = (o) => (o ? o.kind || o.name : null);
+// the activities the menu offers on an object (or none)
+export const homeActsOf = (o) => (o && HOME_KIND_ACTS[homeKey(o)]) || null;
 
 export function installHome(Brain, POSES, H) {
   const { rand, pick } = H;
@@ -37,7 +42,7 @@ export function installHome(Brain, POSES, H) {
     // the objects an activity can be done at right now (the other robot is not using them)
     homeObjs(act) {
       const kinds = HOME_ACTS[act] || [];
-      return Object.values(this.w.objects).filter((o) => kinds.includes(o.kind) && this.homeRoomOpen(o) && !this.otherUses(o.name) && !o.hauled && !o.packed)
+      return Object.values(this.w.objects).filter((o) => kinds.includes(homeKey(o)) && this.homeRoomOpen(o) && !this.otherUses(o.name) && !o.hauled && !o.packed)
         .sort((a, b) => (a.name < b.name ? -1 : 1));
     },
     // the one it is done at: the one he was pointed at, else the first that is not the one he used last (so he uses each in turn)
@@ -46,6 +51,7 @@ export function installHome(Brain, POSES, H) {
       if (!all.length) return null;
       const wanted = this.homeWanted && all.find((o) => o.name === this.homeWanted);
       if (wanted) return wanted;
+      if (TOY_ACTS[act]) return this.toyNext(act, all);                // (the toys and the furniture: each in turn, round and round)
       return all.find((o) => o.name !== (this.lastHome || {})[act]) || all[0];
     },
     // The record he put on is lifted off and the music stops (called when the activity ends, and from choose() when it was cut short).
@@ -53,15 +59,17 @@ export function installHome(Brain, POSES, H) {
       const n = this.recordOn; this.recordOn = null;
       if (!n) return;
       const p = this.obj(n);
-      if (p) p.setPlaying(false);
+      const sp = p && (p.setPlaying || p.group.userData.setPlaying);         // (the record player's, or the jukebox's: toybrain.js)
+      if (sp) sp(false);
       if (this.music && !this.userMusic) this.musicOff();
     },
     // is there something to do that is not just standing about (called from available())
-    homeAvailable(act) { return (act !== 'playrecord' || !this.music) && !!this.homeObj(act); },          // (a record goes on only when nothing else is playing)
+    homeAvailable(act) { return ((act !== 'playrecord' && act !== 'jukebox') || !this.music) && !!this.homeObj(act); },          // (a record goes on only when nothing else is playing)
 
     homeActivities() {
       const stand = (o, front, target, sides) => this.stand(o.name, front, target, sides);
       return {
+        ...this.toyActivities(),                                   // the toys, the arcade, the jukebox and the little furniture (toybrain.js)
         // the bed: plump a pillow, then pull the blanket straight from one side to the other
         makebed: () => {
           const o = this.homeObj('makebed');

@@ -304,7 +304,7 @@ export function makeHomeBuilders({ makeObject, box, mat }) {
   };
 
   // ------------------------------------------------------------------------------------------------ tyre rack
-  // A steel A-frame with a rod on each side and four tyres stacked on it, lying flat. Nothing to use: it is just where the tyres go.
+  // A steel A-frame with a rod on each side and four tyres stacked on it, lying flat. GUY and GAL check the tyres (tidyup, toybrain.js).
   const tyrerack = (name, x = 0, z = 0) => {
     const steel = mat(STEEL, { metalness: 0.6, roughness: 0.4 }), rubber = mat(0x1d1d20, { roughness: 0.9 });
     const o = makeObject(name, x, z, 1.0, 0.6, 1.3, 'medium', (g) => {

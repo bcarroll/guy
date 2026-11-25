@@ -23,6 +23,7 @@ const SPEC = {
   machine: { dur: [0.3, 1.0], bright: 'any' }, lid: { dur: [0.03, 0.4], bright: 'any' },
   ding: { dur: [0.2, 1.0], bright: 'mid' }, cash: { dur: [0.12, 0.6], bright: 'high' }, sizzle: { dur: [0.3, 1.2], bright: 'high' }, plate: { dur: [0.02, 0.3], bright: 'high' }, lift: { dur: [0.3, 1.0], bright: 'mid' },
   splash: { dur: [0.1, 0.6], bright: 'high' }, swish: { dur: [0.1, 0.6], bright: 'high' }, motor: { dur: [0.1, 0.5], bright: 'low' },
+  blip: { dur: [0.03, 0.3], bright: 'any' }, squeak: { dur: [0.08, 0.5], bright: 'mid' },
   chime: { dur: [0.4, 1.2], bright: 'mid' }, pop: { dur: [0.03, 0.3], bright: 'any' }, micon: { dur: [0.1, 0.5], bright: 'mid' }, micoff: { dur: [0.1, 0.5], bright: 'mid' }, whoosh: { dur: [0.1, 0.6], bright: 'high' },
   shot: { dur: [0.05, 0.4], bright: 'high' }, holo: { dur: [0.1, 0.5], bright: 'high' },
   rumble: { dur: [0.3, 1.0], bright: 'low' }, pinhit: { dur: [0.1, 0.8], bright: 'high' }, strike: { dur: [0.3, 1.0], bright: 'high' }, gutter: { dur: [0.3, 1.0], bright: 'low' }, pins: { dur: [0.1, 0.6], bright: 'any' },      // (a rattle of pins with random pitches: its centre jumps between about 1.4 and 4.4 kHz from one render to the next, both fine)

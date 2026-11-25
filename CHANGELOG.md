@@ -19,6 +19,12 @@ The big changes to GUY's room, newest first. The game shows the same list under 
 ### Added
 
 - The Garage has things GUY and GAL build for it: a wooden Garage Workbench (GUY tinkers at its vise), a Metal Tool Chest (GUY sorts the spanners) and a Tyre Rack.
+- Every toy, curio and small piece of furniture has an interaction for GUY and GAL: the 19 Built by GUY toys and decorations, the jukebox, tidying the coffee table, bedside table and wooden shelves, checking the tyres on the tyre rack, and bowling with the bowling kit.
+- The Arcade Cabinet has a real game, Robo Blaster. GUY and GAL play it with their hands on the stick and button, and a panel at the top left shows the game while they play (✕ shrinks it to a Watch chip).
+
+### Changed
+
+- The Interact button names what the robot will do, and "can't use that just now" messages say why instead of "GUY can't do anything with that".
 
 ## 2026-11-23
 
