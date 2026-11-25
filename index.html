@@ -217,6 +217,16 @@
   body[data-lock="camera"] > *:not(canvas):not(.lockok), body[data-lock="on"] > *:not(.lockok) { pointer-events: none !important; }
   #subs { position: fixed; left: 50%; bottom: 128px; transform: translateX(-50%); max-width: min(560px, 92vw); z-index: 6; background: rgba(0,0,0,.7); color: #fff; padding: 9px 16px; border-radius: 10px; font-size: 16px; pointer-events: none; text-align: center; }
   #subs[hidden], #cmdbox[hidden] { display: none; }
+  /* a yes/no question from GUY or GAL (commands.js ask()): the question and Yes / No buttons in the subtitle's place, the subtitle just above */
+  #qbtns { position: fixed; left: 50%; bottom: 128px; transform: translateX(-50%); max-width: min(560px, 92vw); z-index: 7; display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,.78); color: #fff; padding: 6px 8px 6px 14px; border-radius: 10px; box-sizing: border-box; }
+  #qbtns[hidden], #qbtns .q[hidden] { display: none; }
+  #qbtns.bare { padding: 6px; background: transparent; }
+  /* (main.js puts the box above the buttons and the typed box, which wrap on a phone, and the subtitle above the box) */
+  #qbtns .q { flex: 1; min-width: 0; font-size: 14px; line-height: 1.3; }
+  #qbtns .q b { margin-right: 4px; }
+  #qbtns button { border: 0; border-radius: 8px; min-height: 44px; min-width: 64px; padding: 0 14px; font: inherit; font-size: 15px; font-weight: 600; color: #fff; cursor: pointer; touch-action: manipulation; }
+  #qbtns .yes { background: #2a9d63; } #qbtns .no { background: #3a3d4a; }
+  body[data-lock] #qbtns, body[data-lock] #qbtns button { pointer-events: auto !important; }      /* the voice-only screen lock: answering still works */
   #cmdbox { position: fixed; left: 50%; bottom: 76px; transform: translateX(-50%); width: min(560px, 92vw); z-index: 6; display: flex; gap: 6px; background: rgba(28,30,36,.96); border-radius: 12px; padding: 8px; box-sizing: border-box; }
   #cmdbox input { flex: 1; min-width: 0; background: rgba(255,255,255,.1); color: #fff; border: 0; border-radius: 8px; padding: 10px 12px; font: inherit; font-size: 15px; }
   #cmdbox select, #cmdbox button { background: rgba(255,255,255,.12); color: #eee; border: 0; border-radius: 8px; padding: 0 10px; font: inherit; font-size: 14px; min-height: 44px; }
@@ -245,6 +255,7 @@
 <div id="lockscreen-menu" class="lockok" hidden><button data-lock="on">🔒 On: voice only</button><button data-lock="camera">🎥 Camera only</button><button data-lock="off">🔓 Off</button></div>
 <div id="wstation" hidden><div class="box"><header><h2>🖥️ LEARNING WORKSTATION · <span class="who"></span></h2><button class="close" title="Close (Esc)">✕</button></header><div class="hint">Every book on the shelf. Learn teaches at once, no reading; the book stays on the shelf.</div><div class="bar"><button class="all">⚡ Learn all</button></div><div class="rows"></div></div></div>
 <div id="subs" hidden aria-live="polite"></div>
+<div id="qbtns" role="group" aria-label="Answer the question" hidden><span class="q"></span><button type="button" class="yes">Yes</button><button type="button" class="no">No</button></div>
 <form id="cmdbox" hidden><input id="cmd-in" type="text" autocomplete="off" placeholder="Tell GUY what to do…" aria-label="Command for GUY"><select id="cmd-chatter" title="How much they talk" aria-label="How much they talk"><option value="silent">🔇 Subtitles only</option><option value="quiet">🙂 Quiet</option><option value="chatty">💬 Chatty</option></select><select id="cmd-voice" title="Voice: natural downloads about 90 MB once, then works offline" aria-label="Voice engine"><option value="natural">🗣️ Natural voice</option><option value="robot">🤖 Robot voice</option></select><button type="submit">Send</button></form>
 <div id="btns">
   <button id="player-btn" title="Stereo playback controls" hidden>🎵 Stereo</button>
